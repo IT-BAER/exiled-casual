@@ -10,16 +10,15 @@ import {
   Quaternion,
   StandardMaterial,
   Texture,
-  TrailMesh,
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
 import { Mesh, VertexData } from "@babylonjs/core";
-import type { AbstractMesh, Scene } from "@babylonjs/core";
+import type { AbstractMesh, GlowLayer, Scene } from "@babylonjs/core";
 import { hitSpray } from "./hit-spray";
 import { hitSparkle } from "./hit-sparkle";
 import { slamDebris } from "./slam-debris";
-import { clearFxPools, fxPools } from "./fx-pool";
+import { clearFxPools, featherEdges, fxPools } from "./fx-pool";
 import { swingArcs, swingStyle } from "./swing-arc";
 
 /**
@@ -201,8 +200,11 @@ export interface FxProfile {
   motes?: number;
   /** How an arrow lands: a chip back off the face, a spray out the far side, or a few splinters. */
   arrowImpact?: "chip" | "pierce" | "splinter";
-  /** Flame tongues a fire bolt leaves per unit flown: swelling geometric balls. */
-  flames?: number;
+  /** A fire bolt's comet: tail length and width at the head, in world units. */
+  cometLength?: number;
+  cometWidth?: number;
+  /** Floor light carried under the bolt in flight, 0..1 of FLASH_INTENSITY. */
+  carry?: number;
   /** Sideways crackle sparks per unit flown. */
   crackle?: number;
   /** Fireball diameter at the impact, shards it throws, and smoke puffs it leaves. */
@@ -224,7 +226,8 @@ export const FALLBACK_FX: FxProfile = {
   flash: 0.5,
   flightCue: "skill-ember-bolt-flight",
   impactCue: "skill-ember-bolt-impact",
-  flames: 3,
+  cometLength: 1.4,
+  cometWidth: 0.2,
   blast: 1.2,
   burstShards: 22,
   smoke: 3,
@@ -253,7 +256,10 @@ export const SKILL_FX: Record<string, FxProfile> = {
     lifeMin: 0.18,
     lifeMax: 0.32,
     flash: 0.6,
-    flames: 5,
+    cometLength: 2.6,
+    cometWidth: 0.26,
+    carry: 0.22,
+    crackle: 1.2,
     blast: 1.9,
     burstShards: 32,
     smoke: 5,
@@ -270,7 +276,8 @@ export const SKILL_FX: Record<string, FxProfile> = {
     lifeMin: 0.03,
     lifeMax: 0.07,
     flash: 0.3,
-    flames: 0,
+    cometLength: 1,
+    cometWidth: 0.14,
     crackle: 2.5,
     blast: 0.45,
     burstShards: 10,
@@ -344,40 +351,135 @@ export const BOLT_TRAIL_NAME = "fx-bolt-trail";
 /** The speed a profile's `emitRate` is quoted at (Ember Bolt's 12 u/s): it sheds per unit flown. */
 const BOLT_NOMINAL_SPEED = 12;
 
+/** Rings along the comet: enough for its colour to run smoothly from head to tip. */
+const COMET_RINGS = 14;
+const COMET_SIDES = 10;
+/** Where along the comet's rings (0 tip, 1 nose) it is widest, at the bolt itself. */
+const COMET_BELLY = 0.8;
+
 /**
- * Ember bolt: the tail. The head stays a mesh (`meshes.ts` shrank it to a
- * white-hot pip) because the sim's projectile is a real position and the
+ * A fire bolt's tail: ONE tapered teardrop laid back along the flight path,
+ * white-hot at the head and burning out to nothing at the tip, the way PoE2's
+ * fireballs streak in reference-screenshots/inside-map-battle.webp. Built as a
+ * unit cylinder along +Y; `shapeComet` lays its rings out every frame.
+ */
+function buildComet(scene: Scene): Mesh {
+  const comet = MeshBuilder.CreateCylinder(`${BOLT_TRAIL_NAME}-comet`, {
+    height: 1, diameter: 1, tessellation: COMET_SIDES, subdivisions: COMET_RINGS, cap: Mesh.NO_CAP, updatable: true,
+  }, scene);
+  comet.setVerticesData("color", new Float32Array(comet.getTotalVertices() * 4), true);
+  comet.hasVertexAlpha = true;
+  comet.isPickable = false;
+  const name = `${BOLT_TRAIL_NAME}-comet-mat`;
+  let mat = scene.getMaterialByName(name) as StandardMaterial | null;
+  if (!mat) {
+    // White: the vertex colour is the whole palette, so every profile shares it.
+    mat = glowMaterial(scene, name, Color3.White());
+    mat.disableDepthWrite = true;
+    // Soft at the silhouette, so the streak is a glowing core, not a hard cone.
+    featherEdges(mat);
+  }
+  comet.material = mat;
+  const glow = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
+  glow?.referenceMeshToUseItsOwnMaterial(comet);
+  return comet;
+}
+
+/**
+ * Lay the comet's rings out for a tail `len` long: the body tapers from the
+ * belly, at the bolt, back to a point; the nose is a round cap of fixed size
+ * ahead of it, so a long tail never stretches the head into a spike.
+ */
+function shapeComet(comet: Mesh, unit: ArrayLike<number>, out: Float32Array, len: number, width: number): void {
+  const nose = width * 0.6;
+  for (let i = 0; i < out.length; i += 3) {
+    const k = unit[i + 1]! + 0.5;
+    let y: number, r: number;
+    if (k <= COMET_BELLY) {
+      y = -len * (1 - k / COMET_BELLY);
+      r = (k / COMET_BELLY) ** 0.6;
+    } else {
+      const s = (k - COMET_BELLY) / (1 - COMET_BELLY);
+      y = s * nose;
+      r = Math.sqrt(1 - s * s);
+    }
+    // The unit cylinder's diameter is 1, so its x/z are half a radius.
+    out[i] = unit[i]! * width * r;
+    out[i + 1] = y;
+    out[i + 2] = unit[i + 2]! * width * r;
+  }
+  comet.updateVerticesData("position", out);
+  const normals: number[] = [];
+  VertexData.ComputeNormals(out, comet.getIndices()!, normals);
+  comet.updateVerticesData("normal", normals);
+  comet.refreshBoundingInfo();
+}
+
+/** Paint the comet for this frame: bands of heat running back down the tail. */
+function burnComet(comet: Mesh, pos: ArrayLike<number>, col: Float32Array, fx: FxProfile, t: number): void {
+  for (let v = 0; v < pos.length / 3; v++) {
+    const k = pos[v * 3 + 1]! + 0.5;
+    const side = Math.atan2(pos[v * 3 + 2]!, pos[v * 3]!);
+    // Solid at the head, rippling more the further back down the tail.
+    // Two detuned bands, twisted round the axis: tongues, not the rings of a carrot.
+    const wave = 0.5 + 0.25 * Math.sin(k * 11 - t * 23 + side * 3) + 0.25 * Math.sin(k * 23 - t * 37 - side * 2);
+    const flicker = 1 - 0.6 * (1 - k) * wave;
+    // White-hot only at the front; the wake colour, deepening to red, everywhere behind.
+    const hot = Math.max(0, (k - 0.7) / 0.3) ** 1.5;
+    col[v * 4] = fx.wake.r + (fx.core.r - fx.wake.r) * hot;
+    col[v * 4 + 1] = Math.min(1, fx.wake.g * (0.6 + 0.8 * k)) * (1 - hot) + fx.core.g * hot;
+    col[v * 4 + 2] = fx.wake.b * k + (fx.core.b - fx.wake.b) * hot;
+    col[v * 4 + 3] = k ** 1.1 * flicker;
+  }
+  comet.updateVerticesData("color", col);
+}
+
+const scratchUp = new Quaternion();
+
+/**
+ * Fire bolt flight: the comet (`buildComet`), embers and crackle shed behind it
+ * and, for a real cast, the floor lit under it. The head stays a mesh
+ * (`meshes.ts`) because the sim's projectile is a real position and the
  * GlowLayer needs something emissive to bloom.
  *
- * The emitter is the mesh but the particles are NOT parented to it: they are
- * spawned at wherever it was that frame and then left behind in world space,
- * which is what makes the tail a tail instead of a fur coat that flies along.
+ * The comet is laid back along the travel direction each frame, never longer than
+ * the bolt has flown: a fresh bolt's full tail pokes out behind the caster. The
+ * shed sparks are NOT parented: they are left behind in world space, which is
+ * what makes them a wake instead of a fur coat that flies along.
  */
 export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile = FALLBACK_FX): void {
   // Shed per unit FLOWN, not per frame, so the wake is as dense at 30 fps as at 144.
   const embers = fx.emitRate / BOLT_NOMINAL_SPEED;
-  const flames = fx.flames ?? 0;
   const crackle = fx.crackle ?? 0;
-  const owed = { embers: 0, flames: 0, crackle: 0 };
+  const owed = { embers: 0, crackle: 0 };
   let last: Vector3 | null = null;
+  const start = mesh.getAbsolutePosition().clone();
+  const dir = new Vector3(0, 0, 1);
+  const comet = buildComet(scene);
+  const unit = comet.getVerticesData("position")!.slice();
+  const laid = new Float32Array(unit.length);
+  const heat = new Float32Array((unit.length / 3) * 4);
+  const full = fx.cometLength ?? 1.4;
+  const width = fx.cometWidth ?? 0.2;
+  shapeComet(comet, unit, laid, 0, width);
+  let t = Math.random() * 10;
   const pools = fxPools(scene);
   const tick = scene.onBeforeRenderObservable.add(() => {
     const now = mesh.getAbsolutePosition();
+    t += scene.getEngine().getDeltaTime() / 1000;
+    if (last && Vector3.DistanceSquared(last, now) > 1e-8) now.subtractToRef(last, dir).normalize();
+    // A flickering length, a hair over or under, is what keeps it fire and not a cone.
+    shapeComet(comet, unit, laid, Math.min(full * (0.94 + 0.12 * Math.random()), Vector3.Distance(start, now)), width);
+    comet.position.copyFrom(now);
+    Quaternion.FromUnitVectorsToRef(Vector3.UpReadOnly, dir, scratchUp);
+    (comet.rotationQuaternion ??= new Quaternion()).copyFrom(scratchUp);
+    burnComet(comet, unit, heat, fx, t);
+    if (fx.carry) flash(scene, now, fx.carry);
     if (last) {
       const run = Math.min(3, Vector3.Distance(last, now));
       owed.embers += embers * run;
-      owed.flames += flames * run;
       owed.crackle += crackle * run;
       const at = (k: number) => [last!.x + (now.x - last!.x) * k, last!.y + (now.y - last!.y) * k, last!.z + (now.z - last!.z) * k] as const;
-      for (; owed.flames >= 1; owed.flames--) {
-        const [x, y, z] = at(Math.random());
-        // A tongue: born small at the core, swelling and cooling as it is left behind.
-        pools.glow.emit({
-          x, y, z, vx: rand(-0.2, 0.2), vy: rand(0.2, 0.7), vz: rand(-0.2, 0.2), drag: 3,
-          life: rand(fx.lifeMin, fx.lifeMax), size: fx.sizeStart * 0.35, sizeEnd: fx.sizeStart,
-          r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 0.38, r1: fx.wake.r * 0.6, g1: fx.wake.g * 0.4, b1: fx.wake.b * 0.3,
-        });
-      }
       for (; owed.embers >= 1; owed.embers--) {
         const [x, y, z] = at(Math.random());
         // Sideways and slightly up, then gravity takes them down out of the flight path.
@@ -402,23 +504,12 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile 
     last = now.clone();
   });
 
-  // The ribbon: shed geometry is discrete, and only a continuous streak keeps a
-  // fast bolt from breaking its own tail into a dotted line.
-  const ribbon = new TrailMesh(`${BOLT_TRAIL_NAME}-ribbon`, mesh, scene, fx.trailWidth, 10, true);
-  ribbon.material = glowMaterial(scene, `${BOLT_TRAIL_NAME}-ribbon-mat`, fx.wake);
-  ribbon.material.alpha = 0.4;
-  ribbon.isPickable = false;
-
   // The bolt mesh is disposed the tick the sim kills the projectile, i.e. on
   // impact, so its dispose IS the impact event.
   mesh.onDisposeObservable.addOnce(() => {
     scene.onBeforeRenderObservable.remove(tick);
     emberBurst(scene, mesh.getAbsolutePosition().clone(), fx);
-    // stop() BEFORE dispose(): TrailMesh registers its own observer in start() and
-    // only stop() removes it (Babylon 9.20.0); dispose alone leaves update() running.
-    ribbon.stop();
-    ribbon.material?.dispose();
-    ribbon.dispose();
+    comet.dispose();
   });
 }
 
@@ -601,20 +692,32 @@ export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_F
   flash(scene, at, fx.flash);
   const pools = fxPools(scene);
   const blast = fx.blast ?? 1;
-  // The core: white-hot, swelling fast and cooling to the wake colour.
+  // The core: small, white-hot and brief. A big translucent ball reads as a disc.
   pools.glow.emit({
-    x: at.x, y: at.y, z: at.z, life: 0.22, size: blast * 0.3, sizeEnd: blast,
-    r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 0.75, r1: fx.wake.r, g1: fx.wake.g * 0.5, b1: fx.wake.b * 0.3,
+    x: at.x, y: at.y, z: at.z, life: 0.16, size: blast * 0.15, sizeEnd: blast * 0.55,
+    r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 0.95, r1: fx.wake.r, g1: fx.wake.g * 0.5, b1: fx.wake.b * 0.3,
   });
-  // Flame balls rolled out of it, fewer and smaller on a small hit.
+  // A few hot knots rolled out of it, fewer on a small hit.
   const balls = Math.round(blast * BURST_BALLS_PER_UNIT);
   for (let i = 0; i < balls; i++) {
     const a = Math.random() * Math.PI * 2;
-    const speed = rand(0.8, 2.2) * blast;
+    const speed = rand(0.8, 1.8) * blast;
     pools.glow.emit({
-      x: at.x, y: at.y, z: at.z, vx: Math.cos(a) * speed, vy: rand(0.3, 1.6), vz: Math.sin(a) * speed, drag: 5,
-      life: rand(0.22, 0.4), size: blast * 0.15, sizeEnd: blast * 0.45,
-      r: 1, g: 0.75, b: 0.4, a: 0.45, r1: fx.wake.r * 0.6, g1: fx.wake.g * 0.3, b1: 0.04,
+      x: at.x, y: at.y, z: at.z, vx: Math.cos(a) * speed, vy: rand(0.3, 1.2), vz: Math.sin(a) * speed, drag: 6,
+      life: rand(0.18, 0.3), size: blast * 0.1, sizeEnd: blast * 0.3,
+      r: 1, g: 0.8, b: 0.45, a: 0.7, r1: fx.wake.r * 0.6, g1: fx.wake.g * 0.3, b1: 0.04,
+    });
+  }
+  // The starburst: thick flame tongues flung flat and fast out of the core, the
+  // spiked flower PoE2's fire lands as.
+  const tongues = Math.round(blast * BURST_TONGUES_PER_UNIT);
+  for (let i = 0; i < tongues; i++) {
+    const a = ((i + Math.random()) / tongues) * Math.PI * 2;
+    const speed = rand(5, 9) * Math.sqrt(blast);
+    pools.shards.emit({
+      x: at.x, y: at.y, z: at.z, vx: Math.cos(a) * speed, vy: rand(-0.5, 2.5), vz: Math.sin(a) * speed, drag: 7,
+      life: rand(0.14, 0.24), size: blast * 0.22, sizeEnd: blast * 0.1, thick: 0.07 * blast, stretch: 0.05,
+      r: fx.core.r, g: fx.core.g, b: fx.core.b, a: 1, r1: fx.wake.r, g1: fx.wake.g * 0.8, b1: fx.wake.b * 0.5,
     });
   }
   for (let i = 0; i < (fx.burstShards ?? 0); i++) {
@@ -639,8 +742,9 @@ export function emberBurst(scene: Scene, at: Vector3, fx: FxProfile = FALLBACK_F
   }
 }
 
-/** Flame balls a fireball rolls out per unit of its diameter. */
-const BURST_BALLS_PER_UNIT = 4;
+/** Hot knots and flame tongues a fireball throws per unit of its diameter. */
+const BURST_BALLS_PER_UNIT = 1.5;
+const BURST_TONGUES_PER_UNIT = 8;
 
 /** How one melee skill's blow lands on a body. Every count is per landed hit. */
 export interface MeleeImpactStyle {

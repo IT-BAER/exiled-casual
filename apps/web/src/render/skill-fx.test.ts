@@ -60,21 +60,58 @@ function systems(scene: Scene, name: string): ParticleSystem[] {
 }
 
 describe("ember bolt", () => {
-  it("sheds flame and embers from wherever the bolt flies, left behind in the world", () => {
-    const scene = newScene();
-    const mesh = makeMesh(scene, "projectile", "entity-7", Vector3.Zero(), undefined, "skill.ember_bolt.v1");
-    const pools = fxPools(scene);
+  /** Fly a bolt from x 0 to x 4 along +x, one render tick per half unit. */
+  function fly(scene: Scene, id = "skill.ember_bolt.v1") {
+    const mesh = makeMesh(scene, "projectile", "entity-7", new Vector3(0, 0.8, 0), undefined, id);
     for (let i = 1; i <= 8; i++) {
       mesh.position.set(i * 0.5, 0.8, 0);
       mesh.computeWorldMatrix(true);
       scene.onBeforeRenderObservable.notifyObservers(scene);
     }
+    return mesh;
+  }
+
+  it("flies as one comet streaking back along its path, not a row of glow balls", () => {
+    const scene = newScene();
+    const pools = fxPools(scene);
+    fly(scene);
+    // The stacked translucent spheres were the cheap look.
+    expect(pools.glow.emitted).toBe(0);
     expect(pools.shards.emitted).toBeGreaterThan(0);
-    expect(pools.glow.emitted).toBeGreaterThan(0);
-    // Along the path it flew, not riding on the head.
-    const xs = pools.glow.positions().map((p) => p.x);
-    expect(Math.min(...xs)).toBeLessThan(3);
-    expect(Math.max(...xs)).toBeLessThanOrEqual(4.01);
+    const comet = scene.getMeshByName(`${BOLT_TRAIL_NAME}-comet`)!;
+    expect(comet).not.toBeNull();
+    comet.computeWorldMatrix(true);
+    const box = comet.getBoundingInfo().boundingBox;
+    // Head at the bolt, tail laid back the way it came, never behind the caster.
+    expect(box.maximumWorld.x).toBeGreaterThan(3.9);
+    expect(box.maximumWorld.x).toBeLessThan(4.3);
+    expect(box.minimumWorld.x).toBeLessThan(2.5);
+    expect(box.minimumWorld.x).toBeGreaterThanOrEqual(-0.01);
+    expect(box.maximumWorld.z - box.minimumWorld.z).toBeLessThan(0.6);
+  });
+
+  it("burns its tail out at the end: hot and solid at the head, gone at the tip", () => {
+    const scene = newScene();
+    fly(scene);
+    const comet = scene.getMeshByName(`${BOLT_TRAIL_NAME}-comet`)!;
+    const pos = comet.getVerticesData("position")!;
+    const col = comet.getVerticesData("color")!;
+    let head = 0, tail = 0, headY = -Infinity, tailY = Infinity;
+    for (let v = 0; v < pos.length / 3; v++) {
+      const y = pos[v * 3 + 1]!;
+      if (y > headY) { headY = y; head = col[v * 4 + 3]!; }
+      if (y < tailY) { tailY = y; tail = col[v * 4 + 3]!; }
+    }
+    expect(head).toBeGreaterThan(0.5);
+    expect(tail).toBeLessThan(0.05);
+  });
+
+  it("lights the floor under it as it flies", () => {
+    const scene = newScene();
+    fly(scene);
+    const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
+    expect(light!.intensity).toBeGreaterThan(0);
+    expect(light!.position.x).toBeCloseTo(4);
   });
 
   it("draws no fire with a particle system, a flipbook or a sprite sheet", () => {
@@ -93,51 +130,21 @@ describe("ember bolt", () => {
     expect(scene.textures.some((t) => (t as Texture).url?.includes("fire_sheet"))).toBe(false);
   });
 
-  it("strings its ribbon at the bolt, never back to the world origin", () => {
+  it("draws no tail before it has moved, so a fresh bolt never streaks back to the origin", () => {
     const scene = newScene();
-    const at = new Vector3(12, 0.8, -9);
-    makeMesh(scene, "projectile", "entity-7", at);
-
-    const ribbon = scene.getMeshByName(`${BOLT_TRAIL_NAME}-ribbon`);
-    expect(ribbon).not.toBeNull();
-    // A trail seeds every section where its generator stands at build time, in
-    // world space. One section left at (0,0,0) is a beam across the level.
-    const pos = ribbon!.getVerticesData("position")!;
-    let farthest = 0;
-    for (let i = 0; i < pos.length; i += 3) {
-      farthest = Math.max(farthest, Math.hypot(pos[i]! - at.x, pos[i + 2]! - at.z));
-    }
-    expect(farthest).toBeLessThan(1);
+    makeMesh(scene, "projectile", "entity-7", new Vector3(12, 0.8, -9));
+    scene.onBeforeRenderObservable.notifyObservers(scene);
+    const comet = scene.getMeshByName(`${BOLT_TRAIL_NAME}-comet`)!;
+    comet.computeWorldMatrix(true);
+    const box = comet.getBoundingInfo().boundingBox;
+    expect(box.maximumWorld.subtract(box.minimumWorld).length()).toBeLessThan(0.6);
+    expect(box.centerWorld.x).toBeCloseTo(12, 0);
   });
 
-  /**
-   * Every bolt costs a per-frame observer for the rest of the session unless the
-   * trail is STOPPED, not merely disposed.
-   *
-   * `TrailMesh.start()` registers an `onBeforeRenderObservable` observer and
-   * only `stop()` removes it — Babylon's TrailMesh has no `dispose()` override
-   * of its own (checked against 9.20.0), so `dispose()` leaves that observer
-   * running `update()` over the vertex buffers of a mesh that is gone. Thirty
-   * two bolts into a session that is thirty two dead loops a frame, measured
-   * live, and it never recovers because leaving the area does not touch it.
-   */
-  it("takes its ribbon's per-frame observer with it when the bolt lands", async () => {
+  it("takes its comet with it when the bolt lands", () => {
     const scene = newScene();
-    const trailObservers = () =>
-      scene.onBeforeRenderObservable.observers.filter((o) =>
-        String(o.callback).includes("this.update()")).length;
-
-    const mesh = makeMesh(scene, "projectile", "entity-7");
-    expect(trailObservers()).toBe(1);
-
-    mesh.dispose();
-    // Observable.remove marks and splices on a setTimeout(0), so the count is
-    // only honest on the next macrotask. Reading it synchronously says "still
-    // registered" whether the removal happened or not.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(scene.getMeshByName(`${BOLT_TRAIL_NAME}-ribbon`)).toBeNull();
-    expect(trailObservers()).toBe(0);
+    fly(scene).dispose();
+    expect(scene.getMeshByName(`${BOLT_TRAIL_NAME}-comet`)).toBeNull();
   });
 
   it("bursts where it died, because the sim disposing the mesh IS the impact", () => {
@@ -195,10 +202,12 @@ describe("ember bolt", () => {
     expect(SKILL_FX["skill.ember_bolt.v1"]!.blast!).toBeGreaterThan(SKILL_FX["skill.ember_spark.v1"]!.blast! * 2);
   });
 
-  it("crackles Ember Spark sideways in flight, which Ember Bolt's heavy wake does not", () => {
-    expect(SKILL_FX["skill.ember_spark.v1"]!.crackle!).toBeGreaterThan(0);
-    expect(SKILL_FX["skill.ember_bolt.v1"]!.crackle ?? 0).toBe(0);
-    expect(SKILL_FX["skill.ember_bolt.v1"]!.flames!).toBeGreaterThan(SKILL_FX["skill.ember_spark.v1"]!.flames ?? 0);
+  it("drags a longer, wider comet behind Ember Bolt than behind the free Ember Spark", () => {
+    const bolt = SKILL_FX["skill.ember_bolt.v1"]!;
+    const spark = SKILL_FX["skill.ember_spark.v1"]!;
+    expect(spark.crackle!).toBeGreaterThan(0);
+    expect(bolt.cometLength!).toBeGreaterThan(spark.cometLength! * 1.5);
+    expect(bolt.cometWidth!).toBeGreaterThan(spark.cometWidth!);
   });
 
   it("colours its head from its own skill, not whichever projectile spawned first", () => {

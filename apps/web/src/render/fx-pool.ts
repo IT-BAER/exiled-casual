@@ -65,6 +65,11 @@ class SmokeEdgePlugin extends MaterialPluginBase {
   }
 }
 
+/** Thin a material out toward its silhouette, so a solid reads as soft volume. */
+export function featherEdges(material: Material): void {
+  new SmokeEdgePlugin(material);
+}
+
 const FORWARD = new Vector3(0, 0, 1);
 const scratchDir = new Vector3();
 const scratchQ = new Quaternion();
@@ -106,7 +111,7 @@ export class FxPool {
     // Overlap is the look: a slot writing depth would reject the slots behind it.
     mat.disableDepthWrite = true;
     if (blend === "add") mat.alphaMode = 1; // ALPHA_ADD
-    else new SmokeEdgePlugin(mat);
+    else featherEdges(mat);
     this.mesh.material = mat;
     // Transparent pass and `alpha *= vColor.a`; without it the pool draws opaque.
     this.mesh.hasVertexAlpha = true;

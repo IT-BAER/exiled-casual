@@ -1558,7 +1558,7 @@ export function updateMapDevice(root: Mesh, hovered: boolean): void {
 /**
  * Both of these are fire, so both are emissive and neither is lit. The colour
  * here is only the part of the effect that has geometry: the bolt's head is
- * white-hot and everything orange about it lives in its particle tail
+ * white-hot and everything orange about it lives in its comet tail
  * (`skill-fx.ts`), and the disc is the hit area first and a glow second.
  */
 const FIRE_COLOR: Record<"projectile" | "groundArea", [number, number, number]> = {
