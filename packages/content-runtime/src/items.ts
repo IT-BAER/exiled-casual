@@ -41,8 +41,9 @@ const ITEM_BASES: ItemBase[] = [
   },
   // PoE2 gives every shield an implicit block chance and nothing here blocks
   // yet, so the two shields take the armour side of the base instead and roll
-  // armour and life like the rest of the armour classes.
-  { id: "base.ironsworn_tower_shield", name: "Ironsworn Tower Shield", itemClass: "shield", w: 2, h: 3, icon: "/textures/items/ironsworn_tower_shield.webp" },
+  // armour and life like the rest of the armour classes. The tower shield is
+  // PoE2's Splintered Tower Shield (poe2db: 18 Armour).
+  { id: "base.ironsworn_tower_shield", name: "Ironsworn Tower Shield", itemClass: "shield", w: 2, h: 3, stats: { armour: 18 }, icon: "/textures/items/ironsworn_tower_shield.webp" },
   // The starter weapons copy PoE2's own level-1 bases (poe2db): the hammer is the
   // Wooden Club's block, the bow the Crude Bow's. Attacks are authored against the
   // class's starter (simulation/weapon.ts), so another weapon scales them by ratio.

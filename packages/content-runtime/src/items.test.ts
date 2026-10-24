@@ -187,6 +187,7 @@ describe("the plate set's base Armour", () => {
   it.each([
     ["base.ironsworn_plate", 45], ["base.ironsworn_helm", 29],
     ["base.ironsworn_gauntlets", 15], ["base.ironsworn_sabatons", 22],
+    ["base.ironsworn_tower_shield", 18],
   ])("%s carries PoE2's first Str base value, %i", (baseId, armour) => {
     expect(itemStatMods(plain(baseId))).toContainEqual({ stat: "armour", value: armour });
     expect(describeItem(plain(baseId)).statLines).toContainEqual({ label: "Armour", value: String(armour) });
