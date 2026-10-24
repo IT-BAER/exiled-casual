@@ -3,6 +3,7 @@ import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength, strikesTheFloor } from "./skill-fx";
 import { clearFxPools } from "./fx-pool";
+import { slamDebris } from "./slam-debris";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import type { WakeBody } from "./wake";
@@ -795,6 +796,7 @@ export class SnapshotRenderer {
     if (areaChanged) {
       hitSpray(this.scene).clear();
       hitSparkle(this.scene).clear();
+      slamDebris(this.scene).clear();
       clearFxPools(this.scene);
       for (const patch of this.embers) patch.mesh.dispose();
       this.embers.length = 0;

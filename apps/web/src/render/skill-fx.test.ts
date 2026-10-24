@@ -8,6 +8,7 @@ import { GROUND_LOOK_BASES } from "./ground-looks";
 import { GROUND_LOOKS } from "./ground-fx";
 import { createScene } from "./engine";
 import { SPRAY_NAME } from "./hit-spray";
+import { slamDebris } from "./slam-debris";
 import {
   blinkBurst,
   BLINK_NAME,
@@ -314,11 +315,12 @@ describe("melee", () => {
     expect(scene.onBeforeRenderObservable.observers.length).toBe(observers);
   });
 
-  it("slams the floor: a shockwave ring, dust running out along the cone, and thrown grit", () => {
+  it("slams the floor: no light rings, dust running out along the cone, rock thrown and a crack left", () => {
     const scene = newScene();
     groundSlam(scene, new Vector3(3, 0, 2), 0, 1);
     const pools = fxPools(scene);
-    expect(pools.ring.live).toBeGreaterThan(0);
+    expect(pools.ring.emitted).toBe(0);
+    expect(slamDebris(scene).live).toBeGreaterThan(20);
     expect(pools.smoke.live).toBeGreaterThan(3);
     // Dust lies ahead of him along the facing, out toward the slam's reach.
     const far = Math.max(...pools.smoke.positions().map((p) => p.z - 2));
