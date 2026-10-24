@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   atlasGraph, isNodeReachable, areaLevel, atlasNodeTier, mapBaseIdForNode,
   waystoneRarity, type WaystoneRarity,
@@ -276,7 +276,19 @@ function NodePopup(props: {
   // Below has further to fall than above has to rise: the medallion wears its
   // name plate underneath, and covering the name of the place you just opened is
   // the one thing this panel must not do.
-  const below = node.y < 0.42;
+  // Room is measured in pixels: the field's height follows the window's shape, so
+  // a fraction of it cannot say whether the panel fits (at 2048x962 it rose off-screen).
+  const ref = useRef<HTMLDivElement>(null);
+  const [below, setBelow] = useState(node.y < 0.42);
+  useLayoutEffect(() => {
+    const el = ref.current, field = el?.parentElement;
+    if (!el || !field) return;
+    const f = field.getBoundingClientRect(), h = el.getBoundingClientRect().height;
+    const nodeY = f.top + node.y * f.height;
+    const roomAbove = nodeY - NODE, roomBelow = window.innerHeight - (nodeY + NODE + 26);
+    const want = roomAbove >= h ? false : roomBelow >= h ? true : roomBelow > roomAbove;
+    if (want !== below) setBelow(want);
+  });
   const anchorY = below
     ? { top: `calc(${(node.y * 100).toFixed(2)}% + ${NODE + 26}px)` }
     : { bottom: `calc(${(100 - node.y * 100).toFixed(2)}% + ${NODE}px)` };
@@ -286,6 +298,7 @@ function NodePopup(props: {
 
   return (
     <div
+      ref={ref}
       data-testid="prep-popup"
       style={{
         position: "absolute",

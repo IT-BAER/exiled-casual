@@ -35,6 +35,32 @@ describe("PreparationPanel", () => {
     expect(onActivate).toHaveBeenCalledWith(node.id, s.x, s.y);
   });
 
+  it("opens below a node when the screen has no room for the panel above it", () => {
+    // 2048x962: the node field is 396 px tall from y 96, and the panel is 386 px.
+    const nodes = atlasGraph(atlasSeed);
+    const node = nodes.find((n) => n.y >= 0.42 && n.y <= 0.7)!;
+    const rect = (top: number, height: number) => ({ top, height, bottom: top + height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) });
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return this.dataset.testid === "prep-popup" ? rect(0, 386) : rect(96, 396);
+    });
+    vi.stubGlobal("innerHeight", 962);
+    try {
+      render(
+        <PreparationPanel
+          atlasSeed={atlasSeed} completedNodes={nodes.map((n) => n.id)} socketedStone={null}
+          onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+        />,
+      );
+      fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
+      const popup = screen.getByTestId("prep-popup");
+      expect(popup.style.top).not.toBe("");
+      expect(popup.style.bottom).toBe("");
+    } finally {
+      spy.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("says nothing about a place until one is clicked", () => {
     render(
       <PreparationPanel
