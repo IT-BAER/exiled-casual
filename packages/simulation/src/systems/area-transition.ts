@@ -4,7 +4,8 @@ import { CONTENT_VERSION, mapBase } from "@exiled/content-runtime";
 import { mapBaseIdForNode } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { type CollisionRef } from "../collision";
-import type { SessionC, MoveTarget, MoveDir, Position } from "../components";
+import type { SessionC, MoveTarget, MoveDir, Position, HideoutFloorC } from "../components";
+import { floorOf, layFloor } from "../hideout-floor";
 import { areaCollision, buildArea, HIDEOUT_SPAWN } from "../areas";
 import { SPAWN_GRACE_TICKS } from "./damage-resolve";
 import { recomputePlayerStats } from "../derived";
@@ -46,6 +47,12 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     } else if (session.area === "map") {
       suspended = null;
     }
+    // The hideout floor is his, not the area's: lifted off before the teardown below.
+    if (session.area === "hideout" && newArea !== "hideout") {
+      const items = floorOf(world);
+      if (items.length > 0) world.set<HideoutFloorC>(sessionE, "hideoutFloor", { items });
+      else world.remove(sessionE, "hideoutFloor");
+    }
 
     // Spread alive to a snapshot before destroying (world.alive is mutated by destroy).
     for (const e of [...world.alive]) {
@@ -72,6 +79,10 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
       restoreArea(world, suspended, tick);
     } else {
       buildArea(world, newArea, newSession, layout, tick);
+    }
+    if (newArea === "hideout") {
+      layFloor(world, world.get<HideoutFloorC>(sessionE, "hideoutFloor")?.items ?? []);
+      world.remove(sessionE, "hideoutFloor");
     }
     // Entering a map consumes what was held either way: it was this map, and it
     // is now standing in the world again, or it was a map the player has walked

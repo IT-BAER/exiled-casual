@@ -193,6 +193,37 @@ describe("registerAreaTransition — map entry (collision + start socket)", () =
 });
 
 /**
+ * PoE's hideout is your own floor: an item put down there is still there after a
+ * map. Clearing it with the rest of the area destroyed the item outright.
+ */
+describe("an item left on the hideout floor is still there after a map", () => {
+  const glove = { baseId: "base.stalker_gloves", rarity: "rare" as const, itemLevel: 9, name: "Corpse Grip", affixes: [] };
+
+  function tripThroughMap() {
+    const { sim, world } = makeWorld();
+    const sessionE = world.create();
+    world.set<SessionC>(sessionE, "session", {
+      area: "hideout", atlasSeed: 0, areaTier: 1, activeNodeId: "node.the_wrackline", completedNodes: [],
+      mapSeed: 42, waystoneSeed: 0, portalsLeft: 6, mapOpen: 1, pendingArea: "map",
+    });
+    const dropped = world.create();
+    world.set<Position>(dropped, "position", { x: fp(1.5), y: fp(-2) });
+    world.set(dropped, "item", { item: glove, w: 2, h: 2 });
+    sim.step(); // into the map
+    const inMap = world.get<SessionC>(sessionE, "session")!;
+    world.set<SessionC>(sessionE, "session", { ...inMap, pendingArea: "hideout" });
+    sim.step(); // home
+    return world;
+  }
+
+  it("lays the item back where it was put down", () => {
+    const world = tripThroughMap();
+    expect(world.query("item", "position").map((e) => ({ ...world.get(e, "item")!, pos: world.get<Position>(e, "position") })))
+      .toEqual([{ item: glove, w: 2, h: 2, pos: { x: fp(1.5), y: fp(-2) } }]);
+  });
+});
+
+/**
  * Leaving a map you can still come back to freezes it. The rule is PoE1's: the
  * portal budget is what says a map is still yours, so a walk home to empty the
  * bag must not re-roll the place.

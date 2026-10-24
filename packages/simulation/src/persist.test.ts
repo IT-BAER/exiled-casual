@@ -71,6 +71,34 @@ describe("persist: snapshot/restore round-trip", () => {
       .toBeGreaterThan(bare);
   });
 
+  it("brings back what lies on the hideout floor, whether saved there or from a map", async () => {
+    const item = rollItem(ITEM_POOLS, 777, areaLevel(1), 2);
+    const base = baseOf(item.baseId);
+    const kv = new MemoryKv();
+    const { world } = createCombatSim(7, { area: "hideout" });
+    const ge = world.create();
+    world.set(ge, "position", { x: 3000, y: -1500 });
+    world.set(ge, "item", { item, w: base.w, h: base.h });
+    await saveTo(kv, world);
+
+    const reboot = createCombatSim(7, { area: "hideout" });
+    expect(await loadInto(kv, reboot.world)).toBe(true);
+    const floor = (w: typeof world) =>
+      w.query("item", "position").map((e) => [w.get(e, "position"), (w.get(e, "item") as { item: unknown }).item]);
+    expect(floor(reboot.world)).toEqual([[{ x: 3000, y: -1500 }, item]]);
+
+    // Saved from inside a map: the floor is no longer in the world, but it is his.
+    const { sim } = reboot;
+    setSession(reboot.world, { pendingArea: "map", mapOpen: 1, mapSeed: 42, portalsLeft: 6, activeNodeId: "node.the_wrackline", areaTier: 1 });
+    sim.step();
+    expect(getSession(reboot.world).area).toBe("map");
+    const kv2 = new MemoryKv();
+    await saveTo(kv2, reboot.world);
+    const third = createCombatSim(7, { area: "hideout" });
+    expect(await loadInto(kv2, third.world)).toBe(true);
+    expect(floor(third.world)).toEqual([[{ x: 3000, y: -1500 }, item]]);
+  });
+
   it("loadInto returns false when nothing was ever saved", async () => {
     const { world } = createCombatSim(7, { area: "hideout" });
     expect(await loadInto(new MemoryKv(), world)).toBe(false);

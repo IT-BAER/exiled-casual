@@ -396,6 +396,13 @@ export interface ItemC {
   /** Currency dropped from a stack: how many lie here. Absent means one. */
   count?: number;
 }
+/** A ground item with its world position (fixed-point), as it is held off the world. */
+export type FloorItem = ItemC & { x: number; y: number };
+/**
+ * The hideout floor while the player is in a map. Absent in the hideout itself,
+ * where floor items are ordinary ground entities.
+ */
+export interface HideoutFloorC { items: FloorItem[] }
 /** One placed stack in the grid inventory. */
 export interface PlacedItem {
   x: number; y: number; w: number; h: number; item: Item;
