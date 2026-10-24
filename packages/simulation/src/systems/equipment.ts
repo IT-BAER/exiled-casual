@@ -24,9 +24,11 @@ export function registerEquipmentSystem(sim: Simulation): void {
         const slot = cmd.slot;
         if (x === undefined || y === undefined || slot === undefined) continue;
 
-        const inv = world.get<InventoryC>(sessionE, "inventory")!;
-        const placed = inv.items.find((p) => p.x === x && p.y === y);
-        if (!placed) continue;
+        // 0 (or absent) = backpack, 1 = stash; a displaced piece goes back where this one came from.
+        const comp = cmd.data?.["from"] === 1 ? "stash" : "inventory";
+        const inv = world.get<InventoryC>(sessionE, comp);
+        const placed = inv?.items.find((p) => p.x === x && p.y === y);
+        if (!inv || !placed) continue;
 
         const base = baseOf(placed.item.baseId);
         if (!canEquip(base.itemClass, slot)) continue;
@@ -47,12 +49,12 @@ export function registerEquipmentSystem(sim: Simulation): void {
           const fit = placeFirstFit(tempInv, occupantBase.w, occupantBase.h);
           if (fit === null) { sim.pickupRefusedTick = tick; continue; } // rollback: leave everything unchanged
 
-          world.set<InventoryC>(sessionE, "inventory", {
+          world.set<InventoryC>(sessionE, comp, {
             ...inv,
             items: [...afterRemoval, { x: fit.x, y: fit.y, w: occupantBase.w, h: occupantBase.h, item: occupant }],
           });
         } else {
-          world.set<InventoryC>(sessionE, "inventory", { ...inv, items: afterRemoval });
+          world.set<InventoryC>(sessionE, comp, { ...inv, items: afterRemoval });
         }
 
         world.set<EquipmentC>(sessionE, "equipment", {

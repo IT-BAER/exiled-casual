@@ -311,6 +311,16 @@ describe("InventoryPanel", () => {
     expect(screen.getByTestId("drag-ghost").style.left).toContain(`${1000 + 10 * CELL + 11}px`);
   });
 
+  it("a stash piece placed on a paper-doll slot is equipped from the stash", () => {
+    const intents: unknown[] = [];
+    const stash = { cols: 12, rows: 12, items: [{ x: 3, y: 4, w: 1, h: 2, rarity: "normal" as const, name: "Ember Wand", itemClass: "wand", lines: [] }] };
+    render(<InventoryPanel inventory={{ cols: 12, rows: 5, items: [] }} stash={stash} equipment={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent.pointerDown(screen.getByTestId("stash-item-0"), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
+    fireEvent.pointerUp(screen.getByTestId("equip-slot-weapon1"));
+    expect(intents).toEqual([{ kind: "equipItem", x: 3, y: 4, slot: "weapon1", from: "stash" }]);
+  });
+
   it("drags an item across into the stash, resolving the cell against the stash's own grid", () => {
     // The two grids have different column counts, so the drop must be measured on
     // whichever grid the cursor is over. A shared cell size lands a cell out.

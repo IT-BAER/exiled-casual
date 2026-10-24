@@ -177,6 +177,21 @@ describe("equipment system — equipItem", () => {
     expect(getInv(world).items[0]!.item.itemLevel).toBe(65); // first wand back in grid
   });
 
+  it("equips straight from the stash, and the displaced piece takes its place there", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    atLevel(world, 8);
+    clearInv(world);
+    world.set<InventoryC>(sessionE(world), "stash", { cols: 12, rows: 12, items: [{ x: 3, y: 4, w: 1, h: 2, item: WAND }] });
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: { ...WAND, rarity: "magic", affixes: [{ affixId: "affix.mana", value: 9 }] } } });
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 3, y: 4, slot: "weapon1", from: "stash" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots["weapon1"]?.rarity).toBe("normal");
+    const stash = world.get<InventoryC>(sessionE(world), "stash")!;
+    expect(stash.items.map((p) => p.item.rarity)).toEqual(["magic"]);
+    expect(getInv(world).items).toHaveLength(0);
+  });
+
   it("rolls back entirely when displaced occupant does not fit back in the grid", () => {
     const { sim, world, playerEntity } = makeWorld();
 

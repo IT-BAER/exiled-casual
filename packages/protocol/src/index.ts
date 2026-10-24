@@ -28,8 +28,8 @@ export type Intent =
   | { kind: "activateMap"; atlasNodeId: string; x: number; y: number }
   /** Pick up a ground item. Sim re-checks range + placement. */
   | { kind: "pickupItem"; entityId: number }
-  /** Equip an item whose ORIGIN cell in the backpack grid is (x,y) into the given slot. */
-  | { kind: "equipItem"; x: number; y: number; slot: EquipSlotId }
+  /** Equip an item whose ORIGIN cell is (x,y) into the given slot; `from` defaults to the backpack. */
+  | { kind: "equipItem"; x: number; y: number; slot: EquipSlotId; from?: ContainerId }
   /** Unequip a slot back into the backpack grid; no-op if empty or no room. */
   | { kind: "unequipItem"; slot: EquipSlotId }
   /** Drop a backpack item (by ORIGIN cell) as a ground entity at the player's feet. */
@@ -638,7 +638,12 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent equipItem: y must be an integer");
       if (!EQUIP_SLOT_IDS.has(obj["slot"] as string))
         throw new Error("validateIntent equipItem: slot must be a valid EquipSlotId");
-      return { kind: "equipItem", x: obj["x"] as number, y: obj["y"] as number, slot: obj["slot"] as EquipSlotId };
+      if (obj["from"] !== undefined && obj["from"] !== "backpack" && obj["from"] !== "stash")
+        throw new Error("validateIntent equipItem: from must be \"backpack\" or \"stash\"");
+      return {
+        kind: "equipItem", x: obj["x"] as number, y: obj["y"] as number, slot: obj["slot"] as EquipSlotId,
+        ...(obj["from"] !== undefined ? { from: obj["from"] as ContainerId } : {}),
+      };
     }
     case "unequipItem": {
       if (!EQUIP_SLOT_IDS.has(obj["slot"] as string))

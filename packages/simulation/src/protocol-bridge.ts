@@ -68,7 +68,10 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "pickupItem":
       return { tick, entity: player, type: "pickupItem", data: { entityId: intent.entityId } };
     case "equipItem":
-      return { tick, entity: player, type: "equipItem", data: { x: intent.x, y: intent.y }, slot: intent.slot };
+      return {
+        tick, entity: player, type: "equipItem", slot: intent.slot,
+        data: { x: intent.x, y: intent.y, ...(intent.from === "stash" ? { from: 1 } : {}) },
+      };
     case "applyCurrency":
       if ("slot" in intent) return { tick, entity: player, type: "applyCurrency", data: { fromX: intent.fromX, fromY: intent.fromY }, slot: intent.slot };
       return {

@@ -616,8 +616,11 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       const onGrid = !!target?.closest("[data-drop-grid]");
       const insidePanel = !!boxRef.current && !!target && boxRef.current.contains(target);
       if (slot) {
-        if (drag.from.kind === "grid" && drag.from.container === "backpack" && wearable(drag.item, slot)) {
-          onIntent?.({ kind: "equipItem", x: drag.from.x, y: drag.from.y, slot });
+        if (drag.from.kind === "grid" && (drag.from.container === "backpack" || drag.from.container === "stash") && wearable(drag.item, slot)) {
+          onIntent?.({
+            kind: "equipItem", x: drag.from.x, y: drag.from.y, slot,
+            ...(drag.from.container === "stash" ? { from: "stash" as const } : {}),
+          });
         }
         return;
       }
