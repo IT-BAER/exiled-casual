@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { describe, it, expect } from "vitest";
-import { FAMILY_BY_CLASS, areaLevel, familyOf } from "@exiled/rules";
+import { FAMILY_BY_CLASS, areaLevel, familyOf, rollItem } from "@exiled/rules";
 import { ITEM_POOLS, UNARMED, baseOf, describeItem, itemStatMods, spellAddedDamage, waystoneItem, weaponDamage } from "./items.js";
 
 describe("ITEM_POOLS", () => {
@@ -143,6 +143,34 @@ describe("uniques", () => {
     for (const u of ITEM_POOLS.uniques ?? []) {
       expect(existsSync(new URL(`../../../apps/web/public${u.icon}`, import.meta.url)), u.icon).toBe(true);
     }
+  });
+});
+
+describe("rare names", () => {
+  const equipment = ITEM_POOLS.bases.filter((b) => b.itemClass !== "currency" && b.itemClass !== "waystone");
+  const namesOf = (baseId: string, n: number) => {
+    const pools = { bases: ITEM_POOLS.bases.filter((b) => b.id === baseId), affixes: ITEM_POOLS.affixes };
+    return Array.from({ length: n }, (_, i) => rollItem(pools, 0x9e3779b9 ^ i, 60, 2, "rare").name!);
+  };
+
+  it("never reuse a word of a base name, so a rare cannot read as a set piece", () => {
+    const baseWords = new Set(ITEM_POOLS.bases.flatMap((b) => b.name.split(" ")));
+    for (const b of equipment) {
+      const clash = namesOf(b.id, 400).flatMap((n) => n.split(" ")).filter((w) => baseWords.has(w));
+      expect(clash, b.id).toEqual([]);
+    }
+  });
+
+  it("end on a word of the item's own kind: a ring and a wand share no second word", () => {
+    const second = (id: string) => new Set(namesOf(id, 600).map((n) => n.split(" ")[1]));
+    const ring = equipment.find((b) => b.itemClass === "ring")!, wand = equipment.find((b) => b.itemClass === "wand")!;
+    const wandWords = second(wand.id);
+    expect([...second(ring.id)].filter((w) => wandWords.has(w))).toEqual([]);
+  });
+
+  it("give one base more than 256 different names", () => {
+    const ring = equipment.find((b) => b.itemClass === "ring")!;
+    expect(new Set(namesOf(ring.id, 4000)).size).toBeGreaterThan(256);
   });
 });
 

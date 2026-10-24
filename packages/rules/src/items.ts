@@ -198,7 +198,7 @@ export function rollItem(
   const item: Item = { baseId: base.id, rarity: finalRarity, itemLevel: ilvl, affixes };
   // Only an item with something to reveal drops unidentified.
   if (finalRarity !== "normal") item.unidentified = true;
-  if (finalRarity === "rare") item.name = rareName(rnd);
+  if (finalRarity === "rare") item.name = rareName(rnd, base.itemClass);
   if (finalRarity === "magic") item.name = magicName(pools, base.name, affixes);
   return item;
 }

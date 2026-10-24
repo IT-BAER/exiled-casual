@@ -107,6 +107,6 @@ export function applyCurrency(pools: ItemPools, currencyId: string, item: Item, 
   // A magic item's name is its own two mods, so it is rebuilt every time they change.
   // A rare keeps the name it was given; only the promotion into rare earns a new one.
   if (t.to === "magic") out.name = magicName(pools, base.name, affixes);
-  else if (item.rarity !== "rare") out.name = rareName(rnd);
+  else if (item.rarity !== "rare") out.name = rareName(rnd, base.itemClass);
   return out;
 }
