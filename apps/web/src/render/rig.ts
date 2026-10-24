@@ -981,10 +981,12 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * the chest's: the jog alone twists the shoulder line +-38 deg over the hips and
  * pitches the chest, and a braced arm swept the shield through it. `idle` gives the
  * arm back to the idle clip while nothing else plays: its own hold is the right one.
+ * `hold` is how much of the carry is laid on at full weight; the rest of the clip's
+ * own arm motion shows through, or a fully held shield reads as bolted on.
  */
-const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean }[] = [
-  { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: UPPER_BODY_CLIPS, roll: true, steady: false, idle: false },
-  { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true, idle: true },
+const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean; hold: number }[] = [
+  { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: UPPER_BODY_CLIPS, roll: true, steady: false, idle: false, hold: 1 },
+  { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true, idle: true, hold: 0.8 },
 ];
 
 /**
@@ -2292,9 +2294,10 @@ export class RigActor {
           const busy = idling || (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
           carry.weight = worn(this.looks) && !busy ? Math.min(1, carry.weight + step) : Math.max(0, carry.weight - step);
           if (carry.weight <= 0) continue;
+          const weight = carry.weight * carry.spec.hold;
           for (const { node, pose } of carry.pose) {
             const rot = node.rotationQuaternion;
-            if (rot) Quaternion.SlerpToRef(rot, pose, carry.weight, rot);
+            if (rot) Quaternion.SlerpToRef(rot, pose, weight, rot);
           }
           if (carry.spec.steady && this.steady) {
             // The arm, and the shield strapped to its forearm, takes the authored pose in the
@@ -2303,14 +2306,14 @@ export class RigActor {
             freshWorld(fore);
             const h = headingOf(this.pivot);
             const upperNow = fore.getAbsolutePosition().subtract(arm.getAbsolutePosition()).normalize();
-            swing(arm, upperNow, Vector3.Lerp(upperNow, outOfHeading(this.steady.upper, h), carry.weight).normalize());
+            swing(arm, upperNow, Vector3.Lerp(upperNow, outOfHeading(this.steady.upper, h), weight).normalize());
             freshWorld(grip);
             const axisNow = grip.getAbsolutePosition().subtract(fore.getAbsolutePosition()).normalize();
-            const axis = Vector3.Lerp(axisNow, outOfHeading(this.steady.axis, h), carry.weight).normalize();
+            const axis = Vector3.Lerp(axisNow, outOfHeading(this.steady.axis, h), weight).normalize();
             swing(fore, axisNow, axis);
             freshWorld(side);
             const sideNow = across(side.getAbsolutePosition().subtract(fore.getAbsolutePosition()), axis);
-            swing(fore, sideNow, across(Vector3.Lerp(sideNow, outOfHeading(this.steady.side, h), carry.weight), axis));
+            swing(fore, sideNow, across(Vector3.Lerp(sideNow, outOfHeading(this.steady.side, h), weight), axis));
           }
         }
       });

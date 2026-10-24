@@ -2401,8 +2401,8 @@ describe("each melee skill plays its own take", () => {
 /**
  * The tower shield is strapped rigidly to `lowerarm_l`, so the jog's arm swing
  * waved it about like a board, and the jog's shoulders twist +-38 deg over the
- * hips besides. Worn, `SHIELD_CARRY` braces that arm through every clip and holds
- * it in the rig's heading, so the shield rides with the shoulder but never rocks; the buckler keeps the free swing. He runs in place
+ * hips besides. Worn, `SHIELD_CARRY` braces that arm through every clip but idle and holds
+ * most of it in the rig's heading, so the shield sways a little but never waves; the buckler keeps the free swing. He runs in place
  * facing one way, so swing is the forearm's world rotation, worst frame against
  * the first.
  */
@@ -2442,7 +2442,8 @@ describe("the tower shield is braced, not swung", () => {
     expect(deg(await stand("towershield", true), await stand("buckler", true))).toBeGreaterThan(10);
   }, 60_000);
 
-  async function swing(body: "male" | "female", weapon2: string, strike: boolean): Promise<number> {
+  /** Worst forearm turn against the first frame, and how far ahead of the shoulder (+Z, his heading) the forearm's middle rides on average. */
+  async function swing(body: "male" | "female", weapon2: string, strike: boolean): Promise<{ worst: number; ahead: number }> {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     try {
@@ -2457,18 +2458,20 @@ describe("the tower shield is braced, not swung", () => {
       const rig = attachRig(scene, new Mesh("hero", scene), body)!;
       rig.setLooks({ ...BASE_LOOKS, base: body, weapon2 });
       const bone = (n: string) => scene.transformNodes.find((t) => t.name === n && t.isEnabled())!;
-      const forearm = bone("lowerarm_l");
+      const [shoulder, forearm, hand] = [bone("upperarm_l"), bone("lowerarm_l"), bone("hand_l")];
       const relative = () => Quaternion.FromRotationMatrix(forearm.computeWorldMatrix(true).getRotationMatrix());
       const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); };
       for (let i = 0; i < 40; i++) frame();
       const first = relative();
       if (strike) rig.playStrike();
-      let worst = 0;
+      let worst = 0, ahead = 0;
       for (let i = 0; i < 60; i++) {
         frame();
         worst = Math.max(worst, deg(first, relative()));
+        hand.computeWorldMatrix(true);
+        ahead += ((forearm.getAbsolutePosition().z + hand.getAbsolutePosition().z) / 2 - shoulder.getAbsolutePosition().z) / 60;
       }
-      return worst;
+      return { worst, ahead };
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
@@ -2489,19 +2492,29 @@ describe("the tower shield is braced, not swung", () => {
     }
   });
 
-  it("holds the tower shield on his heading through the jog", async () => {
-    expect(await swing("male", "towershield", false)).toBeLessThan(2);
+  // The idle hold rides the forearm 0.01 m ahead of the shoulder; the first brace held it at
+  // 0.25 m and 0 deg through the jog, which read as stiff and thrust forward.
+  it("carries the tower shield low at his flank through the jog, not thrust ahead", async () => {
+    expect((await swing("male", "towershield", false)).ahead).toBeLessThan(0.12);
   }, 60_000);
 
-  it("holds it through a strike on the run", async () => {
-    expect(await swing("male", "towershield", true)).toBeLessThan(2);
+  it("lets the jog sway the tower shield a little, far short of the buckler's swing", async () => {
+    const { worst } = await swing("male", "towershield", false);
+    expect(worst).toBeGreaterThan(5);
+    expect(worst).toBeLessThan(20);
   }, 60_000);
 
-  it("holds it on her body too", async () => {
-    expect(await swing("female", "towershield", false)).toBeLessThan(2);
+  it("keeps it in hand through a strike on the run", async () => {
+    expect((await swing("male", "towershield", true)).worst).toBeLessThan(25);
+  }, 60_000);
+
+  it("sways it on her body too", async () => {
+    const { worst, ahead } = await swing("female", "towershield", false);
+    expect(worst).toBeLessThan(20);
+    expect(ahead).toBeLessThan(0.12);
   }, 60_000);
 
   it("leaves the buckler's arm swinging with the jog", async () => {
-    expect(await swing("male", "buckler", false)).toBeGreaterThan(15);
+    expect((await swing("male", "buckler", false)).worst).toBeGreaterThan(40);
   }, 60_000);
 });

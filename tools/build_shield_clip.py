@@ -3,11 +3,11 @@
 The tower shield is skinned rigidly to `lowerarm_l`, strapped along the forearm,
 so under the pack's clips it swings with the arm and waves about like a board.
 This one-pose clip braces the shield arm: the shoulder at bind, the upper arm
-forward, out and a little down, and the forearm turned so the shield stands
-nearly upright off the left hip, its face turned 50 deg out and its bottom kicked
-forward, clear of the striding knee. `rig.ts` lays it over every clip while the
-tower shield is worn and holds the arm in the hips' heading, so the shield rides
-with the shoulder and never rocks.
+hanging down and a little out at the flank, near the idle clip's own hold, and
+the forearm turned so the shield stands nearly upright off the left hip, its face
+turned 65 deg out, clear of the striding knee. `rig.ts` lays most of it over every
+clip but idle while the tower shield is worn and holds the arm in the hips'
+heading, so the shield sways a little with the stride but never waves.
 
 The shield is rigid on the forearm, so the forearm's world rotation is solved
 straight from the wanted shield frame; the upper arm only places the elbow, and
@@ -42,11 +42,11 @@ SHIELD = "weapon2.towershield.mesh"
 KEYED = ("clavicle_l", "upperarm_l", "lowerarm_l", "hand_l")
 
 # Upper arm direction off the shoulder: out (+X), forward (-Y), down (-Z).
-UPPER = Vector((0.6, -0.8, -0.45)).normalized()
+UPPER = Vector((0.5, -0.05, -0.86)).normalized()
 # Shield face turned this far outward from straight ahead.
-OUTWARD = math.radians(50.0)
+OUTWARD = math.radians(65.0)
 # The shield's bottom kicked forward off vertical.
-LEAN = math.radians(12.0)
+LEAN = math.radians(4.0)
 # Where the left knee travels in the jog, metres off the left shoulder in the hips'
 # heading (out, up, forward), measured at `?viewer` and grown by its knee cop's 9 cm.
 # No shield vertex may sit inside it, or the knee strides through the shield.
