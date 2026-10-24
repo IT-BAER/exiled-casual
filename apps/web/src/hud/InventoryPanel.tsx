@@ -1215,7 +1215,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                 {...s}
                 item={equipment[s.slot]}
                 highlight={slotHighlight(s.slot)}
-                onGrab={(slot, e) => grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e)}
+                // An orb in the hand never picks the worn piece up, same as in the grid.
+                onGrab={(slot, e) => { if (armed) { e.preventDefault(); return; } grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e); }}
                 onHover={(_item, e) => !drag && setHover({ at: { slot: s.slot }, x: e.clientX, y: e.clientY })}
                 onLeave={() => setHover(null)}
               />

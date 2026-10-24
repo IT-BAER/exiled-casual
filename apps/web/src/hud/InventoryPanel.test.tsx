@@ -739,6 +739,18 @@ describe("spending currency on an item", () => {
     expect(screen.queryByTestId("drag-ghost")).toBeNull();
   });
 
+  it("an armed click on a worn piece never takes it off", () => {
+    // The grab is the first step of losing it: the next click on the world drops it.
+    const seen: unknown[] = [];
+    const worn = { gloves: { rarity: "rare" as const, name: "Stalker Gloves", itemClass: "gloves", lines: [], unidentified: true } };
+    render(<InventoryPanel inventory={withScroll} equipment={worn} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("equip-slot-gloves"));
+    expect(screen.queryByTestId("drag-ghost")).toBeNull();
+    fireEvent.pointerUp(screen.getByTestId("inventory-panel"));
+    expect(seen).toEqual([]);
+  });
+
   it("refuses a target the armed orb cannot legally change", () => {
     const seen: unknown[] = [];
     const withOrb = {
