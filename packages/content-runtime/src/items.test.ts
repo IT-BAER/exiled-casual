@@ -12,6 +12,12 @@ describe("ITEM_POOLS", () => {
       expect(b.h).toBeGreaterThan(0);
     }
   });
+
+  // No character totals Str, Dex or Int, so a tooltip's attribute requirement
+  // could never be met or checked; reqLevel is the only one equip enforces.
+  it("asks for no attribute on any base", () => {
+    expect(ITEM_POOLS.bases.filter((b) => b.stats?.reqAttr !== undefined).map((b) => b.id)).toEqual([]);
+  });
 });
 
 describe("describeItem", () => {

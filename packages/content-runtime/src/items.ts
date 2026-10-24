@@ -125,7 +125,7 @@ const ITEM_BASES: ItemBase[] = [
     itemClass: "wand",
     w: 1,
     h: 2,
-    stats: { physMin: 5, physMax: 10, critPct: 8, aps: 1.2, reqLevel: 8, reqAttrValue: 29, reqAttr: "Int" },
+    stats: { physMin: 5, physMax: 10, critPct: 8, aps: 1.2, reqLevel: 8 },
     // PoE2 wand implicits all grant a skill ("Grants Skill: Power Siphon"), which nothing
     // in the sim can honour, so this borrows the implicit of the base whose stat block the
     // wand already copies: PoE1's Goat's Horn, (10-15)% increased Spell Damage. Here
