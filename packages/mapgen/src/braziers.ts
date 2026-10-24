@@ -30,7 +30,7 @@ export const CONTAINER_CLEAR = 0.6;
 /** World units between a bowl's centre and the nearest rock: its radius plus a margin. */
 export const FIRE_CLEARANCE = 0.5;
 /** A player body's width: what must still fit between a bowl and a container, or a
- *  strongroom whose door holds both is shut. */
+ *  strongroom whose door holds both is shut, and between a bowl and any rock in front of it. */
 const BODY_GAP = 1;
 /** Bodies a bowl may never shut out of a room: the player and the widest trash (Rotting Behemoth). */
 const BODY_RADII = [0.5, 0.8];
@@ -101,6 +101,18 @@ export function brazierSpots(
       const wx = originX + (x - dx / 2) * cellSize;
       const wz = originY + (y - dy / 2) * cellSize;
       if (!clear(wx, wz, x, y)) continue;
+      // The lane only checks straight lines; a rock off its diagonal still pinched
+      // the way past the bowl to less than a body. 4 cells reach past that gap.
+      let passable = true;
+      for (let j = y - 4; j <= y + 4 && passable; j++) {
+        for (let i = x - 4; i <= x + 4 && passable; i++) {
+          if (isFloor(i, j) || (i - x) * dx + (j - y) * dy >= 1) continue; // the wall it backs onto
+          const gx = Math.max(0, Math.abs(wx - (originX + i * cellSize)) - half);
+          const gz = Math.max(0, Math.abs(wz - (originY + j * cellSize)) - half);
+          passable = Math.hypot(gx, gz) >= BRAZIER_RADIUS + BODY_GAP;
+        }
+      }
+      if (!passable) continue;
       // Only a reward container is solid; the other anchors keep the old margin.
       if (keepClear.some((c) => Math.hypot(wx - c.x, wz - c.y) < CONTAINER_CLEAR
         + (c.id?.startsWith("reward.") ? BODY_GAP + BRAZIER_RADIUS : FIRE_CLEARANCE))) continue;

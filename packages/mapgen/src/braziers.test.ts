@@ -16,6 +16,28 @@ describe("brazierSpotsFor", () => {
     }
   }, 30_000);
 
+  it("leaves a body's width between a bowl and every rock in front of its wall", () => {
+    // A 0.5 body is 1 wide; a rock a cell off the lane's diagonal shut the way past the bowl.
+    for (const g of ["loop", "open-field", "sunken-ruins", "coast"] as GrammarId[]) {
+      for (let seed = 0; seed < 60; seed++) {
+        const { cols, rows, cellSize, originX, originY, cells } = generateArea(seed, "v", g).grid;
+        const wall = (x: number, y: number) => x < 0 || y < 0 || x >= cols || y >= rows || cells[y * cols + x] !== 1;
+        for (const s of brazierSpotsFor(generateArea(seed, "v", g))) {
+          const fx = (s.x - originX) / cellSize, fy = (s.z - originY) / cellSize;
+          const [nx, ny] = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).find(([dx, dy]) => Number.isInteger(fx + dx * 1.5) && Number.isInteger(fy + dy * 1.5) && wall(fx + dx * 1.5, fy + dy * 1.5))!;
+          for (let y = Math.floor(fy) - 6; y <= Math.ceil(fy) + 6; y++) {
+            for (let x = Math.floor(fx) - 6; x <= Math.ceil(fx) + 6; x++) {
+              // The wall the bowl backs onto starts 1.5 cells along its normal.
+              if (!wall(x, y) || (x - fx) * nx + (y - fy) * ny >= 1.5) continue;
+              const gx = Math.max(0, Math.abs(x - fx) - 0.5), gy = Math.max(0, Math.abs(y - fy) - 0.5);
+              expect(Math.hypot(gx, gy) * cellSize - BRAZIER_RADIUS, `${g} seed ${seed} bowl ${s.x},${s.z} rock ${x},${y}`).toBeGreaterThanOrEqual(1);
+            }
+          }
+        }
+      }
+    }
+  }, 30_000);
+
   it("never stands a bowl against a fen pool", () => {
     let wet = 0;
     for (let seed = 0; seed < 20; seed++) {
