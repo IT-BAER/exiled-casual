@@ -182,6 +182,23 @@ const TILT_COS = Math.cos(PAINTED_TILT);
 /** The painted bowls are wider for their flame than the game's prop, so the
  *  fire is stretched across to fill their coal beds. */
 const BOWL_WIDEN = 1.4;
+/**
+ * How far below the painted near rim the flame's coal face sits, as a share of
+ * the drawn flame. The root fades in over its first centimetres; in the game the
+ * bowl's lip hides that, on a painting nothing does and it read as a dark band
+ * between fire and rim. Sunk this far, the rim line cuts the body at full strength.
+ */
+export const ROOT_SINK = 0.08;
+
+/** The flame body's screen box for a bowl whose near rim is at `base`: its coal
+ *  face, and the scissor that cuts it at the rim. CSS pixels, y down. */
+export function bodyBox(cx: number, base: number, flame: number) {
+  const scale = flame / FLAME_H;
+  const coal = base + flame * ROOT_SINK;
+  const half = TONGUE_W * scale * 0.65 * BOWL_WIDEN;
+  const top = coal - (TONGUE_H * TILT_COS + TONGUE_W * TILT_SIN) * scale;
+  return { scale, coal, left: cx - half, right: cx + half, top, bottom: base };
+}
 
 /**
  * How many colours of the spark ramp get their own pre-rendered dot, and how
@@ -422,15 +439,13 @@ export function Braziers({
         const scale = flame / FLAME_H;
         if (body) {
           const { gl } = body;
-          const half = TONGUE_W * scale * 0.65 * BOWL_WIDEN;
-          const top = base - (TONGUE_H * TILT_COS + TONGUE_W * TILT_SIN) * scale;
-          const bottom = base + TONGUE_W * TILT_SIN * scale;
+          const box = bodyBox(cx, base, flame);
           // Framebuffer pixels, y up.
           gl.scissor(
-            Math.floor((cx - half) * dpr), Math.floor((h - bottom) * dpr),
-            Math.ceil(half * 2 * dpr), Math.ceil((bottom - top) * dpr),
+            Math.floor(box.left * dpr), Math.floor((h - box.bottom) * dpr),
+            Math.ceil((box.right - box.left) * dpr), Math.ceil((box.bottom - box.top) * dpr),
           );
-          gl.uniform2f(body.base, cx * dpr, (h - base) * dpr);
+          gl.uniform2f(body.base, cx * dpr, (h - box.coal) * dpr);
           gl.uniform1f(body.scale, scale * dpr);
           gl.uniform1f(body.time, p);
           // Half the light's swing: the body is the steady part of a fire.
