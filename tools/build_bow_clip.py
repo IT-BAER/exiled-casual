@@ -440,9 +440,9 @@ def build():
     )
 
 
-def splice(clip_name, keyed):
+def splice(clip_name, keyed, scratch=SCRATCH):
     doc, blob = read_glb(ANIMS)
-    add, extra = read_glb(SCRATCH)
+    add, extra = read_glb(scratch)
 
     clips = [a for a in add.get("animations", []) if a.get("name") == clip_name]
     assert len(clips) == 1, [a.get("name") for a in add.get("animations", [])]

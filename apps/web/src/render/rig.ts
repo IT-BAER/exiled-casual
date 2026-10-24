@@ -794,6 +794,13 @@ export const BOW_HOOK: readonly [number, number] = [3 / 30, 8 / 30];
  * them while the bow is worn and no action clip owns the upper body, eased over `CARRY_EASE_SEC`.
  */
 export const BOW_CARRY = "Rig|Bow_Carry";
+/**
+ * The tower shield is strapped rigidly to `lowerarm_l`, so a swinging arm waves
+ * it about. Its carry (`tools/build_shield_clip.py`) braces the whole shield arm
+ * and holds through strikes, casts, hits and the roll; the buckler swings free.
+ */
+export const SHIELD_CARRY = "Rig|Shield_Carry";
+const SHIELD_LOOK = "towershield";
 const CARRY_EASE_SEC = 0.25;
 const STRING_RADIUS = 0.003;
 /** The donor's own string colour (`STRING_COLOUR` in `tools/prep_held_weapons.py`). */
@@ -969,6 +976,17 @@ const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>([...ACTION_CLIPS
 export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(clip);
 
 /**
+ * Each carry clip, when its look is worn, and the clips (and the roll) it gives
+ * the arm back to. A `steady` carry holds its arm in the rig's heading instead of
+ * the chest's: the jog alone twists the shoulder line +-38 deg over the hips and
+ * pitches the chest, and a braced arm swept the shield through it.
+ */
+const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean }[] = [
+  { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: UPPER_BODY_CLIPS, roll: true, steady: false },
+  { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true },
+];
+
+/**
  * How much of a clip's hips bounce to keep, PER CLIP. The jog is authored with
  * 26% of hip height of vertical travel, which on this character is a 0.25-unit
  * hop and reads as bounding rather than running. The curve is compressed toward
@@ -1083,6 +1101,25 @@ function swing(bone: TransformNode, from: Vector3, to: Vector3): void {
   Quaternion.FromUnitVectorsToRef(f, t, new Quaternion()).multiplyToRef(rot, rot);
   bone.computeWorldMatrix(true);
 }
+
+/** Where a node faces: its own three axes in world space. */
+interface Heading { left: Vector3; up: Vector3; fwd: Vector3 }
+
+function headingOf(node: TransformNode): Heading {
+  const m = node.getWorldMatrix();
+  return {
+    left: Vector3.TransformNormal(Vector3.Right(), m).normalize(),
+    up: Vector3.TransformNormal(Vector3.Up(), m).normalize(),
+    fwd: Vector3.TransformNormal(Vector3.Forward(), m).normalize(),
+  };
+}
+
+const intoHeading = (v: Vector3, h: Heading): Vector3 =>
+  new Vector3(Vector3.Dot(v, h.left), Vector3.Dot(v, h.up), Vector3.Dot(v, h.fwd));
+const outOfHeading = (c: Vector3, h: Heading): Vector3 =>
+  h.left.scale(c.x).addInPlace(h.up.scale(c.y)).addInPlace(h.fwd.scale(c.z));
+/** `v` without its part along unit `axis`, normalised. */
+const across = (v: Vector3, axis: Vector3): Vector3 => v.subtract(axis.scale(Vector3.Dot(v, axis))).normalize();
 
 /** A leg held where it stood: the foot's world matrix and the knee over the rig pivot's. */
 interface PlantedLeg {
@@ -1413,9 +1450,17 @@ export class RigActor {
   private readonly tips = new Map<string, Vector3>();
   private bowString: BowString | null = null;
   private stringObserver: Observer<Scene> | null = null;
-  /** The carry pose per bow-arm bone, how far it is laid over the clips, and its observer. */
-  private carry: { node: TransformNode; pose: Quaternion }[] = [];
-  private carryWeight = 0;
+  /** Per `CARRIES` entry, its pose per bone and how far it is laid over the clips; one observer for all. */
+  private carries: { spec: (typeof CARRIES)[number]; pose: { node: TransformNode; pose: Quaternion }[]; weight: number }[] = [];
+  /**
+   * A steady carry's arm, and the upper arm's line, the forearm's axis and a side
+   * line off it in the pivot's heading, read at bind with the carry laid on: the
+   * pose `tools/build_shield_clip.py` authored.
+   */
+  private steady: {
+    arm: TransformNode; forearm: TransformNode; hand: TransformNode; thumb: TransformNode;
+    upper: Vector3; axis: Vector3; side: Vector3;
+  } | null = null;
   private carryObserver: Observer<Scene> | null = null;
   /** Bones that carry the cast toward the cursor: spine, clavicle, upper arm. */
   private aimBones: TransformNode[] = [];
@@ -2208,23 +2253,62 @@ export class RigActor {
       });
     }
 
-    const carried = loaded.anims.animationGroups.find((g) => g.name === BOW_CARRY);
-    for (const t of carried?.targetedAnimations ?? []) {
-      const node = byName.get((t.target as Node).name);
-      if (t.animation.targetProperty === ROTATION && node instanceof TransformNode) {
-        this.carry.push({ node, pose: t.animation.evaluate(carried!.from) as Quaternion });
+    for (const spec of CARRIES) {
+      const carried = loaded.anims.animationGroups.find((g) => g.name === spec.clip);
+      const pose: { node: TransformNode; pose: Quaternion }[] = [];
+      for (const t of carried?.targetedAnimations ?? []) {
+        const node = byName.get((t.target as Node).name);
+        if (t.animation.targetProperty === ROTATION && node instanceof TransformNode) {
+          pose.push({ node, pose: t.animation.evaluate(carried!.from) as Quaternion });
+        }
       }
+      if (pose.length > 0) this.carries.push({ spec, pose, weight: 0 });
     }
-    if (this.carry.length > 0) {
+    const joint = (name: string) => byName.get(name) as TransformNode | undefined;
+    const [armL, foreL, handL, thumbL] = ["upperarm_l", "lowerarm_l", "hand_l", "thumb_01_l"].map(joint);
+    const steadied = this.carries.find((c) => c.spec.steady);
+    if (steadied && armL && foreL && handL && thumbL) {
+      const saved = steadied.pose.map(({ node }) => node.rotationQuaternion?.clone());
+      for (const { node, pose } of steadied.pose) node.rotationQuaternion?.copyFrom(pose);
+      freshWorld(thumbL);
+      const h = headingOf(this.pivot);
+      const upper = foreL.getAbsolutePosition().subtract(armL.getAbsolutePosition()).normalize();
+      const axis = handL.getAbsolutePosition().subtract(foreL.getAbsolutePosition()).normalize();
+      const side = across(thumbL.getAbsolutePosition().subtract(foreL.getAbsolutePosition()), axis);
+      this.steady = {
+        arm: armL, forearm: foreL, hand: handL, thumb: thumbL,
+        upper: intoHeading(upper, h), axis: intoHeading(axis, h), side: intoHeading(side, h),
+      };
+      steadied.pose.forEach(({ node }, i) => { if (saved[i]) node.rotationQuaternion?.copyFrom(saved[i]!); });
+    }
+    if (this.carries.length > 0) {
       this.carryObserver = this.scene.onAfterAnimationsObservable.add(() => {
-        const worn = this.looks.weapon1 === BOW_LOOK;
-        const busy = this.isRolling() || [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
         const step = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000 / CARRY_EASE_SEC;
-        this.carryWeight = worn && !busy ? Math.min(1, this.carryWeight + step) : Math.max(0, this.carryWeight - step);
-        if (this.carryWeight <= 0) return;
-        for (const { node, pose } of this.carry) {
-          const rot = node.rotationQuaternion;
-          if (rot) Quaternion.SlerpToRef(rot, pose, this.carryWeight, rot);
+        for (const carry of this.carries) {
+          const { worn, yieldsTo, roll } = carry.spec;
+          const busy = (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
+          carry.weight = worn(this.looks) && !busy ? Math.min(1, carry.weight + step) : Math.max(0, carry.weight - step);
+          if (carry.weight <= 0) continue;
+          for (const { node, pose } of carry.pose) {
+            const rot = node.rotationQuaternion;
+            if (rot) Quaternion.SlerpToRef(rot, pose, carry.weight, rot);
+          }
+          if (carry.spec.steady && this.steady) {
+            // The arm, and the shield strapped to its forearm, takes the authored pose in the
+            // rig's heading off wherever the shoulder is, however the chest twists and pitches.
+            const { arm, forearm: fore, hand: grip, thumb: side } = this.steady;
+            freshWorld(fore);
+            const h = headingOf(this.pivot);
+            const upperNow = fore.getAbsolutePosition().subtract(arm.getAbsolutePosition()).normalize();
+            swing(arm, upperNow, Vector3.Lerp(upperNow, outOfHeading(this.steady.upper, h), carry.weight).normalize());
+            freshWorld(grip);
+            const axisNow = grip.getAbsolutePosition().subtract(fore.getAbsolutePosition()).normalize();
+            const axis = Vector3.Lerp(axisNow, outOfHeading(this.steady.axis, h), carry.weight).normalize();
+            swing(fore, axisNow, axis);
+            freshWorld(side);
+            const sideNow = across(side.getAbsolutePosition().subtract(fore.getAbsolutePosition()), axis);
+            swing(fore, sideNow, across(Vector3.Lerp(sideNow, outOfHeading(this.steady.side, h), carry.weight), axis));
+          }
         }
       });
     }
@@ -2450,8 +2534,8 @@ export class RigActor {
     this.stringObserver = null;
     if (this.carryObserver) this.scene.onAfterAnimationsObservable.remove(this.carryObserver);
     this.carryObserver = null;
-    this.carry = [];
-    this.carryWeight = 0;
+    this.carries = [];
+    this.steady = null;
     this.bowString?.dispose();
     this.bowString = null;
     this.aimBones = [];

@@ -14,6 +14,7 @@ import {
   aimAngles,
   ARM_MAX,
   BOW_CARRY,
+  SHIELD_CARRY,
   BOW_HOOK,
   BOW_RELEASE,
   bowStringFor,
@@ -2395,4 +2396,80 @@ describe("each melee skill plays its own take", () => {
   it("falls back to the chain while the library lacks the skill's own take", () => {
     expect(strikeClipFor("skill.ground_slam.v1", 1, (c) => c !== "slam")).toBe("strikeB");
   });
+});
+
+/**
+ * The tower shield is strapped rigidly to `lowerarm_l`, so the jog's arm swing
+ * waved it about like a board, and the jog's shoulders twist +-38 deg over the
+ * hips besides. Worn, `SHIELD_CARRY` braces that arm through every clip and holds
+ * it in the rig's heading, so the shield rides with the shoulder but never rocks; the buckler keeps the free swing. He runs in place
+ * facing one way, so swing is the forearm's world rotation, worst frame against
+ * the first.
+ */
+describe("the tower shield is braced, not swung", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const deg = (a: Quaternion, b: Quaternion) => (2 * Math.acos(Math.min(1, Math.abs(Quaternion.Dot(a, b))))) * 180 / Math.PI;
+
+  async function swing(body: "male" | "female", weapon2: string, strike: boolean): Promise<number> {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      const wardrobe = body === "male" ? "wardrobe.glb" : "wardrobe-female.glb";
+      await loadPlayerRig(scene, [body], { anims: file("anim-library.glb"), wardrobes: { [body]: file(wardrobe) } });
+      const rig = attachRig(scene, new Mesh("hero", scene), body)!;
+      rig.setLooks({ ...BASE_LOOKS, base: body, weapon2 });
+      const bone = (n: string) => scene.transformNodes.find((t) => t.name === n && t.isEnabled())!;
+      const forearm = bone("lowerarm_l");
+      const relative = () => Quaternion.FromRotationMatrix(forearm.computeWorldMatrix(true).getRotationMatrix());
+      const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); };
+      for (let i = 0; i < 40; i++) frame();
+      const first = relative();
+      if (strike) rig.playStrike();
+      let worst = 0;
+      for (let i = 0; i < 60; i++) {
+        frame();
+        worst = Math.max(worst, deg(first, relative()));
+      }
+      return worst;
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }
+
+  it("keys the shield arm alone", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      const { scene } = createScene(engine);
+      const lib = await LoadAssetContainerAsync(
+        new File([readFileSync(`${MODELS}anim-library.glb`)], "anim-library.glb", { type: "model/gltf-binary" }), scene);
+      const carry = lib.animationGroups.find((g) => g.name === SHIELD_CARRY)!;
+      expect(carry.targetedAnimations.map((t) => (t.target as TransformNode).name).sort()).toEqual(["clavicle_l", "hand_l", "lowerarm_l", "upperarm_l"]);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
+  it("holds the tower shield on his heading through the jog", async () => {
+    expect(await swing("male", "towershield", false)).toBeLessThan(2);
+  }, 60_000);
+
+  it("holds it through a strike on the run", async () => {
+    expect(await swing("male", "towershield", true)).toBeLessThan(2);
+  }, 60_000);
+
+  it("holds it on her body too", async () => {
+    expect(await swing("female", "towershield", false)).toBeLessThan(2);
+  }, 60_000);
+
+  it("leaves the buckler's arm swinging with the jog", async () => {
+    expect(await swing("male", "buckler", false)).toBeGreaterThan(15);
+  }, 60_000);
 });
