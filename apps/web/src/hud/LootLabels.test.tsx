@@ -125,6 +125,20 @@ describe("LootLabels", () => {
     expect(plate.style.visibility).toBe("visible");
   });
 
+  it("clips plates projected past the edge of the view, so they cannot widen the page", () => {
+    // A drop 40 units away projects thousands of pixels off-screen; unclipped,
+    // find-in-page or a focus scroll slides the whole HUD sideways to reach it.
+    render(
+      <LootLabels
+        project={() => ({ x: 7800, y: 2100, visible: true })}
+        snapshot={snapWith([
+          { id: 4, kind: "groundItem", x: 40, y: 20, rarity: "normal", name: "Scroll of Wisdom", itemClass: "currency" },
+        ])}
+      />,
+    );
+    expect(screen.getByTestId("loot-label-4").parentElement!.style.overflow).toBe("hidden");
+  });
+
   it("stacks plates that project onto the same spot into a column", async () => {
     render(
       <LootLabels

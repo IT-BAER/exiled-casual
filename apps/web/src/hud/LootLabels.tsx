@@ -157,7 +157,9 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
   }, [project, afterFrame]);
 
   return (
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+    // The projector's `visible` means in front of the camera, not on screen: an
+    // off-screen plate stays placed, and only this clip keeps it out of the page's scroll width.
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
       {(plates ? items : []).map((e) => {
         if (e.kind === "gold") return (
           // NeverSink's two gold tiers (reference-screenshots/ground-loot2.png): a
