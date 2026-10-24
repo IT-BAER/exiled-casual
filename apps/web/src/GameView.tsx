@@ -117,6 +117,10 @@ export function GameView({
   const [stashOpen, setStashOpen] = useState(false);
   // The bench takes the same left-hand slot as the stash, so one closes the other.
   const [vendorOpen, setVendorOpen] = useState(false);
+  // Transfers the panel refuses before any intent: the sim never sees them, so its
+  // pickupRefusedTick cannot carry the Inventory Full note.
+  const [refusedSeq, setRefusedSeq] = useState(0);
+  const onTransferRefused = useCallback(() => setRefusedSeq((n) => n + 1), []);
   const [varkis] = useState(createVarkisVoice);
   // The window's state, not the click: he speaks only for a window that really opened or closed.
   useEffect(() => { varkis.window(vendorOpen); }, [varkis, vendorOpen]);
@@ -1030,6 +1034,7 @@ export function GameView({
         }}
         keybinds={keybinds}
         controlMode={controlMode}
+        refusedSeq={refusedSeq}
       />
       {settings.ui.minimap && (
         <Minimap
@@ -1089,6 +1094,7 @@ export function GameView({
           socketedCell={socketedCell}
           onSocketWaystone={socketWaystone}
           onIntent={sendIntent}
+          onRefused={onTransferRefused}
           onClose={closeInventory}
         />
       )}</Presence>

@@ -513,6 +513,17 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "moveItem", x: 0, y: 0, toX: 5, toY: 6, to: "stash" }]);
   });
 
+  it("a shift-click with no room on the other side sends nothing and reports the refusal", () => {
+    const intents: unknown[] = [];
+    let refused = 0;
+    // A 2x2 stash holding a 2x2 piece has no cell left for the backpack's 2x2 item.
+    const stash = { cols: 2, rows: 2, items: [{ x: 0, y: 0, w: 2, h: 2, rarity: "normal" as const, name: "Old Wand", lines: [] }] };
+    render(<InventoryPanel inventory={inv} stash={stash} onIntent={(i) => intents.push(i)} onRefused={() => refused++} onClose={() => {}} />);
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, shiftKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([]);
+    expect(refused).toBe(1);
+  });
+
   it("does nothing on a shift-click while the stash is closed", () => {
     const intents: unknown[] = [];
     render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i)} onClose={() => {}} />);

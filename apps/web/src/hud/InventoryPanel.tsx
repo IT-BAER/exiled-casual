@@ -336,7 +336,7 @@ const DEFAULT_FLASK_KEYS = { life: "1", mana: "2" };
 export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
   socketWanted = false, socketedCell = null, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks, level,
-  onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
+  onClose, onCloseStash, onCloseVendor, onIntent, onRefused, onSocketWaystone,
 }: {
   /** The modifier that, held over an item, shows what is worn in its slot beside it. */
   compareKey?: "ctrl" | "shift";
@@ -363,6 +363,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   socketedCell?: { x: number; y: number } | null;
   onClose: () => void; onCloseStash?: () => void; onCloseVendor?: () => void;
   onIntent?: (intent: Intent) => void;
+  /** A transfer refused here, before any intent: the other container has no room. */
+  onRefused?: () => void;
   /** Called when a waystone from the backpack is placed into the map-device socket. */
   onSocketWaystone?: (x: number, y: number) => void;
 }) {
@@ -717,7 +719,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       }
       return undefined;
     })();
-    if (!fit) return; // no room over there; the item stays put
+    if (!fit) { onRefused?.(); return; } // no room over there; the item stays put
     onIntent?.({
       kind: "moveItem", x: it.x, y: it.y, toX: fit.x, toY: fit.y,
       ...(container === "stash" ? { from: "stash" as const } : { to: "stash" as const }),

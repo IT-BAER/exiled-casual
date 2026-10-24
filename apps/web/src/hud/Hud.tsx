@@ -603,6 +603,8 @@ interface HudProps {
   controlMode?: ControlMode;
   /** The monster under the cursor, for the target frame. Null = none. */
   targetId?: number | null;
+  /** Bumped by a transfer the inventory panel refused itself; shows Inventory Full like the sim's refusal. */
+  refusedSeq?: number;
 }
 
 /**
@@ -885,6 +887,7 @@ export function Hud({
   keybinds = DEFAULT_KEYBINDS_BY_MODE.mouse,
   controlMode = "mouse",
   targetId = null,
+  refusedSeq = 0,
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
   // Length-normalised here rather than trusted: the bar rides in the save, and a
@@ -1029,6 +1032,12 @@ export function Hud({
     if (refusedTick === undefined || refusedTick === was.tick) return;
     setInventoryFull((prev) => ({ seq: (prev?.seq ?? 0) + 1 }));
   }, [hasSnapshot, refusedTick]);
+  const lastRefusedSeq = React.useRef(refusedSeq);
+  React.useEffect(() => {
+    if (refusedSeq === lastRefusedSeq.current) return;
+    lastRefusedSeq.current = refusedSeq;
+    setInventoryFull((prev) => ({ seq: (prev?.seq ?? 0) + 1 }));
+  }, [refusedSeq]);
 
   React.useEffect(() => {
     if (!inventoryFull) return;

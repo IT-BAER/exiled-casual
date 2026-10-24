@@ -770,6 +770,14 @@ describe("Hud inventory full message", () => {
     expect(playDropSound).not.toHaveBeenCalled();
   });
 
+  it("shows Inventory Full when the client refuses a transfer itself", () => {
+    const snap = makeSnap({});
+    const { rerender } = render(<Hud snapshot={snap} refusedSeq={0} />);
+    expect(screen.queryByTestId("inventory-full")).toBeNull();
+    rerender(<Hud snapshot={snap} refusedSeq={1} />);
+    expect(screen.getByTestId("inventory-full")).toHaveTextContent("Inventory Full");
+  });
+
   it("stays quiet on a steady-state snapshot with no new refusal", () => {
     const { rerender } = render(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
     rerender(<Hud snapshot={makeSnap({ pickupRefusedTick: 7 })} />);
