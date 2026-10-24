@@ -41,7 +41,9 @@ export function summarizeHits(hits: readonly RecapHit[], maxLife: number): Death
     byElement[el] = (byElement[el] ?? 0) + h.amount;
     total += h.amount;
   }
+  // A source that rounds to 0 read as "0 Physical" beside the real killers.
   const sources = [...groups.values()]
+    .filter((g) => Math.round(g.damage) > 0)
     .sort((a, b) => b.damage - a.damage)
     .slice(0, 3)
     .map(({ perElement, ...s }) => ({

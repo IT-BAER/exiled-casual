@@ -31,6 +31,14 @@ const hit = (tick: number, species: string, amount: number, type = 1, rare = fal
   ({ tick, species, rare, type, amount });
 
 describe("death recap", () => {
+  it("a source whose hits armour took to nothing is not listed as a killer", () => {
+    const r = summarizeHits([
+      hit(10, "monster.sand_skitterer.v1", 0.2), hit(12, "monster.sand_skitterer.v1", 0.1),
+      hit(20, "monster.sunbaked_colossus.v1", 11, 2),
+    ], 160);
+    expect(r.sources.map((s) => s.species)).toEqual(["monster.sunbaked_colossus.v1"]);
+  });
+
   it("the death screen's snapshot names what killed him", () => {
     const { sim, world, alive } = fight();
     expect(alive()).toBe(false);
