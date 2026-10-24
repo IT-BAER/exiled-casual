@@ -354,8 +354,8 @@ export interface PlayerStats {
   armour: number;
   /**
    * Share of a physical hit armour stops, integer percent. Armour's curve
-   * depends on the size of the hit, so this is quoted against one reference
-   * hit (the bridge's SHEET_REFERENCE_HIT), the way PoE2's sheet does it.
+   * depends on the size of the hit, so this is quoted against a white monster's
+   * hit at the character's level (the bridge's sheetReferenceHit), as PoE2 does.
    */
   armourPct: number;
   /** UNCAPPED totals, one per element. The sheet renders them against RES_CAP so overcapping stays visible. */

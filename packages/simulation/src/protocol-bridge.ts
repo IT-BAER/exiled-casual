@@ -1,11 +1,11 @@
-import { fp, toNumber, fpDist2 } from "@exiled/fixed-point";
+import { fp, toNumber, fpDist2, fpMul } from "@exiled/fixed-point";
 import { PICKUP_RADIUS, SORT_MODES } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageCode, damageTypeOf } from "./damage-types";
 import { hitParts, weaponHit } from "./weapon";
 import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
-import { physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
+import { areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { attackAddedDamage, describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -19,12 +19,19 @@ import type {
 
 /**
  * Armour stops a different share of every hit size, so the character sheet's
- * single "Armour %" has to be quoted against one. PoE2 quotes a hit sized to
- * your level, which is why an endgame character there reads single digits; this
- * game's everyday hit is the Cinder Imp's fp(6) attack. Kept as a literal rather
- * than read from MONSTERS so removing a monster cannot silently move the sheet.
+ * single "Armour %" has to be quoted against one. PoE2 quotes a white monster of
+ * your level, which is why an endgame character there reads single digits: here
+ * the Cinder Imp's fp(6) attack scaled to the highest tier at or below that level.
+ * Kept as a literal rather than read from MONSTERS so removing a monster cannot
+ * silently move the sheet.
  */
 const SHEET_REFERENCE_HIT = fp(6);
+
+function sheetReferenceHit(level: number): number {
+  let tier = 0;
+  while (areaLevel(tier + 1) <= level) tier++;
+  return fpMul(SHEET_REFERENCE_HIT, monsterTierScale(tier).dmgMilli);
+}
 
 /** Ticks the body keeps facing a skill's target after the button is let go (0.4 s). */
 const FACE_LINGER_TICKS = 12;
@@ -588,7 +595,7 @@ export function buildSnapshot(
         const armour = d?.armour ?? 0;
         return {
           armour: toNumber(armour),
-          armourPct: physicalMitigationPct(armour, SHEET_REFERENCE_HIT),
+          armourPct: physicalMitigationPct(armour, sheetReferenceHit(progress.level)),
           res: d?.res ?? resBlock(),
           manaRegenPerSec: toNumber(pm.regen * 30),
           spellDamagePct: world.get<OffenseC>(playerEntity, "offense")?.spellDamagePct ?? 0,

@@ -590,13 +590,27 @@ describe("derived player stats", () => {
 
     const s = buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats;
     expect(s.armour).toBe(50);
-    // Armour's share depends on the hit, so the sheet quotes SHEET_REFERENCE_HIT:
+    // Armour's share depends on the hit; a level-1 sheet quotes the tier-0 fp(6) hit:
     // 50 / (50 + 10 * 6) = 45%.
     expect(s.armourPct).toBe(45);
     expect(s.res.fire).toBe(20);
     // trunc(fp(19.5)/30) = 650 per tick, so the sheet reports 650*30 = fp(19.5)/s.
     expect(s.manaRegenPerSec).toBeCloseTo(19.5, 5);
     expect(s.spellDamagePct).toBe(0);
+  });
+
+  it("the sheet quotes armour against a white monster of the character's own level", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
+    placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+
+    // Level 22 meets tier 3 (area 20): the fp(6) hit x1.63 = 9.78; 50 / (50 + 97.8) = 34%.
+    atLevel(world, 22);
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.armourPct).toBe(34);
+    // Level 50 meets tier 8 (area 50): x3.48 = 20.88; 50 / (50 + 208.8) = 19%.
+    atLevel(world, 50);
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.armourPct).toBe(19);
   });
 
   it("the snapshot carries what a wand or focus adds to spells, and nothing without one", () => {
