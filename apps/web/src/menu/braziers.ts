@@ -10,6 +10,6 @@ import type { BrazierSpot } from "./atmos";
  * bowls and must not drag the menu's buttons, audio and news in to get them.
  */
 export const BRAZIERS: readonly BrazierSpot[] = [
-  { x: 0.525, y: 0.819, r: 0.045, flame: 0.024, phase: 0 },
-  { x: 0.750, y: 0.816, r: 0.075, flame: 0.048, phase: 2.4 },
+  { x: 0.525, y: 0.821, r: 0.045, flame: 0.024, phase: 0 },
+  { x: 0.750, y: 0.821, r: 0.075, flame: 0.048, phase: 2.4 },
 ];
