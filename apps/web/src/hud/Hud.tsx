@@ -577,6 +577,8 @@ interface HudProps {
   skillBar?: (string | null)[];
   /** Draw `Life 100/100` over the globes at all. */
   orbNumbers?: boolean;
+  /** Sides an open panel covers: that globe's label would sit on the panel's stone. */
+  coveredSides?: { left?: boolean; right?: boolean };
   /** A skill was dragged to another socket. The caller owns and persists the bar. */
   onSkillBarChange?: (next: (string | null)[]) => void;
   /** Open the passive tree — the plus button beside the flasks, PoE1's own affordance. */
@@ -831,6 +833,7 @@ export function Hud({
   afterFrame = null,
   skillBar = [],
   orbNumbers = DEFAULT_SETTINGS.ui.orbNumbers,
+  coveredSides = {},
   onSkillBarChange,
   onOpenPassives,
   onToggleInventory,
@@ -1324,7 +1327,7 @@ export function Hud({
             : `${Math.round(life)}/${Math.round(maxLife)}`
         }
         side="left"
-        numbers={orbNumbers}
+        numbers={orbNumbers && !coveredSides.left}
       />
       <Orb
         pct={manaPct}
@@ -1335,7 +1338,7 @@ export function Hud({
         label="Mana"
         value={`${Math.round(mana)}/${Math.round(maxMana)}`}
         side="right"
-        numbers={orbNumbers}
+        numbers={orbNumbers && !coveredSides.right}
       />
 
       <div data-testid="bar-connector" style={connectStyle} />

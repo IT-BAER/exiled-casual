@@ -1017,6 +1017,7 @@ export function GameView({
         targetId={targetId}
         skillBar={snapshot?.skillBar ?? []}
         orbNumbers={settings.ui.orbNumbers}
+        coveredSides={{ left: stashOpen || vendorOpen || characterOpen || panelOpen, right: inventoryOpen }}
         onSkillBarChange={(bar) => sendIntent({ kind: "setSkillBar", bar })}
         onOpenPassives={() => setPassivesOpen(true)}
         onToggleInventory={() => { setInventoryOpen((v) => !v); setStashOpen(false); }}
@@ -1083,8 +1084,8 @@ export function GameView({
           level={snapshot.player.level}
           // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
           socketWanted={panelOpen && socketedStone === null}
-          onSocketWaystone={socketWaystone}
           socketedCell={socketedCell}
+          onSocketWaystone={socketWaystone}
           onIntent={sendIntent}
           onClose={closeInventory}
         />

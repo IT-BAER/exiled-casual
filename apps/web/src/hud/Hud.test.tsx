@@ -119,6 +119,12 @@ describe("Hud", () => {
     expect(readout).toHaveTextContent("50/100");
   });
 
+  it("a side panel open over a globe hides that globe's readout, never the other", () => {
+    render(<Hud snapshot={makeSnap({ life: 50, maxLife: 100 })} coveredSides={{ right: true }} />);
+    expect(screen.queryByTestId("mana-readout")).toBeNull();
+    expect(screen.getByTestId("life-readout")).toHaveTextContent("50/100");
+  });
+
   it("mana readout labels the globe and shows current over max", () => {
     render(<Hud snapshot={makeSnap({})} />);
     const readout = screen.getByTestId("mana-readout");
