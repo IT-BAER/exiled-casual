@@ -548,7 +548,9 @@ RIGID_GEAR = (
         # away inside `SOFT_GREAVE_RADIUS` so the floor-length skirt stays
         # whole: worn over a boot, the boot cuff came out through the trouser leg.
         "matte": True, "clean": True, "greaves": "shins", "skirt_floor": False,
-        "skirt": 1.7,
+        # The skirt is one open shell: culled, its inner faces vanish and the
+        # camera sees the backing leg through the panel.
+        "skirt": 1.7, "twosided": True,
     },
     {
         "slot": "chest", "look": "stalker", "part": "coat",
@@ -560,7 +562,7 @@ RIGID_GEAR = (
         # carries both, and here that half is the one at -X.
         "symmetric": "-x",
         "matte": True, "clean": True, "greaves": "shins",
-        "greave_radius": 3.5, "skirt": 1.3,
+        "greave_radius": 3.5, "skirt": 1.3, "twosided": True,
     },
     {
         "slot": "boots", "look": "ironsworn", "part": "sabaton",
