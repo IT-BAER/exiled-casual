@@ -979,11 +979,12 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * Each carry clip, when its look is worn, and the clips (and the roll) it gives
  * the arm back to. A `steady` carry holds its arm in the rig's heading instead of
  * the chest's: the jog alone twists the shoulder line +-38 deg over the hips and
- * pitches the chest, and a braced arm swept the shield through it.
+ * pitches the chest, and a braced arm swept the shield through it. `idle` gives the
+ * arm back to the idle clip while nothing else plays: its own hold is the right one.
  */
-const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean }[] = [
-  { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: UPPER_BODY_CLIPS, roll: true, steady: false },
-  { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true },
+const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean }[] = [
+  { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: UPPER_BODY_CLIPS, roll: true, steady: false, idle: false },
+  { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true, idle: true },
 ];
 
 /**
@@ -2285,8 +2286,10 @@ export class RigActor {
       this.carryObserver = this.scene.onAfterAnimationsObservable.add(() => {
         const step = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000 / CARRY_EASE_SEC;
         for (const carry of this.carries) {
-          const { worn, yieldsTo, roll } = carry.spec;
-          const busy = (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
+          const { worn, yieldsTo, roll, idle } = carry.spec;
+          const idling = idle && this.activeClip === "idle" && !this.isRolling()
+            && ![...this.groups].some(([c, g]) => c !== "idle" && g.isPlaying);
+          const busy = idling || (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
           carry.weight = worn(this.looks) && !busy ? Math.min(1, carry.weight + step) : Math.max(0, carry.weight - step);
           if (carry.weight <= 0) continue;
           for (const { node, pose } of carry.pose) {

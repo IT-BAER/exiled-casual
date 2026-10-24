@@ -2410,6 +2410,38 @@ describe("the tower shield is braced, not swung", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
   const deg = (a: Quaternion, b: Quaternion) => (2 * Math.acos(Math.min(1, Math.abs(Quaternion.Dot(a, b))))) * 180 / Math.PI;
 
+  /** The shield forearm's world rotation after standing still, optionally striking. */
+  async function stand(weapon2: string, strike = false): Promise<Quaternion> {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
+      const rig = attachRig(scene, new Mesh("hero", scene), "male")!;
+      rig.setLooks({ ...BASE_LOOKS, base: "male", weapon2 });
+      const forearm = scene.transformNodes.find((t) => t.name === "lowerarm_l" && t.isEnabled())!;
+      const frame = () => { rig.setLocomotion(0); scene.render(); };
+      for (let i = 0; i < 60; i++) frame();
+      if (strike) { rig.playStrike(); for (let i = 0; i < 12; i++) frame(); }
+      return Quaternion.FromRotationMatrix(forearm.computeWorldMatrix(true).getRotationMatrix());
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }
+
+  it("leaves the idle hold to the idle clip: standing, the tower shield arm is the buckler's", async () => {
+    expect(deg(await stand("towershield"), await stand("buckler"))).toBeLessThan(1);
+  }, 60_000);
+
+  it("braces it for a strike from a standstill", async () => {
+    expect(deg(await stand("towershield", true), await stand("buckler", true))).toBeGreaterThan(10);
+  }, 60_000);
+
   async function swing(body: "male" | "female", weapon2: string, strike: boolean): Promise<number> {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
