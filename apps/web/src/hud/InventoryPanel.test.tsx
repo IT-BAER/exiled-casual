@@ -370,6 +370,11 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "sellItem", x: 0, y: 0 }]);
   });
 
+  it("the stone seated in the map device fades in the backpack, so it does not read as a second stone", () => {
+    render(<InventoryPanel inventory={inv} socketedCell={{ x: 0, y: 0 }} onClose={() => {}} />);
+    expect(screen.getByTestId("inventory-item-0").style.opacity).toBe("0.3");
+  });
+
   it("ctrl-click on an unread item sells nothing and says why in the vendor window", () => {
     const intents: unknown[] = [];
     const unread = { ...inv, items: [{ ...inv.items[0]!, unidentified: true }] };

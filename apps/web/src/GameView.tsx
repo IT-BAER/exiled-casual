@@ -1084,6 +1084,7 @@ export function GameView({
           // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
           socketWanted={panelOpen && socketedStone === null}
           onSocketWaystone={socketWaystone}
+          socketedCell={socketedCell}
           onIntent={sendIntent}
           onClose={closeInventory}
         />

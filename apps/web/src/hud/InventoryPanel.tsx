@@ -335,7 +335,7 @@ const DEFAULT_FLASK_KEYS = { life: "1", mana: "2" };
 // memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
 export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
-  socketWanted = false, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks, level,
+  socketWanted = false, socketedCell = null, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks, level,
   onClose, onCloseStash, onCloseVendor, onIntent, onSocketWaystone,
 }: {
   /** The modifier that, held over an item, shows what is worn in its slot beside it. */
@@ -359,6 +359,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   vendorOpen?: boolean;
   /** True while an Atlas node is selected and its socket is empty; enables ctrl+click socketing. */
   socketWanted?: boolean;
+  /** Backpack cell of the stone seated in the map device: it stays there until the map opens. */
+  socketedCell?: { x: number; y: number } | null;
   onClose: () => void; onCloseStash?: () => void; onCloseVendor?: () => void;
   onIntent?: (intent: Intent) => void;
   /** Called when a waystone from the backpack is placed into the map-device socket. */
@@ -960,6 +962,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     ? "inset 0 0 8px #e8c86a66, 0 0 6px #e8c86a55"
                     : `inset 0 0 8px ${RARITY_BORDER[it.rarity]}44`,
                   opacity: drag?.from.kind === "grid" && drag.from.container === container && drag.from.x === it.x && drag.from.y === it.y ? 0.3
+                    : container === "backpack" && socketedCell?.x === it.x && socketedCell.y === it.y ? 0.3
                     // PoE's keyword box HIGHLIGHTS rather than filters: the goods
                     // stay where they are and everything else falls back, so the
                     // shelf never reshuffles under a half-typed word.
