@@ -48,7 +48,7 @@ export function Timeline(p: TimelineProps): React.ReactElement {
         {SPEEDS.map((v) => <option key={v} value={v}>{v}x</option>)}
       </select>
       <button type="button" className="av-icon" aria-pressed={p.repeat} onClick={() => p.onRepeat(!p.repeat)}
-        title="Repeat the last action (R)" aria-label="Repeat the last action"><Icon name="repeat" /></button>
+        title="Loop the last action (R)" aria-label="Loop the last action"><Icon name="repeat" /></button>
       <span className="av-sep" />
       <button type="button" className="av-icon" aria-pressed={p.rightOpen} onClick={p.onRight}
         title="Inspector (])" aria-label="Show inspector"><Icon name="panelRight" /></button>

@@ -50,6 +50,9 @@ export interface InspectorProps {
   dir: DirId;
   onMotion: (gait: GaitId, dir: DirId) => void;
   onShot: (id: string) => void;
+  /** Replay the last action each time it ends, attacks included. */
+  repeat: boolean;
+  onRepeat: (on: boolean) => void;
   onCreature: (action: CreatureAction) => void;
   creatureAction: CreatureAction;
   dead: boolean;
@@ -160,6 +163,7 @@ function CharacterSections(p: InspectorProps): React.ReactElement {
             </button>
           ))}
         </div>
+        <LoopToggle {...p} />
       </section>
 
       <section className="av-section">
@@ -202,6 +206,16 @@ function CharacterSections(p: InspectorProps): React.ReactElement {
   );
 }
 
+function LoopToggle(p: InspectorProps): React.ReactElement {
+  return (
+    <div className="av-chips" style={{ marginTop: 8 }}>
+      <button type="button" className="av-chip" aria-pressed={p.repeat} onClick={() => p.onRepeat(!p.repeat)}>
+        <Icon name="repeat" size={14} /> Loop the last action <kbd>R</kbd>
+      </button>
+    </div>
+  );
+}
+
 function CreatureSection(p: InspectorProps): React.ReactElement {
   const label: Record<CreatureAction, string> = { idle: "Idle", walk: "Walk", attack: "Attack", death: "Die" };
   return (
@@ -217,6 +231,7 @@ function CreatureSection(p: InspectorProps): React.ReactElement {
         ))}
         {p.dead && <button type="button" className="av-chip" onClick={p.onReset}>Stand up again</button>}
       </div>
+      <LoopToggle {...p} />
       <p className="av-note">
         {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts. Die drops it through the ragdoll."}
       </p>

@@ -322,6 +322,8 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
         rawClips={rawClips}
         raw={raw}
         onRaw={playRaw}
+        repeat={repeat}
+        onRepeat={(on) => { sceneRef.current?.setRepeat(on); setRepeat(on); }}
         onFx={fx}
         light={light}
         camera={camera}
