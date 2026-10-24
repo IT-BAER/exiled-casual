@@ -553,6 +553,13 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   const sellRef = React.useRef<"ok" | "refused" | null>(null);
   const sellable = (d: NonNullable<typeof drag>): boolean =>
     d.from.kind === "grid" && d.item.itemClass !== "currency" && !d.item.unidentified;
+  // The sim refuses those sales without a word, so a ctrl-click on one says why here.
+  const [sellNote, setSellNote] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!sellNote) return;
+    const t = setTimeout(() => setSellNote(null), 2500);
+    return () => clearTimeout(t);
+  }, [sellNote]);
 
   // Pointer events, not HTML5 drag-and-drop: the release target can be the Babylon
   // canvas behind the panel (drop to ground), which native DnD does not reach.
@@ -877,6 +884,12 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                   if (e.ctrlKey && vendorOpen) {
                     e.preventDefault();
                     setHover(null);
+                    if (it.unidentified || it.itemClass === "currency") {
+                      setSellNote(it.unidentified
+                        ? "Unidentified items will not sell. Read it with a Scroll of Wisdom first."
+                        : "Currency is the payment, not the goods: it will not sell.");
+                      return;
+                    }
                     onIntent?.({
                       kind: "sellItem", x: it.x, y: it.y,
                       ...(container === "stash" ? { from: "stash" as const } : {}),
@@ -1128,10 +1141,16 @@ export const InventoryPanel = React.memo(function InventoryPanel({
               </div>
             );
           })}
-          <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.45, marginTop: 2 }}>
-            Click the shelf to buy. Drag your own onto it or ctrl-click it to sell: all of it pays gold,
-            magic and better also break into shards.
-          </div>
+          {sellNote ? (
+            <div data-testid="vendor-sell-note" style={{ fontSize: 11, color: "#d05a4e", lineHeight: 1.45, marginTop: 2 }}>
+              {sellNote}
+            </div>
+          ) : (
+            <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.45, marginTop: 2 }}>
+              Click the shelf to buy. Drag your own onto it or ctrl-click it to sell: all of it pays gold,
+              magic and better also break into shards.
+            </div>
+          )}
         </div>
       </div>
     )}

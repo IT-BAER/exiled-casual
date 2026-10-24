@@ -370,6 +370,15 @@ describe("InventoryPanel", () => {
     expect(intents).toEqual([{ kind: "sellItem", x: 0, y: 0 }]);
   });
 
+  it("ctrl-click on an unread item sells nothing and says why in the vendor window", () => {
+    const intents: unknown[] = [];
+    const unread = { ...inv, items: [{ ...inv.items[0]!, unidentified: true }] };
+    render(<InventoryPanel inventory={unread} vendorOpen shards={{}} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([]);
+    expect(screen.getByTestId("vendor-sell-note").textContent).toMatch(/unidentified/i);
+  });
+
   it("ignores ctrl-click while the bench is closed, so nothing is destroyed by a stray modifier", () => {
     const intents: unknown[] = [];
     render(<InventoryPanel inventory={inv} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
