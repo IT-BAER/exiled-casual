@@ -35,6 +35,33 @@ describe("Minimap", () => {
     expect(box.querySelector("canvas")!.width).toBe(768);
   });
 
+  it("redraws when Tab switches between corner and overlay while the player stands still", () => {
+    // The switch resizes the canvas, which clears it; a player who stops to read
+    // the map would otherwise get an empty overlay until he takes a step.
+    const draws = new Map<HTMLCanvasElement, number>();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (this: HTMLCanvasElement) {
+      const canvas = this;
+      return new Proxy({}, {
+        get: (_t, k) => k === "drawImage"
+          ? () => draws.set(canvas, (draws.get(canvas) ?? 0) + 1)
+          : k === "createRadialGradient" ? () => ({ addColorStop: () => {} })
+          : k === "getImageData" ? () => ({ data: new Uint8ClampedArray(canvas.width * canvas.height * 4) })
+          : () => {},
+        set: () => true,
+      }) as unknown as CanvasRenderingContext2D;
+    });
+    const still = { x: start.x, y: start.y };
+    const { rerender } = render(<Minimap layout={layout} player={still} />);
+    const shown = screen.getByTestId("minimap").querySelector("canvas")!;
+    const before = draws.get(shown) ?? 0;
+    expect(before).toBeGreaterThan(0);
+    rerender(<Minimap layout={layout} player={still} overlay />);
+    expect(draws.get(shown) ?? 0).toBeGreaterThan(before);
+    const atOverlay = draws.get(shown)!;
+    rerender(<Minimap layout={layout} player={still} />);
+    expect(draws.get(shown)!).toBeGreaterThan(atOverlay);
+  });
+
   it("survives a player standing outside the grid", () => {
     // Defensive: a stale snapshot from the previous area can carry a position
     // that is off this grid entirely. It must not throw.

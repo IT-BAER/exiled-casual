@@ -357,7 +357,8 @@ export function Minimap(
     ctx.strokeStyle = "rgba(0,0,0,0.9)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
-  }, [grid, layout, player]);
+    // `overlay` resizes the canvas, and a resize clears it.
+  }, [grid, layout, player, overlay]);
 
   if (!layout || !grid) return null;
 
