@@ -42,7 +42,7 @@ describe("TargetFrame", () => {
     expect(screen.getByTestId("target-name")).toHaveTextContent("Cinder Imp");
     expect(screen.getByTestId("target-name")).toHaveStyle({ color: "#e8e2d6" });
     expect(screen.getByTestId("target-fill")).toHaveStyle({ width: "25%" });
-    expect(screen.getByTestId("target-level")).toHaveTextContent("Level 14");
+    expect(screen.getByTestId("target-level")).toHaveTextContent("Level 8");
     expect(screen.queryByTestId("target-mods")).toBeNull();
   });
 

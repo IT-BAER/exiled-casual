@@ -174,17 +174,21 @@ describe("nextNodeTier", () => {
 
 describe("the Atlas spans a 1-100 character's climb", () => {
   it("opens at a level a fresh character can survive", () => {
+    // Tier 1 is the first map anyone stands on (every starting stone is Tier 1,
+    // atlasNodeTier starts at 1): a level-1 character must not face level 8.
+    expect(areaLevel(1)).toBe(2);
+    // Tier 0 is "no map open" and the authored reference monster: the same level.
     expect(areaLevel(0)).toBe(2);
   });
 
   it("tops out below the level cap, so the last levels are a grind by choice", () => {
     // The playable ceiling is Tier 15, not ATLAS_NODE_COUNT - 1 (14) - that
     // index is a node-count coincidence, not the Waystone tier band (1..15).
-    expect(areaLevel(WAYSTONE_MAX_TIER)).toBe(92);
+    expect(areaLevel(WAYSTONE_MAX_TIER)).toBe(86);
   });
 
   it("climbs by a fixed step, so a tier is always worth the same jump", () => {
-    for (let t = 0; t < ATLAS_NODE_COUNT - 1; t++) {
+    for (let t = 1; t < WAYSTONE_MAX_TIER; t++) {
       expect(areaLevel(t + 1) - areaLevel(t)).toBe(6);
     }
   });
@@ -200,13 +204,13 @@ describe("the Atlas spans a 1-100 character's climb", () => {
     // This case lives here rather than in xp.test.ts because it needs BOTH
     // curves, and it is the only thing stopping them being tuned separately.
     //
-    // Bounds: measured kills range from 3.21 (level 1, running Tier 1 above his
-    // level, which pays in full) to 4,389 (level 99, pinned at Tier 15 since
-    // the Atlas has nothing higher, so the last stretch is fought under-levelled
-    // by design). > 3 and < 6,000 brackets the real curve with headroom rather
-    // than re-deriving the exact numbers, so a real regression still trips it.
+    // Bounds: measured kills range from 5 (level 1, running Tier 1 at his
+    // level, which pays in full) to 5,446 (level 99, pinned at Tier 15 since
+    // the Atlas has nothing higher, so the last stretch is fought over-levelled
+    // by design, at 60%). > 3 and < 6,000 brackets the real curve with headroom
+    // rather than re-deriving the exact numbers, so a real regression still trips it.
     for (const level of [1, 10, 50, 90, 99]) {
-      const tier = Math.max(1, Math.min(WAYSTONE_MAX_TIER, Math.round((level - 2) / 6)));
+      const tier = Math.max(1, Math.min(WAYSTONE_MAX_TIER, Math.round((level - 2) / 6) + 1));
       const kills = xpToNext(level) / xpAward(level, areaLevel(tier), "normal");
       expect(kills).toBeGreaterThan(3);
       expect(kills).toBeLessThan(6_000);

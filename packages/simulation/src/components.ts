@@ -20,7 +20,7 @@ export interface SessionC {
    * never drift from what the Map Device showed.
    */
   waystoneSeed: number;
-  /** Tier of the open map. 0 = no map open. areaLevel = 2 + 6 * areaTier. */
+  /** Tier of the open map. 0 = no map open. areaLevel = 2 + 6 * (areaTier - 1). */
   areaTier: number;
   /** Atlas node the open map belongs to; "" when none. */
   activeNodeId: string;

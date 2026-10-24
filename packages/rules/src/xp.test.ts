@@ -27,20 +27,29 @@ describe("monsterXp", () => {
     expect(monsterXp(65, "magic")).toBe(2 * monsterXp(65, "normal"));
   });
 
-  it("front-loads: a tier 1 kill is worth 3.5x its area level, a tier 15 one 1.2x", () => {
-    expect(monsterXp(8, "normal")).toBe(23.8);
-    expect(monsterXp(92, "normal")).toBe(95.2);
+  it("front-loads: a tier 1 kill is worth 9x its area level, a tier 15 one 1.05x", () => {
+    expect(monsterXp(2, "normal")).toBe(18.7);
+    expect(monsterXp(86, "normal")).toBeCloseTo(90.1);
   });
 });
 
 describe("xpPenaltyPct", () => {
   it("pays in full inside the tolerance band, then decays to a floor", () => {
+    // Below level 16 the band is 3 levels wide.
+    expect(xpPenaltyPct(5, 2)).toBe(100);
+    expect(xpPenaltyPct(6, 2)).toBe(90);
+    // At 65 it is 7 (3 + 65/16): PoE1's safe zone grows with the character.
     expect(xpPenaltyPct(65, 65)).toBe(100);
-    expect(xpPenaltyPct(68, 65)).toBe(100);
-    expect(xpPenaltyPct(69, 65)).toBe(90);
-    expect(xpPenaltyPct(74, 65)).toBe(40);
-    expect(xpPenaltyPct(75, 65)).toBe(30);
-    expect(xpPenaltyPct(75, 55)).toBe(10);
+    expect(xpPenaltyPct(72, 65)).toBe(100);
+    expect(xpPenaltyPct(73, 65)).toBe(90);
+    expect(xpPenaltyPct(78, 65)).toBe(40);
+    expect(xpPenaltyPct(79, 65)).toBe(30);
+    expect(xpPenaltyPct(82, 65)).toBe(10);
+  });
+
+  it("leaves the last stretch to 100 on Tier 15 paying, not floored", () => {
+    // Level 99 on area level 86: 13 over, safe zone 9, so 60% rather than 10%.
+    expect(xpPenaltyPct(99, 86)).toBe(60);
   });
 
   it("never penalises a character below the area level", () => {
@@ -52,8 +61,8 @@ describe("xpPenaltyPct", () => {
 describe("xpAward", () => {
   it("is the monster's value after the level-difference penalty, as an integer", () => {
     expect(xpAward(65, 65, "boss")).toBe(3400);
-    // areaLevel 65 boss for a level 69 character = 3400 at 90% = 3060
-    expect(xpAward(69, 65, "boss")).toBe(3060);
+    // areaLevel 65 boss for a level 73 character = 3400 at 90% = 3060
+    expect(xpAward(73, 65, "boss")).toBe(3060);
     expect(Number.isInteger(xpAward(65, 71, "normal"))).toBe(true);
   });
 });

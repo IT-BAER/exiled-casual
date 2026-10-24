@@ -317,7 +317,7 @@ describe("registerDeath", () => {
     const groundItems = equipmentDrops(w);
     expect(groundItems.length).toBe(1);
     const ic = w.get(groundItems[0]!, "item") as { item: { itemLevel: number }; w: number; h: number };
-    expect(ic.item.itemLevel).toBe(34); // 2 + 6*5, +2 because a rare monster drops gear two levels above itself
+    expect(ic.item.itemLevel).toBe(28); // 2 + 6*(5-1), +2 because a rare monster drops gear two levels above itself
     expect(ic.w).toBeGreaterThan(0);
   });
 
@@ -407,7 +407,7 @@ describe("registerDeath", () => {
     expect(counts.filter((c) => c === 1).length).toBeGreaterThan(50);
     const gear = kills.flatMap((w) => equipmentDrops(w).map((e) => (w.get(e, "item") as { item: { itemLevel: number } }).item.itemLevel));
     expect(gear.length).toBeGreaterThan(0);
-    for (const ilvl of gear) expect(ilvl).toBe(33); // 2 + 6*5, +1 for a magic monster
+    for (const ilvl of gear) expect(ilvl).toBe(27); // 2 + 6*(5-1), +1 for a magic monster
   });
 
   it("a richer stone pays more", () => {
@@ -458,25 +458,25 @@ describe("registerDeath", () => {
   }
 
   it("a map kill banks the monster's experience", () => {
-    // level 20 explicitly: areaLevel(3) is 20, matching it exactly (no penalty),
+    // level 20 explicitly: areaLevel(4) is 20, matching it exactly (no penalty),
     // and its threshold (xpToNext(20) = 12,000) is nowhere near the kill's award,
     // so the award lands untouched rather than being partly eaten by a level-up.
     // monsterXp(20, "normal") = 40 * 0.85 = 34 (density pass: normal's own
     // multiplier, not the award formula, carries the correction).
-    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20 });
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 4, xp: 0, level: 20 });
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 20, xp: 34, gold: 0 });
   });
 
   it("a swarm body is worth half a normal: a pack of eight pays what four did", () => {
-    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, defId: "monster.vaal_husk.v1" });
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 4, xp: 0, level: 20, defId: "monster.vaal_husk.v1" });
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(17);
   });
 
   it("a rare swarm body is still a whole rare", () => {
-    const whole = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, rare: 1 });
-    const swarm = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, rare: 1, defId: "monster.vaal_husk.v1" });
+    const whole = makeXpKill({ area: "map", areaTier: 4, xp: 0, level: 20, rare: 1 });
+    const swarm = makeXpKill({ area: "map", areaTier: 4, xp: 0, level: 20, rare: 1, defId: "monster.vaal_husk.v1" });
     whole.sim.step([]);
     swarm.sim.step([]);
     expect(swarm.world.get<ProgressC>(swarm.sessionE, "progress")!.xp)
@@ -485,13 +485,13 @@ describe("registerDeath", () => {
 
   it("a magic kill banks twice a normal's experience", () => {
     // monsterXp(20, "magic") = 40 * 1.7 = 68.
-    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, level: 20, magic: true });
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 4, xp: 0, level: 20, magic: true });
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(68);
   });
 
   it("a boss is worth forty normals", () => {
-    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 3, xp: 0, boss: true, level: 20 });
+    const { sim, world, sessionE } = makeXpKill({ area: "map", areaTier: 4, xp: 0, boss: true, level: 20 });
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")!.xp).toBe(40 * 40);
   });
@@ -503,10 +503,10 @@ describe("registerDeath", () => {
   });
 
   it("crossing the threshold levels up and re-derives the life pool", () => {
-    // level 10, areaLevel(1) = 8: within the no-penalty band. The boss award
+    // level 10, areaLevel(2) = 8: within the no-penalty band. The boss award
     // (monsterXp(8, "boss") = 1,120) is exactly what's missing from xpToNext(10)
     // = 3,060, so this kill crosses precisely one level.
-    const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 1, xp: 3_060 - 1_120, boss: true, level: 10 });
+    const { sim, world, sessionE, p } = makeXpKill({ area: "map", areaTier: 2, xp: 3_060 - 1_120, boss: true, level: 10 });
     sim.step([]);
     expect(world.get<ProgressC>(sessionE, "progress")).toEqual({ level: 11, xp: 0, gold: 0 });
     // levelBonus is total-based (210 life over 99 levels), so crossing 10->11
@@ -543,11 +543,11 @@ describe("registerDeath", () => {
   }
 
   it("splits one kill's experience across every occupied bar slot", () => {
-    // level 10, areaTier 1 (areaLevel 8): |8-10|=2 <= 3, so full value.
+    // level 10, areaTier 2 (areaLevel 8): |8-10|=2 <= 3, so full value.
     // monsterXp(8, "normal") = 28 * 0.85 = 23.8, xpAward = trunc(23.8*100/100) = 23.
     // Two occupied gem slots: splitGemXp(23, 2) = trunc(23/2) = 11 each.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0,
+      area: "map", areaTier: 2, level: 10, xp: 0,
       skills: {
         gems: {
           "skill.ember_bolt.v1": { level: 1, xp: 0 },
@@ -567,7 +567,7 @@ describe("registerDeath", () => {
     // Same award (23 xp). Portal in a socket is not in the denominator and earns
     // nothing: ember_bolt takes splitGemXp(23, 1) = 23.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0,
+      area: "map", areaTier: 2, level: 10, xp: 0,
       skills: {
         gems: { "skill.ember_bolt.v1": { level: 1, xp: 0 } },
         bar: ["skill.ember_bolt.v1", "skill.town_portal.v1", null, null, null, MOVE_SOCKET, null, null],
@@ -584,7 +584,7 @@ describe("registerDeath", () => {
     // this scenario ever casts the skill — only the death system runs — so the
     // full award landing on it proves payout is keyed by slot, not by use.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0,
+      area: "map", areaTier: 2, level: 10, xp: 0,
       skills: {
         gems: { "skill.blink.v1": { level: 1, xp: 0 } },
         bar: ["skill.blink.v1", null, null, null, null, MOVE_SOCKET, null, null],
@@ -601,7 +601,7 @@ describe("registerDeath", () => {
     // 11 would mean it was. The free attack earns as though it were one more
     // slot, splitGemXp(23, 1 + 1) = 11, so it keeps pace without taxing anyone.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0,
+      area: "map", areaTier: 2, level: 10, xp: 0,
       skills: {
         gems: {
           "skill.ember_bolt.v1": { level: 1, xp: 0 },
@@ -622,7 +622,7 @@ describe("registerDeath", () => {
     // splitGemXp(23, 0 + 1) = 23 lands on it, which is what keeps Strike's arc
     // breakpoints reachable instead of pinning it at gem 1 forever.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0,
+      area: "map", areaTier: 2, level: 10, xp: 0,
       skills: {
         gems: { "skill.snap_shot.v1": { level: 1, xp: 0 } },
         bar: [null, null, null, null, null, MOVE_SOCKET, null, "skill.snap_shot.v1"],
@@ -636,7 +636,7 @@ describe("registerDeath", () => {
     // Slotted, not cast, and not merely owned: the rule that governs every
     // other gem governs this one too.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0,
+      area: "map", areaTier: 2, level: 10, xp: 0,
       skills: {
         gems: {
           "skill.ember_bolt.v1": { level: 1, xp: 0 },
@@ -653,7 +653,7 @@ describe("registerDeath", () => {
     // Same award (23 xp), one occupied slot (ember_bolt): splitGemXp(23, 1) = 23.
     // blink is owned (has a gem) but not on the bar, so it must not move.
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0,
+      area: "map", areaTier: 2, level: 10, xp: 0,
       skills: {
         gems: {
           "skill.ember_bolt.v1": { level: 1, xp: 0 },
@@ -669,14 +669,14 @@ describe("registerDeath", () => {
   });
 
   it("a gem levels on a big enough kill, and a boss can carry it past three thresholds", () => {
-    // level 10, areaTier 1 (areaLevel 8): the character is above it by 2, full value.
+    // level 10, areaTier 2 (areaLevel 8): the character is above it by 2, full value.
     // monsterXp(8, "boss") = 28*40 = 1,120, xpAward = 1,120. One occupied slot, so
     // the whole award lands on the one gem. gemXpToNext(1..3) = 60, 240, 540:
     // 1,120 - 840 = 280 left over at level 4 (gemXpToNext(4) = 960), crossing
     // three thresholds in the one kill (cap = maxGemLevel(10) = 10, well above 4,
     // so the cap never gets in the way here).
     const { sim, world, sessionE } = makeGemKill({
-      area: "map", areaTier: 1, level: 10, xp: 0, boss: true,
+      area: "map", areaTier: 2, level: 10, xp: 0, boss: true,
       skills: {
         gems: { "skill.ember_bolt.v1": { level: 1, xp: 0 } },
         bar: ["skill.ember_bolt.v1", null, null, null, null, MOVE_SOCKET, null, null],

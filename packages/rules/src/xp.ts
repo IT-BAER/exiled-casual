@@ -3,7 +3,7 @@
 
 /**
  * A character starts at 1. The Atlas is rescaled to meet him there
- * (`atlas.ts`: tier 0 is area level 2), so the level-difference penalty is a
+ * (`atlas.ts`: tier 1 is area level 2), so the level-difference penalty is a
  * choice about which tier to run, never a permanent tax for existing.
  */
 export const START_LEVEL = 1;
@@ -29,7 +29,7 @@ export function xpToNext(level: number): number {
 /**
  * What a kill is worth before the level-difference penalty. Area level plus a
  * flat 20 is the base, so a Tier 15 monster is worth more than a Tier 1 one for
- * the same swing, but the first maps pay 3.5x their area level against 1.2x at
+ * the same swing, but the first maps pay 11x their area level against 1.2x at
  * the top: without it a character was 13 levels under his third map and died
  * there 2-3 times a run (simulation/src/playtest.ts);
  * the multipliers say a rare is eight normals and a boss is forty, which is
@@ -56,11 +56,16 @@ export function monsterXp(areaLevel: number, kind: MonsterXpKind): number {
  * area is penalised — farming a tier you have outgrown pays badly, which is why
  * the Atlas has tiers — while overreaching pays in full: the danger is its own
  * cost, and a penalty on top kept an under-levelled character stuck (playtest.ts).
+ *
+ * The tolerance band is PoE1's safe zone, 3 + level/16: it widens as the
+ * character climbs, so the fourteen levels above Tier 15 (area level 86) decay
+ * to 60% at 99 rather than hitting the floor at 98, where a level cost 32,000 kills.
  */
 export function xpPenaltyPct(charLevel: number, areaLevel: number): number {
   const diff = Math.max(0, charLevel - areaLevel);
-  if (diff <= 3) return 100;
-  return Math.max(10, 100 - 10 * (diff - 3));
+  const safe = 3 + Math.floor(charLevel / 16);
+  if (diff <= safe) return 100;
+  return Math.max(10, 100 - 10 * (diff - safe));
 }
 
 /** One kill's experience: its value, penalised, truncated to an integer. */

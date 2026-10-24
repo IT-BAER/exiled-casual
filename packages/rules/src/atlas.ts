@@ -42,13 +42,15 @@ export interface AtlasGraphNode extends AtlasNode {
 export const WAYSTONE_OFFER_COUNT = 3;
 
 /**
- * Natural area level per docs/01:308, rescaled for a 1-100 character. Tier 0 is
- * level 2 so a character out of the character-creation screen can run the first
- * node, and the fifteenth is 86 so the last stretch to 100 is a tier the player
- * has chosen to farm rather than one the Atlas hands him.
+ * Natural area level per docs/01:308, rescaled for a 1-100 character. Tier 1,
+ * the first map anyone stands on (every starting stone is Tier 1), is level 2 so
+ * a character out of the character-creation screen can run the first node, and
+ * Tier 15 is 86 so the last stretch to 100 is a tier the player has chosen to
+ * farm rather than one the Atlas hands him. Tier 0 (no map open; the authored
+ * reference monster) reads as Tier 1.
  */
 export function areaLevel(tier: number): number {
-  return 2 + 6 * tier;
+  return 2 + 6 * Math.max(0, tier - 1);
 }
 
 // ponytail: per-mille scaling is a calibration placeholder (docs/01:780 says
@@ -344,7 +346,7 @@ export function offerWaystones(atlasSeed: number, count: number): Waystone[] {
     const seed = rnd();
     const roll = 1 + (rnd() % 2); // 1..2
     // A fresh character owns these, so none may be a death trap: the first slot
-    // is always Tier 1 (Area Level 8), the rest Tier 1 or 2. Higher stones drop.
+    // is always Tier 1 (Area Level 2), the rest Tier 1 or 2. Higher stones drop.
     const tier = i === 0 ? 1 : roll;
     out.push({ id: `ws-${i}`, seed, tier });
   }

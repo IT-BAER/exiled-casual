@@ -446,13 +446,13 @@ describe("the tier ladder (reference character, on-level gems, no gear)", () => 
     expect(growth).toBeLessThan(10);
   });
 
-  it("gem levels carry tier 3 and stop mattering above it", () => {
-    // At tier 3 the cap is reached, so this is the last tier where levelling the
+  it("gem levels carry tier 4 and stop mattering above it", () => {
+    // At tier 4 the cap is reached, so this is the last tier where levelling the
     // gem is the player's answer to the monsters getting bigger.
-    expect(onLevelGem(3)).toBe(20);
-    const capped = secondsToKillReferenceRare(3);
-    const r1 = rig(1, 3);
-    spawnMonster(r1.world, makeRare(impDef(), RARE_TEMPLATES[0]!), fp(0), SPAWN_Y, true, monsterTierScale(3));
+    expect(onLevelGem(4)).toBe(20);
+    const capped = secondsToKillReferenceRare(4);
+    const r1 = rig(1, 4);
+    spawnMonster(r1.world, makeRare(impDef(), RARE_TEMPLATES[0]!), fp(0), SPAWN_Y, true, monsterTierScale(4));
     expect(ticksToClear(r1, { maxSecs: 600 }).ticks / HZ / capped).toBeGreaterThan(1.5);
   });
 });
