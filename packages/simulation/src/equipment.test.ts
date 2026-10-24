@@ -6,7 +6,7 @@ import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { saveTo, loadInto, VERSION } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
-import { CONTENT_VERSION, wisdomScroll } from "@exiled/content-runtime";
+import { CONTENT_VERSION, wisdomScroll, currencyItem } from "@exiled/content-runtime";
 import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC, ProgressC } from "./components";
 
 // ---------------------------------------------------------------------------
@@ -265,6 +265,53 @@ describe("equipment system — unequipItem", () => {
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
 
     expect(sim.pickupRefusedTick).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyCurrency on a worn piece
+// ---------------------------------------------------------------------------
+
+describe("equipment system — currency on worn gear", () => {
+  it("a Scroll of Wisdom reads the worn piece without taking it off", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    world.set<InventoryC>(sessionE(world), "inventory", { ...getInv(world), items: [{ x: 0, y: 0, w: 1, h: 1, item: wisdomScroll(), count: 2 }] });
+    const unread: Item = { ...HELMET, rarity: "magic", affixes: [{ affixId: "affix.life", value: 20 }], unidentified: true };
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { helmet: unread } });
+
+    sim.step([intentToCommand({ kind: "applyCurrency", fromX: 0, fromY: 0, slot: "helmet" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots["helmet"]?.unidentified).toBeUndefined();
+    expect(getInv(world).items[0]!.count).toBe(1);
+  });
+
+  it("an orb that changes a worn piece changes the character's stats with it", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    world.set<InventoryC>(sessionE(world), "inventory", { ...getInv(world), items: [{ x: 0, y: 0, w: 1, h: 1, item: currencyItem("currency.transmutation"), count: 1 }] });
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { helmet: HELMET } });
+    sim.step([]);
+    const sheet = (t: number) => { const p = buildSnapshot(world, sim, t, CONTENT_VERSION).player; return JSON.stringify({ s: p.stats, l: p.maxLife, m: p.maxMana }); };
+    const before = sheet(0);
+
+    sim.step([intentToCommand({ kind: "applyCurrency", fromX: 0, fromY: 0, slot: "helmet" }, playerEntity, 1)]);
+
+    const worn = getEquip(world).slots["helmet"]!;
+    expect(worn.rarity).toBe("magic");
+    expect(getInv(world).items).toHaveLength(0);
+    expect(sheet(1)).not.toBe(before);
+  });
+
+  it("an empty slot charges nothing", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    world.set<InventoryC>(sessionE(world), "inventory", { ...getInv(world), items: [{ x: 0, y: 0, w: 1, h: 1, item: wisdomScroll(), count: 2 }] });
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: {} });
+
+    sim.step([intentToCommand({ kind: "applyCurrency", fromX: 0, fromY: 0, slot: "helmet" }, playerEntity, 0)]);
+
+    expect(getInv(world).items[0]!.count).toBe(2);
   });
 });
 

@@ -1215,8 +1215,18 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                 {...s}
                 item={equipment[s.slot]}
                 highlight={slotHighlight(s.slot)}
-                // An orb in the hand never picks the worn piece up, same as in the grid.
-                onGrab={(slot, e) => { if (armed) { e.preventDefault(); return; } grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e); }}
+                // An orb in the hand never picks the worn piece up, same as in the grid:
+                // it is spent on the piece where it is worn, as PoE allows.
+                onGrab={(slot, e) => {
+                  if (!armed) { grab({ kind: "slot", slot }, equipment[slot]!, 1.5, 1.5, e); return; }
+                  e.preventDefault();
+                  const worn = equipment[slot]!;
+                  if (!currencyAccepts(armed.baseId ?? "", worn.rarity, worn.unidentified === true, worn.lines.length)) return;
+                  if (e.shiftKey) shiftSpent.current = true;
+                  else setArmed(null);
+                  playDropSound(currencyResultRarity(armed.baseId ?? "") ?? worn.rarity);
+                  onIntent?.({ kind: "applyCurrency", fromX: armed.x, fromY: armed.y, slot });
+                }}
                 onHover={(_item, e) => !drag && setHover({ at: { slot: s.slot }, x: e.clientX, y: e.clientY })}
                 onLeave={() => setHover(null)}
               />

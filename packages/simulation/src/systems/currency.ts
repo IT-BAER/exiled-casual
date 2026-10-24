@@ -2,7 +2,9 @@ import { applyCurrency } from "@exiled/rules";
 import { ITEM_POOLS, isCurrency, baseOf, isPermanentWaystone } from "@exiled/content-runtime";
 import { fnv1a32 } from "../rng";
 import { Simulation } from "../loop";
-import type { InventoryC } from "../components";
+import { recomputePlayerStats } from "../derived";
+import type { InventoryC, EquipmentC } from "../components";
+import type { Item } from "@exiled/content-schema";
 
 /**
  * Spend one unit of a currency from one inventory cell onto the item in another
@@ -20,6 +22,20 @@ export function registerCurrencySystem(sim: Simulation): void {
       const { fromX, fromY, x, y } = cmd.data ?? {};
       if (fromX === undefined || fromY === undefined) continue;
       let inv = world.get<InventoryC>(sessionE, "inventory")!;
+
+      // A worn piece: the same craft, written back into its slot, and the sheet follows.
+      if (cmd.type === "applyCurrency" && cmd.slot !== undefined) {
+        const equip = world.get<EquipmentC>(sessionE, "equipment");
+        const worn = equip?.slots[cmd.slot];
+        const src = inv.items.findIndex((p) => p.x === fromX && p.y === fromY);
+        if (!equip || !worn || src < 0) continue;
+        const crafted = craft(inv.items[src]!.item, worn, `${tick}:slot:${cmd.slot}`);
+        if (crafted === null) continue;
+        world.set<EquipmentC>(sessionE, "equipment", { slots: { ...equip.slots, [cmd.slot]: crafted } });
+        world.set<InventoryC>(sessionE, "inventory", spend(inv, src));
+        recomputePlayerStats(world);
+        continue;
+      }
 
       if (cmd.type === "applyCurrency") {
         if (x === undefined || y === undefined) continue;
@@ -50,26 +66,36 @@ function applyOnce(inv: InventoryC, fromX: number, fromY: number, x: number, y: 
   const dst = inv.items.findIndex((p) => p.x === x && p.y === y);
   if (src < 0 || dst < 0 || src === dst) return null;
 
-  const currency = inv.items[src]!;
   const target = inv.items[dst]!;
-  // Currency on currency is never a craft, whatever the transition table says.
-  if (!isCurrency(currency.item) || isCurrency(target.item)) return null;
-  // The permanent waystone is the one item in the game that stays white. It
-  // is never consumed, so a rolled modifier on it would be a permanent one —
-  // the floor under sustain would become the best stone anybody owns.
-  if (isPermanentWaystone(target.item)) return null;
-
-  // The base id is the currency id: content and rules agree on the namespace, so
-  // nothing has to carry a second identifier through the wire.
-  const currencyId = baseOf(currency.item.baseId).id;
-  const seed = fnv1a32(`craft:${currencyId}:${tick}:${x}:${y}`);
-  const crafted = applyCurrency(ITEM_POOLS, currencyId, target.item, seed);
+  const crafted = craft(inv.items[src]!.item, target.item, `${tick}:${x}:${y}`);
   if (crafted === null) return null;
 
   const items = inv.items.slice();
   items[dst] = { ...target, item: crafted };
+  return spend({ ...inv, items }, src);
+}
+
+/** What `currency` makes of `target`, or null when it refuses; `where` keys the seed. */
+function craft(currency: Item, target: Item, where: string): Item | null {
+  // Currency on currency is never a craft, whatever the transition table says.
+  if (!isCurrency(currency) || isCurrency(target)) return null;
+  // The permanent waystone is the one item in the game that stays white. It
+  // is never consumed, so a rolled modifier on it would be a permanent one —
+  // the floor under sustain would become the best stone anybody owns.
+  if (isPermanentWaystone(target)) return null;
+
+  // The base id is the currency id: content and rules agree on the namespace, so
+  // nothing has to carry a second identifier through the wire.
+  const currencyId = baseOf(currency.baseId).id;
+  return applyCurrency(ITEM_POOLS, currencyId, target, fnv1a32(`craft:${currencyId}:${where}`));
+}
+
+/** One unit off the stack at index `src`; the last unit takes the cell with it. */
+function spend(inv: InventoryC, src: number): InventoryC {
+  const items = inv.items.slice();
+  const currency = items[src]!;
   const left = (currency.count ?? 1) - 1;
-  if (left <= 0) items.splice(items.indexOf(currency), 1);
+  if (left <= 0) items.splice(src, 1);
   else items[src] = { ...currency, count: left };
   return { ...inv, items };
 }

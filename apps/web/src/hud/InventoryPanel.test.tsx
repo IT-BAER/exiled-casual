@@ -748,6 +748,24 @@ describe("spending currency on an item", () => {
     fireEvent.pointerDown(screen.getByTestId("equip-slot-gloves"));
     expect(screen.queryByTestId("drag-ghost")).toBeNull();
     fireEvent.pointerUp(screen.getByTestId("inventory-panel"));
+    expect(seen.filter((i) => (i as { kind: string }).kind !== "applyCurrency")).toEqual([]);
+  });
+
+  it("an armed scroll clicked on a worn unread piece reads it where it is worn", () => {
+    const seen: unknown[] = [];
+    const worn = { gloves: { rarity: "rare" as const, name: "Stalker Gloves", itemClass: "gloves", lines: [], unidentified: true } };
+    render(<InventoryPanel inventory={withScroll} equipment={worn} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("equip-slot-gloves"));
+    expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, slot: "gloves" }]);
+  });
+
+  it("an armed orb on a worn piece it cannot change sends nothing", () => {
+    const seen: unknown[] = [];
+    const worn = { gloves: { rarity: "rare" as const, name: "Stalker Gloves", itemClass: "gloves", lines: ["+10 to maximum Life"] } };
+    render(<InventoryPanel inventory={withScroll} equipment={worn} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("equip-slot-gloves"));
     expect(seen).toEqual([]);
   });
 

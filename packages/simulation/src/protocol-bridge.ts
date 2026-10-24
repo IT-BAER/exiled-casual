@@ -70,6 +70,7 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
     case "equipItem":
       return { tick, entity: player, type: "equipItem", data: { x: intent.x, y: intent.y }, slot: intent.slot };
     case "applyCurrency":
+      if ("slot" in intent) return { tick, entity: player, type: "applyCurrency", data: { fromX: intent.fromX, fromY: intent.fromY }, slot: intent.slot };
       return {
         tick, entity: player, type: "applyCurrency",
         data: { fromX: intent.fromX, fromY: intent.fromY, x: intent.x, y: intent.y },

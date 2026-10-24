@@ -47,6 +47,8 @@ export type Intent =
   | { kind: "useFlask"; slot: "life" | "mana" }
   /** Spend one Scroll of Wisdom on the unidentified backpack item at its ORIGIN cell. */
   | { kind: "applyCurrency"; fromX: number; fromY: number; x: number; y: number }
+  /** Spend one unit of the backpack stack at (fromX,fromY) on the piece worn in `slot`. */
+  | { kind: "applyCurrency"; fromX: number; fromY: number; slot: EquipSlotId }
   /** One unit of the stack at (fromX,fromY) on every backpack item it accepts, until it runs out. */
   | { kind: "applyCurrencyAll"; fromX: number; fromY: number }
   /**
@@ -644,6 +646,14 @@ export function validateIntent(v: unknown): Intent {
       return { kind: "unequipItem", slot: obj["slot"] as EquipSlotId };
     }
     case "applyCurrency": {
+      if (obj["slot"] !== undefined) {
+        for (const k of ["fromX", "fromY"]) {
+          if (!Number.isInteger(obj[k])) throw new Error(`validateIntent applyCurrency: ${k} must be an integer`);
+        }
+        if (!EQUIP_SLOT_IDS.has(obj["slot"] as string))
+          throw new Error("validateIntent applyCurrency: slot must be a valid EquipSlotId");
+        return { kind: "applyCurrency", fromX: obj["fromX"] as number, fromY: obj["fromY"] as number, slot: obj["slot"] as EquipSlotId };
+      }
       for (const k of ["fromX", "fromY", "x", "y"]) {
         if (!Number.isInteger(obj[k])) throw new Error(`validateIntent applyCurrency: ${k} must be an integer`);
       }
