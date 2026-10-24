@@ -550,3 +550,38 @@ every pixel from its distance to the shore: waves run up the sand and drain back
 the front of the wave, colour deepens with depth, caustics move in the shallows and a sky sheen shows
 the ripples. It costs no extra render pass. A wrong normal map input had also tilted every water
 normal sideways, which is part of why the old water looked flat.
+
+## 2026-10-24 · Spell comets and a wand that aims
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-24-ember-bolt-comet.jpeg" alt="Six frames of Ember Bolt: a white-hot head with an orange tail streaked by heat bands, the floor lit under it, then a white flash opening into a starburst of flame tongues at the target" width="100%"><br><sub>Ember Bolt flies as one comet and lands as a starburst.</sub></td>
+</tr>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-24-blink-comet.jpeg" alt="Six frames of Blink: a feathered violet comet smears from where the player left to where he arrived, arcane motes tearing off the path and fading" width="100%"><br><sub>Blink leaves a feathered violet comet, not a laser bar.</sub></td>
+</tr>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-24-cast-sword-flick.jpeg" alt="Four frames of an Emberbound cast: the wand flicks onto the target with the wrist keyed, the off arm stays with the gait" width="100%"><br><sub>A cast flicks the wand onto the target.</sub></td>
+</tr>
+</table>
+
+Ember Bolt was a row of stacked translucent glow balls that hit as one big pale ball. It is now a
+single comet, a round white-hot head and an orange tail with heat bands running down it that burns
+out at the tip, lighting the floor under it in flight, and it lands as a white flash that opens into
+a starburst of flame tongues. Blink drew a hard translucent cylinder that read as a laser bar; it
+now smears a feathered violet comet from the departure point to the arrival and tears arcane motes
+off the path. Ember Spark's wake deepened to amber so its small comet shows a gradient. The cast
+itself changed too: the wand flicks onto the target with the sword finisher's take, wrist keyed and
+paced onto the release tick, where the open-palm cast held the wand off a stiff forced-down forearm.
+
+## 2026-10-25 · A robe with an inside
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-10-25-ember-robe-twosided.jpeg" alt="Female Emberbound walking in the asset viewer: the skirt's front slit shows its dark red lining and both legs sit inside the boots" width="100%"><br><sub>The skirt lining shows through the slit; the legs stay in the boots.</sub></td>
+</tr>
+</table>
+
+The Emberbound robe and the Stalker coat exported single-sided, so the skirt's inner faces were
+culled and the backing leg showed through the open panel as a leg standing beside the boot. Both
+pieces now export double-sided from the wardrobe build; the glb carries the flag, not the runtime.
