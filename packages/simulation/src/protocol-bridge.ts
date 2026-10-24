@@ -418,6 +418,7 @@ export function buildSnapshot(
       help: d.help,
       unidentified: d.unidentified,
       baseId: ic.item.baseId,
+      waystoneTier: ic.item.waystone?.tier,
       inRange: inRangeOf(pp.x, pp.y, ip.x, ip.y, PICKUP_RADIUS),
     });
   }

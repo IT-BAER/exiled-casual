@@ -3,7 +3,7 @@ import { fp, toNumber } from "@exiled/fixed-point";
 import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { CONTENT_VERSION, MONSTERS, SKILLS, UTILITY_SKILLS } from "@exiled/content-runtime";
-import { ITEM_POOLS, baseOf } from "@exiled/content-runtime";
+import { ITEM_POOLS, baseOf, waystoneItem } from "@exiled/content-runtime";
 import { rollItem, effectiveSkill } from "@exiled/rules";
 import type { Intent } from "@exiled/protocol";
 import { World } from "./ecs";
@@ -610,6 +610,22 @@ describe("buildSnapshot — ground items and inventory", () => {
     expect(gi!.baseId).toBe(item.baseId);
     expect(gi!.inRange).toBe(true);
     expect(snap.inventory).toEqual({ cols: 12, rows: 5, items: [] });
+  });
+
+  it("reports a ground waystone's tier, which the loot filter styles by", () => {
+    const { world, sim, playerEntity } = createCombatSim(42, { area: "map" });
+    const playerPos = world.get<Position>(playerEntity, "position")!;
+    const item = waystoneItem(9, 12);
+    const ge = world.create();
+    world.set(ge, "position", { x: playerPos.x + fp(1), y: playerPos.y });
+    world.set(ge, "item", { item, w: 1, h: 1 });
+    const rolled = world.create();
+    world.set(rolled, "position", { x: playerPos.x, y: playerPos.y + fp(1) });
+    world.set(rolled, "item", { item: rollItem(ITEM_POOLS, 1, 65, 1), w: 1, h: 1 });
+
+    const snap = buildSnapshot(world, sim, 1, "test");
+    expect(snap.entities.find((e) => e.id === ge)!.waystoneTier).toBe(12);
+    expect(snap.entities.find((e) => e.id === rolled)!.waystoneTier).toBeUndefined();
   });
 
   it("reports inRange false for a ground item beyond the pickup radius", () => {

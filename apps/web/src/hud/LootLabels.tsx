@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { Snapshot } from "@exiled/protocol";
-import { RARITY, SERIF } from "./ItemTooltip";
+import { SERIF } from "./ItemTooltip";
+import { plateStyle } from "./loot-filter";
 import { playDropSound } from "../audio/drop-sound";
 
 /** Screen-space position of a world point, in CSS pixels of the canvas. */
@@ -42,24 +43,6 @@ const PLATE_SPREAD_X = 120;
 /** Gap between two stacked plates, on top of the taller one's own height. */
 const PLATE_GAP = 4;
 
-/**
- * Plate fill per rarity. PoE2 tints the plate itself (`docs/todo/image-2.png`):
- * a unique sits on dark maroon, a rare on dark gold, so the tier reads before a
- * single letter does.
- */
-const PLATE_BG: Record<string, string> = {
-  normal: "rgba(10,10,10,0.78)",
-  magic: "rgba(14,20,42,0.82)",
-  rare: "rgba(34,25,8,0.82)",
-  unique: "rgba(38,17,7,0.86)",
-};
-const PLATE_BG_HOVER: Record<string, string> = {
-  normal: "rgba(26,26,26,0.84)",
-  magic: "rgba(30,38,66,0.86)",
-  rare: "rgba(54,42,16,0.86)",
-  unique: "rgba(60,32,16,0.9)",
-};
-
 export interface LootLabelsProps {
   snapshot: Snapshot | null;
   /** Null until the Babylon scene exists; plates then hold their last position. */
@@ -77,9 +60,9 @@ export interface LootLabelsProps {
 }
 
 /**
- * Persistent rarity-coloured name plate over every ground item, the way PoE
- * shows drops (reference-screenshots/ground-loot*.png): a dark plate with a thin
- * rarity border and small-caps serif text in the rarity colour.
+ * Persistent name plate over every ground item, the way PoE shows drops
+ * (reference-screenshots/ground-loot*.png), styled per tier by NeverSink's
+ * filter (`loot-filter.ts`) in small-caps serif.
  *
  * Content is React's; position is not. The camera moves every frame while the
  * snapshot only changes at 30 Hz, so a rAF loop writes transforms straight to
@@ -162,13 +145,14 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
     // `isolate` keeps a hovered plate's lift among the plates, under the HUD drawn after them.
     <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", isolation: "isolate" }}>
       {(plates ? items : []).map((e) => {
+        const look = plateStyle(e);
+        const frame = look.border ? `1px solid ${look.border}` : "none";
         if (e.kind === "gold") return (
-          // NeverSink's two gold tiers (reference-screenshots/ground-loot2.png): a
-          // dim plate for the everyday pile, a bright framed one for the jackpot.
           <div
             key={e.id}
             data-testid={`loot-label-${e.id}`}
             data-jackpot={String(e.jackpot === true)}
+            data-tier={look.tier}
             ref={(node) => {
               if (node) nodes.current.set(e.id, node);
               else nodes.current.delete(e.id);
@@ -179,10 +163,10 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
               top: 0,
               visibility: "hidden",
               padding: e.jackpot ? "3px 14px 4px" : "0 6px 1px",
-              background: e.jackpot ? "rgba(8,8,8,0.92)" : "rgba(10,10,10,0.78)",
-              border: e.jackpot ? "1px solid #f3e3b0" : "none",
-              color: e.jackpot ? "#fff6dc" : "#c9bb94",
-              font: `${e.jackpot ? 17 : 12}px ${SERIF}`,
+              background: look.bg,
+              border: frame,
+              color: look.text,
+              font: `${look.fontPx}px ${SERIF}`,
               fontVariant: "small-caps",
               letterSpacing: "0.04em",
               whiteSpace: "nowrap",
@@ -193,8 +177,7 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
             {e.amount ?? 0}x Gold
           </div>
         );
-        const rarity = (e.rarity ?? "normal") as keyof typeof RARITY;
-        const look = RARITY[rarity] ?? RARITY.normal;
+        const rarity = e.rarity ?? "normal";
         // The base type only earns its own line where PoE2 gives it one: under a
         // rolled name, on a magic or better drop. A normal item IS its base, and a
         // currency plate saying "Waystone (Tier 1) / Waystone" is one line of noise.
@@ -206,7 +189,8 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
           <div
             key={e.id}
             data-testid={`loot-label-${e.id}`}
-            data-rarity={e.rarity ?? "normal"}
+            data-rarity={rarity}
+            data-tier={look.tier}
             data-hover={String(hoverId === e.id)}
             onPointerEnter={() => setHovered(e.id)}
             onPointerLeave={() => setHovered((h) => (h === e.id ? null : h))}
@@ -225,11 +209,13 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
               visibility: "hidden", // until the first projection places it
               zIndex: hoverId === e.id ? 1 : undefined, // a hovered plate rises over the later plates that cover it
               padding: base ? "4px 14px 5px" : "3px 14px 4px",
-              background: (hoverId === e.id ? PLATE_BG_HOVER : PLATE_BG)[rarity] ?? PLATE_BG["normal"],
-              border: `1px solid ${look.frame}${hoverId === e.id ? "" : "66"}`, // the reference plate is filled, not outlined
-              transition: "background 120ms, border-color 120ms",
+              background: look.bg,
+              border: frame,
+              // One lift for every fill: a filled orange plate has no darker "hover colour" to swap to.
+              filter: hoverId === e.id ? "brightness(1.35)" : undefined,
+              transition: "filter 120ms",
               color: look.text,
-              font: `16px ${SERIF}`,
+              font: `${look.fontPx}px ${SERIF}`,
               fontVariant: "small-caps",
               letterSpacing: "0.04em",
               lineHeight: 1.25,
@@ -240,7 +226,7 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
             }}
           >
             {e.name ?? "Item"}
-            {base ? <div style={{ fontSize: 13, opacity: 0.85 }}>{base}</div> : null}
+            {base ? <div style={{ fontSize: "0.8em", opacity: 0.85 }}>{base}</div> : null}
             {/* Stem down to the drop, so a plate lifted out of a stack still says
                 which item on the floor it belongs to. */}
             <span
@@ -251,7 +237,8 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
                 top: "100%",
                 width: 1,
                 height: PLATE_LIFT - 6,
-                background: `linear-gradient(180deg, ${look.frame}99, transparent)`,
+                background: `linear-gradient(180deg, ${look.border ?? look.text}, transparent)`,
+                opacity: 0.6,
               }}
             />
           </div>

@@ -199,11 +199,29 @@ describe("LootLabels", () => {
     const two = screen.getByTestId("loot-label-2");
     fireEvent.pointerEnter(one);
     expect(one.dataset["hover"]).toBe("true");
-    expect(one.style.background).not.toBe(two.style.background);
+    expect(one.style.filter).toContain("brightness");
     expect(two.dataset["hover"]).toBe("false");
+    expect(two.style.filter).toBe("");
     fireEvent.pointerLeave(one);
     expect(one.dataset["hover"]).toBe("false");
-    expect(one.style.background).toBe(two.style.background);
+    expect(one.style.filter).toBe("");
+  });
+
+  it("dresses each plate in its loot filter tier", () => {
+    render(
+      <LootLabels
+        project={null}
+        snapshot={snapWith([
+          { id: 1, kind: "groundItem", x: 0, y: 0, rarity: "normal", name: "Orb of Alchemy", itemClass: "currency", baseId: "currency.alchemy" },
+          { id: 2, kind: "groundItem", x: 0, y: 0, rarity: "magic", name: "Waystone (Tier 12)", itemClass: "waystone", waystoneTier: 12 },
+        ])}
+      />,
+    );
+    const orb = screen.getByTestId("loot-label-1");
+    expect(orb.dataset["tier"]).toBe("currency t5alchemy");
+    expect(orb.style.background).toBe("rgb(213, 159, 0)");
+    expect(orb.style.color).toBe("rgb(0, 0, 0)");
+    expect(screen.getByTestId("loot-label-2").dataset["tier"]).toBe("maps maps_b");
   });
 
   it("lifts the hovered plate over a later one it overlaps", () => {

@@ -336,6 +336,8 @@ export interface SnapshotEntity {
   itemClass?: string;
   /** groundItem only: base id, which picks the model lying on the floor. */
   baseId?: string;
+  /** groundItem only: a waystone's tier, which the loot filter styles it by. */
+  waystoneTier?: number;
   /** groundItem only: tooltip base-stat block + requirements (reference-screenshots/item-*.png). */
   statLines?: ItemStatLine[];
   reqLevel?: number;
