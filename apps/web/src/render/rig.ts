@@ -1124,41 +1124,48 @@ const outOfHeading = (c: Vector3, h: Heading): Vector3 =>
 /** `v` without its part along unit `axis`, normalised. */
 const across = (v: Vector3, axis: Vector3): Vector3 => v.subtract(axis.scale(Vector3.Dot(v, axis))).normalize();
 
-/** A leg held where it stood: the foot's world matrix and the knee over the rig pivot's. */
+/** A leg held where it stood: the foot's world matrix over the rig pivot's. */
 interface PlantedLeg {
   thigh: TransformNode;
   calf: TransformNode;
   foot: TransformNode;
   rel: Matrix;
-  knee: Vector3;
 }
 
 /**
- * Two-bone IK: bend the knee toward where it stood so the ankle reaches where it
- * was planted, then give the foot back the world turn it stood on. The animated
- * knee is no pole: off a planted ankle it swaps sides and the knee whirls.
+ * Two-bone IK in the take's own knee plane: the knee bends further or less so the
+ * ankle reaches where it was planted, then the foot gets back the world turn it
+ * stood on. The plane is the knee's hinge, so the IK never bends it sideways; a
+ * minimal turn of thigh and shin instead swung the knee 75-89 degrees out of it.
  */
-function plantLeg({ thigh, calf, foot, rel, knee: stood }: PlantedLeg, pivot: Matrix): void {
+function plantLeg({ thigh, calf, foot, rel }: PlantedLeg, pivot: Matrix): void {
   freshWorld(foot);
   const want = rel.multiply(pivot);
   const target = want.getTranslation();
   const a = thigh.getAbsolutePosition().clone();
   const b = calf.getAbsolutePosition().clone();
+  const c = foot.getAbsolutePosition().clone();
   const upper = Vector3.Distance(a, b);
-  const lower = Vector3.Distance(b, foot.getAbsolutePosition());
+  const lower = Vector3.Distance(b, c);
   const reach = target.subtract(a);
   const d = Math.min(Math.max(reach.length(), Math.abs(upper - lower) + 1e-4), (upper + lower) * 0.9999);
   const dir = reach.normalize();
-  const bend = Vector3.TransformCoordinates(stood, pivot).subtractInPlace(a);
-  bend.subtractInPlace(dir.scale(Vector3.Dot(bend, dir)));
-  if (bend.lengthSquared() < 1e-12) return;
-  bend.normalize();
+  // A leg too straight to have a knee plane is left as the take posed it.
+  const hinge = Vector3.Cross(b.subtract(a).normalize(), c.subtract(b).normalize());
+  if (hinge.length() < 0.02) return;
+  const axis = across(hinge, dir);
+  const bend = Vector3.Cross(dir, axis).normalize();
   const cos = (upper * upper + d * d - lower * lower) / (2 * upper * d);
   const knee = a.add(dir.scale(upper * cos)).addInPlace(bend.scaleInPlace(upper * Math.sqrt(Math.max(0, 1 - cos * cos))));
   swing(thigh, b.subtract(a), knee.subtract(a));
   calf.computeWorldMatrix(true);
   foot.computeWorldMatrix(true);
   const k = calf.getAbsolutePosition();
+  // Twist the thigh about itself until its knee hinge lies along the solved plane's.
+  const turned = Vector3.Cross(k.subtract(a), foot.getAbsolutePosition().subtract(k));
+  swing(thigh, across(turned, k.subtract(a).normalize()), axis);
+  calf.computeWorldMatrix(true);
+  foot.computeWorldMatrix(true);
   swing(calf, foot.getAbsolutePosition().subtract(k), target.subtract(k));
   want.multiply(calf.getWorldMatrix().clone().invert()).decompose(undefined, foot.rotationQuaternion ?? undefined);
   foot.computeWorldMatrix(true);
@@ -1730,10 +1737,7 @@ export class RigActor {
     if (legs) {
       // Last frame's pose, the one on screen: the body may already be turning this tick.
       const toPivot = this.pivot.getWorldMatrix().clone().invert();
-      for (const leg of this.planted) {
-        leg.foot.getWorldMatrix().multiplyToRef(toPivot, leg.rel);
-        Vector3.TransformCoordinatesToRef(leg.calf.getAbsolutePosition(), toPivot, leg.knee);
-      }
+      for (const leg of this.planted) leg.foot.getWorldMatrix().multiplyToRef(toPivot, leg.rel);
       legs.speedRatio = pace.raise;
       legs.start(false, pace.raise);
       this.scene.sortActiveAnimatables();
@@ -2245,7 +2249,7 @@ export class RigActor {
     for (const side of ["l", "r"]) {
       const [thigh, calf, foot] = ["thigh", "calf", "foot"].map((b) => byName.get(`${b}_${side}`));
       if (thigh instanceof TransformNode && calf instanceof TransformNode && foot instanceof TransformNode) {
-        this.planted.push({ thigh, calf, foot, rel: Matrix.Identity(), knee: Vector3.Zero() });
+        this.planted.push({ thigh, calf, foot, rel: Matrix.Identity() });
       }
     }
     if (this.planted.length === 2) {

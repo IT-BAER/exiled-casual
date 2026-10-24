@@ -2399,6 +2399,74 @@ describe("each melee skill plays its own take", () => {
 });
 
 /**
+ * A standing strike plants the feet by two-bone IK. The knee is a hinge: the IK may
+ * bend it further or less, never sideways out of the plane the take bent it in. The
+ * hinge is the take's own knee-plane normal, carried in the thigh's frame; worst
+ * angle between it and the planted leg's knee plane, over every melee take.
+ */
+describe("a planted foot keeps the knee a hinge", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  it("bends each knee only in the plane the take bent it in", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
+      const rig = attachRig(scene, new Mesh("hero", scene), "male")!;
+      rig.setLooks({ ...BASE_LOOKS, base: "male", weapon2: "towershield" });
+      const bone = (n: string) => scene.transformNodes.find((t) => t.name === n && t.isEnabled())!;
+      const legs = ["l", "r"].map((s) => ({ thigh: bone(`thigh_${s}`), calf: bone(`calf_${s}`), foot: bone(`foot_${s}`) }));
+      const fresh = (node: TransformNode) => {
+        const chain: TransformNode[] = [];
+        for (let n: Node | null = node; n instanceof TransformNode; n = n.parent) chain.unshift(n);
+        for (const n of chain) n.computeWorldMatrix(true);
+      };
+      /** The knee plane's unit normal, or null for a leg too straight to have one. */
+      const plane = ({ thigh, calf, foot }: { thigh: TransformNode; calf: TransformNode; foot: TransformNode }) => {
+        fresh(foot);
+        const [a, b, c] = [thigh.getAbsolutePosition().clone(), calf.getAbsolutePosition().clone(), foot.getAbsolutePosition().clone()];
+        const n = Vector3.Cross(b.subtract(a).normalize(), c.subtract(b).normalize());
+        return n.length() < 0.1 ? null : n.normalize();
+      };
+      const hinges: (Vector3 | null)[] = [null, null];
+      // Before the plant: the take's own knee plane, in the thigh's frame.
+      scene.onAfterAnimationsObservable.add(() => {
+        legs.forEach((leg, i) => {
+          const n = plane(leg);
+          hinges[i] = n && Vector3.TransformNormal(n, leg.thigh.getWorldMatrix().clone().invert());
+        });
+      }, undefined, true);
+      let worst = 0;
+      scene.onAfterAnimationsObservable.add(() => {
+        legs.forEach((leg, i) => {
+          const n = plane(leg);
+          const h = hinges[i];
+          if (!n || !h) return;
+          const carried = Vector3.TransformNormal(h, leg.thigh.getWorldMatrix()).normalize();
+          worst = Math.max(worst, Math.acos(Math.min(1, Vector3.Dot(n, carried))) * 180 / Math.PI);
+        });
+      });
+      const frame = () => { rig.setLocomotion(0); scene.render(); };
+      for (const skill of ["skill.ground_slam.v1", "skill.heavy_strike.v1", "skill.strike.v1", "skill.strike.v1", "skill.strike.v1"]) {
+        for (let i = 0; i < 40; i++) frame();
+        rig.playStrike(undefined, undefined, skill);
+        for (let i = 0; i < 90; i++) frame();
+      }
+      // Ground Slam bent the right knee 75-89 degrees sideways off its hinge.
+      expect(worst).toBeLessThan(3);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
+});
+
+/**
  * The tower shield is strapped rigidly to `lowerarm_l`, so the jog's arm swing
  * waved it about like a board, and the jog's shoulders twist +-38 deg over the
  * hips besides. Worn, `SHIELD_CARRY` braces that arm through every clip but idle and holds
