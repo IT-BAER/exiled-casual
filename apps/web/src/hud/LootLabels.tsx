@@ -159,7 +159,8 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
   return (
     // The projector's `visible` means in front of the camera, not on screen: an
     // off-screen plate stays placed, and only this clip keeps it out of the page's scroll width.
-    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+    // `isolate` keeps a hovered plate's lift among the plates, under the HUD drawn after them.
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden", isolation: "isolate" }}>
       {(plates ? items : []).map((e) => {
         if (e.kind === "gold") return (
           // NeverSink's two gold tiers (reference-screenshots/ground-loot2.png): a
@@ -222,6 +223,7 @@ export function LootLabels({ snapshot, project, afterFrame, onPick, plates = tru
               left: 0,
               top: 0,
               visibility: "hidden", // until the first projection places it
+              zIndex: hoverId === e.id ? 1 : undefined, // a hovered plate rises over the later plates that cover it
               padding: base ? "4px 14px 5px" : "3px 14px 4px",
               background: (hoverId === e.id ? PLATE_BG_HOVER : PLATE_BG)[rarity] ?? PLATE_BG["normal"],
               border: `1px solid ${look.frame}${hoverId === e.id ? "" : "66"}`, // the reference plate is filled, not outlined

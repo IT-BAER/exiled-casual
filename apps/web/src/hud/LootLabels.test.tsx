@@ -206,6 +206,25 @@ describe("LootLabels", () => {
     expect(one.style.background).toBe(two.style.background);
   });
 
+  it("lifts the hovered plate over a later one it overlaps", () => {
+    render(
+      <LootLabels
+        project={null}
+        snapshot={snapWith([
+          { id: 1, kind: "groundItem", x: 0, y: 0, rarity: "rare", name: "One" },
+          { id: 2, kind: "groundItem", x: 0, y: 0, rarity: "rare", name: "Two" },
+        ])}
+      />,
+    );
+    const one = screen.getByTestId("loot-label-1");
+    const two = screen.getByTestId("loot-label-2");
+    // Siblings paint in DOM order, so "Two" covers "One" until One is lifted.
+    fireEvent.pointerEnter(one);
+    expect(Number(one.style.zIndex)).toBeGreaterThan(Number(two.style.zIndex || 0));
+    fireEvent.pointerLeave(one);
+    expect(one.style.zIndex).toBe(two.style.zIndex);
+  });
+
   it("forgets the hover when the hovered item is picked up", () => {
     const drop = () => snapWith([{ id: 1, kind: "groundItem", x: 0, y: 0, rarity: "rare", name: "One" }]);
     const { rerender } = render(<LootLabels project={null} snapshot={drop()} />);
