@@ -17,6 +17,8 @@ import {
   emberBurst,
   CINDER_GLOW,
   CINDER_RATE,
+  CINDER_SCORCH_ALPHA,
+  SCORCH_FALLOFF_STOPS,
   type GroundEmbers,
   FLASH_NAME,
   warmSkillFx,
@@ -571,6 +573,25 @@ describe("cinder ground", () => {
     rim.computeWorldMatrix(true);
     const { minimum: min, maximum: max } = rim.getBoundingInfo().boundingBox;
     expect((max.x - min.x) / 2).toBeCloseTo(1, 1);
+    // Blended, or ALPHA_ADD is ignored and the dim emissive draws an opaque black tube.
+    const rm = rim.material as StandardMaterial;
+    expect(rm.alphaMode).toBe(1);
+    expect(rm.needAlphaBlendingForMesh(rim)).toBe(true);
+  });
+
+  it("lets the scorch fade out inside the glow, so the patch draws no dark outline", () => {
+    // Grey luma of the mask at a radius share, as the canvas gradient paints it.
+    const mask = (r: number): number => {
+      const s = SCORCH_FALLOFF_STOPS;
+      const lum = (c: string) => parseInt(c.length === 4 ? c[1]!.repeat(2) : c.slice(1, 3), 16) / 255;
+      for (let i = 1; i < s.length; i++) {
+        const [a, ca] = s[i - 1]!, [b, cb] = s[i]!;
+        if (r <= b) return lum(ca) + (lum(cb) - lum(ca)) * (r - a) / (b - a);
+      }
+      return lum(s[s.length - 1]![1]);
+    };
+    // Past 80 % of the radius the glow is nearly gone; a scorch still dark there is a black ring.
+    for (const r of [0.8, 0.85, 0.9, 0.95]) expect(CINDER_SCORCH_ALPHA * mask(r)).toBeLessThan(0.06);
   });
 
   it("fades the disc out at its rim instead of ending on a hard edge", () => {

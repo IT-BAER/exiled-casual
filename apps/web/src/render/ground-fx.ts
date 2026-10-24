@@ -168,6 +168,7 @@ export function groundMaterial(scene: Scene, name: string, template: StandardMat
   mat.disableLighting = template.disableLighting;
   mat.alpha = template.alpha;
   mat.alphaMode = template.alphaMode;
+  mat.transparencyMode = template.transparencyMode;
   mat.emissiveTexture = template.emissiveTexture;
   mat.opacityTexture = template.opacityTexture;
   // The same Color3, not a copy: the template's pulse (`cinderGlow`) beats every patch.

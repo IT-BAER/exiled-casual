@@ -2,6 +2,7 @@ import {
   Color3,
   Color4,
   DynamicTexture,
+  Material,
   MeshBuilder,
   ParticleSystem,
   Light,
@@ -792,7 +793,7 @@ export const CINDER_CRACK_GLOW = 0.85;
 export const CINDER_RIM_GLOW = 0.15;
 /** Alpha of the additive glow disc, and of the dark scorch under it. */
 export const CINDER_DISC_ALPHA = 0.45;
-export const CINDER_SCORCH_ALPHA = 0.6;
+export const CINDER_SCORCH_ALPHA = 0.3;
 /** Main fissures per patch, and their width at radius 1 (the patch scales them). */
 const CRACK_BRANCHES = 6;
 const CRACK_WIDTH = 0.03;
@@ -899,6 +900,9 @@ export function attachCinderFX(scene: Scene, mesh: AbstractMesh): GroundEmbers {
   rim.material = patchTemplate(scene, "cinder-rim-mat", (m) => {
     m.emissiveColor = new Color3(1, 0.42, 0.12).scale(CINDER_RIM_GLOW);
     m.alphaMode = 1; // ALPHA_ADD
+    // At alpha 1 with no opacity texture Babylon draws it opaque and ignores ALPHA_ADD:
+    // the dim emissive becomes a black tube round the patch.
+    m.transparencyMode = Material.MATERIAL_ALPHABLEND;
   });
 
   for (const child of [scorch, cracks, rim]) {
@@ -985,9 +989,13 @@ export function cinderGlow(scene: Scene, mat: StandardMaterial): void {
 
 export const SCORCH_FALLOFF_NAME = "cinder-scorch-falloff";
 
-/** The scorch's mask: dark nearly to the rim, then a short soft edge. Null under NullEngine. */
+/** The scorch's mask: gone by 90 % of the radius, inside the glow's own fade, or the
+ *  dark outlives the light and the patch wears a black outline. */
+export const SCORCH_FALLOFF_STOPS: [number, string][] = [[0, "#fff"], [0.5, "#b0b0b0"], [0.75, "#404040"], [0.9, "#000"]];
+
+/** Null under NullEngine. */
 function scorchFalloff(scene: Scene): DynamicTexture | null {
-  return paintedFalloff(scene, SCORCH_FALLOFF_NAME, [[0, "#fff"], [0.7, "#e6e6e6"], [0.93, "#707070"], [1, "#000"]]);
+  return paintedFalloff(scene, SCORCH_FALLOFF_NAME, SCORCH_FALLOFF_STOPS);
 }
 
 /** Radial falloff for the cinder disc, so the patch bleeds off at its edge
