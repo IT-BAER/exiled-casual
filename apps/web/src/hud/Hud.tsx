@@ -77,6 +77,7 @@ export const ES_SEGMENTS = 14;
 const ES_RING_R_VW = (ORB_VW + RING_VW) / 2; // centre line of the braided band
 const ES_SEG_LEN_VW = ((Math.PI * ES_RING_R_VW) / ES_SEGMENTS) * 0.9; // a hairline of track between
 const ES_SEG_THICK_VW = RING_VW * 0.95;
+const ES_MIN_SLIVER = 0.2; // of one segment
 const READOUT_LIFT_VW = ORB_VW * 0.04;
 const READOUT_FONT = `clamp(11px, ${(ORB_VW * 0.066).toFixed(2)}vw, 18px)`;
 /**
@@ -685,10 +686,10 @@ function Orb(props: {
   numbers?: boolean;
 }) {
   const { pct, shield, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true } = props;
-  // Any shield left keeps a segment lit: an empty ring has to mean the next hit is on life.
-  const litSegments = shield && shield.max > 0
-    ? Math.ceil(Math.max(0, Math.min(1, shield.value / shield.max)) * ES_SEGMENTS)
-    : 0;
+  // Segments' worth of shield, filling the edge segment partway. Any shield left shows at
+  // least a sliver: an empty ring has to mean the next hit is on life.
+  const filled = shield && shield.max > 0 ? Math.max(0, Math.min(1, shield.value / shield.max)) * ES_SEGMENTS : 0;
+  const shownSegments = shield && shield.value > 0 ? Math.max(filled, ES_MIN_SLIVER) : filled;
   const rows = [{ key: label.toLowerCase(), label, value }];
   if (shield) rows.push({ key: "shield", label: "Shield", value: `${Math.round(shield.value)}/${Math.round(shield.max)}` });
   return (
@@ -768,16 +769,17 @@ function Orb(props: {
         }}
       />
       {/* Shield segments over the braid's inner half, segment 0 at six o'clock: a hit
-          drains them from the top. Each tile is rotated to its angle and pushed out
+          drains them from the top, the edge segment partway. Each tile is rotated to its angle and pushed out
           along it, so the arc is exact at any window width. */}
       {shield && Array.from({ length: ES_SEGMENTS }, (_, i) => {
         const deg = 180 - ((i + 0.5) * 180) / ES_SEGMENTS; // clockwise from twelve o'clock
-        const on = i < litSegments;
+        const fill = Math.max(0, Math.min(1, shownSegments - i));
         return (
           <div
             key={i}
             data-testid={`${fillTestId.replace(/-fill$/, "")}-es-segment`}
-            data-lit={on ? "true" : "false"}
+            data-lit={fill > 0 ? "true" : "false"}
+            data-fill={fill.toFixed(3)}
             style={{
               position: "absolute",
               left: "50%",
@@ -796,9 +798,12 @@ function Orb(props: {
                 inset: "16% 6%", // the socket's recess; its bronze lip frames the crystal
                 backgroundImage: "url(/hud/es-segment-lit-v1.webp)",
                 backgroundSize: "100% 100%",
-                opacity: on ? 1 : 0,
+                // Cut back from the segment's upper end (its left on this globe's inner half), with room for the glow.
+                clipPath: side === "left"
+                  ? `inset(-6px -6px -6px ${((1 - fill) * 100).toFixed(1)}%)`
+                  : `inset(-6px ${((1 - fill) * 100).toFixed(1)}% -6px -6px)`,
                 filter: "drop-shadow(0 0 3px rgba(140,220,255,0.75))",
-                transition: "opacity 140ms ease-out",
+                transition: "clip-path 160ms linear",
               }}
             />
           </div>

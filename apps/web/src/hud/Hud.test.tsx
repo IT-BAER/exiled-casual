@@ -612,6 +612,16 @@ describe("energy shield ring on the life globe", () => {
     expect(flags.slice(ES_SEGMENTS / 2).every((f) => f === "false")).toBe(true);
   });
 
+  it("fills and drains continuously: the segment at the shield's edge is lit only partway", () => {
+    const fills = () => screen.getAllByTestId("life-orb-es-segment").map((s) => Number(s.dataset.fill));
+    const { rerender } = render(<Hud snapshot={makeSnap({ energyShield: 25, maxEnergyShield: 100 })} />);
+    expect(fills().slice(0, 3)).toEqual([1, 1, 1]);
+    expect(fills()[3]).toBeCloseTo(0.5, 2);
+    expect(fills().slice(4).every((f) => f === 0)).toBe(true);
+    rerender(<Hud snapshot={makeSnap({ energyShield: 26, maxEnergyShield: 100 })} />);
+    expect(fills()[3]).toBeCloseTo(0.64, 2);
+  });
+
   it("reads Life and Shield on two rows", () => {
     render(<Hud snapshot={makeSnap({ life: 80, maxLife: 100, energyShield: 30, maxEnergyShield: 120 })} />);
     expect(screen.getByTestId("life-readout-row-life")).toHaveTextContent("Life80/100");
