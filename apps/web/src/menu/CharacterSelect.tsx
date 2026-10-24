@@ -28,8 +28,8 @@ import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, 
  * menu's does: a painted flame cannot move.
  */
 const BRAZIERS: readonly BrazierSpot[] = [
-  { x: 0.224, y: 0.611, r: 0.052, flame: 0.02, phase: 0 },
-  { x: 0.776, y: 0.615, r: 0.052, flame: 0.02, phase: 3.1 },
+  { x: 0.225, y: 0.611, r: 0.052, flame: 0.02, phase: 0 },
+  { x: 0.774, y: 0.615, r: 0.052, flame: 0.02, phase: 3.1 },
 ];
 
 export interface CharacterSelectProps {
