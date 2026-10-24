@@ -7,7 +7,7 @@ vi.mock("../audio/drop-sound", () => ({ playDropSound: vi.fn() }));
 import { playDropSound } from "../audio/drop-sound";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent, act, within } from "@testing-library/react";
-import { Hud, SKILL_ART } from "./Hud";
+import { Hud, SKILL_ART, ES_SEGMENTS } from "./Hud";
 import { DEFAULT_KEYBINDS_BY_MODE } from "../settings";
 import { SKILLS } from "@exiled/content-runtime";
 import { existsSync } from "node:fs";
@@ -584,21 +584,46 @@ describe("experience per hour", () => {
   });
 });
 
-describe("energy shield on the life globe", () => {
-  it("shares the well with life and rides on top of it", () => {
-    // 100 life + 100 shield: the liquid is the bottom half, the shield the top.
-    render(<Hud snapshot={makeSnap({ life: 100, maxLife: 100, energyShield: 100, maxEnergyShield: 100 })} />);
+describe("energy shield ring on the life globe", () => {
+  const lit = () => screen.getAllByTestId("life-orb-es-segment").filter((s) => s.dataset.lit === "true");
+
+  it("leaves the liquid to life alone: the globe is life over max life", () => {
+    render(<Hud snapshot={makeSnap({ life: 50, maxLife: 100, energyShield: 100, maxEnergyShield: 100 })} />);
     expect(screen.getByTestId("life-orb-fill")).toHaveStyle({ height: "50%" });
-    const band = screen.getByTestId("life-orb-fill-shield");
-    expect(band).toHaveStyle({ height: "50%", bottom: "50%" });
-    expect(screen.getByTestId("life-readout")).toHaveTextContent("100/100 + 100");
+    expect(screen.queryByTestId("life-orb-fill-shield")).toBeNull();
+  });
+
+  it("is a ring of segments, lit in proportion to the shield and never dark while any is left", () => {
+    const { rerender } = render(<Hud snapshot={makeSnap({ energyShield: 100, maxEnergyShield: 100 })} />);
+    expect(screen.getAllByTestId("life-orb-es-segment")).toHaveLength(ES_SEGMENTS);
+    expect(lit()).toHaveLength(ES_SEGMENTS);
+    rerender(<Hud snapshot={makeSnap({ energyShield: 50, maxEnergyShield: 100 })} />);
+    expect(lit()).toHaveLength(ES_SEGMENTS / 2);
+    rerender(<Hud snapshot={makeSnap({ energyShield: 1, maxEnergyShield: 100 })} />);
+    expect(lit()).toHaveLength(1);
+    rerender(<Hud snapshot={makeSnap({ energyShield: 0, maxEnergyShield: 100 })} />);
+    expect(lit()).toHaveLength(0);
+  });
+
+  it("drains from the top: what is left sits at the bottom of the arc", () => {
+    render(<Hud snapshot={makeSnap({ energyShield: 50, maxEnergyShield: 100 })} />);
+    const flags = screen.getAllByTestId("life-orb-es-segment").map((s) => s.dataset.lit);
+    expect(flags.slice(0, ES_SEGMENTS / 2).every((f) => f === "true")).toBe(true);
+    expect(flags.slice(ES_SEGMENTS / 2).every((f) => f === "false")).toBe(true);
+  });
+
+  it("reads Life and Shield on two rows", () => {
+    render(<Hud snapshot={makeSnap({ life: 80, maxLife: 100, energyShield: 30, maxEnergyShield: 120 })} />);
+    expect(screen.getByTestId("life-readout-row-life")).toHaveTextContent("Life80/100");
+    expect(screen.getByTestId("life-readout-row-shield")).toHaveTextContent("Shield30/120");
   });
 
   it("is absent entirely without a shield, and the globe is the globe it was", () => {
     render(<Hud snapshot={makeSnap({ life: 50, maxLife: 100 })} />);
     expect(screen.getByTestId("life-orb-fill")).toHaveStyle({ height: "50%" });
-    expect(screen.queryByTestId("life-orb-fill-shield")).toBeNull();
-    expect(screen.getByTestId("life-readout")).toHaveTextContent("50/100");
+    expect(screen.queryAllByTestId("life-orb-es-segment")).toHaveLength(0);
+    expect(screen.queryByTestId("life-readout-row-shield")).toBeNull();
+    expect(screen.getByTestId("life-readout")).toHaveTextContent("Life50/100");
   });
 });
 

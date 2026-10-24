@@ -69,6 +69,14 @@ export const BAR_H = `${(ORB_VW * 0.72).toFixed(2)}vw`;
  */
 export const ORB_RISE =
   `calc(${ORB_BOTTOM} + ${(ORB_VW + RING_VW).toFixed(2)}vw - ${(ORB_VW * 0.72).toFixed(2)}vw)`;
+/**
+ * Energy shield is PoE2's ring of crystal segments on the life globe's inner half, top to
+ * bottom, not PoE1's pale band in the liquid. The count is PoE2's (14 over the half ring).
+ */
+export const ES_SEGMENTS = 14;
+const ES_RING_R_VW = (ORB_VW + RING_VW) / 2; // centre line of the braided band
+const ES_SEG_LEN_VW = ((Math.PI * ES_RING_R_VW) / ES_SEGMENTS) * 0.9; // a hairline of track between
+const ES_SEG_THICK_VW = RING_VW * 0.95;
 const READOUT_LIFT_VW = ORB_VW * 0.04;
 const READOUT_FONT = `clamp(11px, ${(ORB_VW * 0.066).toFixed(2)}vw, 18px)`;
 /**
@@ -663,8 +671,8 @@ const barStyle: React.CSSProperties = {
  */
 function Orb(props: {
   pct: number;
-  /** Energy shield's share of the same well, riding on top of the liquid. 0 = none. */
-  shieldPct?: number;
+  /** Energy shield, drawn as the segment ring and a second readout row. Absent = none. */
+  shield?: { value: number; max: number };
   fillTestId: string;
   readoutTestId: string;
   art: string;
@@ -676,7 +684,13 @@ function Orb(props: {
    *  second opinion, and PoE lets you turn them off. */
   numbers?: boolean;
 }) {
-  const { pct, shieldPct = 0, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true } = props;
+  const { pct, shield, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true } = props;
+  // Any shield left keeps a segment lit: an empty ring has to mean the next hit is on life.
+  const litSegments = shield && shield.max > 0
+    ? Math.ceil(Math.max(0, Math.min(1, shield.value / shield.max)) * ES_SEGMENTS)
+    : 0;
+  const rows = [{ key: label.toLowerCase(), label, value }];
+  if (shield) rows.push({ key: "shield", label: "Shield", value: `${Math.round(shield.value)}/${Math.round(shield.max)}` });
   return (
     <div
       style={{
@@ -728,25 +742,6 @@ function Orb(props: {
             transition: "height 120ms linear",
           }}
         />
-        {/* Energy shield sits ON TOP of the liquid, the way PoE1 stacks it on the
-            life globe: the well holds life + shield together, and the pale band is
-            the part a hit eats first. With no shield the band is zero-height and the
-            globe is exactly the life globe it has always been. */}
-        {shieldPct > 0 && (
-          <div
-            data-testid={`${fillTestId}-shield`}
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: `${pct}%`,
-              height: `${shieldPct}%`,
-              background: "linear-gradient(to top, rgba(168,226,255,0.85), rgba(214,244,255,0.95))",
-              boxShadow: "inset 0 2px 5px rgba(255,255,255,0.35)",
-              transition: "height 120ms linear, bottom 120ms linear",
-            }}
-          />
-        )}
         {/* glass volume: edges fall to near-black so the disc reads as a sphere */}
         <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 58%, rgba(0,0,0,0.30) 100%)" }} />
         {/* specular bloom, upper left — the liquid's brightest point in the PoE1 shot */}
@@ -772,6 +767,43 @@ function Orb(props: {
           pointerEvents: "none",
         }}
       />
+      {/* Shield segments over the braid's inner half, segment 0 at six o'clock: a hit
+          drains them from the top. Each tile is rotated to its angle and pushed out
+          along it, so the arc is exact at any window width. */}
+      {shield && Array.from({ length: ES_SEGMENTS }, (_, i) => {
+        const deg = 180 - ((i + 0.5) * 180) / ES_SEGMENTS; // clockwise from twelve o'clock
+        const on = i < litSegments;
+        return (
+          <div
+            key={i}
+            data-testid={`${fillTestId.replace(/-fill$/, "")}-es-segment`}
+            data-lit={on ? "true" : "false"}
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: `${ES_SEG_LEN_VW.toFixed(3)}vw`,
+              height: `${ES_SEG_THICK_VW.toFixed(3)}vw`,
+              transform: `translate(-50%, -50%) rotate(${(side === "left" ? deg : -deg).toFixed(2)}deg) translateY(-${ES_RING_R_VW.toFixed(3)}vw)`,
+              backgroundImage: "url(/hud/es-segment-socket-v1.webp)",
+              backgroundSize: "100% 100%",
+              pointerEvents: "none",
+            }}
+          >
+            <div
+              style={{
+                position: "absolute",
+                inset: "16% 6%", // the socket's recess; its bronze lip frames the crystal
+                backgroundImage: "url(/hud/es-segment-lit-v1.webp)",
+                backgroundSize: "100% 100%",
+                opacity: on ? 1 : 0,
+                filter: "drop-shadow(0 0 3px rgba(140,220,255,0.75))",
+                transition: "opacity 140ms ease-out",
+              }}
+            />
+          </div>
+        );
+      })}
       {/* Bronze figure leaning on the globe's outer side, overlapping ring and liquid. */}
       <img
         src={figure}
@@ -796,9 +828,11 @@ function Orb(props: {
           bottom: `${(ORB_VW + RING_VW + READOUT_LIFT_VW).toFixed(2)}vw`,
           left: `${(-RING_VW).toFixed(3)}vw`,
           right: `${(-RING_VW).toFixed(3)}vw`,
-          display: "flex",
+          // PoE2's two rows: labels in one column, values in the next, the pair centred.
+          display: "grid",
+          gridTemplateColumns: "auto auto",
           justifyContent: "center",
-          gap: "0.75vw",
+          columnGap: "0.75vw",
           fontFamily: SERIF,
           // Two thirds of what it was: at the old size the pair of readouts was
           // the largest type on the screen, over the one gauge that is already
@@ -809,8 +843,12 @@ function Orb(props: {
           textShadow: "0 1px 4px #000",
         }}
       >
-        <span style={{ color: "#a9a49a" }}>{label}</span>
-        <span style={{ color: "#f4f0e6" }}>{value}</span>
+        {rows.map((row) => (
+          <div key={row.key} data-testid={`${readoutTestId}-row-${row.key}`} style={{ display: "contents" }}>
+            <span style={{ color: "#a9a49a" }}>{row.label}</span>
+            <span style={{ color: "#f4f0e6", textAlign: "right" }}>{row.value}</span>
+          </div>
+        ))}
       </div>}
     </div>
   );
@@ -1052,12 +1090,7 @@ export function Hud({
   if (!snapshot) return null;
 
   const { life, maxLife, mana, maxMana, cooldowns, energyShield, maxEnergyShield } = snapshot.player;
-  // The life well holds both pools, so the waterline is still "how much is left
-  // before you die" — which is what the globe is for. Without a shield the
-  // denominator is maxLife and nothing moves.
-  const wellMax = maxLife + maxEnergyShield;
-  const lifePct = wellMax > 0 ? Math.max(0, Math.min(100, (life / wellMax) * 100)) : 0;
-  const shieldPct = wellMax > 0 ? Math.max(0, Math.min(100 - lifePct, (energyShield / wellMax) * 100)) : 0;
+  const lifePct = maxLife > 0 ? Math.max(0, Math.min(100, (life / maxLife) * 100)) : 0;
   const manaPct = maxMana > 0 ? Math.max(0, Math.min(100, (mana / maxMana) * 100)) : 0;
 
   const { xp, xpToNext } = snapshot.player;
@@ -1315,17 +1348,13 @@ export function Hud({
 
       <Orb
         pct={lifePct}
-        shieldPct={shieldPct}
+        shield={maxEnergyShield > 0 ? { value: energyShield, max: maxEnergyShield } : undefined}
         fillTestId="life-orb-fill"
         readoutTestId="life-readout"
         art="/hud/orb-life-v2.webp"
         figure="/hud/orb-figure-life-v5.webp"
         label="Life"
-        value={
-          maxEnergyShield > 0
-            ? `${Math.round(life)}/${Math.round(maxLife)} + ${Math.round(energyShield)}`
-            : `${Math.round(life)}/${Math.round(maxLife)}`
-        }
+        value={`${Math.round(life)}/${Math.round(maxLife)}`}
         side="left"
         numbers={orbNumbers && !coveredSides.left}
       />
