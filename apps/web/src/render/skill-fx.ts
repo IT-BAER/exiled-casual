@@ -18,6 +18,7 @@ import { Mesh, VertexData } from "@babylonjs/core";
 import type { AbstractMesh, Scene } from "@babylonjs/core";
 import { hitSpray } from "./hit-spray";
 import { hitSparkle } from "./hit-sparkle";
+import { slamDebris } from "./slam-debris";
 import { clearFxPools, fxPools } from "./fx-pool";
 import { swingArcs, swingStyle } from "./swing-arc";
 
@@ -725,27 +726,30 @@ export const SLAM_WAVE_SPEED = 12;
 const SLAM_CONE = 0.75;
 const SLAM_DUST_ROWS = 5;
 const SLAM_DUST_PER_ROW = 3;
-const SLAM_GRIT = 22;
-const SLAM_RING_COLOUR = new Color3(1, 0.72, 0.4);
+/** Dirt thrown straight up out of the crater, darker than the dust the wave lifts. */
+const SLAM_DIRT = 6;
 
 /**
- * Ground Slam landing: a ring of light racing out across the floor from the
- * weapon, dust bursting up row by row along the cone as the wave reaches it,
- * and grit thrown off the crater.
+ * Ground Slam landing: the floor breaks. Rock and clods are thrown up along the
+ * blow and a crack is left behind (`slam-debris.ts`), a column of dirt goes up
+ * from the crater, and dust bursts up row by row along the cone as the wave
+ * runs out through the ground. No light rings: it reads as earth, not magic.
  */
 export function groundSlam(scene: Scene, at: Vector3, facingX: number, facingZ: number): void {
   const pools = fxPools(scene);
   const len = Math.hypot(facingX, facingZ) || 1;
   const fx = facingX / len, fz = facingZ / len;
-  const ringLife = SLAM_REACH / SLAM_WAVE_SPEED * 1.6;
-  for (const [k, delay] of [[1, 0], [0.7, 0.06]] as const) {
-    pools.ring.emit({
-      x: at.x, y: 0.06, z: at.z, life: ringLife, delay,
-      size: 0.4, sizeEnd: SLAM_REACH * 2 * k,
-      r: SLAM_RING_COLOUR.r, g: SLAM_RING_COLOUR.g, b: SLAM_RING_COLOUR.b, a: 0.9 * k, r1: 0.6, g1: 0.25, b1: 0.08,
+  slamDebris(scene).emit(at, fx, fz);
+  for (let i = 0; i < SLAM_DIRT; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const out = rand(0.3, 1.2);
+    pools.smoke.emit({
+      x: at.x + Math.cos(a) * 0.2, y: 0.15, z: at.z + Math.sin(a) * 0.2,
+      vx: Math.cos(a) * out + fx * 0.8, vy: rand(2.2, 3.6), vz: Math.sin(a) * out + fz * 0.8,
+      gravity: -4, drag: 2, life: rand(0.7, 1.1), delay: i * 0.015, size: 0.35, sizeEnd: 1.3,
+      r: 0.34, g: 0.28, b: 0.21, a: 0.5, r1: 0.42, g1: 0.37, b1: 0.31,
     });
   }
-  pools.glow.emit({ x: at.x, y: 0.15, z: at.z, life: 0.18, size: 0.5, sizeEnd: 1.4, r: 1, g: 0.75, b: 0.45, a: 0.55 });
   for (let row = 1; row <= SLAM_DUST_ROWS; row++) {
     const d = (row / SLAM_DUST_ROWS) * SLAM_REACH;
     for (let i = 0; i < SLAM_DUST_PER_ROW; i++) {
@@ -753,17 +757,6 @@ export function groundSlam(scene: Scene, at: Vector3, facingX: number, facingZ: 
       dustPuff(scene, at.x + Math.sin(yaw) * d, at.z + Math.cos(yaw) * d, 0.8 + 0.25 * row, d / SLAM_WAVE_SPEED, 1.2);
     }
   }
-  for (let i = 0; i < SLAM_GRIT; i++) {
-    const yaw = Math.atan2(fx, fz) + rand(-1, 1) * SLAM_CONE * 1.4;
-    const speed = rand(2, 6);
-    pools.shards.emit({
-      x: at.x, y: 0.1, z: at.z,
-      vx: Math.sin(yaw) * speed, vy: rand(3, 7), vz: Math.cos(yaw) * speed,
-      gravity: -16, life: rand(0.35, 0.6), size: 0.07, thick: 0.05,
-      r: 1, g: 0.6, b: 0.3, a: 0.8, r1: 0.35, g1: 0.18, b1: 0.08,
-    });
-  }
-  hitSpray(scene).emit(new Vector3(at.x, 0.2, at.z), fx, fz, 1, "grit");
 }
 
 /**
@@ -1079,6 +1072,7 @@ export function warmSkillFx(scene: Scene): void {
   clearFxPools(scene);
   hitSpray(scene);
   hitSparkle(scene);
+  slamDebris(scene);
   // Pools and arcs are drawn from birth (alwaysSelectAsActiveMesh, empty slots
   // at zero scale), so standing them up here compiles them behind the plate.
   fxPools(scene);
