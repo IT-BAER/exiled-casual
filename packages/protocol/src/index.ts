@@ -14,7 +14,8 @@ import type { AreaLayout } from "@exiled/mapgen";
 export type ContainerId = "backpack" | "stash" | "vendor" | "buyback";
 
 export type Intent =
-  | { kind: "moveTo"; x: Fixed; y: Fixed }
+  /** `routed`: a walk to a thing the player picked (monster, loot, portal), routed past a plain click's cap. */
+  | { kind: "moveTo"; x: Fixed; y: Fixed; routed?: true }
   | { kind: "moveDir"; dx: -1 | 0 | 1; dy: -1 | 0 | 1 }
   | { kind: "useSkill"; skillId: string; tx: Fixed; ty: Fixed }
   /** Roll a short fixed distance toward a world point. The sim ignores one mid-roll. */
@@ -576,7 +577,9 @@ export function validateIntent(v: unknown): Intent {
     case "moveTo": {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent moveTo: x must be an integer");
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent moveTo: y must be an integer");
-      return { kind: "moveTo", x: obj["x"] as Fixed, y: obj["y"] as Fixed };
+      if (obj["routed"] !== undefined && obj["routed"] !== true) throw new Error("validateIntent moveTo: routed must be true when present");
+      const move = { kind: "moveTo", x: obj["x"] as Fixed, y: obj["y"] as Fixed } as const;
+      return obj["routed"] === true ? { ...move, routed: true } : move;
     }
     case "moveDir": {
       const dx = obj["dx"];

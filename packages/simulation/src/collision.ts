@@ -396,7 +396,7 @@ function gridNav(
 
   /**
    * How far down the chain the pull looks. Twelve cells is six units, past the
-   * player's own routing cap, so the corner is always inside it.
+   * player's plain-click routing cap, so that corner is always inside it.
    */
   const PULL_LOOKAHEAD = 12;
 

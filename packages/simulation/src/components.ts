@@ -148,7 +148,8 @@ export interface Mana       { mana: Fixed; maxMana: Fixed; regen: Fixed }
 export interface Faction    { team: number }
 /** moveSpeed is per-tick Fixed; bodyRadius in Fixed units */
 export interface PlayerC    { moveSpeed: Fixed; bodyRadius: Fixed }
-export interface MoveTarget { x: Fixed; y: Fixed; active: 0 | 1 }
+/** `routed`: a walk to a picked thing, routed past the plain click's cap (player-movement.ts). */
+export interface MoveTarget { x: Fixed; y: Fixed; active: 0 | 1; routed?: 1 }
 /**
  * dx/dy are each -1 | 0 | 1: the direction the keys are ASKING for.
  *

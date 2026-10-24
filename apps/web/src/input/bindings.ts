@@ -354,7 +354,7 @@ export function attachBindings(
     if (!m || inReach(latestSnap, m, reach)) return false;
     pendingAttack = { skillId, targetId: m.id };
     pendingInteractId = null;
-    post({ kind: "moveTo", ...pointerToWorld({ x: m.x, z: m.y }) });
+    post({ kind: "moveTo", ...pointerToWorld({ x: m.x, z: m.y }), routed: true });
     return true;
   }
 
@@ -367,7 +367,7 @@ export function attachBindings(
     }
     const at = pointerToWorld({ x: m.x, z: m.y });
     if (!inReach(snap, m, reachOf(attack.skillId) ?? 0)) {
-      post({ kind: "moveTo", ...at });
+      post({ kind: "moveTo", ...at, routed: true });
       return;
     }
     // A wind-up still landing would make the sim drop this swing.
@@ -570,7 +570,7 @@ export function attachBindings(
       // lies metres behind it, past click-to-move's routing cap.
       const target = latestSnap?.entities.find((en) => en.id === interactable);
       const world = pointerToWorld(target ? { x: target.x, z: target.y } : floor);
-      post({ kind: "moveTo", x: world.x, y: world.y });
+      post({ kind: "moveTo", x: world.x, y: world.y, routed: true });
       pendingInteractId = interactable;
       pendingAttack = null;
       return;
@@ -769,7 +769,7 @@ export function attachBindings(
     pendingInteractId = entityId;
     // Callers hand in snapshot floats; the intent wants fixed-point. Raw floats
     // quantise to ~0, which walked every distant approach to the map origin.
-    post({ kind: "moveTo", ...pointerToWorld({ x, z: y }) });
+    post({ kind: "moveTo", ...pointerToWorld({ x, z: y }), routed: true });
   }
 
   return { detach, onSnapshot, approach, getAim: () => (lastScreen ? aimAt(AIM_HEIGHT) : null) };

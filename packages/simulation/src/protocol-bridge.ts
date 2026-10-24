@@ -45,7 +45,7 @@ export function inRangeOf(
 export function intentToCommand(intent: Intent, player: Entity, tick: number): Command {
   switch (intent.kind) {
     case "moveTo":
-      return { tick, entity: player, type: "moveTo", data: { x: intent.x, y: intent.y } };
+      return { tick, entity: player, type: "moveTo", data: intent.routed ? { x: intent.x, y: intent.y, routed: 1 } : { x: intent.x, y: intent.y } };
     case "moveDir":
       return { tick, entity: player, type: "moveDir", data: { dx: intent.dx, dy: intent.dy } };
     case "useSkill":

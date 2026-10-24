@@ -101,6 +101,12 @@ const TURN_FOR_DISTANCE: Fixed = fp(1);
 export const MAX_AUTO_ROUTE_DISTANCE: Fixed = fp(5);
 
 /**
+ * The cap for a `routed` walk, one to a thing the player picked (a monster to
+ * strike, loot, a portal). That thing was on screen, and the screen is 19x9.5.
+ */
+export const MAX_PICKED_ROUTE_DISTANCE: Fixed = fp(12);
+
+/**
  * How far up the line to the target an obstruction has to be before the walk
  * bends around it.
  *
@@ -131,7 +137,7 @@ const ROUTE_LOOKAHEAD: Fixed = fp(2);
  */
 function aimAt(
   collision: Collision | undefined,
-  x: Fixed, y: Fixed, tx: Fixed, ty: Fixed, bodyRadius: Fixed,
+  x: Fixed, y: Fixed, tx: Fixed, ty: Fixed, bodyRadius: Fixed, cap: Fixed,
 ): { x: Fixed; y: Fixed } {
   if (!collision?.nav) return { x: tx, y: ty };
   const dx = tx - x;
@@ -146,7 +152,7 @@ function aimAt(
     }
     : { x: tx, y: ty };
   if (hasLineOfSight(collision, x, y, ahead.x, ahead.y, bodyRadius)) return { x: tx, y: ty };
-  if (dist > MAX_AUTO_ROUTE_DISTANCE) return { x: tx, y: ty };
+  if (dist > cap) return { x: tx, y: ty };
   // No route at all (a click inside solid rock with no mouth to stand in) hands
   // the walk back to the straight line, which the slide then stops at the wall.
   return collision.nav.waypoint(x, y, tx, ty, bodyRadius) ?? { x: tx, y: ty };
@@ -220,7 +226,8 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       if (type === "moveTo") {
         const x = fpClamp(data?.["x"] ?? 0, WORLD_MIN, WORLD_MAX);
         const y = fpClamp(data?.["y"] ?? 0, WORLD_MIN, WORLD_MAX);
-        world.set<MoveTarget>(e, "moveTarget", { x, y, active: 1 });
+        // Only a routed walk carries the flag, so every plain click hashes as it did.
+        world.set<MoveTarget>(e, "moveTarget", data?.["routed"] === 1 ? { x, y, active: 1, routed: 1 } : { x, y, active: 1 });
       } else if (type === "moveDir") {
         const dx = data?.["dx"] ?? 0;
         const dy = data?.["dy"] ?? 0;
@@ -342,7 +349,8 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
         // the tightest circle it can make is about 0.8 units across, so a target
         // inside that could be orbited rather than reached.
         if (far && moveDir) {
-          const aim = aimAt(collision, pos.x, pos.y, moveTarget.x, moveTarget.y, player.bodyRadius);
+          const cap = moveTarget.routed === 1 ? MAX_PICKED_ROUTE_DISTANCE : MAX_AUTO_ROUTE_DISTANCE;
+          const aim = aimAt(collision, pos.x, pos.y, moveTarget.x, moveTarget.y, player.bodyRadius, cap);
           const want = unit(aim.x - pos.x, aim.y - pos.y);
           const held = moveDir.hx === 0 && moveDir.hy === 0
             ? want

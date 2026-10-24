@@ -11,6 +11,11 @@ describe("validateIntent — valid intents pass through", () => {
     expect(validateIntent(intent)).toEqual(intent);
   });
 
+  test("moveTo to a picked thing keeps its routed flag", () => {
+    const intent = { kind: "moveTo", x: fp(3), y: fp(4), routed: true };
+    expect(validateIntent(intent)).toEqual(intent);
+  });
+
   test("moveDir with valid direction", () => {
     const intent = { kind: "moveDir", dx: 1 as const, dy: -1 as const };
     expect(validateIntent(intent)).toEqual(intent);
@@ -50,6 +55,10 @@ describe("validateIntent — malformed inputs throw", () => {
 
   test("moveTo missing x throws", () => {
     expect(() => validateIntent({ kind: "moveTo", y: fp(4) })).toThrow();
+  });
+
+  test("moveTo with a routed flag other than true throws", () => {
+    expect(() => validateIntent({ kind: "moveTo", x: fp(3), y: fp(4), routed: 1 })).toThrow();
   });
 
   test("moveTo non-integer x (1.5) throws", () => {

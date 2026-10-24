@@ -44,6 +44,11 @@ describe("intentToCommand", () => {
     expect(cmd).toEqual({ tick: 5, entity: 1, type: "moveTo", data: { x: fp(3), y: fp(-2) } });
   });
 
+  it("a routed moveTo carries the flag to the sim as 1", () => {
+    const intent: Intent = { kind: "moveTo", x: fp(3), y: fp(-2), routed: true };
+    expect(intentToCommand(intent, 1, 5).data).toEqual({ x: fp(3), y: fp(-2), routed: 1 });
+  });
+
   it("moveDir maps to correct Command shape", () => {
     const intent: Intent = { kind: "moveDir", dx: 1, dy: -1 };
     const cmd = intentToCommand(intent, 1, 0);

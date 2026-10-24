@@ -491,6 +491,29 @@ describe("click-to-move routes around what it cannot walk through", () => {
     expect(fpDist2(end.x, end.y, goal.x, goal.y)).toBeGreaterThan(fp(2) * fp(2));
   });
 
+  // A walk to a thing he picked (a monster to strike, loot, a portal) is PoE's
+  // run-to-target: it paths around a rock wherever the target stands on screen.
+  it("routes a walk to a picked target past the plain click's five meters", () => {
+    const sim = new Simulation();
+    const farWalled = [
+      ".........", ".........", ".........", ".........", "####.####",
+      ".........", ".........", ".........", ".........", ".........",
+    ];
+    registerPlayerMovement(sim, { active: gridCollision(makeGrid(farWalled)) });
+    const p = sim.world.create();
+    sim.world.set<Position>(p, "position", { x: fp(1), y: fp(1) });
+    sim.world.set<PlayerC>(p, "player", { moveSpeed: Math.trunc(fp(3) / 30), bodyRadius: fp(0.2) });
+    sim.world.set<Faction>(p, "faction", { team: 0 });
+    sim.world.set<MoveDir>(p, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
+    const goal = { x: fp(1), y: fp(8) };
+
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { ...goal, routed: 1 } }]);
+    for (let t = 1; t < 400; t++) sim.step([]);
+
+    const end = sim.world.get<Position>(p, "position")!;
+    expect(fpDist2(end.x, end.y, goal.x, goal.y)).toBeLessThan(fp(0.5) * fp(0.5));
+  });
+
   it("holds the straight line until the wall is in front of him, then goes around", () => {
     const sim = new Simulation();
     const rows = [".........", ".........", ".........", ".........",

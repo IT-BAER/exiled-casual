@@ -307,7 +307,7 @@ describe("attachBindings hold-to-move", () => {
     approach(77, 4, 6);
     // Fixed-point on the wire: raw snapshot floats quantised to ~0 and walked
     // every distant approach to the map origin instead of the target.
-    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "moveTo", x: fp(4), y: fp(6) } });
+    expect(w.postMessage).toHaveBeenCalledWith({ type: "intent", intent: { kind: "moveTo", x: fp(4), y: fp(6), routed: true } });
     // Still walking: out of range means no pickup yet.
     onSnapshot(makeSnap([{ id: 77, kind: "groundItem", x: 4, y: 6, inRange: false }]));
     expect(intentCount(w.postMessage, "pickupItem")).toBe(0);
@@ -568,7 +568,7 @@ describe("attachBindings map device", () => {
     canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
 
     const moves = worker.postMessage.mock.calls.map((c) => c[0]?.intent).filter((i) => i?.kind === "moveTo");
-    expect(moves.at(-1)).toEqual({ kind: "moveTo", x: fp(2), y: fp(3) });
+    expect(moves.at(-1)).toEqual({ kind: "moveTo", x: fp(2), y: fp(3), routed: true });
 
     detach();
     canvas.remove();
@@ -1162,7 +1162,7 @@ describe("attachBindings attack-move (mouse mode)", () => {
     attach();
     b.onSnapshot(snapWith(monster()));
     rightPress();
-    expect(intents()).toEqual([{ kind: "moveTo", x: fp(5), y: fp(7) }]);
+    expect(intents()).toEqual([{ kind: "moveTo", x: fp(5), y: fp(7), routed: true }]);
   });
 
   it("swings once on arriving in reach, aimed at the monster, and stops there", () => {
@@ -1186,7 +1186,7 @@ describe("attachBindings attack-move (mouse mode)", () => {
     rightRelease();
     worker.postMessage.mockClear();
     b.onSnapshot(snapWith(monster(6, 8)));
-    expect(intents()).toEqual([{ kind: "moveTo", x: fp(6), y: fp(8) }]);
+    expect(intents()).toEqual([{ kind: "moveTo", x: fp(6), y: fp(8), routed: true }]);
   });
 
   it("gives up when the monster is gone", () => {
