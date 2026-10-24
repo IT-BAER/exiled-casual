@@ -150,6 +150,17 @@ The same workflow also runs when a push to `main` changes the version in
 That is the path for a release PR (`node tools/release.mjs 0.4.0 --no-git`,
 commit as `release 0.4.0`, merge), which is how Jeff releases on request.
 
+## License
+
+The source code is licensed under the GNU Affero General Public License v3.0, see
+[`LICENSE`](LICENSE). Anyone who runs a modified copy for others must publish their changes.
+
+The license covers the code only. Original art, audio, models, textures, HUD graphics and other
+game assets created for this project (listed under "Original assets" in [`CREDITS.md`](CREDITS.md))
+are all rights reserved. They may be used to build and run this game from this repository, but not
+redistributed or reused in other projects without written permission. The third-party packs listed
+in `CREDITS.md` keep their own licenses (CC0 1.0).
+
 ## Legal
 
 This is an unofficial fan project. It is not affiliated with, endorsed by, or connected to
