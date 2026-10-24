@@ -29,7 +29,7 @@ function makeTelegraph(
     damage = fp(10),
     damageType = 1,
     team = 1,
-    ownerId = 99,
+    ownerId = sim.world.create(),
     leavesGroundTicks = 0,
     ground,
   } = opts;
@@ -156,6 +156,27 @@ describe("registerTelegraphResolve", () => {
 
     sim.step(); // tick 1 — telegraph gone, nothing enqueued
     expect(sim.damageQueue).toHaveLength(0);
+  });
+
+  it("lands nothing and vanishes once the monster winding it up has died", () => {
+    // A boss killed mid-wind-up must not slam the player from its corpse.
+    const sim = new Simulation();
+    registerTelegraphResolve(sim);
+
+    const owner = sim.world.create();
+    const tele = makeTelegraph(sim, { impactTick: 3, radius: fp(3), team: 1, ownerId: owner, leavesGroundTicks: 90, ground: BURN });
+    makePlayer(sim, fp(1), 0, 0);
+
+    sim.step(); // tick 0: the wind-up is under way
+    expect(sim.world.alive.has(tele)).toBe(true);
+    sim.world.destroy(owner); // killed before impact
+    sim.step(); // tick 1
+    expect(sim.world.alive.has(tele)).toBe(false);
+    for (let i = 0; i < 3; i++) {
+      sim.step();
+      expect(sim.damageQueue).toHaveLength(0);
+    }
+    expect(sim.world.query("groundArea")).toHaveLength(0);
   });
 
   it("hits a target whose CENTRE is outside radius but whose body overlaps", () => {

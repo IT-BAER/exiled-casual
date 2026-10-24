@@ -136,7 +136,7 @@ export function registerDamageResolve(
 
 /**
  * The hitter's onHit ailment, rolled on the pre-mitigation hit. A dead hitter
- * (a bolt or slam outliving its monster) has no species left, so rolls nothing.
+ * (a bolt outliving its monster) has no species left, so rolls nothing.
  */
 function applyOnHit(
   world: World, monsters: ReadonlyMap<string, MonsterDef>, rolls: RandomStream, ev: DamageEvent, tick: number,

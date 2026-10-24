@@ -10,6 +10,9 @@ export function registerTelegraphResolve(sim: Simulation): void {
 
     for (const te of telegraphs) {
       const tg = world.get<TelegraphC>(te, "telegraph")!;
+      // Every telegraph is a monster's wind-up, and death interrupts it (both PoE
+      // games): killing a boss mid-slam must not let its corpse land the hit.
+      if (!world.alive.has(tg.ownerId)) { world.destroy(te); continue; }
       if (tick < tg.impactTick) continue;
 
       const tgPos = world.get<Position>(te, "position")!;
