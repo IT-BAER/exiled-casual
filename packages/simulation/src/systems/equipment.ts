@@ -10,7 +10,7 @@ import type { Position, ItemC, InventoryC, VendorC, BuybackC, EquipmentC, Shards
 import type { Item } from "@exiled/content-schema";
 
 export function registerEquipmentSystem(sim: Simulation): void {
-  sim.register("equipment", (world, _tick, commands) => {
+  sim.register("equipment", (world, tick, commands) => {
     const sessionE = world.query("session")[0];
     if (sessionE === undefined) return;
 
@@ -45,7 +45,7 @@ export function registerEquipmentSystem(sim: Simulation): void {
           const tempInv: InventoryC = { ...inv, items: afterRemoval };
           const occupantBase = baseOf(occupant.baseId);
           const fit = placeFirstFit(tempInv, occupantBase.w, occupantBase.h);
-          if (fit === null) continue; // rollback: leave everything unchanged
+          if (fit === null) { sim.pickupRefusedTick = tick; continue; } // rollback: leave everything unchanged
 
           world.set<InventoryC>(sessionE, "inventory", {
             ...inv,
@@ -74,7 +74,7 @@ export function registerEquipmentSystem(sim: Simulation): void {
         const inv = world.get<InventoryC>(sessionE, "inventory")!;
         const base = baseOf(item.baseId);
         const fit = placeFirstFit(inv, base.w, base.h);
-        if (fit === null) continue; // no room, stay equipped
+        if (fit === null) { sim.pickupRefusedTick = tick; continue; } // no room, stay equipped
 
         const newSlots = { ...equip.slots };
         delete newSlots[slot];

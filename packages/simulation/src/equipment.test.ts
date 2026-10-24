@@ -244,6 +244,28 @@ describe("equipment system — unequipItem", () => {
     expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ember_wand");
     expect(getInv(world).items).toHaveLength(0);
   });
+
+  it("says Inventory Full when the backpack has no room for the piece", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    world.set<InventoryC>(sessionE(world), "inventory", { cols: 1, rows: 1, items: [] });
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: WAND } });
+
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(sim.pickupRefusedTick).toBe(0);
+  });
+
+  it("says Inventory Full when a swap has no room for the displaced piece", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    world.set<InventoryC>(sessionE(world), "inventory", { cols: 1, rows: 2, items: [] });
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: FOCUS } });
+    placeInInv(world, WAND, 0, 0, 1, 2);
+    atLevel(world, 8);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(sim.pickupRefusedTick).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
