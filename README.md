@@ -1,6 +1,8 @@
 # Exiled Casual
 
-[Website](https://exiledcasual.com) · [Devlog](devlog/README.md)
+![Exiled Casual - a Stalker's bow against a desert pack in Emberfall](docs/images/banner.jpg)
+
+[Play in the browser](https://exiledcasual.com) · [Devlog](devlog/README.md) · [Changelog](CHANGELOG.md) · AGPL-3.0
 
 An original browser-native action RPG inspired by Path of Exile 1 **and** 2, taking the best of
 either where they differ. It is not a clone of either game. Borrowed design ideas name their
@@ -9,6 +11,15 @@ source in the code and docs, while the implementation, world, art, and content r
 The game is playable in the browser at [exiledcasual.com](https://exiledcasual.com). The site serves
 the latest release and updates on its own when a new release is published. It is an alpha: a save
 may not survive an update yet.
+
+<p align="center">
+  <img src="docs/images/01-emberfall.jpg" width="400" alt="Emberfall: a Stalker fires into a desert pack, gold and an Orb of Augmentation on the sand">
+  <img src="docs/images/02-wrackline.jpg" width="400" alt="The Wrackline: Brine Scuttlers close in next to the entry portal on the beach">
+  <img src="docs/images/03-cinder-vault.jpg" width="400" alt="Cinder Vault: a Vaal Construct winds up a slam, its red telegraph on the stone floor">
+  <img src="docs/images/04-rustwater.jpg" width="400" alt="Rustwater: grublings pour out of a swamp ravine towards a lit brazier">
+  <img src="docs/images/05-atlas-inventory.jpg" width="400" alt="The Atlas over a painted world map, with the inventory and equipped gear open beside it">
+  <img src="docs/images/06-passive-tree.jpg" width="400" alt="The 239-node passive tree, a Stalker at its start door">
+</p>
 
 ## What is playable now
 
@@ -29,7 +40,7 @@ may not survive an update yet.
 - Options that reach the whole game: graphics and audio mixes, HUD toggles, rebindable keys, and a
   debug-logging channel that narrates a run to the console.
 
-Balance is measured rather than final, and no public playable build is available.
+Balance is measured rather than final.
 
 ## How it is built
 
@@ -49,19 +60,6 @@ from.
 ## Devlog
 
 Major visible milestones, in screenshots and short notes, are in [`devlog/`](devlog/README.md).
-
-<table>
-<tr>
-<td width="33%"><img src="devlog/screenshots/2026-10-14-walls-meet-the-floor.jpeg" alt="Blackmire: rock walls with rounded corners and outcrops, a dark band and scattered dust where the rock meets the floor" width="100%"><br><sub>Blackmire walls meeting the floor.</sub></td>
-<td width="33%"><img src="devlog/screenshots/2026-09-28-strand-cliffs.jpeg" alt="The character on the Strand's sand below a tall sandstone cliff, braziers burning on its ledges and scree blending into the beach" width="100%"><br><sub>A cliff on the Strand.</sub></td>
-<td width="33%"><img src="devlog/screenshots/2026-10-10-monster-lineup-cleaned.jpeg" alt="Nine generated creatures in a three by three grid, from the Cinder Imp to Ghaltrek" width="100%"><br><sub>The generated monster roster.</sub></td>
-</tr>
-<tr>
-<td width="33%"><img src="devlog/screenshots/2026-07-25-atlas-fullscreen.jpeg" alt="Fullscreen Atlas over a painted world map" width="100%"><br><sub>The Atlas.</sub></td>
-<td width="33%"><img src="devlog/screenshots/2026-08-08-passive-tree-painted.jpeg" alt="Passive tree with painted bronze frames, theme icons and class portrait doors" width="100%"><br><sub>The passive tree.</sub></td>
-<td width="33%"><img src="devlog/screenshots/2026-09-20-class-ember.jpeg" alt="Emberbound character in a black wool cowl and a floor-length robe with a red lining" width="100%"><br><sub>The Emberbound in a robe.</sub></td>
-</tr>
-</table>
 
 ## Tech stack
 
