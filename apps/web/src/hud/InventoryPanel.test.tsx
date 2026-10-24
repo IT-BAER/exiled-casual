@@ -43,17 +43,19 @@ const inv = {
 };
 
 describe("InventoryPanel", () => {
-  it("sizes a one-cell slot's label to the cell, not to the 9px of the wide ones", () => {
+  it("labels every empty slot in one style, sized to the one-cell slots", () => {
     // At 1280x720 "AMULET" was 41.6px of text in a 26.2px slot and read "AMULE";
-    // its capitals are still 29.9px at 7.6px type, mixed case is 24.9.
+    // its capitals are still 29.9px at 7.6px type, mixed case is 24.9. The wide
+    // slots in 9px capitals beside them read as a second font.
     render(<InventoryPanel inventory={inv} flaskKeys={{ life: "1", mana: "2" }} onClose={() => {}} />);
-    for (const slot of ["amulet", "ring1", "ring2"]) {
-      const style = screen.getByTestId(`equip-slot-${slot}`).style;
-      expect(style.letterSpacing).toBe("0px");
-      expect(style.textTransform).toBe("none");
-      expect(style.fontSize).toContain("vw");
+    const look = (slot: string) => {
+      const s = screen.getByTestId(`equip-slot-${slot}`).style;
+      return { letterSpacing: s.letterSpacing, textTransform: s.textTransform, fontSize: s.fontSize };
+    };
+    expect(look("amulet")).toEqual({ letterSpacing: "0px", textTransform: "none", fontSize: expect.stringContaining("vw") });
+    for (const slot of ["ring1", "ring2", "helmet", "body", "weapon1", "gloves", "boots", "belt"]) {
+      expect(look(slot), slot).toEqual(look("amulet"));
     }
-    expect(screen.getByTestId("equip-slot-helmet").style.fontSize).toBe("9px");
   });
 
   it("captions the flasks with the keys the HUD drinks them on", () => {
