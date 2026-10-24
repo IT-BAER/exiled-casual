@@ -462,6 +462,16 @@ const LOOK_EASE_SEC = 0.1;
 /** The aim chain's share of a cast that the chest carries; the head looks past it. */
 const CHEST_AIM = 0.3;
 /**
+ * A cast with a weapon in hand drops the upper arm and the forearm to these pitches (15 and
+ * 69 deg below level) in the arm's own heading, and points the weapon this far below level
+ * at the target. The wand leaves the thumb side of the fist ~100 deg off the forearm, so the
+ * open-palm cast's straight arm held it up and out to the side. A hanging forearm turns the
+ * thumb forward with a 25-60 deg roll; a raised one needed 155 and wrung the elbow.
+ */
+export const POINT_SHOULDER = -0.25;
+export const POINT_RAISE = -1.2;
+export const POINT_DIP = 0.17;
+/**
  * Bones a cast's aim turns, each by its share of it. Every share turns about world up and a
  * child rides its parent's turn, so the shares ADD: they sum to one or the arm overshoots.
  */
@@ -1122,15 +1132,18 @@ function freshWorld(node: TransformNode): void {
 /**
  * Turn a bone so its world direction `from` points along `to`. Solved in the
  * parent's own frame, so the glTF mirror over the rig cannot flip the turn.
+ * `weight` takes that share of the turn's angle.
  */
-function swing(bone: TransformNode, from: Vector3, to: Vector3): void {
+function swing(bone: TransformNode, from: Vector3, to: Vector3, weight = 1): void {
   const parent = bone.parent;
   const rot = bone.rotationQuaternion;
   if (!(parent instanceof TransformNode) || !rot) return;
   const inverse = parent.getWorldMatrix().clone().invert();
   const f = Vector3.TransformNormal(from, inverse).normalize();
   const t = Vector3.TransformNormal(to, inverse).normalize();
-  Quaternion.FromUnitVectorsToRef(f, t, new Quaternion()).multiplyToRef(rot, rot);
+  const turn = Quaternion.FromUnitVectorsToRef(f, t, new Quaternion());
+  if (weight < 1) Quaternion.SlerpToRef(Quaternion.Identity(), turn, weight, turn);
+  turn.multiplyToRef(rot, rot);
   bone.computeWorldMatrix(true);
 }
 
@@ -1508,6 +1521,8 @@ export class RigActor {
   private lookYaw: number | null = null;
   /** The gaze's current turn off the chest, eased (bone yaw, radians). */
   private look = 0;
+  /** How far a cast has the weapon hand raised and pointed, eased 0..1. */
+  private pointing = 0;
   /** Observer that applies aim rotation after the animation system runs. */
   private aimObserver: Observer<Scene> | null = null;
   private legsObserver: Observer<Scene> | null = null;
@@ -2056,6 +2071,11 @@ export class RigActor {
     const gaze = [nb instanceof TransformNode ? nb : null, headBone];
     const ungazed = gaze.map((n) => n?.rotationQuaternion?.clone() ?? null);
     let looked = false;
+    const [armNode, foreNode] = ["upperarm_r", "lowerarm_r"].map((n) => byName.get(n));
+    const pointer = armNode instanceof TransformNode && foreNode instanceof TransformNode && this.hand
+      ? [armNode, foreNode, this.hand] as const : null;
+    const unpointed = pointer?.map((n) => n.rotationQuaternion?.clone() ?? null) ?? [];
+    let pointed = false;
 
     // Scratch vectors for the aim solver.
     const worldUp = new Vector3(0, 1, 0);
@@ -2098,6 +2118,10 @@ export class RigActor {
       if (looked) {
         gaze.forEach((n, i) => { if (ungazed[i]) n?.rotationQuaternion?.copyFrom(ungazed[i]!); });
         looked = false;
+      }
+      if (pointed) {
+        pointer?.forEach((n, i) => { if (unpointed[i]) n.rotationQuaternion?.copyFrom(unpointed[i]!); });
+        pointed = false;
       }
       if (!turned) return;
       twisted.forEach((n, i) => { if (untwisted[i]) n.rotationQuaternion?.copyFrom(untwisted[i]!); });
@@ -2159,6 +2183,15 @@ export class RigActor {
         // The eyes lead: where the body is turning to while it moves, the cursor while it stands.
         const yaw = this.lookYaw ?? aimYaw;
         if (yaw !== null) want = lookOffset(yaw, bodyYaw);
+      }
+      // An empty hand casts open-palmed; a held weapon is raised and pointed. The bow is in the other hand.
+      const armed = casting && this.looks.weapon1 !== null && this.looks.weapon1 !== BOW_LOOK;
+      // Linear, like the clip's own blend.
+      this.pointing = Math.max(0, Math.min(1, this.pointing + (armed ? 1 : -1) * dt / ACTION_BLEND_SEC));
+      if (pointer && this.pointing > 1e-3) {
+        pointer.forEach((n, i) => { if (n.rotationQuaternion) unpointed[i]?.copyFrom(n.rotationQuaternion); });
+        pointed = true;
+        this.pointWeapon(pointer[0], pointer[1], pointer[2], casting ? aimYaw : null, this.pointing);
       }
       this.look += (want - this.look) * (1 - Math.exp(-dt / LOOK_EASE_SEC));
       if (Math.abs(this.look) < 1e-4) return;
@@ -2507,6 +2540,34 @@ export class RigActor {
    * Read live rather than cached: the arm is mid-animation at the moment of the
    * cast, which is the entire reason the body centre was the wrong answer.
    */
+  /**
+   * Raise the weapon forearm, twist it so the weapon comes round toward `aimYaw`
+   * (the forearm's own heading when null), and bend the wrist the rest of the way.
+   */
+  private pointWeapon(arm: TransformNode, fore: TransformNode, hand: TransformNode, aimYaw: number | null, weight: number): void {
+    const tipLocal = this.tips.get(this.looks.weapon1 ?? "");
+    if (!tipLocal) return;
+    freshWorld(fore);
+    const u = fore.getAbsolutePosition().subtract(arm.getAbsolutePosition()).normalize();
+    const flat = Math.hypot(u.x, u.z);
+    if (flat < 1e-3) return;
+    const heading = new Vector3(u.x / flat, 0, u.z / flat);
+    const pitched = (pitch: number) => heading.scale(Math.cos(pitch)).addInPlaceFromFloats(0, Math.sin(pitch), 0);
+    swing(arm, u, pitched(POINT_SHOULDER), weight);
+    freshWorld(hand);
+    swing(fore, hand.getAbsolutePosition().subtract(fore.getAbsolutePosition()).normalize(), pitched(POINT_RAISE), weight);
+    const yaw = aimYaw ?? Math.atan2(heading.x, heading.z);
+    const want = new Vector3(Math.sin(yaw) * Math.cos(POINT_DIP), -Math.sin(POINT_DIP), Math.cos(yaw) * Math.cos(POINT_DIP));
+    const tip = () => {
+      freshWorld(hand);
+      return Vector3.TransformCoordinates(tipLocal, hand.getWorldMatrix()).subtract(hand.getAbsolutePosition()).normalize();
+    };
+    const lowered = tip();
+    const axis = hand.getAbsolutePosition().subtract(fore.getAbsolutePosition()).normalize();
+    swing(fore, across(lowered, axis), across(want, axis), weight);
+    swing(hand, tip(), want, weight);
+  }
+
   castPoint(): Vector3 | null {
     if (this.bowHand && this.isDrawingBow()) {
       this.bowHand.computeWorldMatrix(true);

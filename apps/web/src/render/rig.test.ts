@@ -2618,3 +2618,55 @@ describe("the tower shield is braced, not swung", () => {
     expect((await swing("male", "buckler", false)).worst).toBeGreaterThan(40);
   }, 60_000);
 });
+
+/**
+ * The wand sits across the fist, about 100 degrees off the forearm, so the cast's
+ * arm stretched at the target held it up and out to the side. Measured as the
+ * worst frame of the hold: the hand-to-tip line against the line to the target.
+ */
+describe("a cast points the wand at the target", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  async function aimed(body: "male" | "female", targetYaw: number): Promise<{ yaw: number; pitch: number }> {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      const wardrobe = body === "male" ? "wardrobe.glb" : "wardrobe-female.glb";
+      await loadPlayerRig(scene, [body], { anims: file("anim-library.glb"), wardrobes: { [body]: file(wardrobe) } });
+      const rig = attachRig(scene, new Mesh("hero", scene), body)!;
+      rig.setLooks({ ...BASE_LOOKS, base: body, weapon1: "emberwand" });
+      const hand = scene.transformNodes.find((t) => t.name === "hand_r" && t.isEnabled())!;
+      const frame = () => { rig.setLocomotion(0); rig.setAimTarget(Math.sin(targetYaw) * 5, Math.cos(targetYaw) * 5); scene.render(); };
+      for (let i = 0; i < 30; i++) frame();
+      rig.playCast();
+      let yaw = 0, pitch = 0;
+      // The hold: past the 0.28 s blend in, before the clip lets go.
+      for (let i = 0; i <= 30; i++) {
+        frame();
+        if (i < 18) continue;
+        hand.computeWorldMatrix(true);
+        const wand = rig.castPoint()!.subtract(hand.getAbsolutePosition()).normalize();
+        const off = Math.atan2(wand.x, wand.z) - targetYaw;
+        yaw = Math.max(yaw, Math.abs(Math.atan2(Math.sin(off), Math.cos(off))) * 180 / Math.PI);
+        pitch = Math.max(pitch, Math.abs(Math.asin(wand.y)) * 180 / Math.PI);
+      }
+      return { yaw, pitch };
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }
+
+  it.each([
+    ["female", 0], ["female", 0.5], ["female", -0.35], ["male", 0],
+  ] as const)("%s, target at %f rad", async (body, targetYaw) => {
+    const { yaw, pitch } = await aimed(body, targetYaw);
+    expect(yaw).toBeLessThan(15);
+    expect(pitch).toBeLessThan(25);
+  }, 60_000);
+});
