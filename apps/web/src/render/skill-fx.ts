@@ -93,39 +93,6 @@ function glowMaterial(scene: Scene, name: string, color: Color3): StandardMateri
   return m;
 }
 
-/**
- * Fade a mesh out over `seconds` while thinning it, WITHOUT moving either end.
- *
- * A uniform scale is right for a ring and wrong for
- * anything pinned between two points: a streak scaled to 0.15 pulls both of its
- * ends in toward its own centre, so the smear that was supposed to join where he
- * left to where he arrived visibly lets go of both while you watch. Here only the
- * radius moves, so the trail dissipates in place.
- */
-function thinOut(
-  scene: Scene, mesh: Mesh, seconds: number, alpha: number, from: number, to: number,
-): void {
-  const mat = mesh.material as StandardMaterial;
-  // Set before the first tick, not inside it: a material born at alpha 1 is opaque
-  // for however many frames pass before the observable first fires, and one
-  // full-brightness frame of a five-unit additive bar is the flash being avoided.
-  mat.alpha = alpha;
-  mesh.scaling.set(from, 1, from);
-  let t = 0;
-  const tick = scene.onBeforeRenderObservable.add(() => {
-    t += scene.getEngine().getDeltaTime() / 1000;
-    const k = Math.min(1, t / seconds);
-    const r = from + (to - from) * k;
-    mesh.scaling.set(r, 1, r);
-    mat.alpha = alpha * (1 - k) * (1 - k);
-    if (k >= 1) {
-      scene.onBeforeRenderObservable.remove(tick);
-      mesh.dispose();
-      mat.dispose();
-    }
-  });
-}
-
 export const FLASH_NAME = "fx-flash";
 /** Bright enough to be seen against a 420-intensity torch, short enough not to
  *  be mistaken for a second lamp in the room. */
@@ -267,8 +234,8 @@ export const SKILL_FX: Record<string, FxProfile> = {
   // The free fallback, and it must read as one: a small pale mote, thin and dry.
   "skill.ember_spark.v1": {
     ...FALLBACK_FX,
-    core: new Color3(1, 0.85, 0.45),
-    wake: new Color3(0.95, 0.7, 0.25),
+    core: new Color3(1, 0.9, 0.6),
+    wake: new Color3(0.95, 0.5, 0.15),
     trailWidth: 0.05,
     emitRate: 45,
     sizeStart: 0.28,
@@ -363,18 +330,18 @@ const COMET_BELLY = 0.8;
  * fireballs streak in reference-screenshots/inside-map-battle.webp. Built as a
  * unit cylinder along +Y; `shapeComet` lays its rings out every frame.
  */
-function buildComet(scene: Scene): Mesh {
-  const comet = MeshBuilder.CreateCylinder(`${BOLT_TRAIL_NAME}-comet`, {
+function buildComet(scene: Scene, name: string, tint: Color3): Mesh {
+  const comet = MeshBuilder.CreateCylinder(name, {
     height: 1, diameter: 1, tessellation: COMET_SIDES, subdivisions: COMET_RINGS, cap: Mesh.NO_CAP, updatable: true,
   }, scene);
   comet.setVerticesData("color", new Float32Array(comet.getTotalVertices() * 4), true);
   comet.hasVertexAlpha = true;
   comet.isPickable = false;
-  const name = `${BOLT_TRAIL_NAME}-comet-mat`;
-  let mat = scene.getMaterialByName(name) as StandardMaterial | null;
+  const matName = `${name}-mat`;
+  let mat = scene.getMaterialByName(matName) as StandardMaterial | null;
   if (!mat) {
-    // White: the vertex colour is the whole palette, so every profile shares it.
-    mat = glowMaterial(scene, name, Color3.White());
+    // The vertex colour paints it: white here leaves the whole palette to it.
+    mat = glowMaterial(scene, matName, tint);
     mat.disableDepthWrite = true;
     // Soft at the silhouette, so the streak is a glowing core, not a hard cone.
     featherEdges(mat);
@@ -455,7 +422,7 @@ export function attachBoltTrail(scene: Scene, mesh: AbstractMesh, fx: FxProfile 
   let last: Vector3 | null = null;
   const start = mesh.getAbsolutePosition().clone();
   const dir = new Vector3(0, 0, 1);
-  const comet = buildComet(scene);
+  const comet = buildComet(scene, `${BOLT_TRAIL_NAME}-comet`, Color3.White());
   const unit = comet.getVerticesData("position")!.slice();
   const laid = new Float32Array(unit.length);
   const heat = new Float32Array((unit.length / 3) * 4);
@@ -1140,6 +1107,10 @@ export const BLINK_STREAK_NAME = "fx-blink-streak";
  * than the fire skills that actually hurt. Exported so the test can hold it.
  */
 export const BLINK_ALPHA = 0.48;
+const BLINK_COLOUR = new Color3(0.34, 0.3, 0.78);
+/** The comet's width at the arrival, about the character's. */
+const BLINK_WIDTH = 0.5;
+const BLINK_MOTES_PER_UNIT = 5;
 
 /**
  * Blink: a streak along the path travelled, a collapsing puff where the
@@ -1189,32 +1160,54 @@ export function blinkBurst(scene: Scene, from: Vector3, to: Vector3): void {
   const delta = to.subtract(from);
   const len = delta.length();
   if (len > 0.01) {
-    // Tapered, not a bar: local +Y is turned onto the travel direction below, so
-    // the wide end sits where the character left and the thin end where it
-    // arrived, which is what makes the smear point somewhere. A constant
-    // diameter at full brightness is a laser beam, not a teleport.
-    const streak = MeshBuilder.CreateCylinder(
-      BLINK_STREAK_NAME,
-      { height: len, diameterBottom: 0.52, diameterTop: 0.1, tessellation: 12 },
-      scene,
-    );
-    streak.position.copyFrom(from.add(to).scale(0.5));
-    // A cylinder is authored along +Y, so turn that axis onto the travel
-    // direction: one rotation about their common perpendicular.
-    const dir = delta.scale(1 / len);
-    const axis = Vector3.Cross(Vector3.Up(), dir);
-    if (axis.lengthSquared() > 1e-6) {
-      streak.rotationQuaternion = Quaternion.RotationAxis(axis.normalize(), Math.acos(Vector3.Dot(Vector3.Up(), dir)));
+    // A feathered comet with its head where he arrived and its tail fading out
+    // where he left: the smear points somewhere. A constant diameter at full
+    // brightness is a laser beam, not a teleport.
+    const streak = buildComet(scene, BLINK_STREAK_NAME, BLINK_COLOUR);
+    const unit = streak.getVerticesData("position")!.slice();
+    shapeComet(streak, unit, new Float32Array(unit.length), len, BLINK_WIDTH);
+    const col = streak.getVerticesData("color")!;
+    for (let v = 0; v < unit.length / 3; v++) {
+      const k = unit[v * 3 + 1]! + 0.5;
+      col[v * 4] = col[v * 4 + 1] = col[v * 4 + 2] = 1;
+      col[v * 4 + 3] = k ** 1.4;
     }
-    const mat = glowMaterial(scene, `${BLINK_STREAK_NAME}-mat`, new Color3(0.34, 0.3, 0.78));
+    streak.updateVerticesData("color", col);
+    streak.position.copyFrom(to);
+    const dir = delta.scale(1 / len);
+    streak.rotationQuaternion = Quaternion.FromUnitVectorsToRef(Vector3.UpReadOnly, dir, new Quaternion());
+    // The comet's material is shared by every blink, so each streak fades its own.
+    const mat = glowMaterial(scene, `${BLINK_STREAK_NAME}-mat-live`, BLINK_COLOUR);
+    mat.disableDepthWrite = true;
+    featherEdges(mat);
     streak.material = mat;
-    streak.isPickable = false;
-    // Thins in place rather than shrinking: a uniform scale drags both ends to the
-    // middle, and the streak's whole job is to still be touching them.
-    //
-    // BLINK_ALPHA, low: a near-opaque additive bar five units long clips to white
-    // at peak and loses the violet that says which skill it was.
-    thinOut(scene, streak, 0.35, BLINK_ALPHA, 1, 0.25);
+    // Fades in place, never shrinks: the streak's whole job is to still be touching
+    // both ends. BLINK_ALPHA, low: a near-opaque additive bar five units long
+    // clips to white at peak and loses the violet that says which skill it was.
+    // Set before the first tick: one full-brightness frame is the flash avoided.
+    mat.alpha = BLINK_ALPHA;
+    let t = 0;
+    const tick = scene.onBeforeRenderObservable.add(() => {
+      t += scene.getEngine().getDeltaTime() / 1000;
+      const k = Math.min(1, t / 0.35);
+      mat.alpha = BLINK_ALPHA * (1 - k) * (1 - k);
+      if (k >= 1) {
+        scene.onBeforeRenderObservable.remove(tick);
+        streak.dispose();
+        mat.dispose();
+      }
+    });
+    // Arcane motes torn off along the path, drifting up and out of it.
+    const pools = fxPools(scene);
+    for (let i = 0; i < Math.round(len * BLINK_MOTES_PER_UNIT); i++) {
+      const k = Math.random();
+      pools.shards.emit({
+        x: from.x + delta.x * k, y: from.y + delta.y * k + rand(-0.2, 0.3), z: from.z + delta.z * k,
+        vx: rand(-0.8, 0.8) + dir.x * 2, vy: rand(0.3, 1.2), vz: rand(-0.8, 0.8) + dir.z * 2, drag: 3,
+        life: rand(0.2, 0.45), delay: k * 0.05, size: 0.12, thick: 0.015, stretch: 0.03,
+        r: 0.75, g: 0.7, b: 1, a: 0.9, r1: 0.3, g1: 0.2, b1: 0.7,
+      });
+    }
   }
   // No impact flash. A teleport lands nothing, and the shared 900-intensity
   // white light lit the whole floor for a skill that does no damage.

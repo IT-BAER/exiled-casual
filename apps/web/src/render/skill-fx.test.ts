@@ -630,7 +630,7 @@ describe("blink", () => {
     // Without something joining the two ends, a teleport reads as a desync.
     const streak = scene.getMeshByName(BLINK_STREAK_NAME);
     expect(streak).not.toBeNull();
-    expect(streak!.position.x).toBeCloseTo(2.5); // midway
+    expect(streak!.position.x).toBeCloseTo(5); // its head is where he arrived
     expect(streak!.rotationQuaternion).not.toBeNull();
 
     const puffs = systems(scene, BLINK_NAME);
@@ -692,6 +692,22 @@ describe("blink", () => {
       expect(still.scaling.y).toBe(1);
       expect(still.position.equals(at)).toBe(true);
     }
+  });
+
+  it("smears a soft comet from where he left to where he arrived, with motes torn off the path", () => {
+    const scene = newScene();
+    const pools = fxPools(scene);
+    blinkBurst(scene, new Vector3(0, 0.9, 0), new Vector3(5, 0.9, 0));
+    const streak = scene.getMeshByName(BLINK_STREAK_NAME)!;
+    streak.computeWorldMatrix(true);
+    const box = streak.getBoundingInfo().boundingBox;
+    expect(box.minimumWorld.x).toBeLessThan(0.1);
+    expect(box.maximumWorld.x).toBeGreaterThan(4.9);
+    expect(box.maximumWorld.x).toBeLessThan(5.5);
+    // Feathered at its silhouette, not a hard tube.
+    expect((streak.material as StandardMaterial).pluginManager?.getPlugin(SMOKE_EDGE_PLUGIN)).toBeTruthy();
+    expect(pools.shards.emitted).toBeGreaterThan(10);
+    expect(pools.shards.positions().every((p) => p.x > -0.1 && p.x < 5.2)).toBe(true);
   });
 });
 
