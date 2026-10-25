@@ -104,7 +104,7 @@ const HALO_COLOR = new Color3((0.5 * 0.02) / 0.045, (0.5 * 0.02) / 0.045, 0.5);
 
 export const PET_COAT_PLUGIN = "ExiledPetCoat";
 /** PoE's coat: `space_bg_at` through ProjectiveUV_Accurate(1.2, 512, 512), ScaleMoveUV tiling 0.8, DarkenTex 0.3625. */
-const COAT = { texture: "/textures/fx/pet/starfield.webp", repeatPx: 512 * 1.2, tiling: 0.8, drift: 0.01, darken: 0.3625 } as const;
+const COAT = { texture: "/textures/fx/pet/starfield.webp", repeatPx: 512 * 1.2, tiling: 0.8, drift: 0.01, darken: 0.3625, fur: 0.4 } as const;
 
 /**
  * The cat's coat as PoE draws it: its glow is the starfield sampled in SCREEN
@@ -150,6 +150,10 @@ class PetCoatPlugin extends MaterialPluginBase {
     return {
       CUSTOM_FRAGMENT_DEFINITIONS: `
         uniform sampler2D coatStars;
+      `,
+      // The fur texture lit read as a grey cat; PoE's is near black (owner's call, 25 October 2026).
+      CUSTOM_FRAGMENT_UPDATE_ALPHA: `
+        surfaceAlbedo *= ${COAT.fur.toFixed(3)};
       `,
       CUSTOM_FRAGMENT_BEFORE_FINALCOLORCOMPOSITION: `
         finalEmissive = toLinearSpace(texture2D(coatStars, gl_FragCoord.xy * coatProjection.xy + coatProjection.zw).rgb)
@@ -598,6 +602,8 @@ export class PetActor {
   private dressCoat(body: Mesh): PetCoatPlugin | null {
     const mat = body.material;
     if (!mat) return null;
+    // A rough dielectric's sheen under the key light painted the black cat grey; PoE's coat has none.
+    if ("metallicF0Factor" in mat) mat.metallicF0Factor = 0;
     const coat = mat.pluginManager?.getPlugin<PetCoatPlugin>(PET_COAT_PLUGIN) ?? new PetCoatPlugin(mat);
     coat.stars ??= new Texture(COAT.texture, this.scene);
     return coat;
