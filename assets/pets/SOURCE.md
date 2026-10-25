@@ -47,6 +47,6 @@ python tools/fetch_blenderkit.py 6b3bbcc7-db99-4424-9436-8e6678ee9354 --type res
 
 The build strips the hair particles, the subsurf and the IK posing rig, decimates
 the body to at most 9k triangles (the tail keeps its rings: collapsed, it shredded
-when it bent) and the eyes to 1.2k, lengthens the tail, and reads the leg joints off
+when it bent) and the eyes to 1.2k, sizes the tail to PoE's (0.53 of the body), and reads the leg joints off
 the source's own weights (where two bones blend) before replacing its bones with
 PoE's. The source ships a pose library only; the clips come from PoE as above.

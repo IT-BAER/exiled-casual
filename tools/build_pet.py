@@ -8,7 +8,7 @@ then `node tools/pack_pet.mjs` for the served copy.
 
 Source: BlenderKit "Domestic cat (rigged)" (assets/pets/SOURCE.md), a 0.54 m
 standing cat with hair particles and an IK posing rig. This strips the hair, the
-subsurf and the IK, lengthens the tail, decimates the body (not the tail) to the
+subsurf and the IK, sizes the tail to PoE's proportion, decimates the body (not the tail) to the
 pet budget, paints the coat (true black with white point stars, dense on the
 head and back; electric-blue veins on the chest and legs) and cyan half-moon
 eyes. Then it rigs the cat after PoE1's Celestial Cat itself: PoE's 29 bones,
@@ -68,8 +68,6 @@ VEIN_COUNT = {"chest": 5, "leg": 7}
 EMISSION_STRENGTH = 2.5
 EYE_COLOR = (0.30, 0.95, 1.00)
 EYE_STRENGTH = 4.0
-# Tail length factor from its root (see stretch_tail).
-TAIL_STRETCH = 1.7
 
 # Source rig names -> ours. The sculptor numbered the spine.
 RENAME = {"Bone.001": "chest", "Bone.002": "neck", "Bone.004": "head",
@@ -199,9 +197,10 @@ def clean_rig(arm, meshes):
                 m.vertex_groups.remove(g)
 
 
-def stretch_tail(arm, body):
-    """Lengthen the tail by TAIL_STRETCH from its root (the source's is 0.6 of
-    the body, PoE's about the body's own length) and re-rig it: the sculptor's
+def stretch_tail(arm, body, ratio):
+    """Bring the tail to `ratio` of the body's length from its root (PoE's
+    proportion: PoE's keys sweep the tail through the same turns, so a longer
+    tail sweeps a wider swirl) and re-rig it: the sculptor's
     tail bones run above the mesh and the last one turns back toward the body,
     so every tail pose sheared the skin into a ribbon. The five bones are laid
     evenly down the mesh's own centreline and the tail beyond its root is
@@ -217,10 +216,13 @@ def stretch_tail(arm, body):
     eb = arm.data.edit_bones
     base = eb[TAIL[0]].head.copy()
     y0 = base.y
+    ys = numpy.array([v.co.y for v in body.data.vertices if tail_w.get(v.index, 0.0) < 0.05])
+    tip0 = max(body.data.vertices[i].co.y for i, w in tail_w.items() if w > 0.5)
+    stretch = ratio * float(numpy.ptp(ys)) / (tip0 - y0)
     for i, w in tail_w.items():
         co = body.data.vertices[i].co
         if co.y > y0:
-            co.y += w * (co.y - y0) * (TAIL_STRETCH - 1)
+            co.y += w * (co.y - y0) * (stretch - 1)
     pts = numpy.array([tuple(body.data.vertices[i].co) for i, w in tail_w.items() if w > 0.5 and body.data.vertices[i].co.y > y0])
     tip = float(pts[:, 1].max())
     seg = (tip - y0) / len(TAIL)
@@ -262,7 +264,8 @@ def stretch_tail(arm, body):
                 body.vertex_groups[name].add([i], tent, "REPLACE")
         moved += 1
     body.data.update()
-    print("tail: %.3f long, %d vertices re-weighted" % (tip - y0, moved))
+    print("tail: %.3f long (x%.2f), %.2f of the body, %d vertices re-weighted"
+          % (tip - y0, stretch, (tip - y0) / float(numpy.ptp(ys)), moved))
 
 
 # Limbs whose joints sit where two bones' weights blend: (the bone each hangs
@@ -714,6 +717,17 @@ def poe_skin():
                 joint=v["j"].astype(numpy.int64), weight=w / w.sum(1, keepdims=True))
 
 
+def poe_tail_ratio(rig, p0, skin):
+    """PoE's tail length (root joint to tip, along the chain) over its body's
+    length (the vertices off the tail, nose to rump)."""
+    at = {n: i for i, n in enumerate(rig["names"])}
+    tail = [at["phys_tail_0%d" % (k + 1)] for k in range(len(TAIL))]
+    on = (skin["weight"] * numpy.isin(skin["joint"], tail)).sum(1)
+    chain = to_tip([p0[i] for i in tail], skin["co"][on > 0.5])
+    length = sum(numpy.linalg.norm(b - a) for a, b in zip(chain, chain[1:]))
+    return length / float(numpy.ptp(skin["co"][on < 0.05][:, 1]))
+
+
 def back_line(co, tris, y):
     """Height of the back at `y`: the highest point where the vertical through
     (0, y) meets the mesh."""
@@ -924,7 +938,9 @@ def to_tip(chain, co):
     """The tail chain run on past its last joint along its last segment, as far
     as the tail's own vertices (those near that segment) reach."""
     last = (chain[-1] - chain[-2]) / numpy.linalg.norm(chain[-1] - chain[-2])
-    s, d = chain_param(co, chain)
+    # Measured against the last segment run on, or nothing past TAIL_RADIUS beyond the last joint counts.
+    reach = float(numpy.linalg.norm(co - chain[-1], axis=1).max())
+    s, d = chain_param(co, chain + [chain[-1] + last * reach])
     near = co[(s >= len(chain) - 1.5) & (d < TAIL_RADIUS)]
     return chain + [chain[-1] + last * max(0.0, float(((near - chain[-1]) @ last).max()))]
 
@@ -1143,15 +1159,15 @@ def main():
     body_tris = decimate(body, BODY_TRIS, keep=TAIL)
     eye_tris = decimate(eyes, EYE_TRIS)
     clean_rig(arm, [body, eyes])
-    stretch_tail(arm, body)
+    rig = poe_rig()
+    r0, p0 = poe_rest(rig)
+    skin = poe_skin()
+    stretch_tail(arm, body, poe_tail_ratio(rig, p0, skin))
     rejoint(arm, body)
     # Painted on the standing cat, before the tail rises: the star regions are
     # fractions of its height.
     coat_material(body)
     eye_material(eyes)
-    rig = poe_rig()
-    r0, p0 = poe_rest(rig)
-    skin = poe_skin()
     curl_tail(arm, body, rig, p0)
     joints = fit_joints(arm, body, rig, p0, skin)
     poe_skeleton(arm, rig, r0, joints)
