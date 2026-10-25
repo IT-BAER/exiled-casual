@@ -2,11 +2,11 @@
 import { describe, it, expect, afterAll, afterEach, beforeAll, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { NullEngine, Scene, type Mesh, type PBRMaterial, type StandardMaterial } from "@babylonjs/core";
+import { NullEngine, Scene, type Mesh, type Node, type PBRMaterial, type StandardMaterial, type TransformNode } from "@babylonjs/core";
 import {
-  FLOOR_CLIPS, FOLLOW, GALLOP_Y, HOVER_Y, PET_ACTIONS, PET_CLIPS, PET_ID, PET_URL, PetActor, ROUTINE, ROUTINE_PERIOD, SWIM_Y,
-  cloudRate, followTarget, loadPet, isPetReady, resetPet, routineAt, stepFollow,
-  type FollowState,
+  CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_ID, PET_URL, PetActor, RELAXED_CHANCE,
+  cloudRate, followTarget, loadPet, isPetReady, resetPet, stepFollow,
+  type FollowState, type PetClip,
 } from "./pet";
 
 // `loadPet` fetches a URL; node has no server, so hand the loader the file on disk.
@@ -122,63 +122,7 @@ describe("pet follow spring", () => {
   });
 });
 
-describe("pet heights and idle routine", () => {
-  it("hovers beside the player below his head and gallops a little higher", () => {
-    // PoE: the hovering cat sits at his hip to chest, the running one at his shoulder.
-    expect(HOVER_Y).toBeGreaterThan(0.7);
-    expect(HOVER_Y + 0.25).toBeLessThan(1.5);
-    expect(GALLOP_Y).toBeGreaterThan(HOVER_Y);
-    expect(GALLOP_Y + 0.25).toBeLessThan(1.7);
-    // The swim of the routine is high over his head (1.8).
-    expect(SWIM_Y).toBeGreaterThan(2.0);
-  });
-
-  it("runs its air loop in order, about every fifteen seconds", () => {
-    expect(ROUTINE.map((p) => p.clip)).toEqual(["spring", "swim", "dive", "hover"]);
-    expect(ROUTINE_PERIOD).toBeGreaterThan(13);
-    expect(ROUTINE_PERIOD).toBeLessThan(17);
-    expect(routineAt(0).clip).toBe("spring");
-    expect(routineAt(ROUTINE_PERIOD - 0.01).clip).toBe("hover");
-    // It loops.
-    expect(routineAt(ROUTINE_PERIOD + 0.01).clip).toBe("spring");
-  });
-
-  it("always floats: no phase below the hover, none on the floor, the swim over his head", () => {
-    for (const p of ROUTINE) expect((FLOOR_CLIPS as readonly string[]).includes(p.clip)).toBe(false);
-    for (let t = 0; t < ROUTINE_PERIOD; t += 0.01) expect(routineAt(t).height).toBeGreaterThanOrEqual(HOVER_Y - 1e-9);
-    const swim = ROUTINE.find((p) => p.clip === "swim")!;
-    expect(routineAt(swim.start + swim.seconds / 2).height).toBeCloseTo(SWIM_Y, 5);
-  });
-
-  it("has no jump in height anywhere: the spring rises, the dive lands", () => {
-    let prev = routineAt(0).height;
-    for (let t = 0.01; t < ROUTINE_PERIOD * 2; t += 0.01) {
-      const h = routineAt(t).height;
-      // A dive is fast but never a teleport: under 0.1 units per hundredth.
-      expect(Math.abs(h - prev)).toBeLessThan(0.1);
-      prev = h;
-    }
-  });
-
-  it("plays the loop around the player: hovers on its follow spot, swims over his head", () => {
-    const at = (clip: string, u: number) => {
-      const p = ROUTINE.find((q) => q.clip === clip)!;
-      const r = routineAt(p.start + p.seconds * u);
-      return Math.hypot(r.side, r.fwd);
-    };
-    expect(at("hover", 0.5)).toBeCloseTo(Math.hypot(FOLLOW.behind, FOLLOW.beside), 5);
-    let over = Infinity;
-    for (let u = 0; u <= 1; u += 0.01) over = Math.min(over, at("swim", u), at("spring", u));
-    expect(over).toBeLessThan(0.3);
-    // It travels, never teleports, the wrap of the loop included.
-    let prev = routineAt(0);
-    for (let t = 0.01; t < ROUTINE_PERIOD * 2; t += 0.01) {
-      const r = routineAt(t);
-      expect(Math.hypot(r.side - prev.side, r.fwd - prev.fwd)).toBeLessThan(0.05);
-      prev = r;
-    }
-  });
-
+describe("pet clouds", () => {
   it("streams the cloud harder the faster it moves, and never off", () => {
     expect(cloudRate(0)).toBeGreaterThan(0);
     expect(cloudRate(FOLLOW.dash)).toBeGreaterThan(cloudRate(0) * 3);
@@ -190,7 +134,8 @@ describe("pet asset", () => {
   const glb = readFileSync(fileURLToPath(new URL("../../public/models/pet.glb", import.meta.url)));
   const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as {
     nodes: { name: string; mesh?: number; skin?: number; children?: number[] }[];
-    animations: { name: string }[];
+    animations: { name: string; samplers: { input: number }[] }[];
+    accessors: { max?: number[] }[];
     materials: { name: string; emissiveFactor?: number[]; extensions?: Record<string, unknown> }[];
     extensionsRequired?: string[];
   };
@@ -206,6 +151,17 @@ describe("pet asset", () => {
     expect(names.length).toBe(PET_CLIPS.length);
   });
 
+  it("runs PoE's four floating clips at PoE's lengths", () => {
+    // idle_floating 2.0 s, run_floating 1.2 s, idle_relaxed_floating 14.67 s, happy_floating 3.0 s.
+    expect(PET_CLIPS).toEqual(["hover", "gallop", "relaxed", "emerge"]);
+    expect(CLIP_SECONDS).toEqual({ hover: 2.0, gallop: 1.2, relaxed: 14.67, emerge: 3.0 });
+    for (const clip of PET_CLIPS) {
+      const anim = json.animations.find((a) => a.name === `${PET_ID}|${clip}`)!;
+      const end = Math.max(...anim.samplers.map((sm) => json.accessors[sm.input]!.max![0]!));
+      expect(end, clip).toBeCloseTo(CLIP_SECONDS[clip], 1);
+    }
+  });
+
   it("glows at the eyes and is served meshopt-packed", () => {
     const eye = json.materials.find((m) => m.name === `${PET_ID}.eye`);
     expect(eye?.emissiveFactor?.[2]).toBeGreaterThan(0.9);
@@ -217,8 +173,35 @@ describe("pet asset", () => {
   });
 });
 
+/** Step `pet` `seconds` at 60 Hz with the player standing at (px, pz) facing +z. */
+function stand(pet: PetActor, seconds: number, px = 0, pz = 0, seen?: PetClip[]): void {
+  for (let i = 0; i < seconds * 60; i++) {
+    pet.update(1 / 60, px, pz, { x: 0, y: 1 }, true, false);
+    if (seen && pet.playing !== seen[seen.length - 1]) seen.push(pet.playing!);
+  }
+}
+
+/** The lowest the posed body's middle goes through `clip`, frame by frame. */
+function lowestThrough(pet: PetActor, clip: PetClip): number {
+  pet.previewAction(clip);
+  const group = pet.clipGroups.get(clip)!;
+  // Restarted unblended, so a frame jumped to is that frame.
+  group.enableBlending = false;
+  pet.previewAction(clip);
+  const chest = pet.root.getDescendants(false).find((n) => n.name === "chest") as TransformNode;
+  const chain: TransformNode[] = [];
+  for (let n: Node | null = chest; n; n = n.parent) chain.unshift(n as TransformNode);
+  let low = Infinity;
+  for (let f = group.from; f <= group.to; f += 1) {
+    group.goToFrame(f);
+    for (const n of chain) n.computeWorldMatrix(true);
+    low = Math.min(low, chest.getAbsolutePosition().y);
+  }
+  return low;
+}
+
 describe("pet actor", () => {
-  it("loads through the real loader and hovers the cat on its root with every clip", async () => {
+  it("loads through the real loader and stands the cat's root on the ground with every clip", async () => {
     const scene = newScene();
     await loadPet(scene);
     expect(isPetReady(scene)).toBe(true);
@@ -231,7 +214,8 @@ describe("pet actor", () => {
     const eyes = meshes.find((m) => m.name.endsWith(".eyes"))!;
     expect(eyes).toBeDefined();
     expect((eyes.material as PBRMaterial).emissiveColor.b).toBeGreaterThan(0.9);
-    expect(pet.root.position.y).toBeCloseTo(HOVER_Y, 1);
+    // PoE's clips carry the cat's height above the ground: the root stays on it.
+    expect(pet.root.position.y).toBe(0);
     expect(pet.root.rotation.x).toBe(0);
     expect((scene.getMeshByName("pet-ground") as Mesh).position.y).toBe(0);
     pet.dispose();
@@ -271,87 +255,94 @@ describe("pet actor", () => {
     pet.dispose();
   });
 
-  it("hovers on arrival, gallops when left behind, hovers again beside him", async () => {
+  it("emerges on arrival and after an area change, then hovers", async () => {
     const scene = newScene();
     await loadPet(scene);
-    const pet = new PetActor(scene);
+    const pet = new PetActor(scene, 1);
+    const seen: PetClip[] = [];
+    stand(pet, CLIP_SECONDS.emerge + 0.5, 0, 0, seen);
+    expect(seen.slice(0, 2)).toEqual(["emerge", "hover"]);
+    pet.update(1 / 60, 40, 40, { x: 0, y: 1 }, true, true);
+    expect(pet.playing).toBe("emerge");
+    pet.dispose();
+  });
+
+  it("gallops when left behind, cutting a one-shot short, and hovers again beside him", async () => {
+    const scene = newScene();
+    await loadPet(scene);
+    const pet = new PetActor(scene, 1);
     pet.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
-    expect(pet.playing).toBe("hover");
-    // The player is suddenly nine units away: the cat gallops after him in the air,
-    // then settles beside him as he walks on (walking, so the routine cannot start).
-    let top = 0;
-    for (let i = 0; i < 40; i++) {
-      pet.update(1 / 60, 0, 9, { x: 0, y: 1 }, true, false);
-      top = Math.max(top, pet.root.position.y);
-    }
+    expect(pet.playing).toBe("emerge");
+    // The player is suddenly nine units away: the cat gallops after him in the air.
+    for (let i = 0; i < 40; i++) pet.update(1 / 60, 0, 9, { x: 0, y: 1 }, true, false);
     expect(pet.playing).toBe("gallop");
-    expect(top).toBeGreaterThan(HOVER_Y + (GALLOP_Y - HOVER_Y) / 2);
+    expect(pet.root.position.y).toBe(0);
+    // Walking on beside him, it settles into the hover.
     for (let i = 0; i < 240; i++) pet.update(1 / 60, 0, 9 + i / 300, { x: 0, y: 1 }, true, false);
     expect(pet.playing).toBe("hover");
-    expect(pet.root.position.y).toBeCloseTo(HOVER_Y, 1);
     pet.dispose();
   });
 
-  it("hovers first while he stands, then plays the routine: floor, spring, swim high, dive", async () => {
+  it("rolls PoE's relaxed idle once per hover cycle while he stands, seeded", async () => {
+    expect(RELAXED_CHANCE).toBe(0.25);
     const scene = newScene();
     await loadPet(scene);
-    const pet = new PetActor(scene);
-    const seen: string[] = [];
-    let low = Infinity;
-    let high = 0;
-    let overhead = Infinity;
-    for (let i = 0; i < 60 * 40; i++) {
-      pet.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
-      if (pet.playing !== seen[seen.length - 1]) seen.push(pet.playing!);
-      low = Math.min(low, pet.root.position.y);
-      if (pet.playing === "swim") high = Math.max(high, pet.root.position.y);
-      if (pet.playing === "swim") overhead = Math.min(overhead, Math.hypot(pet.root.position.x, pet.root.position.z));
+    const runs = (seed: number): PetClip[] => {
+      const pet = new PetActor(scene, seed);
+      const seen: PetClip[] = [];
+      stand(pet, 60, 0, 0, seen);
+      pet.dispose();
+      return seen;
+    };
+    const seen = runs(7);
+    expect(seen[0]).toBe("emerge");
+    expect(seen).toContain("relaxed");
+    // Every relaxed ends back in the hover; nothing else plays while he stands.
+    for (const [i, clip] of seen.entries()) {
+      expect(["emerge", "hover", "relaxed"]).toContain(clip);
+      if (clip === "relaxed" && i + 1 < seen.length) expect(seen[i + 1]).toBe("hover");
     }
-    // It swims over his head, not on its follow spot.
-    expect(overhead).toBeLessThan(0.4);
-    expect(seen[0]).toBe("hover");
-    expect(seen.slice(1, 5)).toEqual(["spring", "swim", "dive", "hover"]);
-    // It came round again: the routine loops while he stands.
-    expect(seen.filter((c) => c === "swim").length).toBeGreaterThanOrEqual(2);
-    // Never down on the floor, not once in forty seconds.
-    expect(low).toBeGreaterThan(HOVER_Y - 0.1);
-    expect(high).toBeGreaterThan(SWIM_Y - 0.2);
-    // He walks off: the cat leaves the floor and comes back up beside him.
-    for (let i = 0; i < 60 * 3; i++) pet.update(1 / 60, i / 300, 0, { x: 1, y: 0 }, true, false);
-    expect(["hover", "gallop"]).toContain(pet.playing);
-    expect(pet.root.position.y).toBeGreaterThan(HOVER_Y - 0.1);
+    // The same seed plays the same idle; a walking player never sees it.
+    expect(runs(7)).toEqual(seen);
+    const pet = new PetActor(scene, 7);
+    const walked: PetClip[] = [];
+    for (let i = 0; i < 60 * 60; i++) {
+      pet.update(1 / 60, 0, i / 300, { x: 0, y: 1 }, true, false);
+      if (pet.playing !== walked[walked.length - 1]) walked.push(pet.playing!);
+    }
+    expect(walked).not.toContain("relaxed");
     pet.dispose();
   });
 
-  it("previews any action in place for the viewer, floor clips on the floor", async () => {
+  it("always floats: no clip takes the body under the hover's lowest", async () => {
     const scene = newScene();
     await loadPet(scene);
     const pet = new PetActor(scene);
-    pet.previewAction("curl");
+    const hover = lowestThrough(pet, "hover");
+    // Held at his hip, as PoE's cat beside a Marauder.
+    expect(hover).toBeGreaterThan(0.5);
+    expect(hover).toBeLessThan(1.2);
+    for (const clip of ["gallop", "relaxed", "emerge"] as const) {
+      expect(lowestThrough(pet, clip), clip).toBeGreaterThan(hover - 0.05);
+    }
+    pet.dispose();
+  });
+
+  it("previews any clip in place for the viewer, the one-shots repeating", async () => {
+    const scene = newScene();
+    await loadPet(scene);
+    const pet = new PetActor(scene);
+    pet.previewAction("relaxed");
     pet.previewTick(1 / 60);
-    expect(pet.playing).toBe("curl");
+    expect(pet.playing).toBe("relaxed");
     expect(pet.root.position.x).toBe(0);
     expect(pet.root.position.z).toBe(0);
-    expect(pet.root.position.y).toBeCloseTo(0, 2);
-    // A one-shot floor clip repeats in the viewer rather than freezing.
-    pet.previewAction("roll_back");
-    for (let i = 0; i < 60 * 6; i++) pet.previewTick(1 / 60);
-    expect(pet.playing).toBe("roll_back");
-    pet.previewAction("hover");
-    pet.previewTick(1 / 60);
-    expect(pet.root.position.y).toBeCloseTo(HOVER_Y, 1);
-    // The routine runs the whole loop in place.
-    pet.previewAction("routine");
-    const seen = new Set<string>();
-    let high = 0;
-    for (let i = 0; i < 60 * 16; i++) {
-      pet.previewTick(1 / 60);
-      seen.add(pet.playing!);
-      high = Math.max(high, pet.root.position.y);
-    }
-    for (const p of ROUTINE) expect(seen.has(p.clip)).toBe(true);
-    expect(high).toBeGreaterThan(SWIM_Y - 0.2);
-    expect(PET_ACTIONS).toEqual([...PET_CLIPS, "routine"]);
+    expect(pet.root.position.y).toBe(0);
+    pet.previewAction("emerge");
+    for (let i = 0; i < 60 * 7; i++) pet.previewTick(1 / 60);
+    expect(pet.playing).toBe("emerge");
+    expect(pet.clipGroups.get("emerge")!.isPlaying).toBe(true);
+    expect(PET_ACTIONS).toEqual(PET_CLIPS);
     expect(pet.clipGroups.size).toBe(PET_CLIPS.length);
     pet.dispose();
   });

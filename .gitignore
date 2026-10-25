@@ -76,6 +76,8 @@ docs/handoffs/
 # prepped glbs beside them and in trellis_local/, and those are tracked.
 assets/props/source/trellis_test/
 assets/props/source/tripo_plate_cuirass.glb
+# GGG's pet rig, read out of a local PoE install by tools/extract_poe_pet.mjs.
+assets/pets/source/poe/
 
 # Headless smoke output (tools/smoke)
 smoke-out/

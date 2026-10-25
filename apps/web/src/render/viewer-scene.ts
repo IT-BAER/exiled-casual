@@ -199,7 +199,7 @@ export interface ViewerScene {
   oneShot(id: string): void;
   /** A creature's own clip, or its death through the ragdoll. */
   creatureAction(action: CreatureAction): Promise<boolean>;
-  /** One of the companion cat's clips, or its whole playtime loop, over the origin; asking again restarts it. */
+  /** One of the companion cat's clips over the origin, repeating; asking again restarts it. */
   petAction(action: PetAction): void;
   /** Library take names, for the raw browser. Empty until the rig loads. */
   rawClips(): string[];
@@ -642,7 +642,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       if (p === null) return;
       const run = () => p.previewAction(action);
       run();
-      lastAction = { run, group: () => (action === "routine" ? null : p.clipGroups.get(action) ?? null) };
+      lastAction = { run, group: () => p.clipGroups.get(action) ?? null };
     },
     rawClips() {
       return libraryClips(scene);

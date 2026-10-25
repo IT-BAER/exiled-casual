@@ -11,28 +11,27 @@ standing cat with hair particles and an IK posing rig. This strips the hair, the
 subsurf and the IK, hangs the fore legs on the chest, lengthens the tail,
 decimates to the pet budget, paints the coat (true black with white point stars,
 dense on the head and back; electric-blue veins on the chest and legs), paints
-cyan half-moon eyes, and authors ten NLA clips on the cat's own bones, each
-matched to PoE footage (assets/pets/SOURCE.md):
+cyan half-moon eyes, and recreates PoE1's Celestial Cat motion on the cat's own
+bones as four NLA clips, frame for frame from PoE's own floating clips
+(tools/extract_poe_pet.mjs reads them out of a local PoE install):
 
-  hover      loop  held in the air: legs hanging loose, tail hooked under, paddle
-  gallop     loop  the rotary gallop it runs in the air beside a moving player
-  lie_side   loop  flopped on its side on the floor
-  roll_back  once  onto its back, paws in the air, and back
-  curl       loop  a ring on the floor, nose to tail
-  stretch    once  fore legs long and rump up, then a hind leg kicked back
-  rear_up    once  up on the hind legs against the player, patting; ends reared
-  spring     once  from the rear to the vertical, driving up
-  swim       loop  stretched out high in the air, paddling and twisting
-  dive       once  head-first down, levelling off to land on its feet
+  hover    idle_floating          loop 2.0 s   nose high at his hip, legs hanging, bobbing
+  gallop   run_floating           loop 1.2 s   the run in the air
+  relaxed  idle_relaxed_floating  once 14.67 s figure swim, ball chasing its tail, uncurl
+  emerge   happy_floating         once 3.0 s   the summon: dropping in somersaulting
 
-Floor clips are solved per frame so the lowest point of the body rests on the
-floor (root origin = floor); the air clips are lifted by the runtime. Facing: the
-cat's nose points -Y in Blender, which is where every monster's nose lands after
-its own pi turn (see Creature.emit in build_monsters.py), so the renderer's
-`atan2(dx, dz)` yaw convention holds without a root rotation.
+The clips carry PoE's root path, height above the ground included, so the
+runtime stands the cat on the ground at its spot. One change from PoE: where a
+one-shot takes the body's middle under the hover's lowest (the relaxed swim
+skims the floor), it is lifted that far, and the build fails if one still dips
+under the hover (the cat always floats). Facing: the cat's nose points -Y in Blender, which is where every
+monster's nose lands after its own pi turn (see Creature.emit in
+build_monsters.py), so the renderer's `atan2(dx, dz)` yaw convention holds
+without a root rotation.
 """
 import math
 import os
+import struct
 import sys
 
 import bpy
@@ -46,9 +45,9 @@ OUT = os.path.join(PET_DIR, "pet.glb")
 
 ID = "pet.cat.v1"
 FPS = 30
-# Real cat length is 0.54 units; from nineteen units up that is a mouse. Scaled so
-# it reads as a cat beside a 1.8-unit character without crowding him.
-SCALE = 1.25
+# Real cat length is 0.54 units. PoE's cat is 0.43 of its player's height nose to
+# tail; this makes ours the same beside a 1.81-unit character.
+SCALE = 1.6
 # Body triangle budget. The source body is 18k before subsurf; the eyes 3.8k.
 BODY_TRIS = 9000
 EYE_TRIS = 1200
@@ -250,6 +249,57 @@ def stretch_tail(arm, body):
         moved += 1
     body.data.update()
     print("tail: %.3f long, %d vertices re-weighted" % (tip - y0, moved))
+
+
+# Chains whose joints sit where two bones' weights blend: (the bone each hangs
+# off, the bones in order). The pelvis itself pivots at the hips.
+CHAINS = [("pelvis", ["chest", "neck", "head"])] + [
+    chain for s in ("_L", "_R") for chain in (
+        ("chest", ["paw1" + s, "paw2" + s, "paw3" + s]),
+        ("pelvis", ["leg1" + s, "leg2" + s, "leg3" + s, "feet" + s]))]
+
+
+def rejoint(arm, body):
+    """Move the spine and leg joints onto the mesh's own: the sculptor's bones
+    float up to 0.17 above the back and the fore elbow sits in front of the leg,
+    so every turn pivoted in the wrong place. A joint is where the two bones'
+    weights blend. The rest mesh does not move; a bone's tail goes to the next
+    one's head, the last of a chain keeps its length and direction."""
+    g = {vg.name: vg.index for vg in body.vertex_groups}
+    co = numpy.array([tuple(v.co) for v in body.data.vertices])
+    w = numpy.zeros((len(co), len(body.vertex_groups)))
+    for v in body.data.vertices:
+        for e in v.groups:
+            w[v.index, e.group] = e.weight
+
+    def blend(a, b):
+        k = w[:, g[a]] * w[:, g[b]]
+        if k.sum() < 1e-6:
+            fail("no weight blend between %s and %s" % (a, b))
+        return Vector(((co * k[:, None]).sum(0) / k.sum()).tolist())
+
+    heads, nxt = {}, {}
+    for parent, chain in CHAINS:
+        for prev, bone in zip([parent] + chain, chain):
+            heads[bone] = blend(prev, bone)
+            if prev != parent:
+                nxt[prev] = bone
+    hips = (heads["leg1_L"] + heads["leg1_R"]) / 2
+    heads["pelvis"] = Vector((0.0, hips.y, hips.z))
+    nxt["pelvis"] = "chest"
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm.data.edit_bones
+    ends = {n: eb[n].tail - eb[n].head for n in heads}
+    for name, head in heads.items():
+        eb[name].use_connect = False
+        eb[name].head = head
+    for name in heads:
+        eb[name].tail = heads[nxt[name]] if name in nxt else heads[name] + ends[name]
+    # The L hock carries a helper the R one lost: it rides the foot's joint.
+    eb["leg3_control_L"].head = heads["feet_L"]
+    eb["leg3_control_L"].tail = heads["feet_L"] + Vector((0, 0.05, 0))
+    bpy.ops.object.mode_set(mode="OBJECT")
 
 
 # --------------------------------------------------------------------------
@@ -479,303 +529,222 @@ def eye_material(eyes):
 
 
 # --------------------------------------------------------------------------
-# clips
+# clips: PoE's own motion, retargeted onto this cat's bones
 # --------------------------------------------------------------------------
 
-def turn(pb, axis, deg):
-    """A rotation about an ARMATURE-space axis, expressed in the bone's local
-    frame: +X is the cat's left, -Y its nose, +Z up. Exact at rest; down a chain
-    it is the axis as the body carries it, so a leg swings "back" relative to the
-    body whichever way the body lies. Signs about +X: a hanging leg swings BACK
-    and a backward tail LIFTS for positive degrees, the root tips the nose DOWN.
-    About +Y the root rolls the cat onto its LEFT side; about +Z the nose turns left."""
-    local = pb.bone.matrix_local.to_3x3().transposed() @ Vector(axis)
-    return Quaternion(local, math.radians(deg))
-
-
-X, Y, Z = (1, 0, 0), (0, 1, 0), (0, 0, 1)
 TAIL = ["tail1", "tail2", "tail3", "tail4", "tail5"]
-SIDES = (("L", 1), ("R", -1))
+# GGG's rig and keyframes, read out of a local PoE install by
+# tools/extract_poe_pet.mjs (gitignored: only what this build makes of them ships).
+POE_DIR = os.path.join(PET_DIR, "source", "poe")
+# World units per PoE unit: its cat plays at 90% beside a 190.8-unit Marauder,
+# ours beside a 1.81-unit character.
+POE_UNIT = 0.9 * 1.81 / 190.8
+# PoE axes are -Z up, -Y forward, +X the cat's left; ours +Z up.
+FLIP = numpy.diag((1.0, 1.0, -1.0))
+# Floats per key after its frame number: scale, rotation xyzw, translation, four unused.
+KEY_WIDTH = (3, 4, 3, 3, 4, 3, 3)
+# Ours, PoE's, loops. PoE's controller plays idle_floating, run_floating while it
+# travels, idle_relaxed_floating at 25% per idle cycle, happy_floating on summon.
+CLIPS = [
+    ("hover", "idle_floating", True),
+    ("gallop", "run_floating", True),
+    ("relaxed", "idle_relaxed_floating", False),
+    ("emerge", "happy_floating", False),
+]
+# The cat always floats: where a one-shot takes the body's middle under the
+# hover's lowest (PoE's relaxed swim skims the floor), that dip alone is lifted,
+# and the build fails if any body point still sinks this far under the hover's.
+FLOAT_SLACK = 0.02
+LIFT_WINDOW = 15
+# Our bone <- (PoE bone it turns with, PoE joint its segment starts at, joint it
+# ends at). DELTA: the bone takes the PoE bone's turn, corrected so its segment
+# swings exactly as PoE's does (our back is two bones over PoE's five, its rest
+# shape the mesh's own). No segment: the bone's own turn alone.
+DELTA = {
+    "root": ("root", None, None),
+    "pelvis": ("spine1", "root", "spine4"),
+    "chest": ("spine2", "spine4", "neck"),
+    "neck": ("neck", "neck", "head"),
+    "head": ("head", None, None),
+    "paw3_L": ("L_wrist", None, None),
+    "paw3_R": ("R_wrist", None, None),
+}
+# AIM: the bone lies along PoE's segment, twisting with PoE's bone. The legs
+# match PoE's joint for joint (upper arm, forearm; thigh, shin, foot, toe), and
+# a tail is a tube that bends anywhere. The tip continues the last segment.
+AIM = {name: ("phys_tail_0%d" % (k + 1), "phys_tail_0%d" % (k + 1), "phys_tail_0%d" % (k + 2))
+       for k, name in enumerate(TAIL[:-1])}
+AIM["tail5"] = ("phys_tail_05", "phys_tail_04", "phys_tail_05")
+for _s in "LR":
+    for _ours, _poe in (("paw1", ("shoulder", "elbow")), ("paw2", ("elbow", "wrist")),
+                        ("leg1", ("hip", "knee")), ("leg2", ("knee", "ankle")),
+                        ("leg3", ("ankle", "toe")), ("feet", ("toe", "toe02"))):
+        AIM["%s_%s" % (_ours, _s)] = ("%s_%s" % (_s, _poe[0]), "%s_%s" % (_s, _poe[0]), "%s_%s" % (_s, _poe[1]))
 
 
-def ease(t):
-    t = min(1.0, max(0.0, t))
-    return t * t * (3 - 2 * t)
+def poe_rig():
+    """PoE's cat: bone names, parents, rest locals (column-vector 4x4), the
+    bones parents-first, its clips (name -> track count, offset), the keyframes."""
+    path = os.path.join(POE_DIR, "rig.ast")
+    anim = os.path.join(POE_DIR, "anim.bin")
+    if not (os.path.exists(path) and os.path.exists(anim)):
+        fail("missing %s: run tools/extract_poe_pet.mjs" % POE_DIR)
+    d = open(path, "rb").read()
+    o = 8
+    raw = []
+    for _ in range(d[1]):
+        n = struct.unpack_from("<H", d, o + 66)[0]
+        # Stored row-vector: the transpose is the column-vector local.
+        m = numpy.array(struct.unpack_from("<16f", d, o + 2)).reshape(4, 4).T
+        raw.append((d[o + 68:o + 68 + n].decode(), d[o], d[o + 1], m))
+        o += 68 + n
+    parent, order = [-1] * len(raw), []
+
+    def walk(i, p):
+        while i != 255:
+            parent[i] = p
+            order.append(i)
+            walk(raw[i][2], i)
+            i = raw[i][1]
+    walk(0, -1)
+    clips = {}
+    for _ in range(d[3]):
+        n, off = struct.unpack_from("<HI", d, o + 5)
+        clips[d[o + 15:o + 15 + n].decode()] = (d[o], off)
+        o += 15 + n
+    return dict(names=[r[0] for r in raw], parent=parent, order=order,
+                rest=[r[3] for r in raw], clips=clips, blob=open(anim, "rb").read())
 
 
-def pulse(t, start, end):
-    """0 -> 1 -> 0 over [start, end], smooth both ways."""
-    if t <= start or t >= end:
-        return 0.0
-    u = (t - start) / (end - start)
-    return ease(u * 2) if u < 0.5 else ease((1 - u) * 2)
+def poe_tracks(rig, clip):
+    """Per bone index: its scale, rotation and translation keys, each an array of
+    rows (frame, values...)."""
+    count, o = rig["clips"][clip]
+    blob, out = rig["blob"], {}
+    for _ in range(count):
+        bone = struct.unpack_from("<I", blob, o + 1)[0]
+        counts = struct.unpack_from("<7I", blob, o + 5)
+        o += 33
+        keys = []
+        for c, w in zip(counts, KEY_WIDTH):
+            keys.append(numpy.frombuffer(blob, "<f4", c * (w + 1), o).reshape(c, w + 1))
+            o += 4 * c * (w + 1)
+        out[bone] = keys[:3]
+    return out
 
 
-def ramp(t, start, end):
-    """0 before `start`, 1 after `end`, smooth between."""
-    return ease((t - start) / (end - start))
+def sample(keys, f):
+    """Linear between keys (rotations normalised the short way round), held past the ends."""
+    i = min(max(int(numpy.searchsorted(keys[:, 0], f, side="right")) - 1, 0), len(keys) - 1)
+    a = keys[i, 1:].astype(numpy.float64)
+    if i < len(keys) - 1 and f > keys[i, 0]:
+        b = keys[i + 1, 1:].astype(numpy.float64)
+        if len(a) == 4 and a.dot(b) < 0:
+            b = -b
+        a = a + (b - a) * (f - keys[i, 0]) / (keys[i + 1, 0] - keys[i, 0])
+    return a / numpy.linalg.norm(a) if len(a) == 4 else a
 
 
-def wave(phase, offset=0.0):
-    return math.sin(2 * math.pi * phase + offset)
+def poe_pose(rig, tracks, f):
+    """PoE's bones at frame `f` (tracks None: rest) in OUR axes: rotations (3x3,
+    scale removed) and joint positions in world units."""
+    world = [None] * len(rig["names"])
+    for i in rig["order"]:
+        if tracks is None:
+            local = rig["rest"][i]
+        else:
+            s, q, t = (sample(k, f) for k in tracks[i])
+            local = numpy.eye(4)
+            local[:3, :3] = numpy.asarray(Quaternion((q[3], q[0], q[1], q[2])).to_matrix()) * s
+            local[:3, 3] = t
+        p = rig["parent"][i]
+        world[i] = local if p < 0 else world[p] @ local
+    rot, pos = [], []
+    for w in world:
+        u, _, vt = numpy.linalg.svd(FLIP @ w[:3, :3] @ FLIP)
+        rot.append(u @ vt)
+        pos.append(POE_UNIT * (FLIP @ w[:3, 3]))
+    return rot, numpy.array(pos)
+
+
+def swing(a, b):
+    """The shortest rotation taking direction `a` onto `b`, 3x3."""
+    return numpy.asarray(Vector(a.tolist()).rotation_difference(Vector(b.tolist())).to_matrix())
+
+
+def unit(v):
+    return v / numpy.linalg.norm(v)
 
 
 class Pose:
-    """Rotations per bone, composed in the order they are added, and a root
-    height in ARMATURE space (the ground solve writes it)."""
+    """Local rotations per bone and the root's location, ready to key."""
 
     def __init__(self, arm):
         self.arm = arm
         self.rot = {}
-        self.lift = 0.0
-
-    def add(self, bone, axis, deg):
-        if abs(deg) < 1e-6:
-            return
-        pb = self.arm.pose.bones[bone]
-        self.rot[bone] = self.rot.get(bone, Quaternion()) @ turn(pb, axis, deg)
-
-    def legs(self, fore, hind):
-        """`fore` / `hind`: per side, (shoulder|hip, elbow|knee, wrist|hock, toes) degrees about X."""
-        for side, _ in SIDES:
-            for bone, deg in zip(("paw1_", "paw2_", "paw3_"), fore[side][:3]):
-                self.add(bone + side, X, deg)
-            for bone, deg in zip(("leg2_", "leg3_", "feet_"), hind[side][:3]):
-                self.add(bone + side, X, deg)
-
-    def tail(self, pitch, yaw=(0, 0, 0, 0, 0)):
-        for name, p, y in zip(TAIL, pitch, yaw):
-            self.add(name, X, p)
-            self.add(name, Z, y)
+        self.root = Vector()
 
     def apply(self):
-        root = self.arm.pose.bones["root"]
         for pb in self.arm.pose.bones:
             pb.rotation_quaternion = self.rot.get(pb.name, Quaternion())
             pb.location = Vector()
-        # Pose location is in the bone's rest frame; the root has no parent.
-        root.location = root.bone.matrix_local.to_3x3().inverted() @ Vector((0, 0, self.lift))
+        self.arm.pose.bones["root"].location = self.root
 
 
-def both(deg):
-    return {"L": deg, "R": deg}
+def retarget(arm, rig, rest, posed, lift):
+    """Our cat in PoE's pose. Each bone's armature-space orientation is PoE's turn
+    of its bone (DELTA) or segment direction (AIM) applied to our rest; heads
+    follow their parents, and the root carries PoE's pelvis path, `lift` higher."""
+    idx = {n: i for i, n in enumerate(rig["names"])}
+    r0, p0 = rest
+    r1, p1 = posed
+    want = {}
+    pose = Pose(arm)
+    bones = [b for b in arm.data.bones if b.parent is None]
+    while bones:
+        b = bones.pop(0)
+        bones.extend(b.children)
+        rest_m = b.matrix_local
+        rest_r = numpy.asarray(rest_m.to_3x3())
+        spec = DELTA.get(b.name) or AIM.get(b.name)
+        if spec is None:
+            # A helper PoE has no counterpart for rides its parent.
+            rot = numpy.asarray(want[b.parent.name].to_3x3()) @ numpy.asarray(
+                (b.parent.matrix_local.inverted() @ rest_m).to_3x3())
+        else:
+            ref, a, e = (idx.get(n) for n in spec)
+            turn = r1[ref] @ r0[ref].T
+            if b.name in AIM:
+                seg = p1[e] - p1[a] if b.name != "tail5" else turn @ (p0[e] - p0[a])
+                turn = swing(turn @ rest_r[:, 1], unit(seg)) @ turn
+            elif a is not None:
+                turn = swing(turn @ unit(p0[e] - p0[a]), unit(p1[e] - p1[a])) @ turn
+            rot = turn @ rest_r
+        m = Matrix(rot.tolist()).to_4x4()
+        if b.parent is None:
+            # Where PoE's pelvis is, our pelvis head goes; the root is placed to put it there.
+            offset = numpy.asarray(arm.data.bones["pelvis"].head_local - b.head_local)
+            head = p1[idx["root"]] + numpy.array((0.0, 0.0, lift)) - turn @ offset
+            m.translation = Vector(head.tolist())
+            basis = rest_m.inverted() @ m
+            pose.root = basis.translation
+        else:
+            parent = want[b.parent.name]
+            m.translation = parent @ (b.parent.matrix_local.inverted() @ rest_m).translation
+            basis = rest_m.inverted() @ b.parent.matrix_local @ parent.inverted() @ m
+        want[b.name] = m
+        pose.rot[b.name] = basis.to_quaternion()
+    return pose
 
 
-def mirror(left, right):
-    return {"L": left, "R": right}
-
-
-# The hover: PoE's cat held in the air beside the player. Body a little nose-up,
-# head up, all four legs hanging loose with the toes drooped, the tail hanging
-# from the rump and hooking forward under it (bridge frames, cFi5bzlkpi4 34-50 s).
-HOVER_PITCH = -20.0
-HOVER_FORE = (10.0, -16.0, 62.0)
-HOVER_HIND = (6.0, 30.0, 64.0)
-HOVER_TAIL = (-78.0, -8.0, -12.0, -16.0, -20.0)
-
-
-def hover(arm, t, phase):
-    p = Pose(arm)
-    p.add("root", X, HOVER_PITCH)
-    p.add("root", Z, 3 * wave(phase))
-    p.add("chest", X, 2 * wave(phase))
-    p.add("neck", X, 2 - wave(phase))
-    p.add("head", X, 14 + 3 * wave(phase, 0.8))
-    p.add("head", Z, 6 * wave(phase, 1.7))
-    # A slow paddle, the fore paws a beat apart.
-    p.legs(
-        {s: (HOVER_FORE[0] + 9 * k * wave(phase), HOVER_FORE[1] - 10 * k * wave(phase, 0.6), HOVER_FORE[2]) for s, k in SIDES},
-        {s: (HOVER_HIND[0] - 5 * k * wave(phase, 1.2), HOVER_HIND[1] + 6 * k * wave(phase, 1.8), HOVER_HIND[2]) for s, k in SIDES},
-    )
-    p.tail(HOVER_TAIL, [8 * wave(phase, -0.6 * i) for i in range(5)])
-    return p
-
-
-def gallop(arm, t, phase):
-    """A cat's rotary gallop, run in the air at the player's shoulder: the fore
-    legs reach and sweep a half-beat ahead of the hind, the spine gathers and
-    extends, the head stays level, the tail rides up in a long S."""
-    p = Pose(arm)
-    a = 2 * math.pi * phase
-    # Spine: gathered (back round, legs under) at the hind plant, extended after.
-    flex = math.sin(a)
-    p.add("root", X, -4 + 5 * math.sin(a + 0.6))
-    p.add("chest", X, 12 * flex)
-    p.add("neck", X, -10 - 9 * flex)
-    p.add("head", X, 8 - 4 * flex)
-    fore, hind = {}, {}
-    for side, k in SIDES:
-        lead = 0.0 if side == "L" else 0.55
-        f = a + lead
-        h = a + math.pi + lead
-        # Shoulder swings -50 (reach) .. +40 (swept back); the elbow folds on the
-        # way forward; the paw flicks back at the end of the sweep.
-        fore[side] = (-5 - 45 * math.cos(f), 10 - 55 * max(0.0, math.sin(f)), 40 + 30 * math.cos(f))
-        hind[side] = (5 + 45 * math.cos(h), 15 - 40 * max(0.0, -math.sin(h)), 35 + 25 * math.cos(h))
-    p.legs(fore, hind)
-    p.tail((28, 12, -8, -16, 18), [6 * math.sin(a - 0.7 * i) for i in range(5)])
-    return p
-
-
-def lie_side(arm, t, phase):
-    """Flopped on its left side on the floor, legs out loose, tail lying along
-    the boards in a curve, breathing (bridge 57-61 s)."""
-    p = Pose(arm)
-    p.add("root", Y, 88)
-    p.add("chest", X, 1.5 * wave(phase))
-    p.add("neck", Y, -14)
-    p.add("neck", X, -6)
-    p.add("head", X, 6)
-    p.legs(mirror((-22, 18, 30), (-10, 14, 26)), mirror((-6, 8, 30), (6, 4, 34)))
-    p.tail((-14, -10, -18, -22, -16 + 10 * wave(phase)))
-    return p
-
-
-def roll_back(arm, t, phase):
-    """From the side onto its back, paws folded in the air, a twist through the
-    spine, and back onto the side (bridge 61-62 s, 89-90 s)."""
-    p = Pose(arm)
-    r = pulse(t, 0.0, 1.0)
-    p.add("root", Y, 88 + 92 * r)
-    p.add("chest", Y, -22 * math.sin(math.pi * t) * (1 - 0.4 * r))
-    p.add("neck", Y, -14 * (1 - r))
-    p.add("head", X, 6 + 14 * r)
-    p.legs(
-        mirror((-22 - 30 * r, 18 - 80 * r, 30 + 30 * r), (-10 - 36 * r, 14 - 74 * r, 26 + 30 * r)),
-        mirror((-6 - 40 * r, 8 + 50 * r, 30), (6 - 44 * r, 4 + 46 * r, 34)),
-    )
-    p.tail((-14 + 34 * r, -10 + 16 * r, -18 + 22 * r, -22 + 18 * r, -16))
-    return p
-
-
-def curl(arm, t, phase):
-    """Curled in a ring on the floor, nose to tail, the tail wrapped round:
-    from above, PoE's donut (bridge 62-65 s, 77-80 s). A loaf with every leg
-    tucked under and the spine bent sideways; the tail closes the ring."""
-    p = Pose(arm)
-    p.add("root", Y, 22)
-    breath = 1.5 * wave(phase)
-    p.add("root", Z, -30)
-    p.add("chest", Z, 62)
-    p.add("chest", X, breath)
-    p.add("neck", Z, 48)
-    p.add("neck", X, 16)
-    p.add("head", Z, 40)
-    p.add("head", X, 30)
-    # Hind legs folded flat: thigh forward (leg1 is the thigh), shin back to the
-    # hock, foot forward along the floor. Forearms flat under the chest.
-    for side, _ in SIDES:
-        p.add("leg1_" + side, X, -45)
-    p.legs(both((80, -150, 130)), both((82, -112, 75)))
-    # The nose turns to the cat's left, so the tail curls to its left to meet it.
-    p.tail((-8, -4, -4, -4, -6), (-40, -38, -36, -34, -30 - 4 * wave(phase, 1.0)))
-    return p
-
-
-def stretch(arm, t, phase):
-    """Up off the floor into a cat's stretch: fore legs long, chest low, rump
-    high; then the chest comes up and a hind leg kicks out behind (bridge 65-66 s,
-    80-81 s)."""
-    p = Pose(arm)
-    front = pulse(t, 0.05, 0.6)
-    back = pulse(t, 0.5, 0.95)
-    p.add("root", X, 22 * front - 8 * back)
-    p.add("chest", X, 24 * front)
-    p.add("neck", X, -34 * front)
-    p.add("head", X, -14 * front)
-    p.legs(
-        both((-80 * front, 30 * front, -36 * front)),
-        mirror((-12 * front + 8 * back, 16 * front, 6 * front), (-12 * front + 58 * back, 16 * front - 34 * back, 6 * front + 30 * back)),
-    )
-    p.tail((24 * front - 10 * back, 10, 0, -6, 10))
-    return p
-
-
-REAR_PITCH = -68.0
-
-
-def reared(p, k, pat=0.0):
-    """Up on the hind legs against the player, fore paws raised, `k` 0..1."""
-    p.add("root", X, REAR_PITCH * k)
-    p.add("neck", X, 34 * k)
-    p.add("head", X, 18 * k)
-    p.legs(
-        mirror((-54 * k + pat, 26 * k, 34 * k), (-54 * k - pat, 26 * k, 34 * k)),
-        both((-46 * k, 10 * k, -46 * k)),
-    )
-    p.tail((52 * k, 12 * k, 6, 4, 14))
-
-
-def rear_up(arm, t, phase):
-    """Rears up onto the hind legs against the player's side and pats at him
-    (bridge 67-68 s, 82-83 s); ends reared, where the spring starts."""
-    p = Pose(arm)
-    k = ramp(t, 0.0, 0.35)
-    reared(p, k, pat=16 * math.sin(2 * math.pi * 2 * t) * ramp(t, 0.3, 0.45))
-    return p
-
-
-def spring(arm, t, phase):
-    """From the rear straight up past the player's head: body to the vertical,
-    hind legs driving down, fore legs reaching up (bridge 68.4 s, 83.4 s)."""
-    p = Pose(arm)
-    k = ramp(t, 0.0, 0.5)
-    p.add("root", X, REAR_PITCH - 20 * k)
-    p.add("neck", X, 34 - 30 * k)
-    p.add("head", X, 18 - 10 * k)
-    p.legs(both((-54 - 60 * k, 26 - 26 * k, 34 - 20 * k)), both((-46 + 66 * k, 10 + 10 * k, -46 + 96 * k)))
-    p.tail((52 - 60 * k, 12 - 14 * k, 6 - 6 * k, 4 - 4 * k, 14 - 10 * k))
-    return p
-
-
-def swim(arm, t, phase):
-    """High over the player: stretched out level, fore legs paddling ahead,
-    hind legs streaming behind, slowly twisting as it swims (bridge 69-70 s,
-    84-85 s)."""
-    p = Pose(arm)
-    p.add("root", X, -6)
-    p.add("root", Y, 24 * wave(phase))
-    p.add("root", Z, 14 * wave(phase, 1.2))
-    p.add("chest", X, -6 + 4 * wave(phase * 2))
-    p.add("neck", X, -12)
-    p.add("head", X, 10)
-    p.legs(
-        {s: (-62 + 22 * k * wave(phase * 2), 18 - 14 * k * wave(phase * 2, 0.8), 30) for s, k in SIDES},
-        {s: (58 + 8 * k * wave(phase * 2, 1.6), -14, 40) for s, k in SIDES},
-    )
-    p.tail((-4, 0, 6 * wave(phase), -6 * wave(phase, 1), 8 * wave(phase, 2)), [10 * wave(phase, -0.8 * i) for i in range(5)])
-    return p
-
-
-def dive(arm, t, phase):
-    """Head-first straight down, fore legs reaching for the floor, hind legs and
-    a straight tail trailing up; levels off at the last moment and lands on its
-    feet (official 5.6-8.9 s, bridge 70.7 s, 85.4 s)."""
-    p = Pose(arm)
-    down = ramp(t, 0.0, 0.2) * (1 - ramp(t, 0.6, 0.95))
-    p.add("root", X, 82 * down)
-    p.add("neck", X, -24 * down)
-    p.add("head", X, -12 * down)
-    p.legs(both((-58 * down, 14 * down, 20 * down)), both((52 * down, -10 * down, 30 * down)))
-    p.tail((22 * down, 4 * down, 0, 0, 6 * down))
-    return p
-
-
-# name, poser, seconds, loops, ground: None (runtime height), "floor" (every frame
-# rests on the floor), "first" (the first frame's floor offset held: it leaves the
-# floor by runtime height), "last" (eases into the last frame's floor offset).
-CLIPS = [
-    ("hover", hover, 3.2, True, None),
-    ("gallop", gallop, 0.5, True, None),
-    ("lie_side", lie_side, 3.0, True, "floor"),
-    ("roll_back", roll_back, 1.6, False, "floor"),
-    ("curl", curl, 4.0, True, "floor"),
-    ("stretch", stretch, 1.6, False, "floor"),
-    ("rear_up", rear_up, 1.2, False, "floor"),
-    ("spring", spring, 0.6, False, "first"),
-    ("swim", swim, 2.4, True, None),
-    ("dive", dive, 0.8, False, "last"),
-]
+def lifts(lows, floor):
+    """How far each frame must rise for `lows` to stay at `floor`,
+    widened then averaged over LIFT_WINDOW frames so the rise never shows a kink
+    and never falls short."""
+    need = numpy.maximum(0.0, floor - numpy.asarray(lows))
+    n, w = len(need), LIFT_WINDOW
+    wide = numpy.array([need[max(0, i - w):i + w + 1].max() for i in range(n)])
+    return numpy.array([wide[max(0, i - w):i + w + 1].mean() for i in range(n)])
 
 
 def heights(body):
@@ -791,10 +760,6 @@ def heights(body):
     return float(z.min()), float(z.max())
 
 
-def lowest(body):
-    return heights(body)[0]
-
-
 def muted(arm, on):
     """Mute every NLA track: a measured pose must be the one just set, not what
     the clips already authored would evaluate to."""
@@ -802,37 +767,40 @@ def muted(arm, on):
         track.mute = on
 
 
+def measured(arm, body, poses):
+    """Each pose's lowest and highest body point and the height of the body's
+    middle (the chest joint), with no action bound and every clip muted."""
+    arm.animation_data.action = None
+    muted(arm, True)
+    out = []
+    for pose in poses:
+        pose.apply()
+        out.append(heights(body) + (arm.pose.bones["chest"].head.z,))
+    muted(arm, False)
+    return numpy.array(out)
+
+
 def author_clips(arm, body):
+    rig = poe_rig()
+    rest = poe_pose(rig, None, 0)
     arm.animation_data_create()
-    for clip, poser, seconds, loops, ground in CLIPS:
-        length = int(round(seconds * FPS))
-
-        def posed(frame):
-            u = (frame % length) / length if loops else frame / length
-            phase = frame / length if loops else (frame / FPS) / seconds
-            return u, poser(arm, u, phase)
-
-        # Measure first, with no action bound and the other clips muted.
-        arm.animation_data.action = None
-        muted(arm, True)
-        poses = []
-        for frame in range(length + 1):
-            u, pose = posed(frame)
-            if ground == "floor":
-                pose.apply()
-                pose.lift = -lowest(body)
-            poses.append((u, pose))
-        if ground in ("first", "last"):
-            edge = poses[0 if ground == "first" else -1][1]
-            edge.apply()
-            held = -lowest(body)
-            for u, pose in poses:
-                pose.lift = held if ground == "first" else held * ramp(u, 0.55, 1.0)
-            print("clip %-10s floor lift %.3f" % (clip, held))
-        elif ground == "floor":
-            lifts = [pose.lift for _, pose in poses]
-            print("clip %-10s floor lift %.3f .. %.3f" % (clip, min(lifts), max(lifts)))
-        muted(arm, False)
+    lows, middles = {}, {}
+    for clip, poe_clip, loops in CLIPS:
+        tracks = poe_tracks(rig, poe_clip)
+        length = int(max(k[-1, 0] for t in tracks.values() for k in t if len(k)))
+        posed = [poe_pose(rig, tracks, f) for f in range(length + 1)]
+        poses = [retarget(arm, rig, rest, p, 0.0) for p in posed]
+        span = measured(arm, body, poses)
+        lift = numpy.zeros(length + 1)
+        if not loops:
+            lift = lifts(span[:, 2], middles["hover"])
+            if lift.any():
+                poses = [retarget(arm, rig, rest, p, h) for p, h in zip(posed, lift)]
+                span = measured(arm, body, poses)
+        lows[clip] = float(span[:, 0].min())
+        middles[clip] = float(span[:, 2].min())
+        print("clip %-8s %3d frames from %s, body %.3f .. %.3f, lifted up to %.3f"
+              % (clip, length, poe_clip, lows[clip], float(span[:, 1].max()), float(lift.max())))
 
         action = bpy.data.actions.new("%s|%s" % (ID, clip))
         action.use_fake_user = True
@@ -841,10 +809,14 @@ def author_clips(arm, body):
         layer.strips.new(type="KEYFRAME").channelbag(slot, ensure=True)
         arm.animation_data.action = action
         arm.animation_data.action_slot = slot
-        # The last frame repeats the first: a loop has no seam.
-        for frame, (_, pose) in enumerate(poses):
+        last = {}
+        for frame, pose in enumerate(poses):
             pose.apply()
             for pb in arm.pose.bones:
+                # One hemisphere frame to frame, or a key interpolates the long way round.
+                if pb.name in last and last[pb.name].dot(pb.rotation_quaternion) < 0:
+                    pb.rotation_quaternion = -pb.rotation_quaternion
+                last[pb.name] = pb.rotation_quaternion.copy()
                 pb.keyframe_insert("rotation_quaternion", frame=frame + 1)
             arm.pose.bones["root"].keyframe_insert("location", frame=frame + 1)
         track = arm.animation_data.nla_tracks.new()
@@ -856,6 +828,9 @@ def author_clips(arm, body):
     for pb in arm.pose.bones:
         pb.rotation_quaternion = Quaternion()
         pb.location = Vector()
+    for clip in (c for c, _, loops in CLIPS if not loops):
+        if lows[clip] < lows["hover"] - FLOAT_SLACK:
+            fail("%s dips to %.3f, under the hover's %.3f: the cat always floats" % (clip, lows[clip], lows["hover"]))
 
 
 # --------------------------------------------------------------------------
@@ -877,6 +852,7 @@ def main():
     eye_tris = decimate(eyes, EYE_TRIS)
     clean_rig(arm, [body, eyes])
     stretch_tail(arm, body)
+    rejoint(arm, body)
 
     arm.name = arm.data.name = ID
     body.name = body.data.name = ID + ".body"
@@ -890,14 +866,6 @@ def main():
     print("pet %s: body %d tris, eyes %d tris, bones %d, height %.3f, length %.3f"
           % (ID, body_tris, eye_tris, len(arm.data.bones), hi - lo, max(ys) - min(ys)))
     author_clips(arm, body)
-    # The hover's extent about the armature origin, for the runtime's HOVER_Y.
-    muted(arm, True)
-    hover(arm, 0.0, 0.0).apply()
-    print("hover extent: lowest %.3f, highest %.3f about the origin" % heights(body))
-    muted(arm, False)
-    for pb in arm.pose.bones:
-        pb.rotation_quaternion = Quaternion()
-        pb.location = Vector()
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.export_scene.gltf(

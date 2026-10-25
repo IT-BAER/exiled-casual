@@ -33,6 +33,8 @@ def args():
 
 def setup(scene):
     scene.render.engine = "BLENDER_EEVEE"
+    # The importer turns key times into frames at the scene's rate: the build's.
+    scene.render.fps = 30
     scene.render.resolution_x = scene.render.resolution_y = TILE
     scene.render.film_transparent = False
     scene.render.image_settings.file_format = "PNG"
@@ -61,8 +63,25 @@ def setup(scene):
     return cam
 
 
-def frame_camera(cam, meshes, view):
-    corners = [m.matrix_world @ Vector(c) for m in meshes for c in m.bound_box]
+def posed_corners(meshes):
+    """The posed meshes' bounding corners: an armature-deformed object's own
+    bound_box is its rest pose."""
+    bpy.context.view_layer.update()
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    out = []
+    for m in meshes:
+        ev = m.evaluated_get(depsgraph)
+        me = ev.to_mesh()
+        co = numpy.empty(len(me.vertices) * 3, dtype=numpy.float32)
+        me.vertices.foreach_get("co", co)
+        ev.to_mesh_clear()
+        co = co.reshape(-1, 3)
+        out += [m.matrix_world @ Vector(c.tolist()) for c in (co.min(0), co.max(0))]
+    return out
+
+
+def frame_camera(cam, corners, view):
+    """Frame every corner given: a clip that travels stays in shot."""
     lo = [min(c[k] for c in corners) for k in range(3)]
     hi = [max(c[k] for c in corners) for k in range(3)]
     centre = Vector([(lo[k] + hi[k]) / 2 for k in range(3)])
@@ -95,7 +114,6 @@ def main():
     arm = bpy.data.objects.get(ID)
     if arm is None or arm.type != "ARMATURE":
         sys.exit("no armature %s in %s" % (ID, opts["glb"]))
-    # Air clips hang from the origin: lift them off the floor as the runtime does.
     arm.location.z = float(opts["lift"])
     meshes = [c for c in arm.children_recursive if c.type == "MESH"]
     action = bpy.data.actions.get("%s|%s" % (ID, opts["clip"]))
@@ -109,14 +127,17 @@ def main():
     frames = int(opts["frames"])
     tmp = os.path.join(ROOT, "review", "_pet_tile.png")
     os.makedirs(os.path.dirname(tmp), exist_ok=True)
+    shots = [start + round(span * i / frames) for i in range(frames)]
+    corners = []
+    for f in shots:
+        scene.frame_set(f)
+        corners += posed_corners(meshes)
     rows = []
     for view in opts["view"].split(","):
-        scene.frame_set(start)
-        bpy.context.view_layer.update()
-        frame_camera(cam, meshes, view)
+        frame_camera(cam, corners, view)
         tiles = []
-        for i in range(frames):
-            scene.frame_set(start + round(span * i / frames))
+        for f in shots:
+            scene.frame_set(f)
             tiles.append(render_tile(scene, tmp))
         rows.append(numpy.concatenate(tiles, axis=1))
     sheet = numpy.concatenate(rows, axis=0)

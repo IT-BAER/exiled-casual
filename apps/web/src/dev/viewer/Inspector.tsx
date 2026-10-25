@@ -244,10 +244,7 @@ function CreatureSection(p: InspectorProps): React.ReactElement {
 }
 
 function PetSection(p: InspectorProps): React.ReactElement {
-  const label: Record<PetAction, string> = {
-    hover: "Hover", gallop: "Gallop", lie_side: "Lie", roll_back: "Roll", curl: "Curl", stretch: "Stretch",
-    rear_up: "Rear up", spring: "Spring", swim: "Swim", dive: "Dive", routine: "Routine",
-  };
+  const label: Record<PetAction, string> = { hover: "Hover", gallop: "Gallop", relaxed: "Relaxed", emerge: "Emerge" };
   return (
     <section className="av-section">
       <h3 className="av-h">Actions</h3>
@@ -260,8 +257,8 @@ function PetSection(p: InspectorProps): React.ReactElement {
       </div>
       <LoopToggle {...p} />
       <p className="av-note">
-        Hover is the rest beside the player, Gallop the run in the air with its cloud streaming. Lie to Dive are the
-        playtime loop&apos;s steps, each repeating at its own height; Routine plays the whole loop in order.
+        PoE&apos;s four floating clips. Hover is the rest beside the player, Gallop the run in the air with its cloud
+        streaming, Relaxed the idle it rolls a quarter of the hover cycles, Emerge its arrival. Each repeats here.
       </p>
     </section>
   );

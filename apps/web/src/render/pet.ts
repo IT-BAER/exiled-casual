@@ -9,6 +9,7 @@ import {
   ParticleSystem,
   StandardMaterial,
   Texture,
+  TransformNode,
   Vector3,
   type AnimationGroup,
   type AssetContainer,
@@ -19,35 +20,35 @@ import { standGroundBlob } from "./meshes";
 import { warmContainer } from "./warm-shaders";
 
 /**
- * The companion cat: PoE1's Celestial Cat Pet, watched frame by frame in three
- * videos (assets/pets/SOURCE.md). Moving, it gallops IN THE AIR beside the player
- * at his shoulder, a violet nebula and dark smoke streaming behind. Standing, it
- * hovers at his hip with its legs hanging loose, and every so often springs up
- * past his head, swims a loop above him and dives back to its hover. It never
- * touches the floor: the owner's rule, over PoE's floor play. Cosmetic and
- * client-only: the sim never hears of it, so replay checksums and the protocol
- * are untouched.
+ * The companion cat: PoE1's Celestial Cat Pet, its motion recreated from PoE's
+ * own floating clips (assets/pets/SOURCE.md). Moving, it gallops IN THE AIR
+ * beside the player, a violet nebula and dark smoke streaming behind. Standing,
+ * it hovers at his hip with its legs hanging, and at the end of each hover cycle
+ * PoE's controller rolls its relaxed idle: a swim up over him and round, a ball
+ * chasing its tail, uncurled back into the hover. It drops in somersaulting when
+ * it arrives. It never sinks under the hover: the owner's rule, kept by the
+ * build. Cosmetic and client-only: the sim never hears of it, so replay
+ * checksums and the protocol are untouched.
  *
- * `tools/build_pet.py` authors the body and its ten clips into `pet.glb` (floor
- * clips carry their own floor contact, root origin = floor); this is the runtime
- * half. The follow is a critically damped spring to a spot behind and beside the
- * player, pure arithmetic in `stepFollow`; the playtime loop is a timeline,
- * `routineAt`, pure arithmetic too; `PetActor` hangs the glTF on a root, sets its
- * height and plays the clip either asks for. Failure to load is not fatal: the
- * actor simply has no body.
+ * `tools/build_pet.py` puts the body and its four clips into `pet.glb`, each
+ * carrying PoE's root path with its height above the ground, so the root here
+ * stands ON the ground; this is the runtime half. The follow is a critically
+ * damped spring to a spot behind and beside the player, pure arithmetic in
+ * `stepFollow`; `PetActor` hangs the glTF on a root and plays the clip PoE's
+ * controller would. Failure to load is not fatal: the actor simply has no body.
  */
 export const PET_URL = "/models/pet.glb";
 export const PET_ID = "pet.cat.v1";
-export const PET_CLIPS = [
-  "hover", "gallop", "lie_side", "roll_back", "curl", "stretch", "rear_up", "spring", "swim", "dive",
-] as const;
+/** PoE's idle_floating, run_floating, idle_relaxed_floating, happy_floating. */
+export const PET_CLIPS = ["hover", "gallop", "relaxed", "emerge"] as const;
 export type PetClip = (typeof PET_CLIPS)[number];
-/** Everything the viewer can ask for: the clips, plus the whole playtime loop. */
-export const PET_ACTIONS = [...PET_CLIPS, "routine"] as const;
-export type PetAction = (typeof PET_ACTIONS)[number];
-/** Clips that lie or stand on the floor: root height 0. */
-export const FLOOR_CLIPS = ["lie_side", "roll_back", "curl", "stretch", "rear_up"] as const satisfies readonly PetClip[];
-const LOOPED: readonly PetClip[] = ["hover", "gallop", "lie_side", "curl", "swim"];
+/** Everything the viewer can ask for: each clip, repeating. */
+export const PET_ACTIONS = PET_CLIPS;
+export type PetAction = PetClip;
+export const CLIP_SECONDS: Record<PetClip, number> = { hover: 2.0, gallop: 1.2, relaxed: 14.67, emerge: 3.0 };
+const LOOPED: readonly PetClip[] = ["hover", "gallop"];
+/** PoE's idle_relaxed_chance: the roll at the end of every hover cycle while he stands. */
+export const RELAXED_CHANCE = 0.25;
 
 export const FOLLOW = {
   /** Units behind the player along his heading. */
@@ -65,25 +66,8 @@ export const FOLLOW = {
   gallopEnd: 0.8,
   /** Further than this from its spot it is simply put there: a portal, a Blink. */
   teleport: 12,
-  /** Seconds the player stands, the cat hovering, before the playtime loop starts. */
-  idleAfter: 5,
 } as const;
 
-/**
- * Root heights, the root origin being the floor under a standing cat. The hover
- * spans -0.14..0.44 about its root (`build_pet.py` prints it), so it hangs at
- * his hip to chest as on the bridge in PoE; the gallop rides at his shoulder;
- * the swim is high over his head.
- */
-export const HOVER_Y = 1.0;
-export const GALLOP_Y = 1.3;
-export const SWIM_Y = 2.4;
-const BOB = 0.03;
-const BOB_PERIOD = 3.2;
-/** Height chase rate per second, for every change the timeline does not draw itself. */
-const HEIGHT_RATE = 6;
-/** Chase rate per second toward the loop's path: smooths it without lagging it. */
-const ROUTINE_CHASE = 10;
 /** Yaw chase rate per second. */
 const TURN_RATE = 8;
 /** Below this own speed it faces where the player faces. */
@@ -91,87 +75,16 @@ const FACING_SPEED = 0.3;
 /** Below this the player is standing, in units per second. */
 const PLAYER_STILL = 0.1;
 
-const ease = (u: number): number => {
-  const c = Math.min(1, Math.max(0, u));
-  return c * c * (3 - 2 * c);
-};
-
-/** A spot relative to the standing player: `side` to his right, `fwd` along his facing. */
-export interface Spot {
-  side: number;
-  fwd: number;
-}
-
-export interface RoutinePhase {
-  clip: PetClip;
-  start: number;
-  seconds: number;
-  /** Root height at `u` (0..1) through the phase. */
-  height: (u: number) => number;
-  /** Where on the floor plane the cat is at `u`, relative to the player. */
-  path: (u: number) => Spot;
-}
-
-/** The hover's spot: the follow spot, so the loop starts and ends without a slide. */
-const REST: Spot = { side: FOLLOW.beside, fwd: -FOLLOW.behind };
-const OVER: Spot = { side: 0, fwd: 0 };
-/** Radius of the swim's loop out to his right and back over his head. */
-const SWIM_LOOP = 0.6;
-const between = (a: Spot, b: Spot, k: number): Spot => ({
-  side: a.side + (b.side - a.side) * k,
-  fwd: a.fwd + (b.fwd - a.fwd) * k,
-});
-
-/**
- * The playtime loop while he stands, in order. The owner's rule: the cat ALWAYS
- * floats, so PoE's floor phases are left out and no phase goes below the hover.
- */
-export const ROUTINE: readonly RoutinePhase[] = (() => {
-  const at = (s: Spot) => () => s;
-  const plan: [PetClip, number, (u: number) => number, (u: number) => Spot][] = [
-    ["spring", 0.6, (u) => HOVER_Y + (SWIM_Y - HOVER_Y) * ease(u), (u) => between(REST, OVER, ease(u))],
-    [
-      "swim",
-      2.4,
-      (u) => SWIM_Y + 0.12 * Math.sin(2 * Math.PI * u),
-      (u) => ({
-        side: SWIM_LOOP * (1 - Math.cos(2 * Math.PI * u)),
-        fwd: SWIM_LOOP * Math.sin(2 * Math.PI * u),
-      }),
-    ],
-    ["dive", 0.8, (u) => SWIM_Y - (SWIM_Y - HOVER_Y) * ease(u), (u) => between(OVER, REST, ease(u))],
-    ["hover", 10.0, () => HOVER_Y, at(REST)],
-  ];
-  let t = 0;
-  return plan.map(([clip, seconds, height, path]) => {
-    const phase = { clip, start: t, seconds, height, path };
-    t += seconds;
-    return phase;
-  });
-})();
-export const ROUTINE_PERIOD = ROUTINE.reduce((sum, p) => sum + p.seconds, 0);
-
-/** Which clip the loop plays `t` seconds in, the root height and the spot there. */
-export function routineAt(t: number): { clip: PetClip; height: number; u: number } & Spot {
-  const local = ((t % ROUTINE_PERIOD) + ROUTINE_PERIOD) % ROUTINE_PERIOD;
-  for (const p of ROUTINE) {
-    if (local < p.start + p.seconds) {
-      const u = (local - p.start) / p.seconds;
-      return { clip: p.clip, height: p.height(u), u, ...p.path(u) };
-    }
-  }
-  const last = ROUTINE[ROUTINE.length - 1]!;
-  return { clip: last.clip, height: last.height(1), u: 1, ...last.path(1) };
-}
-
-/** A clip shown on its own (the viewer): its height, `t` seconds into it. */
-function clipHeight(clip: PetClip, t: number): number {
-  if (clip === "hover") return HOVER_Y;
-  if (clip === "gallop") return GALLOP_Y;
-  // The floor clips stay in the file for the viewer only; play never asks for them.
-  if ((FLOOR_CLIPS as readonly PetClip[]).includes(clip)) return 0;
-  const phase = ROUTINE.find((p) => p.clip === clip)!;
-  return phase.height((t % phase.seconds) / phase.seconds);
+/** A seeded uniform [0, 1) (mulberry32): the relaxed roll replays in tests. */
+function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 /** The rim halo: violet light hugging the silhouette, as PoE's cat wears it. */
@@ -189,8 +102,8 @@ export function cloudRate(speed: number): number {
 function smokeRate(speed: number): number {
   return 40 * Math.min(1, Math.max(0, speed) / FOLLOW.dash);
 }
-/** The floating body in root space: glTF y up, nose toward +z, tail toward -z. */
-const BODY_BOX = { x: 0.1, yLo: 0.02, yHi: 0.38, zLo: -0.32, zHi: 0.28 } as const;
+/** The body about its middle (the anchor), root axes: y up, nose toward +z, tail toward -z. */
+const BODY_BOX = { x: 0.13, y: 0.23, zLo: -0.41, zHi: 0.36 } as const;
 
 /** glTF's own wrapper node; an instance is parented *with* it (see monsters.ts). */
 const GLTF_ROOT = "__root__";
@@ -288,42 +201,47 @@ export function stepFollow(s: FollowState, dt: number, px: number, pz: number, h
 // --------------------------------------------------------------------------
 
 export class PetActor {
-  /** Carries the body; the renderer never touches it. */
+  /** Carries the body on the ground at its spot; the renderer never touches it. */
   readonly root: Mesh;
   /** Carries the ground blob at y 0 under the body. */
   private readonly ground: Mesh;
+  /** Rides the body's middle (its chest joint) in root space: the clouds are born round it. */
+  private readonly anchor: Mesh;
+  private chest: TransformNode | null = null;
+  private readonly inverse = new Matrix();
+  private readonly turn = new Matrix();
   private entries: InstantiatedEntries | null = null;
   private halo: Mesh | null = null;
   /** The clips by name, for the viewer's timeline. */
   readonly clipGroups = new Map<PetClip, AnimationGroup>();
   private current: PetClip | null = null;
+  /** Seconds into the current clip; a hover counts its cycles from it. */
+  private clipT = 0;
   /** The viewer's action, or null in play. */
   private previewed: PetAction | null = null;
-  private previewT = 0;
-  /** Seconds into the playtime loop, or -1 when not in it. */
-  private routineT = -1;
-  /** The player's facing when the loop began; its spots are laid out on it. */
-  private routineHeading = { x: 0, z: 1 };
-  /** Root height over the floor, chased toward what the moment asks for. */
-  private y = HOVER_Y;
   private fx: ParticleSystem[] = [];
   private nebula: ParticleSystem | null = null;
   private smoke: ParticleSystem | null = null;
   private readonly follow: FollowState = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0 };
   private speed = 0;
   private placed = false;
-  private time = 0;
-  /** Seconds the player has stood still. */
-  private still = 0;
   private lastPlayer: { x: number; z: number } | null = null;
   private shown = true;
+  private readonly roll: () => number;
 
-  constructor(private readonly scene: Scene) {
+  constructor(
+    private readonly scene: Scene,
+    seed = Math.floor(Math.random() * 4294967296),
+  ) {
+    this.roll = seeded(seed);
     this.root = new Mesh("pet-root", scene);
     this.root.isPickable = false;
+    this.anchor = new Mesh("pet-anchor", scene);
+    this.anchor.isPickable = false;
+    this.anchor.parent = this.root;
     this.ground = new Mesh("pet-ground", scene);
     this.ground.isPickable = false;
-    standGroundBlob(scene, this.ground, 0.34, 0.24, "actor");
+    standGroundBlob(scene, this.ground, 0.44, 0.31, "actor");
   }
 
   /** The clip playing, for tests and the DEV handles. */
@@ -338,49 +256,32 @@ export class PetActor {
   /**
    * The asset viewer: start `action` on a cat over the origin, restarting it if
    * it is already running. `previewTick` then carries it with no player to
-   * follow: every clip repeats at its own height, the routine runs the whole
-   * playtime loop, and the gallop fakes a nose-first dash so its cloud streams.
+   * follow: every clip repeats, and the gallop fakes a nose-first dash so its
+   * cloud streams.
    */
   previewAction(action: PetAction): void {
     if (!this.entries) this.attach();
     this.show(true);
     this.previewed = action;
-    this.previewT = 0;
-    this.current = null;
-    if (action !== "routine") this.play(action, true);
+    this.start(action);
     this.previewTick(0);
   }
 
   previewTick(dt: number): void {
     const action = this.previewed;
     if (action === null) return;
-    this.time += dt;
-    this.previewT += dt;
     if (!this.entries) this.attach();
-    let clip: PetClip;
-    if (action === "routine") {
-      // Round an imaginary player at the origin, facing +z.
-      const r = routineAt(this.previewT);
-      this.y = r.height;
-      this.play(r.clip, LOOPED.includes(r.clip));
-      this.routineHeading = { x: 0, z: 1 };
-      this.speed = this.walkRoutine(dt, 0, 0, r);
-      this.place(this.follow.x, this.follow.z, this.follow.yaw, r.clip);
-      return;
-    } else {
-      clip = action;
-      this.y = clipHeight(clip, this.previewT);
-    }
-    this.speed = clip === "gallop" ? FOLLOW.dash : 0;
+    this.clipT += dt;
+    this.speed = action === "gallop" ? FOLLOW.dash : 0;
     this.follow.vx = 0;
     this.follow.vz = this.speed;
-    this.place(0, 0, 0, clip);
+    this.place(0, 0, 0, action);
   }
 
   /**
    * Once per frame with the player's DRAWN position (the interpolated mesh, not
    * the snapshot) and his heading. `jump` is an area change: the cat is put on
-   * its spot rather than streaking across the new map to it.
+   * its spot and drops in again rather than streaking across the new map to it.
    */
   update(
     dt: number,
@@ -390,7 +291,6 @@ export class PetActor {
     alive: boolean,
     jump: boolean,
   ): void {
-    this.time += dt;
     if (!this.entries) this.attach();
     const hx = heading?.x ?? 0;
     const hz = heading?.y ?? 1;
@@ -407,94 +307,61 @@ export class PetActor {
       this.follow.z = t.z;
       this.follow.vx = this.follow.vz = 0;
       this.follow.yaw = Math.atan2(hx, hz);
-      this.y = HOVER_Y;
-      this.routineT = -1;
       this.placed = true;
       this.lastPlayer = null;
+      this.start("emerge");
     }
     const playerSpeed = this.lastPlayer ? Math.hypot(px - this.lastPlayer.x, pz - this.lastPlayer.z) / dt : 0;
     this.lastPlayer = { x: px, z: pz };
-    this.still = playerSpeed < PLAYER_STILL ? this.still + dt : 0;
 
-    let clip: PetClip;
-    let want: number;
-    if (this.still > FOLLOW.idleAfter && (this.routineT >= 0 || this.speed < FOLLOW.gallopEnd)) {
-      if (this.routineT < 0) {
-        // The loop is laid out around him as he stood when it began.
-        const len = Math.hypot(hx, hz) || 1;
-        this.routineHeading = { x: hx / len, z: hz / len };
-        this.routineT = 0;
-      } else this.routineT += dt;
-      const r = routineAt(this.routineT);
-      clip = r.clip;
-      want = r.height;
-      this.speed = this.walkRoutine(dt, px, pz, r);
-    } else {
-      this.routineT = -1;
-      this.speed = stepFollow(this.follow, dt, px, pz, hx, hz);
-      const travelling = this.speed > (this.current === "gallop" ? FOLLOW.gallopEnd : FOLLOW.gallop);
-      clip = travelling ? "gallop" : "hover";
-      want = clip === "gallop" ? GALLOP_Y : HOVER_Y;
+    this.speed = stepFollow(this.follow, dt, px, pz, hx, hz);
+    this.clipT += dt;
+    const travelling = this.speed > (this.current === "gallop" ? FOLLOW.gallopEnd : FOLLOW.gallop);
+    if (travelling) {
+      // PoE's run cuts any idle short.
+      if (this.current !== "gallop") this.start("gallop");
+    } else if (this.current === "gallop" || this.current === null) {
+      this.start("hover");
+    } else if (this.clipT >= CLIP_SECONDS[this.current]) {
+      // A hover cycle or a one-shot ended: PoE's controller rolls its relaxed idle
+      // on every idle cycle while he stands.
+      if (this.current === "hover" && playerSpeed < PLAYER_STILL && this.roll() < RELAXED_CHANCE) this.start("relaxed");
+      else if (this.current === "hover") this.clipT -= CLIP_SECONDS.hover;
+      else this.start("hover");
     }
-    // The loop's timeline draws its own height; it is chased only on the way in.
-    const k = this.routineT > 1 ? 1 : 1 - Math.exp(-HEIGHT_RATE * dt);
-    this.y += (want - this.y) * k;
-    this.play(clip, LOOPED.includes(clip));
-    this.place(this.follow.x, this.follow.z, this.follow.yaw, clip);
+    this.place(this.follow.x, this.follow.z, this.follow.yaw, this.current!);
   }
 
-  /**
-   * Carry the cat along the loop's path around the player at (px, pz), facing
-   * where it goes. Returns its own speed.
-   */
-  private walkRoutine(dt: number, px: number, pz: number, at: Spot): number {
-    const h = this.routineHeading;
-    const tx = px + h.x * at.fwd - h.z * at.side;
-    const tz = pz + h.z * at.fwd + h.x * at.side;
-    const s = this.follow;
-    if (dt <= 0) {
-      s.x = tx;
-      s.z = tz;
-      return 0;
-    }
-    const k = 1 - Math.exp(-ROUTINE_CHASE * dt);
-    s.vx = ((tx - s.x) * k) / dt;
-    s.vz = ((tz - s.z) * k) / dt;
-    s.x += s.vx * dt;
-    s.z += s.vz * dt;
-    const speed = Math.hypot(s.vx, s.vz);
-    let want = s.yaw;
-    if (speed > FACING_SPEED) want = Math.atan2(s.vx, s.vz);
-    let turn = want - s.yaw;
-    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-    s.yaw += turn * Math.min(1, TURN_RATE * dt);
-    return speed;
-  }
-
-  /** Put the root, its ground blob and the cloud rates where the moment says. */
+  /** Put the root on the ground at (x, z), the clouds and the ground blob under the body. */
   private place(x: number, z: number, yaw: number, clip: PetClip): void {
-    // The bob is a float's; a cat on the floor does not bob.
-    const air = Math.min(1, this.y / 0.3);
-    this.root.position.set(x, this.y + air * BOB * Math.sin((this.time * 2 * Math.PI) / BOB_PERIOD), z);
+    if (this.chest) {
+      // The body's middle in root space, from the last drawn pose: the clip moves
+      // it over the root (PoE's root motion), up to three units high.
+      this.root.getWorldMatrix().invertToRef(this.inverse);
+      this.chest.computeWorldMatrix();
+      Vector3.TransformCoordinatesToRef(this.chest.getAbsolutePosition(), this.inverse, this.anchor.position);
+    }
+    this.root.position.set(x, 0, z);
     this.root.rotation.x = 0;
     this.root.rotation.y = yaw;
-    this.ground.position.set(x, 0, z);
+    Matrix.RotationYToRef(yaw, this.turn);
+    const under = Vector3.TransformCoordinates(this.anchor.position, this.turn);
+    this.ground.position.set(x + under.x, 0, z + under.z);
     const travel = clip === "gallop" ? Math.max(this.speed, FOLLOW.dash) : this.speed;
     if (this.nebula) this.nebula.emitRate = cloudRate(travel);
     if (this.smoke) this.smoke.emitRate = smokeRate(travel);
   }
 
-  private play(clip: PetClip, loop: boolean): void {
-    const group = this.clipGroups.get(clip);
-    if (!group) {
-      // No body yet (or no file): remember the choice.
-      this.current = clip;
-      return;
-    }
-    if (this.current === clip && (group.isPlaying || !loop)) return;
-    for (const [name, other] of this.clipGroups) if (name !== clip) other.stop();
-    group.start(loop, 1);
+  /** Start `clip` from its first frame; the viewer repeats every clip. */
+  private start(clip: PetClip): void {
+    this.clipT = 0;
     this.current = clip;
+    const group = this.clipGroups.get(clip);
+    // No body yet (or no file): attach() starts the choice.
+    if (!group) return;
+    for (const [name, other] of this.clipGroups) if (name !== clip) other.stop();
+    group.stop();
+    group.start(LOOPED.includes(clip) || this.previewed !== null, 1);
   }
 
   private attach(): void {
@@ -507,6 +374,10 @@ export class PetActor {
       if (node instanceof Mesh) node.isPickable = false;
       for (const mesh of node.getChildMeshes()) mesh.isPickable = false;
     }
+    this.chest =
+      entries.rootNodes
+        .flatMap((n) => n.getDescendants(false))
+        .find((n): n is TransformNode => n instanceof TransformNode && n.name === "chest") ?? null;
     for (const group of entries.animationGroups) {
       const clip = PET_CLIPS.find((c) => group.name.endsWith(`|${c}`));
       if (!clip) {
@@ -523,9 +394,7 @@ export class PetActor {
     this.smoke = this.buildSmoke();
     this.fx = [this.nebula, this.smoke, this.buildSparks()];
     // Whatever was decided before the body arrived starts now.
-    const was = this.current;
-    this.current = null;
-    if (was) this.play(was, LOOPED.includes(was) || this.previewed !== null);
+    if (this.current) this.start(this.current);
   }
 
   /**
@@ -562,18 +431,18 @@ export class PetActor {
   }
 
   /**
-   * Particles are born inside the hung body (root space, so they turn with it)
+   * Particles are born inside the body (round the anchor, so they turn with it)
    * and thrown AGAINST its travel, so the cloud wraps the cat at rest and streams
    * out behind it on the move. `back` shifts the birth box toward the trailing
    * end, for the smoke that only lives at the far tail.
    */
   private emitFromBody(ps: ParticleSystem, back: number, lift: number, spread: number): void {
-    ps.emitter = this.root;
+    ps.emitter = this.anchor;
     const local = new Vector3();
     ps.startPositionFunction = (worldMatrix: Matrix, position: Vector3): void => {
       local.set(
         (Math.random() * 2 - 1) * BODY_BOX.x,
-        BODY_BOX.yLo + Math.random() * (BODY_BOX.yHi - BODY_BOX.yLo),
+        (Math.random() * 2 - 1) * BODY_BOX.y,
         BODY_BOX.zLo + Math.random() * (BODY_BOX.zHi - BODY_BOX.zLo) - back,
       );
       Vector3.TransformCoordinatesToRef(local, worldMatrix, position);
@@ -685,6 +554,7 @@ export class PetActor {
     this.entries = null;
     this.clipGroups.clear();
     this.ground.dispose();
+    this.anchor.dispose();
     this.root.dispose();
   }
 }

@@ -46,8 +46,8 @@ describe("subject groups", () => {
   it("lists the companion cat under its own group with every action it has", () => {
     const pets = SUBJECT_GROUPS.find((g) => g.label === "Pet");
     expect(pets?.subjects.map((s) => s.id)).toEqual([PET_SUBJECT.id]);
-    expect(PET_ACTIONS).toEqual([...PET_CLIPS, "routine"]);
-    expect(parseViewerState("?viewer&subject=pet&clip=pet:routine").subject).toBe("pet");
+    expect(PET_ACTIONS).toEqual(PET_CLIPS);
+    expect(parseViewerState("?viewer&subject=pet&clip=pet:relaxed").subject).toBe("pet");
   });
 });
 
