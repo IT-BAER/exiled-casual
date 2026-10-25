@@ -8,12 +8,15 @@ then `node tools/pack_pet.mjs` for the served copy.
 
 Source: BlenderKit "Domestic cat (rigged)" (assets/pets/SOURCE.md), a 0.54 m
 standing cat with hair particles and an IK posing rig. This strips the hair, the
-subsurf and the IK, hangs the fore legs on the chest, lengthens the tail,
-decimates to the pet budget, paints the coat (true black with white point stars,
-dense on the head and back; electric-blue veins on the chest and legs), paints
-cyan half-moon eyes, and recreates PoE1's Celestial Cat motion on the cat's own
-bones as four NLA clips, frame for frame from PoE's own floating clips
-(tools/extract_poe_pet.mjs reads them out of a local PoE install):
+subsurf and the IK, lengthens the tail, decimates the body (not the tail) to the
+pet budget, paints the coat (true black with white point stars, dense on the
+head and back; electric-blue veins on the chest and legs) and cyan half-moon
+eyes. Then it rigs the cat after PoE1's Celestial Cat itself: PoE's 29 bones,
+names and rest orientations, their joints fitted onto our mesh, the tail bent
+into PoE's rest curve, and the weights taken over from PoE's own skin. On that
+skeleton PoE's floating clips play as they are, every bone's local turn and
+offset frame for frame, as four NLA clips (tools/extract_poe_pet.mjs reads rig,
+clips and skin out of a local PoE install):
 
   hover    idle_floating          loop 2.0 s   nose high at his hip, legs hanging, bobbing
   gallop   run_floating           loop 1.2 s   the run in the air
@@ -22,9 +25,9 @@ bones as four NLA clips, frame for frame from PoE's own floating clips
 
 The clips carry PoE's root path, height above the ground included, so the
 runtime stands the cat on the ground at its spot. One change from PoE: where a
-one-shot takes the body's middle under the hover's lowest (the relaxed swim
-skims the floor), it is lifted that far, and the build fails if one still dips
-under the hover (the cat always floats). Facing: the cat's nose points -Y in Blender, which is where every
+one-shot takes the body under the hover's lowest (the relaxed swim skims the
+floor), it is lifted that far, and the build fails if one still dips under the
+hover (the cat always floats). Facing: the cat's nose points -Y in Blender, which is where every
 monster's nose lands after its own pi turn (see Creature.emit in
 build_monsters.py), so the renderer's `atan2(dx, dz)` yaw convention holds
 without a root rotation.
@@ -138,17 +141,32 @@ def strip_modifiers(ob):
         p.use_smooth = True
 
 
-def decimate(ob, budget):
+def decimate(ob, budget, keep=None):
+    """Collapse `ob` to `budget` triangles, sparing the vertex groups in `keep`
+    (the rest takes the whole cut)."""
     tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
     if tris <= budget:
         return tris
     mod = ob.modifiers.new("decimate", "DECIMATE")
-    mod.ratio = budget / tris
+    spared = 0
+    if keep:
+        index = {ob.vertex_groups[n].index for n in keep}
+        verts = [v.index for v in ob.data.vertices
+                 if sum(e.weight for e in v.groups if e.group in index) >= 0.5]
+        group = ob.vertex_groups.new(name="decimate.keep")
+        group.add(verts, 1.0, "REPLACE")
+        mod.vertex_group = group.name
+        mod.invert_vertex_group = True
+        inside = set(verts)
+        spared = sum(len(p.vertices) - 2 for p in ob.data.polygons if inside.issuperset(p.vertices))
+    mod.ratio = (budget - spared) / (tris - spared)
     mod.use_collapse_triangulate = True
     with bpy.context.temp_override(object=ob, active_object=ob,
                                    selected_editable_objects=[ob], selected_objects=[ob]):
         bpy.ops.object.modifier_move_to_index(modifier=mod.name, index=0)
         bpy.ops.object.modifier_apply(modifier=mod.name)
+    if keep:
+        ob.vertex_groups.remove(ob.vertex_groups["decimate.keep"])
     return sum(len(p.vertices) - 2 for p in ob.data.polygons)
 
 
@@ -164,10 +182,6 @@ def clean_rig(arm, meshes):
     for child, parent in REPARENT.items():
         eb[child].parent = eb[parent]
         eb[child].use_connect = False
-    # The source hangs the fore legs off the pelvis: a chest that bends would tear
-    # the shoulders off them. On the chest, the curl and the arch carry them along.
-    for side in "LR":
-        eb["paw1_" + side].parent = eb["Bone.001"]
     for name in DROP_BONES:
         eb.remove(eb[name])
     for b in eb:
@@ -251,20 +265,18 @@ def stretch_tail(arm, body):
     print("tail: %.3f long, %d vertices re-weighted" % (tip - y0, moved))
 
 
-# Chains whose joints sit where two bones' weights blend: (the bone each hangs
-# off, the bones in order). The pelvis itself pivots at the hips.
-CHAINS = [("pelvis", ["chest", "neck", "head"])] + [
-    chain for s in ("_L", "_R") for chain in (
-        ("chest", ["paw1" + s, "paw2" + s, "paw3" + s]),
-        ("pelvis", ["leg1" + s, "leg2" + s, "leg3" + s, "feet" + s]))]
+# Limbs whose joints sit where two bones' weights blend: (the bone each hangs
+# off, the bones in order).
+CHAINS = [chain for s in ("_L", "_R") for chain in (
+    ("chest", ["paw1" + s, "paw2" + s, "paw3" + s]),
+    ("pelvis", ["leg1" + s, "leg2" + s, "leg3" + s, "feet" + s]))]
 
 
 def rejoint(arm, body):
-    """Move the spine and leg joints onto the mesh's own: the sculptor's bones
-    float up to 0.17 above the back and the fore elbow sits in front of the leg,
-    so every turn pivoted in the wrong place. A joint is where the two bones'
-    weights blend. The rest mesh does not move; a bone's tail goes to the next
-    one's head, the last of a chain keeps its length and direction."""
+    """Move the leg joints onto the mesh's own, where fit_joints reads them: the
+    sculptor's fore elbow sits in front of the leg. A joint is where the two
+    bones' weights blend. The rest mesh does not move; a bone's tail goes to the
+    next one's head, the last of a chain keeps its length and direction."""
     g = {vg.name: vg.index for vg in body.vertex_groups}
     co = numpy.array([tuple(v.co) for v in body.data.vertices])
     w = numpy.zeros((len(co), len(body.vertex_groups)))
@@ -284,9 +296,6 @@ def rejoint(arm, body):
             heads[bone] = blend(prev, bone)
             if prev != parent:
                 nxt[prev] = bone
-    hips = (heads["leg1_L"] + heads["leg1_R"]) / 2
-    heads["pelvis"] = Vector((0.0, hips.y, hips.z))
-    nxt["pelvis"] = "chest"
     bpy.context.view_layer.objects.active = arm
     bpy.ops.object.mode_set(mode="EDIT")
     eb = arm.data.edit_bones
@@ -552,34 +561,40 @@ CLIPS = [
     ("emerge", "happy_floating", False),
 ]
 # The cat always floats: where a one-shot takes the body's middle under the
-# hover's lowest (PoE's relaxed swim skims the floor), that dip alone is lifted,
-# and the build fails if any body point still sinks this far under the hover's.
+# hover's lowest middle, or any body point under the hover's lowest (PoE's
+# relaxed swim skims the floor), that dip alone is lifted, and the build fails
+# if one still sinks this far under.
 FLOAT_SLACK = 0.02
 LIFT_WINDOW = 15
-# Our bone <- (PoE bone it turns with, PoE joint its segment starts at, joint it
-# ends at). DELTA: the bone takes the PoE bone's turn, corrected so its segment
-# swings exactly as PoE's does (our back is two bones over PoE's five, its rest
-# shape the mesh's own). No segment: the bone's own turn alone.
-DELTA = {
-    "root": ("root", None, None),
-    "pelvis": ("spine1", "root", "spine4"),
-    "chest": ("spine2", "spine4", "neck"),
-    "neck": ("neck", "neck", "head"),
-    "head": ("head", None, None),
-    "paw3_L": ("L_wrist", None, None),
-    "paw3_R": ("R_wrist", None, None),
-}
-# AIM: the bone lies along PoE's segment, twisting with PoE's bone. The legs
-# match PoE's joint for joint (upper arm, forearm; thigh, shin, foot, toe), and
-# a tail is a tube that bends anywhere. The tip continues the last segment.
-AIM = {name: ("phys_tail_0%d" % (k + 1), "phys_tail_0%d" % (k + 1), "phys_tail_0%d" % (k + 2))
-       for k, name in enumerate(TAIL[:-1])}
-AIM["tail5"] = ("phys_tail_05", "phys_tail_04", "phys_tail_05")
+# The Celestial's own skin (art/models/pet/cat/armour_celestial_*.smd), read
+# by the same tool: its weights are what this cat's are transferred from.
+SKIN = os.path.join(POE_DIR, "skin.smd")
+# A clip-only helper with no weights and no counterpart on the body.
+AUX = "aux_animation_control_ratio"
+# Our cat rides PoE's skeleton itself: PoE's 29 bones, names, hierarchy and
+# rest orientations, their joints on our mesh. A limb or tail joint goes where
+# the source's own weights bend (rejoint, stretch_tail): PoE joint <- (our old
+# bone, its "head" or "tail").
+MAPPED = {"phys_tail_0%d" % (k + 1): (name, "head") for k, name in enumerate(TAIL)}
 for _s in "LR":
-    for _ours, _poe in (("paw1", ("shoulder", "elbow")), ("paw2", ("elbow", "wrist")),
-                        ("leg1", ("hip", "knee")), ("leg2", ("knee", "ankle")),
-                        ("leg3", ("ankle", "toe")), ("feet", ("toe", "toe02"))):
-        AIM["%s_%s" % (_ours, _s)] = ("%s_%s" % (_s, _poe[0]), "%s_%s" % (_s, _poe[0]), "%s_%s" % (_s, _poe[1]))
+    for _poe, _ours in (("hip", ("leg1", "head")), ("knee", ("leg2", "head")),
+                        ("ankle", ("leg3", "head")), ("toe", ("feet", "head")),
+                        ("toe02", ("feet", "tail")), ("shoulder", ("paw1", "head")),
+                        ("elbow", ("paw2", "head")), ("wrist", ("paw3", "head"))):
+        MAPPED["%s_%s" % (_s, _poe)] = ("%s_%s" % (_ours[0], _s), _ours[1])
+# The back and the head sit on the midline at PoE's place along the body
+# (mapped through the nose, shoulders, hips and tail root) and as deep under
+# the back line as PoE's.
+MIDLINE = ["root", "spine", "spine3", "spine1", "spine4", "spine2", "neck", "head"]
+# Of a bone with several children, the one its segment runs to.
+SEGMENT = {"root": "spine", "spine2": "neck"}
+# The body's middle, where the runtime's clouds are born and the float rule measures.
+MIDDLE = "spine1"
+BONE_LENGTH = 0.04
+# The tail by chain place (tail_profile): how far off the chain a vertex may be,
+# and the spread PoE's weights are averaged over, in segments.
+TAIL_RADIUS = 0.04
+TAIL_SMOOTH = 0.4
 
 
 def poe_rig():
@@ -645,26 +660,15 @@ def sample(keys, f):
     return a / numpy.linalg.norm(a) if len(a) == 4 else a
 
 
-def poe_pose(rig, tracks, f):
-    """PoE's bones at frame `f` (tracks None: rest) in OUR axes: rotations (3x3,
-    scale removed) and joint positions in world units."""
+def poe_rest(rig):
+    """PoE's bones at rest in OUR axes: rotations (3x3) and joint positions in
+    world units (its rest locals carry no scale)."""
     world = [None] * len(rig["names"])
     for i in rig["order"]:
-        if tracks is None:
-            local = rig["rest"][i]
-        else:
-            s, q, t = (sample(k, f) for k in tracks[i])
-            local = numpy.eye(4)
-            local[:3, :3] = numpy.asarray(Quaternion((q[3], q[0], q[1], q[2])).to_matrix()) * s
-            local[:3, 3] = t
         p = rig["parent"][i]
-        world[i] = local if p < 0 else world[p] @ local
-    rot, pos = [], []
-    for w in world:
-        u, _, vt = numpy.linalg.svd(FLIP @ w[:3, :3] @ FLIP)
-        rot.append(u @ vt)
-        pos.append(POE_UNIT * (FLIP @ w[:3, 3]))
-    return rot, numpy.array(pos)
+        world[i] = rig["rest"][i] if p < 0 else world[p] @ rig["rest"][i]
+    return ([FLIP @ w[:3, :3] @ FLIP for w in world],
+            numpy.array([POE_UNIT * (FLIP @ w[:3, 3]) for w in world]))
 
 
 def swing(a, b):
@@ -672,68 +676,354 @@ def swing(a, b):
     return numpy.asarray(Vector(a.tolist()).rotation_difference(Vector(b.tolist())).to_matrix())
 
 
-def unit(v):
-    return v / numpy.linalg.norm(v)
+def poe_locals(rig, tracks, f):
+    """PoE's bones at frame `f` (tracks None: rest) in OUR axes, each in its
+    parent's frame: rotations (3x3) and offsets in world units. The clips move
+    joints too (the back stretches, the hocks slide), not only turn them."""
+    rot, pos = [], []
+    for i in range(len(rig["names"])):
+        if tracks is None:
+            r, t = rig["rest"][i][:3, :3], rig["rest"][i][:3, 3]
+        else:
+            _, q, t = (sample(k, f) for k in tracks[i])
+            r = numpy.asarray(Quaternion((q[3], q[0], q[1], q[2])).to_matrix())
+        rot.append(FLIP @ r @ FLIP)
+        pos.append(POE_UNIT * (FLIP @ t))
+    return rot, pos
+
+
+def poe_skin():
+    """PoE's cat skin in our axes and world units: vertices, triangles, and per
+    vertex four PoE bone indices with their weights. A v3 .smd: a 32-byte head
+    (bounding box at 8), "DOLm", the shape count at 39, triangle and vertex
+    counts at 45, an (offset, count) per shape, u16 indices, then 32-byte
+    vertices: position f32x3, normal and tangent i8x4, uv f16x2, bones u8x4,
+    weights u8x4 summing to 255."""
+    if not os.path.exists(SKIN):
+        fail("missing %s: run tools/extract_poe_pet.mjs" % SKIN)
+    d = open(SKIN, "rb").read()
+    if d[32:36] != b"DOLm":
+        fail("%s is not a v3 skinned mesh" % SKIN)
+    ntri, nvert = struct.unpack_from("<II", d, 45)
+    o = 53 + 8 * d[39]
+    tris = numpy.frombuffer(d, "<u2", ntri * 3, o).reshape(-1, 3).astype(numpy.int64)
+    rec = numpy.dtype([("p", "<f4", 3), ("nt", "i1", 8), ("uv", "<f2", 2), ("j", "u1", 4), ("w", "u1", 4)])
+    v = numpy.frombuffer(d, rec, nvert, o + ntri * 6)
+    w = v["w"].astype(numpy.float64)
+    return dict(co=POE_UNIT * (v["p"].astype(numpy.float64) @ FLIP), tris=tris,
+                joint=v["j"].astype(numpy.int64), weight=w / w.sum(1, keepdims=True))
+
+
+def back_line(co, tris, y):
+    """Height of the back at `y`: the highest point where the vertical through
+    (0, y) meets the mesh."""
+    a, b, c = co[tris[:, 0]], co[tris[:, 1]], co[tris[:, 2]]
+    e1, e2, d = b[:, :2] - a[:, :2], c[:, :2] - a[:, :2], numpy.array((0.0, y)) - a[:, :2]
+    den = e1[:, 0] * e2[:, 1] - e2[:, 0] * e1[:, 1]
+    ok = numpy.abs(den) > 1e-12
+    den = numpy.where(ok, den, 1.0)
+    s = (d[:, 0] * e2[:, 1] - e2[:, 0] * d[:, 1]) / den
+    t = (e1[:, 0] * d[:, 1] - d[:, 0] * e1[:, 1]) / den
+    hit = ok & (s >= 0) & (t >= 0) & (s + t <= 1)
+    if not hit.any():
+        fail("no body over y %.3f" % y)
+    return float((a[:, 2] + s * (b[:, 2] - a[:, 2]) + t * (c[:, 2] - a[:, 2]))[hit].max())
+
+
+def body_tris(body):
+    me = body.data
+    me.calc_loop_triangles()
+    co = numpy.array([tuple(v.co) for v in me.vertices])
+    tris = numpy.empty(len(me.loop_triangles) * 3, dtype=numpy.int64)
+    me.loop_triangles.foreach_get("vertices", tris)
+    return co, tris.reshape(-1, 3)
+
+
+def curl_tail(arm, body, rig, p0):
+    """Bend our rest tail into PoE's rest curve, each segment keeping its
+    length: the sculptor's runs straight back where PoE's rises, and every tail
+    pose of PoE's is a turn from that curve. The tail's skin follows its bones;
+    the last bone continues PoE's last segment."""
+    at = {n: i for i, n in enumerate(rig["names"])}
+    poe = [p0[at["phys_tail_0%d" % (k + 1)]] for k in range(len(TAIL))]
+    dirs = [(b - a) / numpy.linalg.norm(b - a) for a, b in zip(poe, poe[1:])]
+    dirs.append(dirs[-1])
+    bones = arm.data.bones
+    old = [numpy.asarray(bones[n].head_local) for n in TAIL] + [numpy.asarray(bones[TAIL[-1]].tail_local)]
+    new, turns = [old[0]], []
+    for k in range(len(TAIL)):
+        seg = old[k + 1] - old[k]
+        turns.append(swing(seg, dirs[k]))
+        new.append(new[k] + dirs[k] * numpy.linalg.norm(seg))
+    tail = {body.vertex_groups[n].index: k for k, n in enumerate(TAIL)}
+    for v in body.data.vertices:
+        co = numpy.asarray(v.co)
+        moved, on, total = numpy.zeros(3), 0.0, 0.0
+        for e in v.groups:
+            total += e.weight
+            if e.group in tail:
+                k = tail[e.group]
+                moved += e.weight * (new[k] + turns[k] @ (co - old[k]))
+                on += e.weight
+        if on > 0:
+            v.co = Vector(((moved + (total - on) * co) / total).tolist())
+    body.data.update()
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm.data.edit_bones
+    for k, name in enumerate(TAIL):
+        eb[name].head = Vector(new[k].tolist())
+        eb[name].tail = Vector(new[k + 1].tolist())
+    bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def fit_joints(arm, body, rig, p0, skin):
+    """Where each PoE joint goes on our cat (see MAPPED, MIDLINE)."""
+    at = {n: i for i, n in enumerate(rig["names"])}
+    joints = {}
+    for poe, (ours, end) in MAPPED.items():
+        b = arm.data.bones[ours]
+        joints[poe] = numpy.array(b.head_local if end == "head" else b.tail_local)
+    co, tris = body_tris(body)
+
+    def both(src, n):
+        return (src("L_" + n)[1] + src("R_" + n)[1]) / 2
+
+    poe = [skin["co"][:, 1].min()] + [both(lambda n: p0[at[n]], n) for n in ("shoulder", "hip")] \
+        + [p0[at["phys_tail_01"]][1]]
+    ours = [co[:, 1].min()] + [both(joints.get, n) for n in ("shoulder", "hip")] + [joints["phys_tail_01"][1]]
+    for n in MIDLINE:
+        y0, z0 = p0[at[n]][1], p0[at[n]][2]
+        y = float(numpy.interp(y0, poe, ours))
+        joints[n] = numpy.array((0.0, y, back_line(co, tris, y) - (back_line(skin["co"], skin["tris"], y0) - z0)))
+    return joints
+
+
+def segments(rig):
+    """Per PoE bone (AUX aside) the child its segment runs to, None for a leaf."""
+    names = rig["names"]
+    out = {}
+    for i in rig["order"]:
+        if names[i] == AUX:
+            continue
+        kids = [names[c] for c, p in enumerate(rig["parent"]) if p == i and names[c] != AUX]
+        out[names[i]] = SEGMENT.get(names[i]) or (kids[0] if len(kids) == 1 else None)
+    return out
+
+
+def poe_skeleton(arm, rig, r0, joints):
+    """Replace the source's bones with PoE's, each at its fitted joint in PoE's
+    own rest orientation, so PoE's local turns and offsets mean the same here."""
+    names = rig["names"]
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = arm.data.edit_bones
+    for b in list(eb):
+        eb.remove(b)
+    for i in rig["order"]:
+        if names[i] == AUX:
+            continue
+        b = eb.new(names[i])
+        b.head, b.tail = Vector(), Vector((0.0, BONE_LENGTH, 0.0))
+        m = Matrix(r0[i].tolist()).to_4x4()
+        m.translation = Vector(joints[names[i]].tolist())
+        b.matrix = m
+        b.use_deform = True
+        if rig["parent"][i] >= 0:
+            b.parent = eb[names[rig["parent"][i]]]
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for pb in arm.pose.bones:
+        pb.rotation_mode = "QUATERNION"
+
+
+def transfer_weights(body, eyes, rig, p0, joints, skin):
+    """Our skin takes PoE's weights. PoE's mesh is first fitted onto ours by its
+    own skin, each bone carrying its part by the turn and stretch from PoE's
+    segment to ours; then every vertex of ours takes the weights of the nearest
+    point of that surface, keeps the four strongest and sums to one. The eyes
+    ride the head."""
+    names = rig["names"]
+    at = {n: i for i, n in enumerate(names)}
+    seg = segments(rig)
+    S = numpy.repeat(numpy.eye(3)[None], len(names), 0)
+    to = numpy.array(p0, dtype=numpy.float64)
+    for i in rig["order"]:
+        n = names[i]
+        if n == AUX:
+            continue
+        to[i] = joints[n]
+        if seg[n] is None:
+            S[i] = S[rig["parent"][i]]
+        else:
+            a, b = p0[at[seg[n]]] - p0[i], joints[seg[n]] - joints[n]
+            S[i] = swing(a, b) * numpy.clip(numpy.linalg.norm(b) / numpy.linalg.norm(a), 0.6, 1.6)
+    co, j, w = skin["co"], skin["joint"], skin["weight"]
+    fitted = numpy.zeros_like(co)
+    for k in range(4):
+        local = numpy.einsum("nij,nj->ni", S[j[:, k]], co - numpy.asarray(p0)[j[:, k]])
+        fitted += w[:, k, None] * (to[j[:, k]] + local)
+    me = bpy.data.meshes.new("poe_skin")
+    me.from_pydata(fitted.tolist(), [], skin["tris"].tolist())
+    ref = bpy.data.objects.new("poe_skin", me)
+    bpy.context.scene.collection.objects.link(ref)
+    bones = [n for n in names if n != AUX]
+    for n in bones:
+        ref.vertex_groups.new(name=n)
+    for v in range(len(co)):
+        for k in range(4):
+            if w[v, k] > 0:
+                ref.vertex_groups[names[j[v, k]]].add([v], float(w[v, k]), "ADD")
+    for ob in (body, eyes):
+        for g in list(ob.vertex_groups):
+            ob.vertex_groups.remove(g)
+        for n in bones:
+            ob.vertex_groups.new(name=n)
+    eyes.vertex_groups["head"].add([v.index for v in eyes.data.vertices], 1.0, "REPLACE")
+    mod = body.modifiers.new("weights", "DATA_TRANSFER")
+    mod.object = ref
+    mod.use_vert_data = True
+    mod.data_types_verts = {"VGROUP_WEIGHTS"}
+    mod.vert_mapping = "POLYINTERP_NEAREST"
+    mod.layers_vgroup_select_src = "ALL"
+    mod.layers_vgroup_select_dst = "NAME"
+    with bpy.context.temp_override(object=body, active_object=body,
+                                   selected_editable_objects=[body], selected_objects=[body]):
+        bpy.ops.object.modifier_move_to_index(modifier=mod.name, index=0)
+        bpy.ops.object.modifier_apply(modifier=mod.name)
+    bpy.data.objects.remove(ref, do_unlink=True)
+    bpy.data.meshes.remove(me)
+    tail_profile(body, rig, p0, joints, skin)
+    groups = {g.index: g for g in body.vertex_groups}
+    for v in body.data.vertices:
+        keep = sorted(((e.weight, e.group) for e in v.groups if e.weight > 0), reverse=True)[:4]
+        total = sum(x for x, _ in keep)
+        if total <= 0:
+            fail("vertex %d took no weight" % v.index)
+        for e in list(v.groups):
+            groups[e.group].remove([v.index])
+        for x, g in keep:
+            groups[g].add([v.index], x / total, "REPLACE")
+    body.data.update()
+
+
+def chain_param(co, chain):
+    """Per point, how far along the polyline `chain` its nearest point lies (in
+    segments: 1.5 is halfway down the second) and how far off it it is."""
+    best_s = numpy.zeros(len(co))
+    best_d = numpy.full(len(co), numpy.inf)
+    for k, (a, b) in enumerate(zip(chain, chain[1:])):
+        ab = b - a
+        t = numpy.clip(((co - a) @ ab) / (ab @ ab), 0, 1)
+        d = numpy.linalg.norm(co - (a + t[:, None] * ab), axis=1)
+        closer = d < best_d
+        best_s[closer], best_d[closer] = k + t[closer], d[closer]
+    return best_s, best_d
+
+
+def to_tip(chain, co):
+    """The tail chain run on past its last joint along its last segment, as far
+    as the tail's own vertices (those near that segment) reach."""
+    last = (chain[-1] - chain[-2]) / numpy.linalg.norm(chain[-1] - chain[-2])
+    s, d = chain_param(co, chain)
+    near = co[(s >= len(chain) - 1.5) & (d < TAIL_RADIUS)]
+    return chain + [chain[-1] + last * max(0.0, float(((near - chain[-1]) @ last).max()))]
+
+
+def tail_profile(body, rig, p0, joints, skin):
+    """The tail past the first half segment takes PoE's tail weights by place
+    along the chain, ring by ring: a tube too thin to land on by nearest
+    surface, where neighbours round the tail took different bones and every
+    turn shredded it. PoE's weights at each of its tail vertices, averaged by
+    chain distance, read at each of ours."""
+    names = rig["names"]
+    at = {n: i for i, n in enumerate(names)}
+    tail = ["phys_tail_0%d" % (k + 1) for k in range(len(TAIL))]
+    co, j, w = skin["co"], skin["joint"], skin["weight"]
+    on = numpy.isin(j, [at[n] for n in tail])
+    pick = (w * on).sum(1) > 0
+    poe = to_tip([p0[at[n]] for n in tail], co[pick])
+    s_poe, _ = chain_param(co[pick], poe)
+    full = numpy.zeros((int(pick.sum()), len(names)))
+    for k in range(4):
+        numpy.add.at(full, (numpy.arange(len(full)), j[pick][:, k]), w[pick][:, k])
+    vco = numpy.array([tuple(v.co) for v in body.data.vertices])
+    s, d = chain_param(vco, to_tip([joints[n] for n in tail], vco))
+    groups = {n: body.vertex_groups[n] for n in names if n != AUX}
+    for i in numpy.nonzero((s >= 0.5) & (d < TAIL_RADIUS))[0]:
+        k = numpy.exp(-((s_poe - s[i]) / TAIL_SMOOTH) ** 2)
+        mix = (full * k[:, None]).sum(0) / k.sum()
+        for g in groups.values():
+            g.remove([int(i)])
+        for b in numpy.nonzero(mix > 1e-3)[0]:
+            groups[names[b]].add([int(i)], float(mix[b]), "REPLACE")
+
+
+class Fit:
+    """What carries PoE's motion onto our skeleton: per PoE bone (AUX aside) its
+    parent, and the map taking PoE's local offset onto ours (the turn and
+    stretch from PoE's rest offset to our joint's); the root's rest head, ours
+    and PoE's."""
+
+    def __init__(self, arm, rig, rest):
+        names = rig["names"]
+        self.names = names
+        self.order = [i for i in rig["order"] if names[i] != AUX]
+        self.parent = rig["parent"]
+        bones = arm.data.bones
+        self.offset = {}
+        for i in self.order:
+            p = self.parent[i]
+            if p < 0:
+                continue
+            t0 = rest[1][i]
+            o = numpy.asarray(bones[names[p]].matrix_local.to_3x3()).T @ numpy.asarray(
+                bones[names[i]].head_local - bones[names[p]].head_local)
+            self.offset[i] = swing(t0, o) * (numpy.linalg.norm(o) / numpy.linalg.norm(t0))
+        self.root = self.order[0]
+        self.head0 = numpy.asarray(bones[names[self.root]].head_local)
+        self.poe0 = rest[1][self.root]
 
 
 class Pose:
-    """Local rotations per bone and the root's location, ready to key."""
+    """Local rotations and locations per bone, ready to key."""
 
     def __init__(self, arm):
         self.arm = arm
         self.rot = {}
-        self.root = Vector()
+        self.loc = {}
 
     def apply(self):
         for pb in self.arm.pose.bones:
             pb.rotation_quaternion = self.rot.get(pb.name, Quaternion())
-            pb.location = Vector()
-        self.arm.pose.bones["root"].location = self.root
+            pb.location = self.loc.get(pb.name, Vector())
 
 
-def retarget(arm, rig, rest, posed, lift):
-    """Our cat in PoE's pose. Each bone's armature-space orientation is PoE's turn
-    of its bone (DELTA) or segment direction (AIM) applied to our rest; heads
-    follow their parents, and the root carries PoE's pelvis path, `lift` higher."""
-    idx = {n: i for i, n in enumerate(rig["names"])}
-    r0, p0 = rest
-    r1, p1 = posed
-    want = {}
-    pose = Pose(arm)
-    bones = [b for b in arm.data.bones if b.parent is None]
-    while bones:
-        b = bones.pop(0)
-        bones.extend(b.children)
-        rest_m = b.matrix_local
-        rest_r = numpy.asarray(rest_m.to_3x3())
-        spec = DELTA.get(b.name) or AIM.get(b.name)
-        if spec is None:
-            # A helper PoE has no counterpart for rides its parent.
-            rot = numpy.asarray(want[b.parent.name].to_3x3()) @ numpy.asarray(
-                (b.parent.matrix_local.inverted() @ rest_m).to_3x3())
+def retarget(arm, fit, frame, lift):
+    """Our cat in PoE's pose: every bone takes its PoE bone's local turn and
+    its offset through the fit, the root PoE's path from rest, `lift` higher."""
+    rot, pos = frame
+    world, pose = {}, Pose(arm)
+    for i in fit.order:
+        n, p = fit.names[i], fit.parent[i]
+        b = arm.data.bones[n]
+        if p < 0:
+            r = rot[i]
+            head = fit.head0 + pos[i] - fit.poe0 + numpy.array((0.0, 0.0, lift))
         else:
-            ref, a, e = (idx.get(n) for n in spec)
-            turn = r1[ref] @ r0[ref].T
-            if b.name in AIM:
-                seg = p1[e] - p1[a] if b.name != "tail5" else turn @ (p0[e] - p0[a])
-                turn = swing(turn @ rest_r[:, 1], unit(seg)) @ turn
-            elif a is not None:
-                turn = swing(turn @ unit(p0[e] - p0[a]), unit(p1[e] - p1[a])) @ turn
-            rot = turn @ rest_r
-        m = Matrix(rot.tolist()).to_4x4()
-        if b.parent is None:
-            # Where PoE's pelvis is, our pelvis head goes; the root is placed to put it there.
-            offset = numpy.asarray(arm.data.bones["pelvis"].head_local - b.head_local)
-            head = p1[idx["root"]] + numpy.array((0.0, 0.0, lift)) - turn @ offset
-            m.translation = Vector(head.tolist())
-            basis = rest_m.inverted() @ m
-            pose.root = basis.translation
+            pr, ph = world[p]
+            r = pr @ rot[i]
+            head = ph + pr @ (fit.offset[i] @ pos[i])
+        world[i] = (r, head)
+        m = Matrix(r.tolist()).to_4x4()
+        m.translation = Vector(head.tolist())
+        if p < 0:
+            basis = b.matrix_local.inverted() @ m
         else:
-            parent = want[b.parent.name]
-            m.translation = parent @ (b.parent.matrix_local.inverted() @ rest_m).translation
-            basis = rest_m.inverted() @ b.parent.matrix_local @ parent.inverted() @ m
-        want[b.name] = m
-        pose.rot[b.name] = basis.to_quaternion()
+            pm = Matrix(world[p][0].tolist()).to_4x4()
+            pm.translation = Vector(world[p][1].tolist())
+            basis = b.matrix_local.inverted() @ b.parent.matrix_local @ pm.inverted() @ m
+        pose.rot[n] = basis.to_quaternion()
+        pose.loc[n] = basis.translation
     return pose
 
 
@@ -769,33 +1059,33 @@ def muted(arm, on):
 
 def measured(arm, body, poses):
     """Each pose's lowest and highest body point and the height of the body's
-    middle (the chest joint), with no action bound and every clip muted."""
+    middle (the MIDDLE joint), with no action bound and every clip muted."""
     arm.animation_data.action = None
     muted(arm, True)
     out = []
     for pose in poses:
         pose.apply()
-        out.append(heights(body) + (arm.pose.bones["chest"].head.z,))
+        out.append(heights(body) + (arm.pose.bones[MIDDLE].head.z,))
     muted(arm, False)
     return numpy.array(out)
 
 
-def author_clips(arm, body):
-    rig = poe_rig()
-    rest = poe_pose(rig, None, 0)
+def author_clips(arm, body, rig):
+    fit = Fit(arm, rig, poe_locals(rig, None, 0))
     arm.animation_data_create()
     lows, middles = {}, {}
     for clip, poe_clip, loops in CLIPS:
         tracks = poe_tracks(rig, poe_clip)
         length = int(max(k[-1, 0] for t in tracks.values() for k in t if len(k)))
-        posed = [poe_pose(rig, tracks, f) for f in range(length + 1)]
-        poses = [retarget(arm, rig, rest, p, 0.0) for p in posed]
+        posed = [poe_locals(rig, tracks, f) for f in range(length + 1)]
+        poses = [retarget(arm, fit, p, 0.0) for p in posed]
         span = measured(arm, body, poses)
         lift = numpy.zeros(length + 1)
         if not loops:
-            lift = lifts(span[:, 2], middles["hover"])
+            lift = numpy.maximum(lifts(span[:, 2], middles["hover"]),
+                                 lifts(span[:, 0], lows["hover"]))
             if lift.any():
-                poses = [retarget(arm, rig, rest, p, h) for p, h in zip(posed, lift)]
+                poses = [retarget(arm, fit, p, h) for p, h in zip(posed, lift)]
                 span = measured(arm, body, poses)
         lows[clip] = float(span[:, 0].min())
         middles[clip] = float(span[:, 2].min())
@@ -818,7 +1108,7 @@ def author_clips(arm, body):
                     pb.rotation_quaternion = -pb.rotation_quaternion
                 last[pb.name] = pb.rotation_quaternion.copy()
                 pb.keyframe_insert("rotation_quaternion", frame=frame + 1)
-            arm.pose.bones["root"].keyframe_insert("location", frame=frame + 1)
+                pb.keyframe_insert("location", frame=frame + 1)
         track = arm.animation_data.nla_tracks.new()
         track.name = action.name
         strip = track.strips.new(action.name, 1, action)
@@ -848,24 +1138,35 @@ def main():
         bake_world(ob, arm)
         for mod in ob.modifiers:
             mod.object = arm
-    body_tris = decimate(body, BODY_TRIS)
+    # The tail keeps its rings: collapsed, its faces ran lengthwise across two
+    # bones and every bend shredded it into strips.
+    body_tris = decimate(body, BODY_TRIS, keep=TAIL)
     eye_tris = decimate(eyes, EYE_TRIS)
     clean_rig(arm, [body, eyes])
     stretch_tail(arm, body)
     rejoint(arm, body)
+    # Painted on the standing cat, before the tail rises: the star regions are
+    # fractions of its height.
+    coat_material(body)
+    eye_material(eyes)
+    rig = poe_rig()
+    r0, p0 = poe_rest(rig)
+    skin = poe_skin()
+    curl_tail(arm, body, rig, p0)
+    joints = fit_joints(arm, body, rig, p0, skin)
+    poe_skeleton(arm, rig, r0, joints)
+    transfer_weights(body, eyes, rig, p0, joints, skin)
 
     arm.name = arm.data.name = ID
     body.name = body.data.name = ID + ".body"
     eyes.name = eyes.data.name = ID + ".eyes"
-    coat_material(body)
-    eye_material(eyes)
 
     lo = min((body.matrix_world @ Vector(c)).z for c in body.bound_box)
     hi = max((body.matrix_world @ Vector(c)).z for c in body.bound_box)
     ys = [(body.matrix_world @ Vector(c)).y for c in body.bound_box]
     print("pet %s: body %d tris, eyes %d tris, bones %d, height %.3f, length %.3f"
           % (ID, body_tris, eye_tris, len(arm.data.bones), hi - lo, max(ys) - min(ys)))
-    author_clips(arm, body)
+    author_clips(arm, body, rig)
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.export_scene.gltf(

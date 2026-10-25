@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, Scene, type Mesh, type Node, type PBRMaterial, type StandardMaterial, type TransformNode } from "@babylonjs/core";
 import {
-  CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_ID, PET_URL, PetActor, RELAXED_CHANCE,
+  ANCHOR_BONE, CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_ID, PET_URL, PetActor, RELAXED_CHANCE,
   cloudRate, followTarget, loadPet, isPetReady, resetPet, stepFollow,
   type FollowState, type PetClip,
 } from "./pet";
@@ -188,14 +188,15 @@ function lowestThrough(pet: PetActor, clip: PetClip): number {
   // Restarted unblended, so a frame jumped to is that frame.
   group.enableBlending = false;
   pet.previewAction(clip);
-  const chest = pet.root.getDescendants(false).find((n) => n.name === "chest") as TransformNode;
+  const middle = pet.root.getDescendants(false).find((n) => n.name === ANCHOR_BONE) as TransformNode;
+  expect(middle, ANCHOR_BONE).toBeDefined();
   const chain: TransformNode[] = [];
-  for (let n: Node | null = chest; n; n = n.parent) chain.unshift(n as TransformNode);
+  for (let n: Node | null = middle; n; n = n.parent) chain.unshift(n as TransformNode);
   let low = Infinity;
   for (let f = group.from; f <= group.to; f += 1) {
     group.goToFrame(f);
     for (const n of chain) n.computeWorldMatrix(true);
-    low = Math.min(low, chest.getAbsolutePosition().y);
+    low = Math.min(low, middle.getAbsolutePosition().y);
   }
   return low;
 }

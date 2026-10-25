@@ -46,6 +46,8 @@ export type PetClip = (typeof PET_CLIPS)[number];
 export const PET_ACTIONS = PET_CLIPS;
 export type PetAction = PetClip;
 export const CLIP_SECONDS: Record<PetClip, number> = { hover: 2.0, gallop: 1.2, relaxed: 14.67, emerge: 3.0 };
+/** The body's middle on PoE's own skeleton (mid back), where the clouds are born. */
+export const ANCHOR_BONE = "spine1";
 const LOOPED: readonly PetClip[] = ["hover", "gallop"];
 /** PoE's idle_relaxed_chance: the roll at the end of every hover cycle while he stands. */
 export const RELAXED_CHANCE = 0.25;
@@ -205,9 +207,9 @@ export class PetActor {
   readonly root: Mesh;
   /** Carries the ground blob at y 0 under the body. */
   private readonly ground: Mesh;
-  /** Rides the body's middle (its chest joint) in root space: the clouds are born round it. */
+  /** Rides the body's middle (ANCHOR_BONE) in root space: the clouds are born round it. */
   private readonly anchor: Mesh;
-  private chest: TransformNode | null = null;
+  private middle: TransformNode | null = null;
   private readonly inverse = new Matrix();
   private readonly turn = new Matrix();
   private entries: InstantiatedEntries | null = null;
@@ -334,12 +336,12 @@ export class PetActor {
 
   /** Put the root on the ground at (x, z), the clouds and the ground blob under the body. */
   private place(x: number, z: number, yaw: number, clip: PetClip): void {
-    if (this.chest) {
+    if (this.middle) {
       // The body's middle in root space, from the last drawn pose: the clip moves
       // it over the root (PoE's root motion), up to three units high.
       this.root.getWorldMatrix().invertToRef(this.inverse);
-      this.chest.computeWorldMatrix();
-      Vector3.TransformCoordinatesToRef(this.chest.getAbsolutePosition(), this.inverse, this.anchor.position);
+      this.middle.computeWorldMatrix();
+      Vector3.TransformCoordinatesToRef(this.middle.getAbsolutePosition(), this.inverse, this.anchor.position);
     }
     this.root.position.set(x, 0, z);
     this.root.rotation.x = 0;
@@ -374,10 +376,10 @@ export class PetActor {
       if (node instanceof Mesh) node.isPickable = false;
       for (const mesh of node.getChildMeshes()) mesh.isPickable = false;
     }
-    this.chest =
+    this.middle =
       entries.rootNodes
         .flatMap((n) => n.getDescendants(false))
-        .find((n): n is TransformNode => n instanceof TransformNode && n.name === "chest") ?? null;
+        .find((n): n is TransformNode => n instanceof TransformNode && n.name === ANCHOR_BONE) ?? null;
     for (const group of entries.animationGroups) {
       const clip = PET_CLIPS.find((c) => group.name.endsWith(`|${c}`));
       if (!clip) {

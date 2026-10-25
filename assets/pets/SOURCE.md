@@ -9,12 +9,16 @@ stars dense on the head and back, electric-blue veins on chest and legs, cyan ha
 eyes, a violet rim glow and nebula. The shape is a real cat; the coat, veins and eyes
 are painted by the build.
 
-Motion: PoE1's own. `node tools/extract_poe_pet.mjs "<Path of Exile>/Bundles2"` reads
-`art/models/pet/cat/rig.ast` out of a local PoE install into `source/poe/` (gitignored;
-needs `npm i --no-save pathofexile-dat@16.0.1`). The build recreates its four floating
-clips on our cat's bones, frame for frame: each bone takes the turn of its PoE
-counterpart (spine, neck, head) or lies along PoE's joint-to-joint segment (legs,
-tail), and the root carries PoE's pelvis path, height above the ground included.
+Rig and motion: PoE1's own. `node tools/extract_poe_pet.mjs "<Path of Exile>/Bundles2"`
+reads `art/models/pet/cat/rig.ast` (skeleton and clips) and the Celestial's skin
+`armour_celestial_6f84573d.smd` out of a local PoE install into `source/poe/` (gitignored;
+needs `npm i --no-save pathofexile-dat@16.0.1`). The build rigs our cat on PoE's own
+skeleton: its 29 bones, names and rest orientations, the limb and tail joints where our
+mesh bends, the root and the five back bones as deep under our back line as PoE's, the
+tail bent into PoE's rest curve. The weights come from PoE's skin, fitted onto our mesh
+bone by bone (the tail ring by ring along its chain). The four floating clips then play
+frame for frame as PoE keys them: each bone's local turn and offset, the root's path
+with its height above the ground.
 PoE's pet controller (`metadata/pet/cat/celestial.ao`) plays them as the runtime does:
 
 | ours | PoE clip | length | when |
@@ -42,8 +46,7 @@ python tools/fetch_blenderkit.py 6b3bbcc7-db99-4424-9436-8e6678ee9354 --type res
 ```
 
 The build strips the hair particles, the subsurf and the IK posing rig, decimates
-the body to 9k triangles and the eyes to 1.2k, renames the numbered spine bones
-(`chest`, `neck`, `head`, `root`), hangs the fore legs on the chest, re-rigs and
-lengthens the tail, and moves the spine and leg joints onto the mesh's own (where
-two bones' weights blend: the source's float up to 0.17 above the back). The
-source ships a pose library only; the clips come from PoE as above.
+the body to at most 9k triangles (the tail keeps its rings: collapsed, it shredded
+when it bent) and the eyes to 1.2k, lengthens the tail, and reads the leg joints off
+the source's own weights (where two bones blend) before replacing its bones with
+PoE's. The source ships a pose library only; the clips come from PoE as above.
