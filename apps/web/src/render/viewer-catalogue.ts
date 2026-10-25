@@ -17,14 +17,16 @@ import { SLOTS, type Looks, type RigClip, type Slot } from "./rig";
 export interface ViewerSubject {
   id: string;
   label: string;
-  group: Spawnable["group"] | "Character";
+  group: Spawnable["group"] | "Character" | "Pet";
 }
 
 /** The character is subject zero: it is the reason the screen exists. */
 export const CHARACTER_SUBJECT: ViewerSubject = { id: "character", label: "Character", group: "Character" };
+/** The companion cat is not spawnable (the gallery never stands one), so it is listed by hand. */
+export const PET_SUBJECT: ViewerSubject = { id: "pet", label: "Celestial Cat", group: "Pet" };
 
 /** Everything that can stand on the turntable, flat. */
-export const VIEWER_SUBJECTS: readonly ViewerSubject[] = [CHARACTER_SUBJECT, ...SPAWNABLE];
+export const VIEWER_SUBJECTS: readonly ViewerSubject[] = [CHARACTER_SUBJECT, PET_SUBJECT, ...SPAWNABLE];
 
 export interface SubjectGroup {
   id: string;
@@ -48,7 +50,7 @@ const PROP_GROUP: Partial<Record<(typeof PROP_KINDS)[number], string>> = {
   orbAlchemy: "Ground drops", orbEmbers: "Ground drops", waystone: "Ground drops", goldPile: "Ground drops",
 };
 
-const GROUP_ORDER = ["Character", "Creatures", "Hideout", "Containers", "Beach", "Desert", "Ground drops", "Other props"];
+const GROUP_ORDER = ["Character", "Pet", "Creatures", "Hideout", "Containers", "Beach", "Desert", "Ground drops", "Other props"];
 
 function groupOf(s: ViewerSubject): string {
   if (s.group !== "Props") return s.group;

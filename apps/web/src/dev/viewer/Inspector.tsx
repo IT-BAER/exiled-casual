@@ -1,6 +1,7 @@
 import React from "react";
 import { CLASS_LIST } from "@exiled/content-runtime";
 import { SLOTS, type Looks, type Slot } from "../../render/rig";
+import { PET_ACTIONS, type PetAction } from "../../render/pet";
 import {
   CAMERAS,
   CREATURE_ACTIONS,
@@ -18,7 +19,7 @@ import {
 import type { SubjectStats, ViewToggles } from "../../render/viewer-scene";
 import { Icon } from "./icons";
 
-export type SubjectKind = "character" | "creature" | "prop";
+export type SubjectKind = "character" | "creature" | "pet" | "prop";
 export type GaitId = (typeof GAITS)[number]["id"];
 export type DirId = (typeof DIRECTIONS_8)[number]["id"];
 
@@ -55,6 +56,8 @@ export interface InspectorProps {
   onRepeat: (on: boolean) => void;
   onCreature: (action: CreatureAction) => void;
   creatureAction: CreatureAction;
+  onPet: (action: PetAction) => void;
+  petAction: PetAction;
   dead: boolean;
   onReset: () => void;
   rawClips: string[];
@@ -87,6 +90,7 @@ export function Inspector(p: InspectorProps): React.ReactElement {
       <div className="av-scroll" style={{ padding: 0 }}>
         {p.kind === "character" && <CharacterSections {...p} />}
         {p.kind === "creature" && <CreatureSection {...p} />}
+        {p.kind === "pet" && <PetSection {...p} />}
         <ViewSection {...p} />
         <StatsSection stats={p.stats} />
       </div>
@@ -234,6 +238,30 @@ function CreatureSection(p: InspectorProps): React.ReactElement {
       <LoopToggle {...p} />
       <p className="av-note">
         {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts. Die drops it through the ragdoll."}
+      </p>
+    </section>
+  );
+}
+
+function PetSection(p: InspectorProps): React.ReactElement {
+  const label: Record<PetAction, string> = {
+    hover: "Hover", gallop: "Gallop", lie_side: "Lie", roll_back: "Roll", curl: "Curl", stretch: "Stretch",
+    rear_up: "Rear up", spring: "Spring", swim: "Swim", dive: "Dive", routine: "Routine",
+  };
+  return (
+    <section className="av-section">
+      <h3 className="av-h">Actions</h3>
+      <div className="av-chips">
+        {PET_ACTIONS.map((a) => (
+          <button key={a} type="button" className="av-chip" aria-pressed={p.petAction === a} onClick={() => p.onPet(a)}>
+            {label[a]}
+          </button>
+        ))}
+      </div>
+      <LoopToggle {...p} />
+      <p className="av-note">
+        Hover is the rest beside the player, Gallop the run in the air with its cloud streaming. Lie to Dive are the
+        playtime loop&apos;s steps, each repeating at its own height; Routine plays the whole loop in order.
       </p>
     </section>
   );

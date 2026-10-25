@@ -22,8 +22,10 @@ import {
   type ViewerScene,
   type ViewToggles,
 } from "../render/viewer-scene";
+import { PET_ACTIONS, type PetAction } from "../render/pet";
 import {
   CHARACTER_SUBJECT,
+  PET_SUBJECT,
   classPreset,
   DIRECTIONS_8,
   FX_PREVIEWS,
@@ -53,6 +55,7 @@ import { Timeline } from "./viewer/Timeline";
 
 function kindOf(id: string): SubjectKind {
   if (id === CHARACTER_SUBJECT.id) return "character";
+  if (id === PET_SUBJECT.id) return "pet";
   return VIEWER_SUBJECTS.find((s) => s.id === id)?.group === "Creatures" ? "creature" : "prop";
 }
 
@@ -74,6 +77,7 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
   const [gait, setGait] = React.useState<GaitId>("idle");
   const [dir, setDir] = React.useState<DirId>("f");
   const [creatureAct, setCreatureAct] = React.useState<CreatureAction>("idle");
+  const [petAct, setPetAct] = React.useState<PetAction>("hover");
   const [dead, setDead] = React.useState(false);
   const [raw, setRaw] = React.useState<string | null>(null);
   const [rawClips, setRawClips] = React.useState<string[]>([]);
@@ -111,6 +115,9 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
       if (fx) v.fireFx(fx);
     } else if (verb === "attack") {
       void v.creatureAction("attack");
+    } else if (verb === "pet" && (PET_ACTIONS as readonly string[]).includes(arg)) {
+      v.petAction(arg as PetAction);
+      setPetAct(arg as PetAction);
     } else if (ONE_SHOTS.some((s) => s.id === verb)) {
       v.oneShot(verb);
     }
@@ -204,6 +211,7 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     setGait("idle");
     setDir("f");
     setCreatureAct("idle");
+    setPetAct("hover");
     setDead(false);
     setRaw(null);
     setClip(null);
@@ -241,6 +249,12 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     void v.creatureAction(a).then((ok) => { if (a === "death" && ok) setDead(true); });
     if (a === "idle" || a === "walk") { setCreatureAct(a); setClip(a === "walk" ? "walk:f" : null); }
     if (a === "attack") setClip("attack");
+  };
+
+  const petDo = (a: PetAction) => {
+    sceneRef.current?.petAction(a);
+    setPetAct(a);
+    setClip(a === "hover" ? null : `pet:${a}`);
   };
 
   const playRaw = (name: string | null) => {
@@ -317,6 +331,8 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
         onShot={shot}
         onCreature={creature}
         creatureAction={creatureAct}
+        onPet={petDo}
+        petAction={petAct}
         dead={dead}
         onReset={() => void pick(subject)}
         rawClips={rawClips}

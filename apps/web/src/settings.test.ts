@@ -129,6 +129,12 @@ describe("sanitize", () => {
     expect(sanitize({ ui: { monsterHealthBars: "yes" } }).ui.monsterHealthBars).toBe(true);
   });
 
+  it("defaults the companion cat ON and keeps a saved false", () => {
+    expect(sanitize(null).ui.pet).toBe(true);
+    expect(sanitize({ ui: { pet: false } }).ui.pet).toBe(false);
+    expect(sanitize({ ui: { pet: 0 } }).ui.pet).toBe(true);
+  });
+
   it("compares items on Ctrl by default, keeps a saved Shift, and refuses anything else", () => {
     expect(sanitize(null).ui.compareKey).toBe("ctrl");
     expect(sanitize({ ui: { compareKey: "shift" } }).ui.compareKey).toBe("shift");

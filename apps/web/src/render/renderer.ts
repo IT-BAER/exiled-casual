@@ -25,6 +25,7 @@ import { flashPeak, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
 import { contactPoint } from "./contact";
 import { burnOutGround, igniteGround, EMBER_TAIL_TICKS, GROUND_FADE_TICKS } from "./ground-fx";
 import { PlayerAilmentFx } from "./player-ailment-fx";
+import { PetActor } from "./pet";
 import { hitSparkle } from "./hit-sparkle";
 
 /** Sim rate. Consecutive snapshots are one tick apart, which is what turns a
@@ -391,6 +392,8 @@ export class SnapshotRenderer {
   private lastFrameMs = 0;
   /** What the player's debuffs look like on his body. */
   private readonly ailmentFx: PlayerAilmentFx;
+  /** The companion cat, while the `ui.pet` setting is on. */
+  private pet: PetActor | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -412,6 +415,16 @@ export class SnapshotRenderer {
         this.kinds.delete(target);
         return true;
       };
+    }
+  }
+
+  /** Show or put away the companion cat (`ui.pet`). */
+  setPet(on: boolean): void {
+    if (on) {
+      this.pet ??= new PetActor(this.scene);
+    } else if (this.pet) {
+      this.pet.dispose();
+      this.pet = null;
     }
   }
 
@@ -780,6 +793,16 @@ export class SnapshotRenderer {
     // skips the straddling pair and prev is already in the new area.
     const areaChanged = this.lastArea !== next.area;
     this.lastArea = next.area;
+
+    // The cat trails the DRAWN player, so it glides with him between snapshots.
+    this.pet?.update(
+      Math.max(this.scene.getEngine().getDeltaTime(), 1) / 1000,
+      playerMesh?.position.x ?? next.player.x,
+      playerMesh?.position.z ?? next.player.y,
+      next.player.heading,
+      next.player.alive,
+      areaChanged,
+    );
 
     // Corpses belong to the place they fell in. They live outside `this.meshes`,
     // so without this they ride the crossing and lie in the new area until their

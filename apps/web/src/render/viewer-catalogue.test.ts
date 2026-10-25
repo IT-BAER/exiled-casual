@@ -5,8 +5,10 @@ import { describe, it, expect } from "vitest";
 import { CLASS_LIST } from "@exiled/content-runtime";
 import { CLIP_NAME, gaitOf, SLOTS, type RigClip } from "./rig";
 import { SPAWNABLE } from "./gallery";
+import { PET_ACTIONS, PET_CLIPS } from "./pet";
 import { looksFromPartNames } from "./viewer-scene";
 import {
+  PET_SUBJECT,
   ONE_SHOTS,
   GAITS,
   DIRECTIONS_8,
@@ -39,6 +41,13 @@ describe("subject groups", () => {
 
   it("never shows an empty group", () => {
     for (const g of SUBJECT_GROUPS) expect(g.subjects.length, g.label).toBeGreaterThan(0);
+  });
+
+  it("lists the companion cat under its own group with every action it has", () => {
+    const pets = SUBJECT_GROUPS.find((g) => g.label === "Pet");
+    expect(pets?.subjects.map((s) => s.id)).toEqual([PET_SUBJECT.id]);
+    expect(PET_ACTIONS).toEqual([...PET_CLIPS, "routine"]);
+    expect(parseViewerState("?viewer&subject=pet&clip=pet:routine").subject).toBe("pet");
   });
 });
 

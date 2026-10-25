@@ -411,6 +411,13 @@ export function OptionsPanel({
                   onToggle={(monsterHealthBars) => setUi({ monsterHealthBars })}
                 />
               </Row>
+              <Row label="Companion Cat" note="A cat that floats along behind you. It never fights.">
+                <Gem
+                  label="Companion Cat"
+                  on={settings.ui.pet}
+                  onToggle={(pet) => setUi({ pet })}
+                />
+              </Row>
               <Group>Troubleshooting</Group>
               <Row
                 label="Debug Logging"

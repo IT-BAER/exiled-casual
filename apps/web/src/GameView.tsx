@@ -12,6 +12,7 @@ import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
 import { SnapshotRenderer } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadMonsters, resetMonsters } from "./render/monsters";
+import { loadPet, resetPet } from "./render/pet";
 import { enablePhysics, resetPhysics } from "./render/ragdoll";
 import { clearGallery, spawnAsset } from "./render/gallery";
 import { AssetSpawner } from "./hud/AssetSpawner";
@@ -165,6 +166,7 @@ export function GameView({
   // inside the mount effect where nothing else can reach it.
   const sceneRef = useRef<Scene | null>(null);
   const engineRef = useRef<Engine | null>(null);
+  const rendererRef = useRef<SnapshotRenderer | null>(null);
   // The keydown listener is attached once, so it cannot read these flags
   // directly without reading them as they were on mount. One mirror ref is
   // cheaper than five functional updates that also have to decide something.
@@ -411,6 +413,10 @@ export function GameView({
     cameraRef.current = camera;
     engineRef.current = engine;
     const renderer = new SnapshotRenderer(scene);
+    rendererRef.current = renderer;
+    // The cat is not on the loading plate's critical path: it attaches itself
+    // to its actor whenever the file lands.
+    void loadPet(scene);
 
     // Ground-item name plates live in the DOM, so they need the camera's
     // world -> canvas projection.
@@ -897,6 +903,8 @@ export function GameView({
       resetProps();
       resetFireLights();
       resetMonsters();
+      resetPet();
+      rendererRef.current = null;
       resetPhysics();
       resetRocks();
       stopAmbient();
@@ -919,6 +927,11 @@ export function GameView({
     if (scene === null) return;
     applyGraphics(scene, engineRef.current, settings.graphics);
   }, [settings.graphics]);
+
+  /** The companion cat follows the same rule: the first pass applies the saved toggle. */
+  useEffect(() => {
+    rendererRef.current?.setPet(settings.ui.pet);
+  }, [settings.ui.pet]);
 
   /**
    * Auto graphics: from the plate lifting until the next area, one fps reading a

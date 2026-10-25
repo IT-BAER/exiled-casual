@@ -71,6 +71,8 @@ export interface UiSettings {
    * busy turns it off. Bosses keep their own big bar either way.
    */
   monsterHealthBars: boolean;
+  /** The companion cat floating along behind the character. Cosmetic; default ON. */
+  pet: boolean;
   /** What each key does, one map per control mode. See KEYBIND_ACTIONS. */
   keybinds: Record<ControlMode, Keybinds>;
   /** Each character's control mode by character id. Absent: never chose, plays mouse. */
@@ -238,6 +240,7 @@ export const DEFAULT_SETTINGS: Settings = {
     orbNumbers: true,
     overlayMapOpacity: 0.6,
     monsterHealthBars: true,
+    pet: true,
     keybinds: { mouse: { ...DEFAULT_KEYBINDS_BY_MODE.mouse }, wasd: { ...DEFAULT_KEYBINDS_BY_MODE.wasd } },
     controls: {},
     compareKey: "ctrl",
@@ -364,6 +367,7 @@ export function sanitize(raw: unknown, renderer?: string): Settings {
       orbNumbers: bool(u["orbNumbers"], d.ui.orbNumbers),
       overlayMapOpacity: num(u["overlayMapOpacity"], 0.15, 1, d.ui.overlayMapOpacity),
       monsterHealthBars: bool(u["monsterHealthBars"], d.ui.monsterHealthBars),
+      pet: bool(u["pet"], d.ui.pet),
       keybinds: keybindProfiles(u["keybinds"]),
       controls: controls(u["controls"]),
       compareKey: member(u["compareKey"], COMPARE_KEYS, d.ui.compareKey),

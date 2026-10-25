@@ -83,6 +83,7 @@ vi.mock("./render/renderer", () => ({
     apply = vi.fn();
     setHoveredEntity = vi.fn();
     setAim = vi.fn();
+    setPet = vi.fn();
     cameraShake = () => ({ x: 0, z: 0 });
     wadingBodies = () => [];
   },

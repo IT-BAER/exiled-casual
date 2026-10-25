@@ -13,8 +13,10 @@ const DIST = "apps/web/dist/assets";
  * `chunk` went 900 -> 1250 with rolldown 1.2.14, which inlines the lazy Babylon chunks the
  * menu stage loads anyway: measured on a preview, the warmed menu fetched 7377 kB raw JS in
  * 204 files against 7495 kB in 521 before, and the total gzip fell 2081 -> 1942.
+ * `total` 2100 -> 2110 for the companion cat (`render/pet.ts`): measured 2101.8 against
+ * 2100.0 before it, so the module is 1.8 kB gzip in the GameView chunk.
  */
-const BUDGET = { total: 2100, chunk: 1250 };
+const BUDGET = { total: 2110, chunk: 1250 };
 
 const files = readdirSync(DIST).filter((f) => f.endsWith(".js"));
 if (files.length === 0) {

@@ -38,6 +38,7 @@ import {
 import { buildSkyEnvironment, ENVIRONMENT_INTENSITY, GROUND_COLOR, SKY_COLOR } from "./environment";
 import { attachProp, loadProps, PROP_KINDS, type PropKind } from "./props";
 import { attachCreature, loadMonsters, type CreatureRig } from "./monsters";
+import { loadPet, PetActor, type PetAction } from "./pet";
 import { disposeRagdoll, dropDead, enablePhysics } from "./ragdoll";
 import { blinkBurst, meleeImpact, setStreakLength } from "./skill-fx";
 import { makeMesh } from "./meshes";
@@ -56,6 +57,7 @@ import {
 import { DEFAULT_SETTINGS } from "../settings";
 import {
   CHARACTER_SUBJECT,
+  PET_SUBJECT,
   mainGroup,
   ONE_SHOTS,
   rawClipLabel,
@@ -79,7 +81,7 @@ import {
   type RigActor,
 } from "./rig";
 
-export { CHARACTER_SUBJECT, VIEWER_SUBJECTS, type ViewerSubject } from "./viewer-catalogue";
+export { CHARACTER_SUBJECT, PET_SUBJECT, VIEWER_SUBJECTS, type ViewerSubject } from "./viewer-catalogue";
 
 /**
  * The looks each slot ships, read off `slot.look.part` mesh names.
@@ -197,6 +199,8 @@ export interface ViewerScene {
   oneShot(id: string): void;
   /** A creature's own clip, or its death through the ragdoll. */
   creatureAction(action: CreatureAction): Promise<boolean>;
+  /** One of the companion cat's clips, or its whole playtime loop, over the origin; asking again restarts it. */
+  petAction(action: PetAction): void;
   /** Library take names, for the raw browser. Empty until the rig loads. */
   rawClips(): string[];
   /** Loop a library take on the character, or stop the raw take with null. */
@@ -316,6 +320,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     loadPlayerRig(scene, BODIES).catch(() => undefined),
     loadProps(scene).catch(() => undefined),
     loadMonsters(scene).catch(() => undefined),
+    loadPet(scene),
   ]);
 
   // After the imports, so the viewer judges armour under the same environment
@@ -340,6 +345,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   let host: Mesh | null = null;
   let rig: RigActor | null = null;
   let creature: CreatureRig | null = null;
+  let pet: PetActor | null = null;
   let looks: Looks | null = null;
   // Locomotion is re-asserted every frame, as the game does: the hips ease into
   // their turn and the direction blend follows them.
@@ -367,6 +373,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       rig?.setLocomotion(moving.speed);
       if (!dead) creature?.setLocomotion(moving.speed);
     }
+    if (!paused) pet?.previewTick((engine.getDeltaTime() / 1000) * scene.animationTimeScale);
     if (!repeat || paused || lastAction === null) return;
     const group = lastAction.group();
     if (group?.isPlaying) { repeatAt = 0; return; }
@@ -382,6 +389,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   const groupsNow = (): AnimationGroup[] => {
     if (rig) return [rig.rawGroup, ...rig.clipGroups.values()].filter((g): g is AnimationGroup => g !== null);
     if (creature) return [...creature.clipGroups.values()];
+    if (pet) return [...pet.clipGroups.values()];
     return [];
   };
 
@@ -460,6 +468,8 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     rig = null;
     creature?.dispose();
     creature = null;
+    pet?.dispose();
+    pet = null;
     if (host) disposeRagdoll(host);
     // Every exhibit shares its container's materials: disposing them here
     // leaves the next copy of that prop or creature untextured white.
@@ -559,6 +569,10 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         rig?.standSettled();
       } else if ((PROP_KINDS as readonly string[]).includes(id)) {
         attachProp(scene, host, id as PropKind, true);
+      } else if (id === PET_SUBJECT.id) {
+        pet = new PetActor(scene);
+        pet.root.parent = host;
+        pet.previewAction("hover");
       } else {
         creature = attachCreature(scene, host, id);
         // The first report only seeds the swing edge (`noteAttack`).
@@ -622,6 +636,13 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       }
       moving = { speed: action === "walk" ? 2 : 0, rel: 0 };
       return true;
+    },
+    petAction(action) {
+      const p = pet;
+      if (p === null) return;
+      const run = () => p.previewAction(action);
+      run();
+      lastAction = { run, group: () => (action === "routine" ? null : p.clipGroups.get(action) ?? null) };
     },
     rawClips() {
       return libraryClips(scene);
