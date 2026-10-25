@@ -32,11 +32,20 @@ One change, the owner's rule that the cat always floats: where a one-shot takes 
 body's middle under the hover's lowest (PoE's relaxed swim skims the floor), it is
 lifted that far.
 
+Aura: PoE's own effect files (`celestial.ao` hangs `spaaaace.pet` and `celestial_body.pet`
+on the bone group `mid`, head to tail tip; the skin pass projects `space_bg_at` across the
+screen as the coat). `pet.ts` recreates its eight emitters and the coat from those
+parameters; each GGG texture is replaced by one of ours in the same role, and
+`python tools/build_pet_fx.py` gives ours the tone measured off the one it replaces
+(numbers in the tool; no GGG file is read or shipped) into `apps/web/public/textures/fx/pet/`.
+
 | part | source file | asset | author | licence |
 |---|---|---|---|---|
 | body, eyes, rig | `source/domestic_cat_1k.blend` | Domestic cat (rigged) (`6b3bbcc7-db99-4424-9436-8e6678ee9354`) | Paweł Wałasiewicz | royalty_free |
 | stars, veins, eye slits | painted by `build_pet.py` (numpy, seeded) | - | - | ours |
-| unused | `source/starfield_v1.png` | generated, `/codex-imagegen` (gpt-6.1-sol), 25 October 2026; replaced by the painted stars | - | ours |
+| coat starfield | `source/starfield_v1.png` | generated, `/codex-imagegen` (gpt-6.1-sol), 25 October 2026 | - | ours |
+| aura nebula, cloud mask, starburst, wisp, swirl | `source/fx/{nebula,cloud_mask,starburst,wisp,swirl}_v1.png` | generated, `/codex-imagegen` (gpt-6.1-sol), 25 October 2026 | - | ours |
+| aura glows, spark dot | computed by `tools/build_pet_fx.py` from PoE's measured colour stops | - | - | ours |
 | unused backup | `source/lowpoly_cat.glb` | Cat (`3b8e6df1-3478-4150-9df8-0f5a2bf0476f`), rigify, no UVs | ali alipour | royalty_free |
 
 Reproduce the cat with:

@@ -2,10 +2,10 @@
 import { describe, it, expect, afterAll, afterEach, beforeAll, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { NullEngine, Scene, type Mesh, type Node, type PBRMaterial, type StandardMaterial, type TransformNode } from "@babylonjs/core";
+import { NullEngine, ParticleSystem, Scene, Vector3, type Mesh, type Texture, type Node, type PBRMaterial, type StandardMaterial, type TransformNode } from "@babylonjs/core";
 import {
-  ANCHOR_BONE, CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_ID, PET_URL, PetActor, RELAXED_CHANCE,
-  cloudRate, followTarget, loadPet, isPetReady, resetPet, stepFollow,
+  ANCHOR_BONE, AURA, CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_COAT_PLUGIN, PET_FX_NAMES, PET_ID, PET_URL, PetActor, RELAXED_CHANCE,
+  auraSize, followTarget, loadPet, isPetReady, pointOnChain, resetPet, stepFollow,
   type FollowState, type PetClip,
 } from "./pet";
 
@@ -122,11 +122,39 @@ describe("pet follow spring", () => {
   });
 });
 
-describe("pet clouds", () => {
-  it("streams the cloud harder the faster it moves, and never off", () => {
-    expect(cloudRate(0)).toBeGreaterThan(0);
-    expect(cloudRate(FOLLOW.dash)).toBeGreaterThan(cloudRate(0) * 3);
-    expect(cloudRate(50)).toBe(cloudRate(FOLLOW.dash * 2));
+describe("pet aura", () => {
+  it("places a point along the mid chain by arc length, as PoE's LineEmitter", () => {
+    const chain = [new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 2, 0)];
+    const out = new Vector3();
+    expect(pointOnChain(chain, 0, out).asArray()).toEqual([0, 0, 0]);
+    expect(pointOnChain(chain, 1, out).asArray()).toEqual([1, 2, 0]);
+    // Three units long: half way is 1.5 along, half a unit up the second leg.
+    const mid = pointOnChain(chain, 0.5, out);
+    expect(mid.x).toBeCloseTo(1);
+    expect(mid.y).toBeCloseTo(0.5);
+    expect(pointOnChain(chain, 1 / 6, out).x).toBeCloseTo(0.5);
+  });
+
+  it("recreates PoE's eight emitters at PoE's rates and lifetimes", () => {
+    // spaaaace.pet: wisps, swirls, violet glow; celestial_body.pet: nebula, sparkles, nebula core, blue glow, sparks.
+    expect(AURA.map((e) => [e.rate, e.life])).toEqual([
+      [20.87, 0.8], [15.65, 0.6], [8.52, 1], [51.37, 0.3], [6.78, 1], [12.52, 1.5], [10, 1], [2.26, 1],
+    ]);
+    expect(PET_FX_NAMES).toEqual(AURA.map((e) => e.name));
+    // Locked to the cat: they ride its body; the rest are left behind as it moves.
+    expect(AURA.filter((e) => e.locked).map((e) => e.rate)).toEqual([8.52, 6.78, 12.52, 10]);
+    expect(AURA.filter((e) => e.blend === "alpha").map((e) => e.rate)).toEqual([51.37, 12.52]);
+  });
+
+  it("sizes them in our units round a body 0.77 long", () => {
+    const size = (rate: number) => auraSize(AURA.find((e) => e.rate === rate)!);
+    // The faint violet glow wraps the whole cat; a spark is a speck; the wisps sit between.
+    expect(size(8.52).start[0]).toBeGreaterThan(0.77);
+    expect(size(2.26).end[1]).toBeLessThan(0.05);
+    const wisp = size(20.87);
+    expect(wisp.start[0]).toBeGreaterThan(0.03);
+    expect(wisp.end[1]).toBeLessThan(0.3);
+    expect(wisp.end[0]).toBeGreaterThan(wisp.start[0]);
   });
 });
 
@@ -225,7 +253,24 @@ describe("pet actor", () => {
     expect(scene.animationGroups.length).toBe(0);
   });
 
-  it("wears a violet rim halo on the body's own skeleton", async () => {
+  it("wears PoE's coat, the starfield in screen space, on the body and not the eyes", async () => {
+    const scene = newScene();
+    await loadPet(scene);
+    const pet = new PetActor(scene);
+    pet.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
+    const coat = scene.getMeshByName(`${PET_ID}.body`)!.material!;
+    const eyes = scene.getMeshByName(`${PET_ID}.eyes`)!.material!;
+    expect(coat.pluginManager?.getPlugin(PET_COAT_PLUGIN)?.getClassName()).toBe(PET_COAT_PLUGIN);
+    expect(eyes.pluginManager?.getPlugin(PET_COAT_PLUGIN) ?? null).toBeNull();
+    // A second cat on the shared material does not stack a second coat.
+    const again = new PetActor(scene);
+    again.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
+    expect(coat.pluginManager!.getPlugin(PET_COAT_PLUGIN)).toBeTruthy();
+    again.dispose();
+    pet.dispose();
+  });
+
+  it("wears PoE's faint blue rim halo on the body's own skeleton", async () => {
     const scene = newScene();
     await loadPet(scene);
     const pet = new PetActor(scene);
@@ -236,11 +281,51 @@ describe("pet actor", () => {
     expect(halo.isPickable).toBe(false);
     expect(halo.skeleton).toBe(body.skeleton);
     const mat = halo.material as StandardMaterial;
-    expect(mat.emissiveColor.b).toBeGreaterThan(mat.emissiveColor.g);
+    // PoE's HighlightEdges is rgb (0.02, 0.02, 0.045): no violet, blue 2.25 times red.
+    expect(mat.emissiveColor.r).toBeCloseTo(mat.emissiveColor.g, 5);
+    expect(mat.emissiveColor.b / mat.emissiveColor.r).toBeCloseTo(2.25, 2);
+    expect(mat.emissiveColor.b).toBeLessThanOrEqual(0.5);
     expect(mat.opacityFresnelParameters?.isEnabled).toBe(true);
     // The fresnel term ADDS to alpha: any base alpha paints the whole skin.
     expect(mat.alpha).toBe(0);
     pet.dispose();
+  });
+
+  it("hangs PoE's eight emitters on the cat, born along its posed head-to-tail chain", async () => {
+    const scene = newScene();
+    await loadPet(scene);
+    const pet = new PetActor(scene, 1);
+    for (let i = 0; i < 20; i++) pet.update(1 / 60, 3, 4, { x: 0, y: 1 }, true, false);
+    const systems = scene.particleSystems.filter((ps) => PET_FX_NAMES.includes(ps.name)) as ParticleSystem[];
+    expect(systems.map((ps) => ps.name)).toEqual(PET_FX_NAMES);
+    const tail = [1, 2, 3, 4, 5].map((k) => `phys_tail_0${k}`);
+    const bones = ["head", "neck", "spine2", "spine4", "spine1", "spine3", "spine", "root", ...tail]
+      .map((n) => pet.root.getDescendants(false).find((d) => d.name === n) as TransformNode);
+    const world = bones.map((b) => b.getAbsolutePosition().clone());
+    const lo = world.reduce((a, b) => Vector3.Minimize(a, b));
+    const hi = world.reduce((a, b) => Vector3.Maximize(a, b));
+    for (const [i, ps] of systems.entries()) {
+      const spec = AURA[i]!;
+      expect(ps.emitter, spec.name).toBe(pet.root);
+      expect(ps.isLocal, spec.name).toBe(spec.locked);
+      expect(ps.emitRate, spec.name).toBe(spec.rate);
+      expect(ps.blendMode, spec.name).toBe(spec.blend === "add" ? ParticleSystem.BLENDMODE_ADD : ParticleSystem.BLENDMODE_STANDARD);
+      expect((ps.particleTexture as Texture).url, spec.name).toBe(spec.texture);
+      expect(ps.billboardMode === ParticleSystem.BILLBOARDMODE_STRETCHED, spec.name).toBe(spec.stretched === true);
+      expect(ps.getCustomEffect() !== null, spec.name).toBe(spec.projected === true);
+      // A locked birth is in the cat's own space; Babylon carries it to the world.
+      const at = new Vector3();
+      for (let k = 0; k < 40; k++) {
+        ps.startPositionFunction!(pet.root.getWorldMatrix(), at, null!, ps.isLocal);
+        const w = ps.isLocal ? Vector3.TransformCoordinates(at, pet.root.getWorldMatrix()) : at;
+        for (const axis of ["x", "y", "z"] as const) {
+          expect(w[axis], `${spec.name} ${axis}`).toBeGreaterThan(lo[axis] - 1e-3);
+          expect(w[axis], `${spec.name} ${axis}`).toBeLessThan(hi[axis] + 1e-3);
+        }
+      }
+    }
+    pet.dispose();
+    expect(scene.particleSystems.filter((ps) => PET_FX_NAMES.includes(ps.name))).toEqual([]);
   });
 
   it("hides while the player is dead and comes back alive", async () => {

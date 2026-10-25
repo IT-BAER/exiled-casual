@@ -7,6 +7,7 @@ import {
   Matrix,
   Mesh,
   ParticleSystem,
+  ShaderStore,
   StandardMaterial,
   Texture,
   TransformNode,
@@ -14,15 +15,20 @@ import {
   type AnimationGroup,
   type AssetContainer,
   type InstantiatedEntries,
+  type Material,
   type Scene,
+  type UniformBuffer,
 } from "@babylonjs/core";
+import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase";
+// The nebula shader is derived from this one, which Babylon otherwise loads lazily.
+import "@babylonjs/core/Shaders/particles.fragment";
 import { standGroundBlob } from "./meshes";
 import { warmContainer } from "./warm-shaders";
 
 /**
  * The companion cat: PoE1's Celestial Cat Pet, its motion recreated from PoE's
  * own floating clips (assets/pets/SOURCE.md). Moving, it gallops IN THE AIR
- * beside the player, a violet nebula and dark smoke streaming behind. Standing,
+ * beside the player, PoE's nebula, wisps and sparks left behind it. Standing,
  * it hovers at his hip with its legs hanging, and at the end of each hover cycle
  * PoE's controller rolls its relaxed idle: a swim up over him and round, a ball
  * chasing its tail, uncurled back into the hover. It drops in somersaulting when
@@ -46,7 +52,7 @@ export type PetClip = (typeof PET_CLIPS)[number];
 export const PET_ACTIONS = PET_CLIPS;
 export type PetAction = PetClip;
 export const CLIP_SECONDS: Record<PetClip, number> = { hover: 2.0, gallop: 1.2, relaxed: 14.67, emerge: 3.0 };
-/** The body's middle on PoE's own skeleton (mid back), where the clouds are born. */
+/** The body's middle on PoE's own skeleton (mid back), where the ground blob sits under it. */
 export const ANCHOR_BONE = "spine1";
 const LOOPED: readonly PetClip[] = ["hover", "gallop"];
 /** PoE's idle_relaxed_chance: the roll at the end of every hover cycle while he stands. */
@@ -61,7 +67,7 @@ export const FOLLOW = {
   rate: 6,
   /** Inside this of its spot it stops correcting, so it rests rather than hunts. */
   deadZone: 0.4,
-  /** Own speed at which the cloud streams in full. */
+  /** A full-speed catch-up, units per second. */
   dash: 4,
   /** Own speed above which it gallops; it hovers again below `gallopEnd`. */
   gallop: 1.2,
@@ -89,23 +95,176 @@ function seeded(seed: number): () => number {
   };
 }
 
-/** The rim halo: violet light hugging the silhouette, as PoE's cat wears it. */
-const HALO_COLOR = new Color3(0.42, 0.26, 1.0);
+/**
+ * The rim halo: PoE's HighlightEdges rgb (0.02, 0.02, 0.045), its hue kept and
+ * its blue lifted to 0.5. PoE's own level would vanish under our tone map; the
+ * lift is ours, judged in game.
+ */
+const HALO_COLOR = new Color3((0.5 * 0.02) / 0.045, (0.5 * 0.02) / 0.045, 0.5);
 
-const PUFF = "/textures/fx/haze.webp";
-const SMOKE = "/textures/fx/smoke_puff.webp";
-export const PET_FX_NAMES = ["fx-pet-nebula", "fx-pet-smoke", "fx-pet-sparks"] as const;
-/** Nebula puffs per second: a thin shimmer at rest, a stream at dash speed. */
-export function cloudRate(speed: number): number {
-  const k = Math.min(1, Math.max(0, speed) / FOLLOW.dash);
-  return 10 + 130 * k;
+export const PET_COAT_PLUGIN = "ExiledPetCoat";
+/** PoE's coat: `space_bg_at` through ProjectiveUV_Accurate(1.2, 512, 512), ScaleMoveUV tiling 0.8, DarkenTex 0.3625. */
+const COAT = { texture: "/textures/fx/pet/starfield.webp", repeatPx: 512 * 1.2, tiling: 0.8, drift: 0.01, darken: 0.3625 } as const;
+
+/**
+ * The cat's coat as PoE draws it: its glow is the starfield sampled in SCREEN
+ * space, so the stars hold still on the screen while the cat moves under them,
+ * a window onto one sky. It replaces the coat's own emissive; albedo and
+ * lighting stay. Reading DarkenTex as a gain in linear light is inferred.
+ */
+class PetCoatPlugin extends MaterialPluginBase {
+  stars: Texture | null = null;
+  time = 0;
+
+  constructor(material: Material) {
+    super(material, PET_COAT_PLUGIN, 230, {});
+    this.doNotSerialize = true;
+    this._enable(true);
+  }
+
+  override getClassName(): string {
+    return PET_COAT_PLUGIN;
+  }
+
+  override getSamplers(samplers: string[]): void {
+    samplers.push("coatStars");
+  }
+
+  override getUniforms(): { ubo: { name: string; size: number; type: string }[]; fragment: string } {
+    return {
+      ubo: [{ name: "coatProjection", size: 4, type: "vec4" }],
+      fragment: `
+        uniform vec4 coatProjection;
+      `,
+    };
+  }
+
+  override bindForSubMesh(ubo: UniformBuffer, scene: Scene): void {
+    const perPixel = (COAT.tiling * 1080) / (COAT.repeatPx * scene.getEngine().getRenderHeight());
+    ubo.updateFloat4("coatProjection", perPixel, perPixel, this.time * COAT.drift, this.time * COAT.drift);
+    ubo.setTexture("coatStars", this.stars);
+  }
+
+  override getCustomCode(shaderType: string): Record<string, string> | null {
+    if (shaderType !== "fragment") return null;
+    return {
+      CUSTOM_FRAGMENT_DEFINITIONS: `
+        uniform sampler2D coatStars;
+      `,
+      CUSTOM_FRAGMENT_BEFORE_FINALCOLORCOMPOSITION: `
+        finalEmissive = toLinearSpace(texture2D(coatStars, gl_FragCoord.xy * coatProjection.xy + coatProjection.zw).rgb)
+          * ${COAT.darken.toFixed(4)} * vLightingIntensity.y;
+      `,
+    };
+  }
 }
-/** Dark smoke per second: none at rest, the far tail of the trail at speed. */
-function smokeRate(speed: number): number {
-  return 40 * Math.min(1, Math.max(0, speed) / FOLLOW.dash);
+
+/** One PoE pet unit in ours: a Marauder's 190.8 is our 1.81, and the pet stands at PoE's scale 90. */
+export const POE_UNIT = (1.81 / 190.8) * 0.9;
+
+/**
+ * One of PoE's particle emitters, as its `.pet` file states it in PoE units and
+ * seconds. Born along the bone group `mid` (head to tail tip). Read as: size
+ * `scale` grows start to end with up to `sizeVar` added, times `emitScale`;
+ * `opacity` keys spread evenly over the life; `up` is vertical speed start to
+ * end, `along` the [min, max] of a speed (averaged over the life where PoE
+ * eases it) in a random direction inside a cone `cone` wide about +Y (negative
+ * flies the other way); `accel` is vertical. These readings of PoE's fields are
+ * inferred, not documented.
+ */
+export interface AuraEmitter {
+  name: string;
+  texture: string;
+  blend: "add" | "alpha";
+  rate: number;
+  life: number;
+  scale: readonly [number, number];
+  sizeVar: number;
+  emitScale: number;
+  opacity: readonly number[];
+  tint?: readonly [number, number, number];
+  /** Rides the cat (PoE's "locked to parent"); otherwise left behind as it moves. */
+  locked: boolean;
+  up: readonly [number, number];
+  along: readonly [number, number];
+  accel: number;
+  cone: number;
+  /** Stretched along its velocity (PoE's velocity-oriented sparks). */
+  stretched?: boolean;
+  /** The nebula drawn in screen space through a cloud mask (PoE's ProjectiveUV). */
+  projected?: boolean;
 }
-/** The body about its middle (the anchor), root axes: y up, nose toward +z, tail toward -z. */
-const BODY_BOX = { x: 0.13, y: 0.23, zLo: -0.41, zHi: 0.36 } as const;
+
+const FX = "/textures/fx/pet";
+/** PoE's spaaaace.pet and celestial_body.pet, in that order. */
+export const AURA: readonly AuraEmitter[] = [
+  { name: "fx-pet-wisps", texture: `${FX}/wisp.webp`, blend: "add", rate: 20.87, life: 0.8, scale: [22, 60.6], sizeVar: 47.6,
+    emitScale: 0.261, opacity: [0, 0.42, 0.47, 0.32, 0.2, 0.08, 0], locked: false, up: [17, 2.2], along: [2.2, 19.2], accel: 0, cone: Math.PI },
+  { name: "fx-pet-swirls", texture: `${FX}/swirl.webp`, blend: "add", rate: 15.65, life: 0.6, scale: [12, 50], sizeVar: 52,
+    emitScale: 0.4, opacity: [0.7, 0.89, 0.7], tint: [0.327, 1, 1], locked: false, up: [16, 2.2], along: [18.25, 34.75], accel: 0, cone: Math.PI },
+  { name: "fx-pet-violet-glow", texture: `${FX}/glow_violet.webp`, blend: "add", rate: 8.52, life: 1, scale: [150, 189], sizeVar: 27,
+    emitScale: 0.739, opacity: [0, 0.0475, 0], locked: true, up: [0, 0], along: [0, 0], accel: 0, cone: Math.PI },
+  { name: "fx-pet-nebula", texture: `${FX}/cloud_mask.webp`, blend: "alpha", rate: 51.37, life: 0.3, scale: [57.6, 57.6], sizeVar: 6.5,
+    emitScale: 0.72, opacity: [0, 1, 1, 0.63, 0.35, 0.14, 0], locked: false, up: [0, 0], along: [0, 0], accel: 29.95, cone: Math.PI, projected: true },
+  { name: "fx-pet-sparkles", texture: `${FX}/starburst.webp`, blend: "add", rate: 6.78, life: 1, scale: [46, 46], sizeVar: 0,
+    emitScale: 0.37, opacity: [0, 1, 1, 0], locked: true, up: [0, 0], along: [0, 0], accel: -11.7, cone: Math.PI },
+  { name: "fx-pet-nebula-core", texture: `${FX}/cloud_mask.webp`, blend: "alpha", rate: 12.52, life: 1.5, scale: [57.6, 57.6], sizeVar: 6.5,
+    emitScale: 0.57, opacity: [0, 1, 1, 1, 1, 1, 0], locked: true, up: [0, 0], along: [0, 0], accel: 14.35, cone: Math.PI, projected: true },
+  { name: "fx-pet-blue-glow", texture: `${FX}/glow_blue.webp`, blend: "add", rate: 10, life: 1, scale: [87.6, 87.6], sizeVar: 0,
+    emitScale: 1, opacity: [0, 0.058, 0.058, 0], locked: true, up: [0, 0], along: [0, 0], accel: 0, cone: Math.PI },
+  { name: "fx-pet-sparks", texture: `${FX}/spark.webp`, blend: "add", rate: 2.26, life: 1, scale: [3, 3], sizeVar: 0,
+    emitScale: 1, opacity: [0, 1, 1, 0], locked: false, up: [-0.4, -0.4], along: [-107, -34], accel: 46.1, cone: 1.95, stretched: true },
+];
+export const PET_FX_NAMES = AURA.map((e) => e.name);
+
+/** An emitter's particle size in our units: [min, max] at birth and at death. */
+export function auraSize(e: AuraEmitter): { start: [number, number]; end: [number, number] } {
+  const k = e.emitScale * POE_UNIT;
+  return {
+    start: [e.scale[0] * k, (e.scale[0] + e.sizeVar) * k],
+    end: [e.scale[1] * k, (e.scale[1] + e.sizeVar) * k],
+  };
+}
+/** The point `u` (0..1) of the way along the polyline `chain` by arc length, into `out`. */
+export function pointOnChain(chain: readonly Vector3[], u: number, out: Vector3): Vector3 {
+  let total = 0;
+  for (let i = 1; i < chain.length; i++) total += Vector3.Distance(chain[i - 1]!, chain[i]!);
+  let left = Math.min(1, Math.max(0, u)) * total;
+  for (let i = 1; i < chain.length; i++) {
+    const leg = Vector3.Distance(chain[i - 1]!, chain[i]!);
+    if (left <= leg && leg > 0) return Vector3.LerpToRef(chain[i - 1]!, chain[i]!, left / leg, out);
+    left -= leg;
+  }
+  return out.copyFrom(chain[chain.length - 1]!);
+}
+
+/** PoE's bone group `mid`, head to tail tip: the polyline every aura particle is born on. */
+export const MID_CHAIN = [
+  "head", "neck", "spine2", "spine4", "spine1", "spine3", "spine", "root",
+  "phys_tail_01", "phys_tail_02", "phys_tail_03", "phys_tail_04", "phys_tail_05",
+] as const;
+
+/**
+ * The particle shader with its colour taken from the nebula in SCREEN space
+ * (PoE's ProjectiveUV) and its alpha from the cloud mask on the quad, so the
+ * cloud is a window onto one sky rather than a picture stuck on a card.
+ */
+const NEBULA_SHADER = "petNebula";
+const NEBULA_TEX = `${FX}/nebula.webp`;
+/** One nebula repeat spans this many screen pixels at 1080p (PoE's tiling 1 over 512). */
+const NEBULA_REPEAT_PX = 512;
+/** PoE's ScaleMoveUV drift, repeats per second. */
+const NEBULA_DRIFT = [0.2, 0.12] as const;
+function registerNebulaShader(): void {
+  const name = `${NEBULA_SHADER}PixelShader`;
+  if (ShaderStore.ShadersStore[name]) return;
+  const base = ShaderStore.ShadersStore["particlesPixelShader"]!;
+  const colour = "vec4 baseColor=(textureColor*textureMask+(vec4(1.,1.,1.,1.)-textureMask))*vColor;";
+  if (!base.includes(colour)) throw new Error("pet nebula: Babylon's particle shader changed");
+  ShaderStore.ShadersStore[name] = base
+    .replace("uniform sampler2D diffuseSampler;", "uniform sampler2D diffuseSampler;uniform sampler2D nebulaSampler;uniform vec4 nebulaProjection;")
+    .replace(colour, "vec4 baseColor=vec4(texture2D(nebulaSampler,gl_FragCoord.xy*nebulaProjection.xy+nebulaProjection.zw).rgb,textureColor.r)*vColor;");
+}
 
 /** glTF's own wrapper node; an instance is parented *with* it (see monsters.ts). */
 const GLTF_ROOT = "__root__";
@@ -207,13 +366,20 @@ export class PetActor {
   readonly root: Mesh;
   /** Carries the ground blob at y 0 under the body. */
   private readonly ground: Mesh;
-  /** Rides the body's middle (ANCHOR_BONE) in root space: the clouds are born round it. */
+  /** Rides the body's middle (ANCHOR_BONE) in root space: the ground blob sits under it. */
   private readonly anchor: Mesh;
   private middle: TransformNode | null = null;
+  /** The MID_CHAIN bones, and their last drawn positions in root space. */
+  private chainNodes: TransformNode[] = [];
+  private readonly chain: Vector3[] = MID_CHAIN.map(() => new Vector3());
+  private nebulaTexture: Texture | null = null;
+  /** Seconds the aura has run, for the nebula's drift. */
+  private fxTime = 0;
   private readonly inverse = new Matrix();
   private readonly turn = new Matrix();
   private entries: InstantiatedEntries | null = null;
   private halo: Mesh | null = null;
+  private coat: PetCoatPlugin | null = null;
   /** The clips by name, for the viewer's timeline. */
   readonly clipGroups = new Map<PetClip, AnimationGroup>();
   private current: PetClip | null = null;
@@ -222,8 +388,6 @@ export class PetActor {
   /** The viewer's action, or null in play. */
   private previewed: PetAction | null = null;
   private fx: ParticleSystem[] = [];
-  private nebula: ParticleSystem | null = null;
-  private smoke: ParticleSystem | null = null;
   private readonly follow: FollowState = { x: 0, z: 0, vx: 0, vz: 0, yaw: 0 };
   private speed = 0;
   private placed = false;
@@ -258,8 +422,7 @@ export class PetActor {
   /**
    * The asset viewer: start `action` on a cat over the origin, restarting it if
    * it is already running. `previewTick` then carries it with no player to
-   * follow: every clip repeats, and the gallop fakes a nose-first dash so its
-   * cloud streams.
+   * follow: every clip repeats.
    */
   previewAction(action: PetAction): void {
     if (!this.entries) this.attach();
@@ -274,10 +437,8 @@ export class PetActor {
     if (action === null) return;
     if (!this.entries) this.attach();
     this.clipT += dt;
-    this.speed = action === "gallop" ? FOLLOW.dash : 0;
-    this.follow.vx = 0;
-    this.follow.vz = this.speed;
-    this.place(0, 0, 0, action);
+    this.fxTime += dt;
+    this.place(0, 0, 0);
   }
 
   /**
@@ -331,17 +492,21 @@ export class PetActor {
       else if (this.current === "hover") this.clipT -= CLIP_SECONDS.hover;
       else this.start("hover");
     }
-    this.place(this.follow.x, this.follow.z, this.follow.yaw, this.current!);
+    this.fxTime += dt;
+    this.place(this.follow.x, this.follow.z, this.follow.yaw);
   }
 
-  /** Put the root on the ground at (x, z), the clouds and the ground blob under the body. */
-  private place(x: number, z: number, yaw: number, clip: PetClip): void {
+  /** Put the root on the ground at (x, z), the aura's chain on the pose and the ground blob under the body. */
+  private place(x: number, z: number, yaw: number): void {
+    // The body's middle and its head-to-tail chain in root space, from the last
+    // drawn pose: the clip moves them over the root (PoE's root motion).
+    this.root.getWorldMatrix().invertToRef(this.inverse);
     if (this.middle) {
-      // The body's middle in root space, from the last drawn pose: the clip moves
-      // it over the root (PoE's root motion), up to three units high.
-      this.root.getWorldMatrix().invertToRef(this.inverse);
       this.middle.computeWorldMatrix();
       Vector3.TransformCoordinatesToRef(this.middle.getAbsolutePosition(), this.inverse, this.anchor.position);
+    }
+    for (const [i, node] of this.chainNodes.entries()) {
+      Vector3.TransformCoordinatesToRef(node.getAbsolutePosition(), this.inverse, this.chain[i]!);
     }
     this.root.position.set(x, 0, z);
     this.root.rotation.x = 0;
@@ -349,9 +514,7 @@ export class PetActor {
     Matrix.RotationYToRef(yaw, this.turn);
     const under = Vector3.TransformCoordinates(this.anchor.position, this.turn);
     this.ground.position.set(x + under.x, 0, z + under.z);
-    const travel = clip === "gallop" ? Math.max(this.speed, FOLLOW.dash) : this.speed;
-    if (this.nebula) this.nebula.emitRate = cloudRate(travel);
-    if (this.smoke) this.smoke.emitRate = smokeRate(travel);
+    if (this.coat) this.coat.time = this.fxTime;
   }
 
   /** Start `clip` from its first frame; the viewer repeats every clip. */
@@ -376,10 +539,11 @@ export class PetActor {
       if (node instanceof Mesh) node.isPickable = false;
       for (const mesh of node.getChildMeshes()) mesh.isPickable = false;
     }
-    this.middle =
-      entries.rootNodes
-        .flatMap((n) => n.getDescendants(false))
-        .find((n): n is TransformNode => n instanceof TransformNode && n.name === ANCHOR_BONE) ?? null;
+    const bones = entries.rootNodes
+      .flatMap((n) => n.getDescendants(false))
+      .filter((n): n is TransformNode => n instanceof TransformNode);
+    this.middle = bones.find((n) => n.name === ANCHOR_BONE) ?? null;
+    this.chainNodes = MID_CHAIN.map((name) => bones.find((n) => n.name === name)).filter((n) => n !== undefined);
     for (const group of entries.animationGroups) {
       const clip = PET_CLIPS.find((c) => group.name.endsWith(`|${c}`));
       if (!clip) {
@@ -391,10 +555,14 @@ export class PetActor {
       this.clipGroups.set(clip, group);
     }
     this.entries = entries;
-    this.halo = this.buildHalo(entries);
-    this.nebula = this.buildNebula();
-    this.smoke = this.buildSmoke();
-    this.fx = [this.nebula, this.smoke, this.buildSparks()];
+    const body = entries.rootNodes
+      .flatMap((n) => n.getChildMeshes(false))
+      .find((m): m is Mesh => m instanceof Mesh && m.name.endsWith(".body"));
+    if (body) {
+      this.halo = this.buildHalo(body);
+      this.coat = this.dressCoat(body);
+    }
+    this.fx = AURA.map((spec) => this.buildAura(spec));
     // Whatever was decided before the body arrived starts now.
     if (this.current) this.start(this.current);
   }
@@ -404,11 +572,16 @@ export class PetActor {
    * (fresnel opacity, additive): the violet light that hugs PoE's cat and keeps
    * a black cat readable on a dark floor.
    */
-  private buildHalo(entries: InstantiatedEntries): Mesh | null {
-    const body = entries.rootNodes
-      .flatMap((n) => n.getChildMeshes(false))
-      .find((m): m is Mesh => m instanceof Mesh && m.name.endsWith(".body"));
-    if (!body) return null;
+  /** PoE's coat on the body's material, which every cat in the scene shares: dressed once. */
+  private dressCoat(body: Mesh): PetCoatPlugin | null {
+    const mat = body.material;
+    if (!mat) return null;
+    const coat = mat.pluginManager?.getPlugin<PetCoatPlugin>(PET_COAT_PLUGIN) ?? new PetCoatPlugin(mat);
+    coat.stars ??= new Texture(COAT.texture, this.scene);
+    return coat;
+  }
+
+  private buildHalo(body: Mesh): Mesh {
     const halo = body.clone(`${PET_ID}.halo`, body.parent);
     halo.skeleton = body.skeleton;
     halo.isPickable = false;
@@ -433,105 +606,63 @@ export class PetActor {
   }
 
   /**
-   * Particles are born inside the body (round the anchor, so they turn with it)
-   * and thrown AGAINST its travel, so the cloud wraps the cat at rest and streams
-   * out behind it on the move. `back` shifts the birth box toward the trailing
-   * end, for the smoke that only lives at the far tail.
+   * One of PoE's emitters on the cat's root: born at a random point along the
+   * posed MID_CHAIN, so the aura follows the clip's every pose. A locked one is
+   * born in the root's own space and carried with it; the rest stay where they
+   * were born, which is the trail behind a moving cat.
    */
-  private emitFromBody(ps: ParticleSystem, back: number, lift: number, spread: number): void {
-    ps.emitter = this.anchor;
-    const local = new Vector3();
-    ps.startPositionFunction = (worldMatrix: Matrix, position: Vector3): void => {
-      local.set(
-        (Math.random() * 2 - 1) * BODY_BOX.x,
-        (Math.random() * 2 - 1) * BODY_BOX.y,
-        BODY_BOX.zLo + Math.random() * (BODY_BOX.zHi - BODY_BOX.zLo) - back,
-      );
-      Vector3.TransformCoordinatesToRef(local, worldMatrix, position);
-      if (back > 0) {
-        // The far tail is downstream of the body, not behind its nose.
-        const k = back * Math.min(1, this.speed / FOLLOW.dash);
-        const len = this.speed || 1;
-        position.x -= (this.follow.vx / len) * k;
-        position.z -= (this.follow.vz / len) * k;
-      }
+  private buildAura(spec: AuraEmitter): ParticleSystem {
+    const ps = new ParticleSystem(spec.name, Math.ceil(spec.rate * spec.life * 1.5) + 4, this.scene);
+    ps.emitter = this.root;
+    ps.isLocal = spec.locked;
+    ps.particleTexture = new Texture(spec.texture, this.scene);
+    ps.blendMode = spec.blend === "add" ? ParticleSystem.BLENDMODE_ADD : ParticleSystem.BLENDMODE_STANDARD;
+    ps.applyFog = true;
+    const [r, g, b] = spec.tint ?? [1, 1, 1];
+    const last = spec.opacity.length - 1;
+    for (const [i, a] of spec.opacity.entries()) ps.addColorGradient(i / last, new Color4(r, g, b, a));
+    const size = auraSize(spec);
+    ps.addSizeGradient(0, size.start[0], size.start[1]);
+    ps.addSizeGradient(1, size.end[0], size.end[1]);
+    ps.minLifeTime = ps.maxLifeTime = spec.life;
+    ps.emitRate = spec.rate;
+    ps.minEmitPower = ps.maxEmitPower = 1;
+    ps.gravity = new Vector3(0, spec.accel * POE_UNIT, 0);
+    if (spec.stretched) ps.billboardMode = ParticleSystem.BILLBOARDMODE_STRETCHED;
+    ps.startPositionFunction = (world: Matrix, position: Vector3, _p, isLocal: boolean): void => {
+      pointOnChain(this.chain, Math.random(), position);
+      if (!isLocal) Vector3.TransformCoordinatesToRef(position, world, position);
     };
+    // The root only ever turns about +Y, so a cone about +Y is the same in its space and the world's.
+    const cosEdge = Math.cos(spec.cone / 2);
+    const up = ((spec.up[0] + spec.up[1]) / 2) * POE_UNIT;
     ps.startDirectionFunction = (_world: Matrix, direction: Vector3): void => {
-      direction.set(
-        -this.follow.vx * 0.55 + (Math.random() * 2 - 1) * spread,
-        lift + (Math.random() * 2 - 1) * spread * 0.6,
-        -this.follow.vz * 0.55 + (Math.random() * 2 - 1) * spread,
-      );
+      const cos = 1 - Math.random() * (1 - cosEdge);
+      const sin = Math.sqrt(1 - cos * cos);
+      const turn = Math.random() * Math.PI * 2;
+      const speed = (spec.along[0] + Math.random() * (spec.along[1] - spec.along[0])) * POE_UNIT;
+      direction.set(sin * Math.cos(turn) * speed, cos * speed + up, sin * Math.sin(turn) * speed);
     };
-  }
-
-  private buildNebula(): ParticleSystem {
-    const ps = new ParticleSystem(PET_FX_NAMES[0], 220, this.scene);
-    ps.particleTexture = new Texture(PUFF, this.scene);
-    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
-    ps.applyFog = true;
-    // Violet at the body, magenta down the trail, gone.
-    ps.addColorGradient(0, new Color4(0.5, 0.3, 1, 0));
-    ps.addColorGradient(0.2, new Color4(0.55, 0.32, 1, 0.32));
-    ps.addColorGradient(0.7, new Color4(0.85, 0.25, 0.75, 0.18));
-    ps.addColorGradient(1, new Color4(0.4, 0.1, 0.3, 0));
-    ps.addSizeGradient(0, 0.8);
-    ps.addSizeGradient(1, 1.3);
-    // Puffs no bigger than the cat's head: the body must stay readable inside them.
-    ps.minSize = 0.12;
-    ps.maxSize = 0.24;
-    ps.minLifeTime = 0.45;
-    ps.maxLifeTime = 0.8;
-    ps.emitRate = cloudRate(0);
-    ps.minEmitPower = 1;
-    ps.maxEmitPower = 1;
-    ps.gravity = new Vector3(0, 0.12, 0);
-    this.emitFromBody(ps, 0, 0.1, 0.16);
+    if (spec.projected) this.projectNebula(ps);
     ps.start();
     return ps;
   }
 
-  private buildSmoke(): ParticleSystem {
-    const ps = new ParticleSystem(PET_FX_NAMES[1], 80, this.scene);
-    ps.particleTexture = new Texture(SMOKE, this.scene);
-    ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
-    ps.applyFog = true;
-    ps.addColorGradient(0, new Color4(0.12, 0.08, 0.18, 0));
-    ps.addColorGradient(0.3, new Color4(0.12, 0.08, 0.18, 0.4));
-    ps.addColorGradient(1, new Color4(0.08, 0.06, 0.1, 0));
-    ps.addSizeGradient(0, 0.7);
-    ps.addSizeGradient(1, 1.8);
-    ps.minSize = 0.3;
-    ps.maxSize = 0.5;
-    ps.minLifeTime = 1.0;
-    ps.maxLifeTime = 1.4;
-    ps.emitRate = smokeRate(0);
-    ps.minEmitPower = 1;
-    ps.maxEmitPower = 1;
-    ps.gravity = new Vector3(0, 0.08, 0);
-    this.emitFromBody(ps, 0.9, 0.05, 0.1);
-    ps.start();
-    return ps;
-  }
-
-  private buildSparks(): ParticleSystem {
-    const ps = new ParticleSystem(PET_FX_NAMES[2], 24, this.scene);
-    ps.particleTexture = new Texture(PUFF, this.scene);
-    ps.blendMode = ParticleSystem.BLENDMODE_ADD;
-    ps.applyFog = true;
-    ps.addColorGradient(0, new Color4(1, 1, 1, 0));
-    ps.addColorGradient(0.15, new Color4(1, 1, 1, 1));
-    ps.addColorGradient(1, new Color4(0.6, 0.9, 1, 0));
-    ps.minSize = 0.025;
-    ps.maxSize = 0.05;
-    ps.minLifeTime = 1.2;
-    ps.maxLifeTime = 2.0;
-    ps.emitRate = 6;
-    ps.minEmitPower = 1;
-    ps.maxEmitPower = 1;
-    this.emitFromBody(ps, 0, 0.25, 0.12);
-    ps.start();
-    return ps;
+  /** Draw `ps` through the nebula shader: the nebula in screen space, the cloud mask on the quad. */
+  private projectNebula(ps: ParticleSystem): void {
+    registerNebulaShader();
+    this.nebulaTexture ??= new Texture(NEBULA_TEX, this.scene);
+    const engine = this.scene.getEngine();
+    const defines: string[] = [];
+    ps.fillDefines(defines, ps.blendMode);
+    const effect = engine.createEffectForParticles(NEBULA_SHADER, ["nebulaProjection"], ["nebulaSampler"], defines.join("\n"), undefined, undefined, undefined, ps);
+    ps.setCustomEffect(effect, 0);
+    ps.onBeforeDrawParticlesObservable.add((fx) => {
+      if (!fx || !this.nebulaTexture) return;
+      const perPixel = 1080 / (NEBULA_REPEAT_PX * engine.getRenderHeight());
+      fx.setTexture("nebulaSampler", this.nebulaTexture);
+      fx.setFloat4("nebulaProjection", perPixel, perPixel, this.fxTime * NEBULA_DRIFT[0], this.fxTime * NEBULA_DRIFT[1]);
+    });
   }
 
   private show(on: boolean): void {
@@ -548,7 +679,10 @@ export class PetActor {
   dispose(): void {
     for (const ps of this.fx) ps.dispose();
     this.fx = [];
-    this.nebula = this.smoke = null;
+    this.nebulaTexture?.dispose();
+    this.nebulaTexture = null;
+    // The coat stays on the shared material for the next cat.
+    this.coat = null;
     this.halo?.material?.dispose();
     this.halo?.dispose();
     this.halo = null;
