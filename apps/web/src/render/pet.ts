@@ -83,6 +83,8 @@ const BOB = 0.03;
 const BOB_PERIOD = 3.2;
 /** Height chase rate per second, for every change the timeline does not draw itself. */
 const HEIGHT_RATE = 6;
+/** Chase rate per second toward the loop's path: smooths it without lagging it. */
+const ROUTINE_CHASE = 10;
 /** Yaw chase rate per second. */
 const TURN_RATE = 8;
 /** Below this own speed it faces where the player faces. */
@@ -95,47 +97,77 @@ const ease = (u: number): number => {
   return c * c * (3 - 2 * c);
 };
 
+/** A spot relative to the standing player: `side` to his right, `fwd` along his facing. */
+export interface Spot {
+  side: number;
+  fwd: number;
+}
+
 export interface RoutinePhase {
   clip: PetClip;
   start: number;
   seconds: number;
   /** Root height at `u` (0..1) through the phase. */
   height: (u: number) => number;
+  /** Where on the floor plane the cat is at `u`, relative to the player. */
+  path: (u: number) => Spot;
 }
+
+/** The floor phases' spot, close to the follow spot so the loop starts without a slide. */
+const REST: Spot = { side: 0.9, fwd: -1.0 };
+/** Against his right side, for the rear-up. */
+const NEAR: Spot = { side: 0.45, fwd: 0.05 };
+const OVER: Spot = { side: 0, fwd: 0 };
+/** Radius of the swim's loop out to his right and back over his head. */
+const SWIM_LOOP = 0.6;
+const between = (a: Spot, b: Spot, k: number): Spot => ({
+  side: a.side + (b.side - a.side) * k,
+  fwd: a.fwd + (b.fwd - a.fwd) * k,
+});
 
 /** PoE's playtime loop in order; each phase lasts its clip's own length. */
 export const ROUTINE: readonly RoutinePhase[] = (() => {
   const floor = () => 0;
-  const plan: [PetClip, number, (u: number) => number][] = [
-    ["lie_side", 3.0, floor],
-    ["roll_back", 1.6, floor],
-    ["curl", 4.0, floor],
-    ["stretch", 1.6, floor],
-    ["rear_up", 1.2, floor],
-    ["spring", 0.6, (u) => SWIM_Y * ease(u)],
-    ["swim", 2.4, (u) => SWIM_Y + 0.12 * Math.sin(2 * Math.PI * u)],
-    ["dive", 0.8, (u) => SWIM_Y * (1 - ease(u))],
+  const at = (s: Spot) => () => s;
+  const plan: [PetClip, number, (u: number) => number, (u: number) => Spot][] = [
+    ["lie_side", 3.0, floor, at(REST)],
+    ["roll_back", 1.6, floor, at(REST)],
+    ["curl", 4.0, floor, at(REST)],
+    // Up out of the stretch, it walks over to him.
+    ["stretch", 1.6, floor, (u) => between(REST, NEAR, ease((u - 0.45) / 0.55))],
+    ["rear_up", 1.2, floor, at(NEAR)],
+    ["spring", 0.6, (u) => SWIM_Y * ease(u), (u) => between(NEAR, OVER, ease(u))],
+    [
+      "swim",
+      2.4,
+      (u) => SWIM_Y + 0.12 * Math.sin(2 * Math.PI * u),
+      (u) => ({
+        side: SWIM_LOOP * (1 - Math.cos(2 * Math.PI * u)),
+        fwd: SWIM_LOOP * Math.sin(2 * Math.PI * u),
+      }),
+    ],
+    ["dive", 0.8, (u) => SWIM_Y * (1 - ease(u)), (u) => between(OVER, REST, ease(u))],
   ];
   let t = 0;
-  return plan.map(([clip, seconds, height]) => {
-    const phase = { clip, start: t, seconds, height };
+  return plan.map(([clip, seconds, height, path]) => {
+    const phase = { clip, start: t, seconds, height, path };
     t += seconds;
     return phase;
   });
 })();
 export const ROUTINE_PERIOD = ROUTINE.reduce((sum, p) => sum + p.seconds, 0);
 
-/** Which clip the loop plays `t` seconds in, and the root height there. */
-export function routineAt(t: number): { clip: PetClip; height: number; u: number } {
+/** Which clip the loop plays `t` seconds in, the root height and the spot there. */
+export function routineAt(t: number): { clip: PetClip; height: number; u: number } & Spot {
   const local = ((t % ROUTINE_PERIOD) + ROUTINE_PERIOD) % ROUTINE_PERIOD;
   for (const p of ROUTINE) {
     if (local < p.start + p.seconds) {
       const u = (local - p.start) / p.seconds;
-      return { clip: p.clip, height: p.height(u), u };
+      return { clip: p.clip, height: p.height(u), u, ...p.path(u) };
     }
   }
   const last = ROUTINE[ROUTINE.length - 1]!;
-  return { clip: last.clip, height: last.height(1), u: 1 };
+  return { clip: last.clip, height: last.height(1), u: 1, ...last.path(1) };
 }
 
 /** A clip shown on its own (the viewer): its height, `t` seconds into it. */
@@ -274,6 +306,8 @@ export class PetActor {
   private previewT = 0;
   /** Seconds into the playtime loop, or -1 when not in it. */
   private routineT = -1;
+  /** The player's facing when the loop began; its spots are laid out on it. */
+  private routineHeading = { x: 0, z: 1 };
   /** Root height over the floor, chased toward what the moment asks for. */
   private y = HOVER_Y;
   private fx: ParticleSystem[] = [];
@@ -329,10 +363,14 @@ export class PetActor {
     if (!this.entries) this.attach();
     let clip: PetClip;
     if (action === "routine") {
+      // Round an imaginary player at the origin, facing +z.
       const r = routineAt(this.previewT);
-      clip = r.clip;
       this.y = r.height;
-      this.play(clip, LOOPED.includes(clip));
+      this.play(r.clip, LOOPED.includes(r.clip));
+      this.routineHeading = { x: 0, z: 1 };
+      this.speed = this.walkRoutine(dt, 0, 0, r, r.clip);
+      this.place(this.follow.x, this.follow.z, this.follow.yaw, r.clip);
+      return;
     } else {
       clip = action;
       this.y = clipHeight(clip, this.previewT);
@@ -378,22 +416,27 @@ export class PetActor {
       this.placed = true;
       this.lastPlayer = null;
     }
-    this.speed = stepFollow(this.follow, dt, px, pz, hx, hz);
-
     const playerSpeed = this.lastPlayer ? Math.hypot(px - this.lastPlayer.x, pz - this.lastPlayer.z) / dt : 0;
     this.lastPlayer = { x: px, z: pz };
     this.still = playerSpeed < PLAYER_STILL ? this.still + dt : 0;
 
     let clip: PetClip;
     let want: number;
-    const travelling = this.speed > (this.current === "gallop" ? FOLLOW.gallopEnd : FOLLOW.gallop);
-    if (this.still > FOLLOW.idleAfter && !travelling) {
-      this.routineT = this.routineT < 0 ? 0 : this.routineT + dt;
+    if (this.still > FOLLOW.idleAfter && (this.routineT >= 0 || this.speed < FOLLOW.gallopEnd)) {
+      if (this.routineT < 0) {
+        // The loop is laid out around him as he stood when it began.
+        const len = Math.hypot(hx, hz) || 1;
+        this.routineHeading = { x: hx / len, z: hz / len };
+        this.routineT = 0;
+      } else this.routineT += dt;
       const r = routineAt(this.routineT);
       clip = r.clip;
       want = r.height;
+      this.speed = this.walkRoutine(dt, px, pz, r, clip);
     } else {
       this.routineT = -1;
+      this.speed = stepFollow(this.follow, dt, px, pz, hx, hz);
+      const travelling = this.speed > (this.current === "gallop" ? FOLLOW.gallopEnd : FOLLOW.gallop);
       clip = travelling ? "gallop" : "hover";
       want = clip === "gallop" ? GALLOP_Y : HOVER_Y;
     }
@@ -402,6 +445,35 @@ export class PetActor {
     this.y += (want - this.y) * k;
     this.play(clip, LOOPED.includes(clip));
     this.place(this.follow.x, this.follow.z, this.follow.yaw, clip);
+  }
+
+  /**
+   * Carry the cat along the loop's path around the player at (px, pz), facing
+   * where it goes, or him while it rears up. Returns its own speed.
+   */
+  private walkRoutine(dt: number, px: number, pz: number, at: Spot, clip: PetClip): number {
+    const h = this.routineHeading;
+    const tx = px + h.x * at.fwd - h.z * at.side;
+    const tz = pz + h.z * at.fwd + h.x * at.side;
+    const s = this.follow;
+    if (dt <= 0) {
+      s.x = tx;
+      s.z = tz;
+      return 0;
+    }
+    const k = 1 - Math.exp(-ROUTINE_CHASE * dt);
+    s.vx = ((tx - s.x) * k) / dt;
+    s.vz = ((tz - s.z) * k) / dt;
+    s.x += s.vx * dt;
+    s.z += s.vz * dt;
+    const speed = Math.hypot(s.vx, s.vz);
+    let want = s.yaw;
+    if (speed > FACING_SPEED) want = Math.atan2(s.vx, s.vz);
+    else if (clip === "rear_up") want = Math.atan2(px - s.x, pz - s.z);
+    let turn = want - s.yaw;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    s.yaw += turn * Math.min(1, TURN_RATE * dt);
+    return speed;
   }
 
   /** Put the root, its ground blob and the cloud rates where the moment says. */

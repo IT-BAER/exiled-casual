@@ -163,6 +163,30 @@ describe("pet heights and idle routine", () => {
     }
   });
 
+  it("plays the loop around the player: beside him on the floor, against him, over his head", () => {
+    const at = (clip: string, u: number) => {
+      const p = ROUTINE.find((q) => q.clip === clip)!;
+      const r = routineAt(p.start + p.seconds * u);
+      return Math.hypot(r.side, r.fwd);
+    };
+    for (const clip of ["lie_side", "roll_back", "curl"]) {
+      expect(at(clip, 0.5)).toBeGreaterThan(0.8);
+      expect(at(clip, 0.5)).toBeLessThan(1.6);
+    }
+    // PoE: it rears up against his side and springs up past his head.
+    expect(at("rear_up", 0.5)).toBeLessThan(0.6);
+    let over = Infinity;
+    for (let u = 0; u <= 1; u += 0.01) over = Math.min(over, at("swim", u), at("spring", u));
+    expect(over).toBeLessThan(0.3);
+    // It travels, never teleports, the wrap of the loop included.
+    let prev = routineAt(0);
+    for (let t = 0.01; t < ROUTINE_PERIOD * 2; t += 0.01) {
+      const r = routineAt(t);
+      expect(Math.hypot(r.side - prev.side, r.fwd - prev.fwd)).toBeLessThan(0.05);
+      prev = r;
+    }
+  });
+
   it("streams the cloud harder the faster it moves, and never off", () => {
     expect(cloudRate(0)).toBeGreaterThan(0);
     expect(cloudRate(FOLLOW.dash)).toBeGreaterThan(cloudRate(0) * 3);
@@ -283,12 +307,20 @@ describe("pet actor", () => {
     const seen: string[] = [];
     let low = Infinity;
     let high = 0;
+    let rear = Infinity;
+    let overhead = Infinity;
     for (let i = 0; i < 60 * 40; i++) {
       pet.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
       if (pet.playing !== seen[seen.length - 1]) seen.push(pet.playing!);
+      const d = Math.hypot(pet.root.position.x, pet.root.position.z);
       if (pet.playing === "curl") low = Math.min(low, pet.root.position.y);
       if (pet.playing === "swim") high = Math.max(high, pet.root.position.y);
+      if (pet.playing === "rear_up") rear = Math.min(rear, d);
+      if (pet.playing === "swim") overhead = Math.min(overhead, d);
     }
+    // It comes to him to rear up and swims over his head, not on its follow spot.
+    expect(rear).toBeLessThan(0.7);
+    expect(overhead).toBeLessThan(0.4);
     expect(seen[0]).toBe("hover");
     const order = ["lie_side", "roll_back", "curl", "stretch", "rear_up", "spring", "swim", "dive"];
     expect(seen.slice(1, 1 + order.length)).toEqual(order);
