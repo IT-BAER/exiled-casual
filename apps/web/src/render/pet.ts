@@ -217,6 +217,28 @@ export const AURA: readonly AuraEmitter[] = [
 ];
 export const PET_FX_NAMES = AURA.map((e) => e.name);
 
+/**
+ * The owner's calls over PoE's numbers (25 October 2026: "too fast", "too
+ * strong", trails "smoother and shorter", patches "cheap when they appear").
+ * The particles run on PoE's clock slowed AURA_SLOW times, so lives, rates,
+ * speeds and pulls stretch together and every shape stays PoE's; each opacity
+ * is scaled by AURA_STRENGTH (the nebula patches by PATCH_STRENGTH again) and
+ * eased in and out over the whole life by a sine window.
+ */
+export const AURA_SLOW = 2.5;
+export const AURA_STRENGTH = 0.5;
+const PATCH_STRENGTH = 0.6;
+/** Share of the cat's own velocity a particle left behind carries: its trail is only what the cat outruns. */
+export const TRAIL_FOLLOW = 0.85;
+const ENVELOPE_KEYS = 9;
+
+/** PoE's opacity keys, evenly spread over the life, read at `t` (0..1). */
+function poeOpacity(keys: readonly number[], t: number): number {
+  const at = t * (keys.length - 1);
+  const i = Math.min(keys.length - 2, Math.floor(at));
+  return keys[i]! + (keys[i + 1]! - keys[i]!) * (at - i);
+}
+
 /** An emitter's particle size in our units: [min, max] at birth and at death. */
 export function auraSize(e: AuraEmitter): { start: [number, number]; end: [number, number] } {
   const k = e.emitScale * POE_UNIT;
@@ -253,8 +275,8 @@ const NEBULA_SHADER = "petNebula";
 const NEBULA_TEX = `${FX}/nebula.webp`;
 /** One nebula repeat spans this many screen pixels at 1080p (PoE's tiling 1 over 512). */
 const NEBULA_REPEAT_PX = 512;
-/** PoE's ScaleMoveUV drift, repeats per second. */
-const NEBULA_DRIFT = [0.2, 0.12] as const;
+/** Repeats per second: a tenth of PoE's ScaleMoveUV (0.2, 0.12), which the owner found too fast. */
+const NEBULA_DRIFT = [0.02, 0.012] as const;
 function registerNebulaShader(): void {
   const name = `${NEBULA_SHADER}PixelShader`;
   if (ShaderStore.ShadersStore[name]) return;
@@ -263,7 +285,7 @@ function registerNebulaShader(): void {
   if (!base.includes(colour)) throw new Error("pet nebula: Babylon's particle shader changed");
   ShaderStore.ShadersStore[name] = base
     .replace("uniform sampler2D diffuseSampler;", "uniform sampler2D diffuseSampler;uniform sampler2D nebulaSampler;uniform vec4 nebulaProjection;")
-    .replace(colour, "vec4 baseColor=vec4(texture2D(nebulaSampler,gl_FragCoord.xy*nebulaProjection.xy+nebulaProjection.zw).rgb,textureColor.r)*vColor;");
+    .replace(colour, "vec4 baseColor=vec4(texture2D(nebulaSampler,gl_FragCoord.xy*nebulaProjection.xy+nebulaProjection.zw).rgb,textureColor.r*textureColor.r)*vColor;");
 }
 
 /** glTF's own wrapper node; an instance is parented *with* it (see monsters.ts). */
@@ -618,9 +640,16 @@ export class PetActor {
     ps.particleTexture = new Texture(spec.texture, this.scene);
     ps.blendMode = spec.blend === "add" ? ParticleSystem.BLENDMODE_ADD : ParticleSystem.BLENDMODE_STANDARD;
     ps.applyFog = true;
+    // Babylon steps `updateSpeed` of particle time per 60 Hz frame: one PoE second takes AURA_SLOW real ones.
+    ps.updateSpeed = 1 / (60 * AURA_SLOW);
     const [r, g, b] = spec.tint ?? [1, 1, 1];
-    const last = spec.opacity.length - 1;
-    for (const [i, a] of spec.opacity.entries()) ps.addColorGradient(i / last, new Color4(r, g, b, a));
+    const strength = AURA_STRENGTH * (spec.projected ? PATCH_STRENGTH : 1);
+    const last = ENVELOPE_KEYS - 1;
+    for (let i = 0; i <= last; i++) {
+      const t = i / last;
+      const a = i === 0 || i === last ? 0 : poeOpacity(spec.opacity, t) * Math.sin(Math.PI * t) * strength;
+      ps.addColorGradient(t, new Color4(r, g, b, a));
+    }
     const size = auraSize(spec);
     ps.addSizeGradient(0, size.start[0], size.start[1]);
     ps.addSizeGradient(1, size.end[0], size.end[1]);
@@ -642,6 +671,11 @@ export class PetActor {
       const turn = Math.random() * Math.PI * 2;
       const speed = (spec.along[0] + Math.random() * (spec.along[1] - spec.along[0])) * POE_UNIT;
       direction.set(sin * Math.cos(turn) * speed, cos * speed + up, sin * Math.sin(turn) * speed);
+      // In particle time, so the cat's real velocity is stretched by the same AURA_SLOW.
+      if (!spec.locked) {
+        const k = TRAIL_FOLLOW * AURA_SLOW;
+        direction.addInPlaceFromFloats(this.follow.vx * k, 0, this.follow.vz * k);
+      }
     };
     if (spec.projected) this.projectNebula(ps);
     ps.start();

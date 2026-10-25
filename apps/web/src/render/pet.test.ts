@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, ParticleSystem, Scene, Vector3, type Mesh, type Texture, type Node, type PBRMaterial, type StandardMaterial, type TransformNode } from "@babylonjs/core";
 import {
-  ANCHOR_BONE, AURA, CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_COAT_PLUGIN, PET_FX_NAMES, PET_ID, PET_URL, PetActor, RELAXED_CHANCE,
+  ANCHOR_BONE, AURA, AURA_SLOW, AURA_STRENGTH, CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_COAT_PLUGIN, PET_FX_NAMES, PET_ID, PET_URL, PetActor, RELAXED_CHANCE, TRAIL_FOLLOW,
   auraSize, followTarget, loadPet, isPetReady, pointOnChain, resetPet, stepFollow,
   type FollowState, type PetClip,
 } from "./pet";
@@ -326,6 +326,50 @@ describe("pet actor", () => {
     }
     pet.dispose();
     expect(scene.particleSystems.filter((ps) => PET_FX_NAMES.includes(ps.name))).toEqual([]);
+  });
+
+  it("runs the aura calmer than PoE: slowed, at half strength, its trail short and following the cat", async () => {
+    // The owner's call over PoE's numbers: PoE's clock slowed, every opacity halved.
+    expect(AURA_SLOW).toBeGreaterThanOrEqual(2);
+    expect(AURA_STRENGTH).toBe(0.5);
+    const scene = newScene();
+    await loadPet(scene);
+    const pet = new PetActor(scene, 1);
+    pet.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
+    // Left nine units behind, it gallops after him.
+    let speed = 0;
+    for (let i = 0; i < 20; i++) {
+      const before = pet.root.position.clone();
+      pet.update(1 / 60, 0, 9, { x: 0, y: 1 }, true, false);
+      speed = Vector3.Distance(before, pet.root.position) * 60;
+    }
+    expect(speed).toBeGreaterThan(FOLLOW.gallop);
+    const systems = scene.particleSystems.filter((ps) => PET_FX_NAMES.includes(ps.name)) as ParticleSystem[];
+    for (const [i, ps] of systems.entries()) {
+      const spec = AURA[i]!;
+      /** Real seconds per second of PoE's particle clock: Babylon steps `updateSpeed` per 60 Hz frame. */
+      const stretch = 1 / (60 * ps.updateSpeed);
+      expect(stretch, spec.name).toBeCloseTo(AURA_SLOW, 5);
+      // Every particle eases in and out over its life: no pop on birth or death.
+      const alpha = ps.getColorGradients()!.map((g) => g.color1.a);
+      const peak = Math.max(...alpha);
+      expect(peak, spec.name).toBeLessThanOrEqual(Math.max(...spec.opacity) * AURA_STRENGTH + 1e-9);
+      expect(alpha[0], spec.name).toBe(0);
+      expect(alpha[alpha.length - 1], spec.name).toBe(0);
+      expect(alpha[1]!, spec.name).toBeLessThan(peak * 0.6);
+      // The nebula patches are the quietest: a hint of sky, not a blot.
+      if (spec.projected) expect(peak, spec.name).toBeLessThanOrEqual(0.3);
+    }
+    // The nebula has no speed of its own: what it carries is the cat's, so its
+    // trail is what the cat outruns in one life, under half a metre at a dash.
+    const nebula = systems[AURA.findIndex((e) => e.name === "fx-pet-nebula")]!;
+    const dir = new Vector3();
+    nebula.startDirectionFunction!(pet.root.getWorldMatrix(), dir, null!, false);
+    const realSpeed = dir.length() * 60 * nebula.updateSpeed;
+    expect(realSpeed / speed).toBeCloseTo(TRAIL_FOLLOW, 1);
+    const life = AURA.find((e) => e.name === "fx-pet-nebula")!.life * AURA_SLOW;
+    expect((1 - realSpeed / speed) * FOLLOW.dash * life).toBeLessThan(0.5);
+    pet.dispose();
   });
 
   it("hides while the player is dead and comes back alive", async () => {
