@@ -240,6 +240,10 @@ describe("pet actor", () => {
     const meshes = pet.root.getChildMeshes();
     expect(meshes.length).toBeGreaterThan(0);
     for (const m of meshes) expect(m.isPickable).toBe(false);
+    // Skinned bounds stay at the rest pose, on the ground under a cat that floats.
+    const skinned = meshes.filter((m) => m.skeleton);
+    expect(skinned.map((m) => m.name.split(".").pop()).sort()).toEqual(["body", "eyes", "halo"]);
+    for (const m of skinned) expect(m.alwaysSelectAsActiveMesh).toBe(true);
     const eyes = meshes.find((m) => m.name.endsWith(".eyes"))!;
     expect(eyes).toBeDefined();
     expect((eyes.material as PBRMaterial).emissiveColor.b).toBeGreaterThan(0.9);

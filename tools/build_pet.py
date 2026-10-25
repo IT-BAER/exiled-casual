@@ -66,8 +66,11 @@ STAR_SEED = 7
 VEIN_COLOR = (0.22, 0.42, 1.0)
 VEIN_COUNT = {"chest": 5, "leg": 7}
 EMISSION_STRENGTH = 2.5
-EYE_COLOR = (0.30, 0.95, 1.00)
-EYE_STRENGTH = 4.0
+EYE_COLOR = (0.05, 0.80, 1.00)
+EYE_STRENGTH = 2.5
+# The crescent, in eye radii: its disc, and where the cut disc sits (toward the nose, up).
+EYE_RADIUS = 0.6
+EYE_CUT = (0.08, 0.22)
 
 # Source rig names -> ours. The sculptor numbered the spine.
 RENAME = {"Bone.001": "chest", "Bone.002": "neck", "Bone.004": "head",
@@ -510,19 +513,24 @@ def paint_eyes(eyes):
         c = centres[0] if pos[i, :, 0].mean() > 0 else centres[1]
         if (pos[i, :, 1] - c[1]).mean() > -0.25 * radius:
             continue  # back of the eyeball
-        for _ in range(90):
+        # A few samples per texel, or a triangle wide in UV paints with gaps.
+        for _ in range(max(90, int(area[i] * EYE_TEX ** 2 * 4))):
             a, b = rng.random(), rng.random()
             if a + b > 1:
                 a, b = 1 - a, 1 - b
             p = pos[i, 0] + a * (pos[i, 1] - pos[i, 0]) + b * (pos[i, 2] - pos[i, 0])
             d = (p - c) / radius
-            inside = (d[0] ** 2 + d[2] ** 2) < 0.62 ** 2
-            # PoE's half-moon: the top is a straight lid slanting down to the nose.
+            # PoE's crescent (cateyeglowcelestial): a disc less the same disc
+            # shifted up, the cut leaning to the nose so the inner horn sits low.
             inward = -d[0] if c[0] > 0 else d[0]
-            if inside and d[2] < 0.12 - 0.38 * inward:
+            cut = (inward - EYE_CUT[0]) ** 2 + (d[2] - EYE_CUT[1]) ** 2
+            if inward ** 2 + d[2] ** 2 < EYE_RADIUS ** 2 < cut:
                 t = uv[i, 0] + a * (uv[i, 1] - uv[i, 0]) + b * (uv[i, 2] - uv[i, 0])
                 pts.append((float(t[0]), float(t[1]), 1.0))
-    splat(img, pts, EYE_TEX, EYE_COLOR, 1.2)
+    # Coverage, then colour: summed cyan splats clip every channel to white.
+    cover = numpy.zeros_like(img)
+    splat(cover, pts, EYE_TEX, (1.0, 1.0, 1.0), 1.2)
+    img += numpy.clip(cover, 0, 1) * numpy.asarray(EYE_COLOR, dtype=numpy.float32)
     print("eyes: %d slit points, radius %.4f" % (len(pts), radius))
     return packed(ID + ".eye.png", EYE_TEX, numpy.clip(img, 0, 1))
 
@@ -692,6 +700,35 @@ def poe_locals(rig, tracks, f):
             r = numpy.asarray(Quaternion((q[3], q[0], q[1], q[2])).to_matrix())
         rot.append(FLIP @ r @ FLIP)
         pos.append(POE_UNIT * (FLIP @ t))
+    return rot, pos
+
+
+def even_tail(rig, frame, offset):
+    """`frame` with the tail bent as one even arc on our joints (`offset`, the
+    fit's map from PoE's offsets to ours): PoE's keys bend it one way at one
+    joint and back at the next (an S its tail physics smooths away). The first
+    bone keeps its swing off the body; every later segment turns from the one
+    before by the mean of those turns, each bone swung the least way onto it.
+    PoE's tail rests unturned, its curve in the offsets alone."""
+    rot, pos = frame
+    at = {n: i for i, n in enumerate(rig["names"])}
+    tail = [at["phys_tail_0%d" % (k + 1)] for k in range(len(TAIL))]
+    # Each bone's segment in its own frame: to the next joint, the last one run on.
+    seg = [offset[j] @ pos[j] for j in tail[1:]] + [offset[tail[-1]] @ pos[tail[-1]]]
+    world = [numpy.eye(3)]
+    for j in tail[1:]:
+        world.append(world[-1] @ rot[j])
+    d = [w @ s / numpy.linalg.norm(s) for w, s in zip(world, seg)]
+    turn = numpy.mean([numpy.asarray(Vector(a.tolist()).rotation_difference(Vector(b.tolist())).to_exponential_map())
+                       for a, b in zip(d, d[1:])], axis=0)
+    step = numpy.asarray(Quaternion(Vector(turn.tolist())).to_matrix())
+    rot = list(rot)
+    new, want = [world[0]], d[0]
+    for k in range(1, len(tail)):
+        want = step @ want
+        w = swing(world[k] @ seg[k] / numpy.linalg.norm(seg[k]), want) @ world[k]
+        rot[tail[k]] = new[-1].T @ w
+        new.append(w)
     return rot, pos
 
 
@@ -1093,7 +1130,7 @@ def author_clips(arm, body, rig):
     for clip, poe_clip, loops in CLIPS:
         tracks = poe_tracks(rig, poe_clip)
         length = int(max(k[-1, 0] for t in tracks.values() for k in t if len(k)))
-        posed = [poe_locals(rig, tracks, f) for f in range(length + 1)]
+        posed = [even_tail(rig, poe_locals(rig, tracks, f), fit.offset) for f in range(length + 1)]
         poses = [retarget(arm, fit, p, 0.0) for p in posed]
         span = measured(arm, body, poses)
         lift = numpy.zeros(length + 1)

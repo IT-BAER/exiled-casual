@@ -563,7 +563,11 @@ export class PetActor {
       if (node.name !== GLTF_ROOT) node.name = `${PET_ID}.instance`;
       // The glTF wrapper is itself a Mesh: a click must never land on the cat.
       if (node instanceof Mesh) node.isPickable = false;
-      for (const mesh of node.getChildMeshes()) mesh.isPickable = false;
+      for (const mesh of node.getChildMeshes()) {
+        mesh.isPickable = false;
+        // A skinned mesh keeps its rest bounds, on the ground under a cat that floats: culled by those, it vanishes.
+        if (mesh.skeleton) mesh.alwaysSelectAsActiveMesh = true;
+      }
     }
     const bones = entries.rootNodes
       .flatMap((n) => n.getDescendants(false))
