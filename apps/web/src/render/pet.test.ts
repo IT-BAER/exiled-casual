@@ -133,22 +133,19 @@ describe("pet heights and idle routine", () => {
     expect(SWIM_Y).toBeGreaterThan(2.0);
   });
 
-  it("runs the PoE routine in its order, about every fifteen seconds", () => {
-    expect(ROUTINE.map((p) => p.clip)).toEqual(["lie_side", "roll_back", "curl", "stretch", "rear_up", "spring", "swim", "dive"]);
+  it("runs its air loop in order, about every fifteen seconds", () => {
+    expect(ROUTINE.map((p) => p.clip)).toEqual(["spring", "swim", "dive", "hover"]);
     expect(ROUTINE_PERIOD).toBeGreaterThan(13);
     expect(ROUTINE_PERIOD).toBeLessThan(17);
-    expect(routineAt(0).clip).toBe("lie_side");
-    expect(routineAt(ROUTINE_PERIOD - 0.01).clip).toBe("dive");
+    expect(routineAt(0).clip).toBe("spring");
+    expect(routineAt(ROUTINE_PERIOD - 0.01).clip).toBe("hover");
     // It loops.
-    expect(routineAt(ROUTINE_PERIOD + 0.01).clip).toBe("lie_side");
+    expect(routineAt(ROUTINE_PERIOD + 0.01).clip).toBe("spring");
   });
 
-  it("lies on the floor for the floor phases and swims over his head", () => {
-    for (const p of ROUTINE) {
-      const mid = routineAt(p.start + p.seconds / 2);
-      expect(mid.clip).toBe(p.clip);
-      if ((FLOOR_CLIPS as readonly string[]).includes(p.clip)) expect(mid.height).toBe(0);
-    }
+  it("always floats: no phase below the hover, none on the floor, the swim over his head", () => {
+    for (const p of ROUTINE) expect((FLOOR_CLIPS as readonly string[]).includes(p.clip)).toBe(false);
+    for (let t = 0; t < ROUTINE_PERIOD; t += 0.01) expect(routineAt(t).height).toBeGreaterThanOrEqual(HOVER_Y - 1e-9);
     const swim = ROUTINE.find((p) => p.clip === "swim")!;
     expect(routineAt(swim.start + swim.seconds / 2).height).toBeCloseTo(SWIM_Y, 5);
   });
@@ -163,18 +160,13 @@ describe("pet heights and idle routine", () => {
     }
   });
 
-  it("plays the loop around the player: beside him on the floor, against him, over his head", () => {
+  it("plays the loop around the player: hovers on its follow spot, swims over his head", () => {
     const at = (clip: string, u: number) => {
       const p = ROUTINE.find((q) => q.clip === clip)!;
       const r = routineAt(p.start + p.seconds * u);
       return Math.hypot(r.side, r.fwd);
     };
-    for (const clip of ["lie_side", "roll_back", "curl"]) {
-      expect(at(clip, 0.5)).toBeGreaterThan(0.8);
-      expect(at(clip, 0.5)).toBeLessThan(1.6);
-    }
-    // PoE: it rears up against his side and springs up past his head.
-    expect(at("rear_up", 0.5)).toBeLessThan(0.6);
+    expect(at("hover", 0.5)).toBeCloseTo(Math.hypot(FOLLOW.behind, FOLLOW.beside), 5);
     let over = Infinity;
     for (let u = 0; u <= 1; u += 0.01) over = Math.min(over, at("swim", u), at("spring", u));
     expect(over).toBeLessThan(0.3);
@@ -307,26 +299,22 @@ describe("pet actor", () => {
     const seen: string[] = [];
     let low = Infinity;
     let high = 0;
-    let rear = Infinity;
     let overhead = Infinity;
     for (let i = 0; i < 60 * 40; i++) {
       pet.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
       if (pet.playing !== seen[seen.length - 1]) seen.push(pet.playing!);
-      const d = Math.hypot(pet.root.position.x, pet.root.position.z);
-      if (pet.playing === "curl") low = Math.min(low, pet.root.position.y);
+      low = Math.min(low, pet.root.position.y);
       if (pet.playing === "swim") high = Math.max(high, pet.root.position.y);
-      if (pet.playing === "rear_up") rear = Math.min(rear, d);
-      if (pet.playing === "swim") overhead = Math.min(overhead, d);
+      if (pet.playing === "swim") overhead = Math.min(overhead, Math.hypot(pet.root.position.x, pet.root.position.z));
     }
-    // It comes to him to rear up and swims over his head, not on its follow spot.
-    expect(rear).toBeLessThan(0.7);
+    // It swims over his head, not on its follow spot.
     expect(overhead).toBeLessThan(0.4);
     expect(seen[0]).toBe("hover");
-    const order = ["lie_side", "roll_back", "curl", "stretch", "rear_up", "spring", "swim", "dive"];
-    expect(seen.slice(1, 1 + order.length)).toEqual(order);
+    expect(seen.slice(1, 5)).toEqual(["spring", "swim", "dive", "hover"]);
     // It came round again: the routine loops while he stands.
     expect(seen.filter((c) => c === "swim").length).toBeGreaterThanOrEqual(2);
-    expect(low).toBeLessThan(0.01);
+    // Never down on the floor, not once in forty seconds.
+    expect(low).toBeGreaterThan(HOVER_Y - 0.1);
     expect(high).toBeGreaterThan(SWIM_Y - 0.2);
     // He walks off: the cat leaves the floor and comes back up beside him.
     for (let i = 0; i < 60 * 3; i++) pet.update(1 / 60, i / 300, 0, { x: 1, y: 0 }, true, false);
