@@ -605,7 +605,7 @@ BONE_LENGTH = 0.04
 # The tail by chain place (tail_profile): how far off the chain a vertex may be,
 # and the spread PoE's weights are averaged over, in segments.
 TAIL_RADIUS = 0.04
-TAIL_SMOOTH = 0.4
+TAIL_SMOOTH = 1.0
 
 
 def poe_rig():

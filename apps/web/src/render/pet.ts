@@ -608,6 +608,9 @@ export class PetActor {
     if (!mat) return null;
     // A rough dielectric's sheen under the key light painted the black cat grey; PoE's coat has none.
     if ("metallicF0Factor" in mat) mat.metallicF0Factor = 0;
+    // The glow layer draws the material's own emissive, not the plugin's starfield:
+    // the painted coat blurred there into grey clouds over the whole cat.
+    if ("emissiveTexture" in mat) Object.assign(mat, { emissiveTexture: null, emissiveColor: new Color3(0, 0, 0) });
     const coat = mat.pluginManager?.getPlugin<PetCoatPlugin>(PET_COAT_PLUGIN) ?? new PetCoatPlugin(mat);
     coat.stars ??= new Texture(COAT.texture, this.scene);
     return coat;

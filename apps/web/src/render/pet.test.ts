@@ -266,6 +266,9 @@ describe("pet actor", () => {
     const eyes = scene.getMeshByName(`${PET_ID}.eyes`)!.material!;
     expect(coat.pluginManager?.getPlugin(PET_COAT_PLUGIN)?.getClassName()).toBe(PET_COAT_PLUGIN);
     expect(eyes.pluginManager?.getPlugin(PET_COAT_PLUGIN) ?? null).toBeNull();
+    // The glow layer reads the material's emissive, never the plugin's: anything left there blurs into grey clouds.
+    expect((coat as PBRMaterial).emissiveTexture).toBeNull();
+    expect((coat as PBRMaterial).emissiveColor.asArray()).toEqual([0, 0, 0]);
     // A second cat on the shared material does not stack a second coat.
     const again = new PetActor(scene);
     again.update(1 / 60, 0, 0, { x: 0, y: 1 }, true, false);
