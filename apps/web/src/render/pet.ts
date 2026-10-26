@@ -223,15 +223,16 @@ export const PET_FX_NAMES = AURA.map((e) => e.name);
 
 /**
  * The owner's calls over PoE's numbers (25 October 2026: "too fast", "too
- * strong", trails "smoother and shorter", patches "cheap when they appear").
+ * strong", trails "smoother and shorter", patches "cheap when they appear";
+ * 26 October: the aura "slightly stronger", the patches read as smoke).
  * The particles run on PoE's clock slowed AURA_SLOW times, so lives, rates,
  * speeds and pulls stretch together and every shape stays PoE's; each opacity
  * is scaled by AURA_STRENGTH (the nebula patches by PATCH_STRENGTH again) and
  * eased in and out over the whole life by a sine window.
  */
 export const AURA_SLOW = 2.5;
-export const AURA_STRENGTH = 0.5;
-const PATCH_STRENGTH = 0.6;
+export const AURA_STRENGTH = 0.65;
+const PATCH_STRENGTH = 0.12;
 /** Share of the cat's own velocity a particle left behind carries: its trail is only what the cat outruns. */
 export const TRAIL_FOLLOW = 0.85;
 const ENVELOPE_KEYS = 9;

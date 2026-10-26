@@ -335,10 +335,10 @@ describe("pet actor", () => {
     expect(scene.particleSystems.filter((ps) => PET_FX_NAMES.includes(ps.name))).toEqual([]);
   });
 
-  it("runs the aura calmer than PoE: slowed, at half strength, its trail short and following the cat", async () => {
-    // The owner's call over PoE's numbers: PoE's clock slowed, every opacity halved.
+  it("runs the aura calmer than PoE: slowed, under full strength, its trail short and following the cat", async () => {
+    // The owner's call over PoE's numbers: PoE's clock slowed, every opacity scaled down.
     expect(AURA_SLOW).toBeGreaterThanOrEqual(2);
-    expect(AURA_STRENGTH).toBe(0.5);
+    expect(AURA_STRENGTH).toBe(0.65);
     const scene = newScene();
     await loadPet(scene);
     const pet = new PetActor(scene, 1);
@@ -364,8 +364,8 @@ describe("pet actor", () => {
       expect(alpha[0], spec.name).toBe(0);
       expect(alpha[alpha.length - 1], spec.name).toBe(0);
       expect(alpha[1]!, spec.name).toBeLessThan(peak * 0.6);
-      // The nebula patches are the quietest: a hint of sky, not a blot.
-      if (spec.projected) expect(peak, spec.name).toBeLessThanOrEqual(0.3);
+      // The nebula patches are the quietest: a hint of sky, not smoke.
+      if (spec.projected) expect(peak, spec.name).toBeLessThanOrEqual(0.1);
     }
     // The nebula has no speed of its own: what it carries is the cat's, so its
     // trail is what the cat outruns in one life, under half a metre at a dash.
