@@ -1847,7 +1847,7 @@ def wrack_drowned():
     """
     return GeneratedCreature("monster.wrack_drowned.v1", WRACK_DROWNED_SOURCE, "coast", 1.8,
                              normal=WRACK_DROWNED_NORMAL, offset=(-0.072, 0.0),
-                             carry="r", held=0.31, thigh=0.225, knee=0.20, fused_arms=True)
+                             carry="r", held=0.31, thigh=0.20, knee=0.20, fused_arms=True)
 
 
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
