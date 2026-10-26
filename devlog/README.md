@@ -598,3 +598,16 @@ The companion pet follows PoE1's Celestial Cat: a black cat with a starry coat t
 the player, carried on PoE's own 29-bone skeleton, skin weights and floating clips. Its rest head is
 now bowed to PoE's pose, so it looks straight ahead instead of at the sky. The aura glows a little
 brighter, and the grey cloud patches that read as smoke are nearly gone.
+
+## 2026-10-26 · A Cosmetics page
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-26-cosmetics-page.jpeg" alt="The inventory pane on its Cosmetics page in the hideout: Inventory and Cosmetics tabs on the gilt title band, a gold plate of empty dark slot frames mirroring the paper-doll, the Celestial Cat in the Pet slot and a dimmed copy in the owned strip below" width="100%"><br><sub>The Cosmetics page, with the cat in its Pet slot.</sub></td>
+</tr>
+</table>
+
+The inventory's second page now follows PoE1's Cosmetics page. Its two tabs sit on the title band,
+and the whole pane below becomes one carved gold plate of slot frames that mirror the paper-doll:
+weapons, helmet, body, gloves, boots, belt, amulet, five flask skins, portrait, pet and effects. Owned
+cosmetics line the foot; a click puts the Celestial Cat into its Pet slot, and another takes it out.
