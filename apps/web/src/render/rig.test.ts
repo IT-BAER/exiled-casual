@@ -2153,6 +2153,37 @@ describe("a sword strike moves the legs only while standing", () => {
     expect(off("idle", "thigh_l"), "thigh back on the idle").toBeLessThan(2);
   }), 60_000);
 
+  it("drives a ground attack's weapon head to the floor, not just the fist", () => withFiles(async () => {
+    const { scene, rig, lowFoot } = await rigged();
+    rig.setLooks({ ...BASE_LOOKS, weapon1: "ironswornhammer" });
+    const frame = () => { rig.setLocomotion(0); scene.render(); };
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) frame();
+    const floor = lowFoot();
+    const hand = scene.getTransformNodeByName("hand_r")!;
+    const fore = scene.getTransformNodeByName("lowerarm_r")!;
+    // The game's pace: 26 ticks of wind-up over a 90-tick beat.
+    rig.playStrike(90 / 30, 26 / 30, "skill.ground_slam.v1");
+    let lowest = Infinity;
+    let fold = 180;
+    for (let i = 0; i < 120; i++) {
+      frame();
+      const head = rig.castPoint()!;
+      const grip = hand.getAbsolutePosition();
+      lowest = Math.min(lowest, head.y - floor);
+      if (grip.y - floor < 0.3) {
+        const haft = head.subtract(grip).normalize();
+        const arm = grip.subtract(fore.getAbsolutePosition()).normalize();
+        fold = Math.min(fold, Math.acos(Vector3.Dot(haft, arm)) * 180 / Math.PI);
+      }
+    }
+    // The take puts the wrist 0.125 m off the floor and held the hammer head 0.41 m up.
+    expect(lowest, "head over the floor at its lowest").toBeLessThan(0.15);
+    expect(lowest, "head never through the floor").toBeGreaterThan(-0.02);
+    // A cocked wrist, never a haft folded back along the forearm (the grip holds it at 82).
+    expect(fold, "haft to forearm near the floor").toBeGreaterThan(40);
+  }), 60_000);
+
   it("keeps the feet on the floor through all three strikes", () => withFiles(async () => {
     const { scene, rig, lowFoot } = await rigged();
     const frame = () => { rig.setLocomotion(0); scene.render(); };

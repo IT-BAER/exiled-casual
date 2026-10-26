@@ -1081,6 +1081,18 @@ export const STRIKE_LEG_SHARE = 0.15;
  * fist on the floor, and at the shared 0.15 it stopped 28cm short of it.
  */
 const STRIKE_LEG_SHARE_OF: Partial<Record<StrikeClip, number>> = { slam: 1 };
+/**
+ * Strikes that hit the floor with the weapon, not the fist. The slam's take puts the
+ * wrist 0.125 m off the floor, but a hammer held square to the forearm points its head
+ * 34 degrees UP from there, 0.41 m over it: the wrist cocks toward the floor
+ * (`reachFloor`) to land the head `GROUND_REACH_Y` over it, never past `WRIST_COCK_MAX`.
+ * Full while the hand is under `REACH_NEAR`, none above `REACH_FAR`, so it follows the take.
+ */
+export const GROUND_REACH: ReadonlySet<StrikeClip> = new Set(["slam"]);
+const GROUND_REACH_Y = 0.08;
+const REACH_NEAR = 0.3;
+const REACH_FAR = 0.7;
+const WRIST_COCK_MAX = (40 * Math.PI) / 180;
 export const IDLE_CALM_BONES: ReadonlySet<string> = new Set([
   HIPS_BONE, "thigh_l", "calf_l", "foot_l", "ball_l", "thigh_r", "calf_r", "foot_r", "ball_r",
 ]);
@@ -1464,6 +1476,7 @@ export class RigActor {
   /** Per strike, its sole's lift over the floor per frame, already in this rig's proportions. */
   private readonly planted: PlantedLeg[] = [];
   private plantObserver: Observer<Scene> | null = null;
+  private reachObserver: Observer<Scene> | null = null;
 
   private entries: InstantiatedEntries | null = null;
   /** The wired skeleton by bone name, and the hips' rest: what a library take retargets onto. */
@@ -2286,6 +2299,7 @@ export class RigActor {
         for (const leg of this.planted) plantLeg(leg, this.pivot.getWorldMatrix());
       });
     }
+    this.reachObserver = this.scene.onAfterAnimationsObservable.add(() => this.reachFloor());
 
     for (const spec of CARRIES) {
       const carried = loaded.anims.animationGroups.find((g) => g.name === spec.clip);
@@ -2544,6 +2558,34 @@ export class RigActor {
     return Vector3.TransformCoordinates(local, this.hand.getWorldMatrix());
   }
 
+  /** A `GROUND_REACH` strike near the floor: cock the wrist so the held weapon's head meets it. */
+  private reachFloor(): void {
+    const s = this.strike;
+    const hand = this.hand;
+    const local = this.tips.get(this.looks.weapon1 ?? "");
+    if (!s || !hand || !local || !s.group.isPlaying || !GROUND_REACH.has(s.clip as StrikeClip)) return;
+    freshWorld(hand);
+    const floor = this.pivot.getAbsolutePosition().y;
+    const grip = hand.getAbsolutePosition().clone();
+    const x = Math.min(1, Math.max(0, (grip.y - floor - REACH_NEAR) / (REACH_FAR - REACH_NEAR)));
+    const weight = 1 - x * x * (3 - 2 * x);
+    if (weight <= 0) return;
+    const haft = Vector3.TransformCoordinates(local, hand.getWorldMatrix()).subtract(grip);
+    const len = haft.length();
+    const dir = haft.scale(1 / len);
+    // The pitch that lands the head on its mark, keeping the haft's own heading.
+    const want = Math.max(-1, Math.min(1, (floor + GROUND_REACH_Y - grip.y) / len));
+    const flat = new Vector3(dir.x, 0, dir.z);
+    if (want >= dir.y || flat.lengthSquared() < 1e-8) return;
+    const target = flat.normalize().scale(Math.sqrt(1 - want * want));
+    target.y = want;
+    const angle = Math.acos(Math.min(1, Vector3.Dot(dir, target)));
+    const axis = Vector3.Cross(dir, target);
+    if (axis.lengthSquared() < 1e-12) return;
+    const turn = Quaternion.RotationAxis(axis.normalize(), Math.min(angle, WRIST_COCK_MAX) * weight);
+    swing(hand, dir, dir.applyRotationQuaternion(turn));
+  }
+
   /**
    * Hand the skeleton over to the physics: every clip stopped, and the coat
    * solver taken off the render loop. Both would otherwise keep writing bones
@@ -2599,6 +2641,8 @@ export class RigActor {
     this.planted.length = 0;
     if (this.plantObserver) this.scene.onAfterAnimationsObservable.remove(this.plantObserver);
     this.plantObserver = null;
+    if (this.reachObserver) this.scene.onAfterAnimationsObservable.remove(this.reachObserver);
+    this.reachObserver = null;
     this.parts.clear();
     this.stopRaw();
     this.bones = new Map();
