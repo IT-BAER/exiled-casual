@@ -7,7 +7,7 @@ import { slamDebris } from "./slam-debris";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import type { WakeBody } from "./wake";
-import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, setHovered, setTier, updateTelegraph, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, setHovered, setTier, updateTelegraph, updateChargePath, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
 import { rigOf } from "./rig";
@@ -315,7 +315,7 @@ function kindOf(e: SnapshotEntity): MeshKind {
     return e.rare ? "rare" : "monster";
   }
   if (e.kind === "projectile") return "projectile";
-  if (e.kind === "telegraph") return "telegraph";
+  if (e.kind === "telegraph") return e.fromX !== undefined ? "chargePath" : "telegraph";
   if (e.kind === "portal") return "portal";
   if (e.kind === "mapDevice") return "mapDevice";
   if (e.kind === "stash") return "stash";
@@ -656,7 +656,9 @@ export class SnapshotRenderer {
       }
       this.syncMesh(
         e.id,
-        kindOf(e),
+        // A mesh keeps the kind it was built as: a charge that arrives early stops
+        // sending its origin, and must not be scaled as a disc for its last ticks.
+        this.kinds.get(e.id) ?? kindOf(e),
         ox,
         oy,
         nx,
@@ -736,7 +738,13 @@ export class SnapshotRenderer {
       const arriving = arrivingPortals.indexOf(e.id);
       if (arriving >= 0) portalAppear(this.scene, mesh, arriving * PORTAL_STAGGER_MS, arriving === 0);
       if (e.kind === "telegraph") {
-        updateTelegraph(mesh, e.progress ?? 0);
+        if (this.kinds.get(e.id) !== "chargePath") updateTelegraph(mesh, e.progress ?? 0);
+        else if (e.fromX === undefined || e.fromY === undefined) updateChargePath(mesh, e.progress ?? 0, undefined);
+        else {
+          // The brute moves at 30 Hz like everything else; its end of the path is interpolated with it.
+          const px = prevE?.fromX ?? e.fromX, py = prevE?.fromY ?? e.fromY;
+          updateChargePath(mesh, e.progress ?? 0, { x: lerp(px, e.fromX, alpha), y: lerp(py, e.fromY, alpha) });
+        }
       }
       if (e.kind === "groundArea") {
         const born = this.ignited.get(e.id) ?? this.now;

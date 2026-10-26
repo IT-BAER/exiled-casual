@@ -410,6 +410,27 @@ describe("buildSnapshot — boss & telegraph", () => {
     expect(snapPast.entities[0]!.progress).toBe(1);
   });
 
+  it("a charge's telegraph carries where its brute stands now; a slam's carries nothing", () => {
+    const { world } = makeMinimalWorld();
+    const brute = addMonster(world, 1, 2);
+    world.set<MonsterC>(brute, "monster", { ...world.get<MonsterC>(brute, "monster")!, dashX: fp(5), dashY: fp(2), dashUntilTick: 40 });
+    const charge = addTelegraph(world, 5, 2, 10, 40);
+    world.set<TelegraphC>(charge, "telegraph", { ...world.get<TelegraphC>(charge, "telegraph")!, ownerId: brute });
+    const slammer = addMonster(world, -3, 0);
+    const slam = addTelegraph(world, -2, 0, 10, 30);
+    world.set<TelegraphC>(slam, "telegraph", { ...world.get<TelegraphC>(slam, "telegraph")!, ownerId: slammer });
+
+    const tg = (id: number) => buildSnapshot(world, {} as never, 20, "test").entities.find((e) => e.id === id)!;
+    expect(tg(charge).fromX).toBeCloseTo(1, 5);
+    expect(tg(charge).fromY).toBeCloseTo(2, 5);
+    expect(tg(slam).fromX).toBeUndefined();
+    expect(tg(slam).fromY).toBeUndefined();
+
+    // The brute runs in: the path's near end follows it.
+    world.set<Position>(brute, "position", { x: fp(3), y: fp(2) });
+    expect(tg(charge).fromX).toBeCloseTo(3, 5);
+  });
+
   it("zero-length wind-up (startTick === impactTick) yields progress 1", () => {
     const { world } = makeMinimalWorld();
     addTelegraph(world, 0, 0, 10, 10);

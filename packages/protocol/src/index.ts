@@ -307,6 +307,9 @@ export interface SnapshotEntity {
   bossAwake?: boolean;
   /** telegraph wind-up progress: 0 at cast → 1 at impact, for fill animation */
   progress?: number;
+  /** telegraph of a charge only: where the charging monster stands now; the renderer draws a path from here to x/y */
+  fromX?: number;
+  fromY?: number;
   /** portal/mapDevice only: the player is close enough to activate it */
   inRange?: boolean;
   /** portal/mapDevice only: fixed yaw in radians, so the renderer angles it consistently */

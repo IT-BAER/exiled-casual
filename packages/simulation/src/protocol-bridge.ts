@@ -373,11 +373,16 @@ export function buildSnapshot(
     const raw = tg.impactTick === tg.startTick
       ? 1
       : (tick - tg.startTick) / (tg.impactTick - tg.startTick);
+    // A charge's telegraph is the one its owner's dash ends on. Derived here rather
+    // than stored, because checksumWorld hashes every component field.
+    const owner = world.get<MonsterC>(tg.ownerId, "monster");
+    const from = owner?.dashUntilTick === tg.impactTick ? world.get<Position>(tg.ownerId, "position") : undefined;
     entities.push({
       id: e, kind: "telegraph",
       x: toNumber(tp.x), y: toNumber(tp.y),
       radius: toNumber(tg.radius),
       progress: Math.min(1, Math.max(0, raw)),
+      ...(from ? { fromX: toNumber(from.x), fromY: toNumber(from.y) } : {}),
     });
   }
 

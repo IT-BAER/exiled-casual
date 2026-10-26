@@ -1201,6 +1201,48 @@ describe("SnapshotRenderer — new kinds", () => {
     expect(mesh!.scaling.x).toBeCloseTo(3.5);
   });
 
+  it("draws a charge as a narrow path from the brute to where it lands, not a disc", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const tel = (tick: number, from?: { x: number; y: number }) => makeSnapshot({
+      tick,
+      entities: [{ id: 7, kind: "telegraph", x: 4, y: 1, radius: 1.1, progress: 0.3, ...(from ? { fromX: from.x, fromY: from.y } : {}) }],
+    });
+    /** The path's footprint on the floor, in world units. */
+    const span = () => {
+      const root = scene.getMeshByName("entity-7")!;
+      const path = root.getChildMeshes().find((m) => m.name === "telegraph-path")!;
+      root.computeWorldMatrix(true);
+      path.computeWorldMatrix(true);
+      path.refreshBoundingInfo({});
+      const b = path.getBoundingInfo().boundingBox;
+      return { path, x: [b.minimumWorld.x, b.maximumWorld.x] as const, z: [b.minimumWorld.z, b.maximumWorld.z] as const };
+    };
+
+    let prev = tel(1, { x: 0, y: 1 });
+    renderer.apply(null, prev, 1);
+    const root = scene.getMeshByName("entity-7")!;
+    expect(root.getChildMeshes().map((m) => m.name)).toEqual(["telegraph-path"]);
+    let s = span();
+    expect(s.x[0]).toBeCloseTo(0, 1);
+    expect(s.x[1]).toBeCloseTo(4, 1);
+    // Subtle: narrower than the 2.2 hit disc it replaces.
+    expect(s.z[1] - s.z[0]).toBeLessThan(1);
+
+    // The brute runs in and the path shortens behind it.
+    const next = tel(2, { x: 2, y: 1 });
+    renderer.apply(prev, next, 1);
+    s = span();
+    expect(s.x[0]).toBeCloseTo(2, 1);
+    expect(s.x[1]).toBeCloseTo(4, 1);
+    prev = next;
+
+    // Arrived early: no origin any more, so nothing is left to draw until the hit lands.
+    renderer.apply(prev, tel(3), 1);
+    expect(span().path.isEnabled()).toBe(false);
+  });
+
   it("dresses the disenchanter in one whole set, with nothing in his hands", () => {
     const worn = [VENDOR_LOOKS.helmet, VENDOR_LOOKS.chest, VENDOR_LOOKS.gloves, VENDOR_LOOKS.boots];
     expect(VENDOR_LOOKS.base).toBe("male");

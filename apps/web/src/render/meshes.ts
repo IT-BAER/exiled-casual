@@ -11,6 +11,7 @@ import {
   TransformNode,
   Vector3,
   VertexBuffer,
+  VertexData,
   type Scene,
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
@@ -23,7 +24,7 @@ import { groundMaterial } from "./ground-fx";
 import { hasRim, HIT_TINT, HIT_ALPHA, type Tier } from "./rim";
 import { playSfxAt } from "../audio/sfx";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "chargePath" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -40,6 +41,7 @@ const Y_LIFT: Record<MeshKind, number> = {
   projectile: 0.8,
   groundArea: 0.05,
   telegraph: 0.06,
+  chargePath: 0.06,
   // portal children self-position (inner disc at y=1.75 in local space); root sits on ground
   portal: 0,
   // map device cylinder base already starts at y=0 (children lift themselves)
@@ -434,6 +436,77 @@ export function updateTelegraph(root: Mesh, progress: number): void {
   const flash = Math.max(0, (progress - 0.85) / 0.15);
   parts.rim.emissiveColor.set(0.55 + flash * 0.45, 0.16 + flash * 0.76, 0.03 + flash * 0.73);
   parts.rim.alpha = 0.5 + flash * 0.5;
+}
+
+/** Width of a charge's path on the floor: a lane, far narrower than the 2.2 hit disc it replaces. */
+const CHARGE_PATH_WIDTH = 0.7;
+
+/**
+ * A charge's telegraph: a soft lane on the floor from the brute to where it
+ * lands, instead of the disc. Built as a unit strip from the landing point
+ * (z = 0) back to the brute (z = 1); updateChargePath turns and stretches it
+ * each snapshot. Strongest at the landing end, gone at the brute and at both
+ * edges, so no polygon edge is ever drawn.
+ */
+function buildChargePath(scene: Scene, root: Mesh): void {
+  const along = [[0, 0.5], [0.06, 1], [0.5, 0.55], [1, 0]];
+  const across = [[-0.5, 0], [-0.2, 0.7], [0, 1], [0.2, 0.7], [0.5, 0]];
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+  for (const [z, a] of along) {
+    for (const [x, b] of across) {
+      positions.push(x!, 0, z!);
+      colors.push(1, 1, 1, a! * b!);
+    }
+  }
+  const cols = across.length;
+  for (let r = 0; r < along.length - 1; r++) {
+    for (let c = 0; c < cols - 1; c++) {
+      const v = r * cols + c;
+      indices.push(v, v + cols, v + 1, v + 1, v + cols, v + cols + 1);
+    }
+  }
+  const path = new Mesh("telegraph-path", scene);
+  Object.assign(new VertexData(), { positions, colors, indices }).applyToMesh(path);
+  path.hasVertexAlpha = true;
+  path.parent = root;
+  path.isPickable = false;
+  path.receiveShadows = false;
+  // Lit like the disc's rim: colour from emissive alone, added onto the floor.
+  const mat = new StandardMaterial(`${root.name}-tel-path`, scene);
+  mat.diffuseColor = new Color3(0, 0, 0);
+  mat.specularColor = new Color3(0, 0, 0);
+  mat.emissiveColor = new Color3(0.55, 0.16, 0.03);
+  mat.disableLighting = true;
+  mat.backFaceCulling = false;
+  mat.disableDepthWrite = true;
+  mat.alphaMode = 1; // ALPHA_ADD
+  path.material = mat;
+  root.metadata = { path: mat };
+}
+
+/**
+ * Lay a charge's path from the brute (`from`, sim x/y) to the root, which
+ * stands on the landing point, and light it as the wind-up runs out. No
+ * `from` means the brute has arrived: nothing is left to warn about.
+ * Mutates the existing mesh and material; no allocations per call.
+ */
+export function updateChargePath(root: Mesh, progress: number, from: { x: number; y: number } | undefined): void {
+  const mat = (root.metadata as { path?: StandardMaterial } | null)?.path;
+  const path = root.getChildMeshes(true)[0];
+  if (!mat || !path) return;
+  const dx = from ? from.x - root.position.x : 0;
+  const dz = from ? from.y - root.position.z : 0;
+  const length = Math.hypot(dx, dz);
+  path.setEnabled(length > 0.05);
+  if (length <= 0.05) return;
+  // The root may be turned by the shared yaw code; the path answers to world axes.
+  path.rotation.y = Math.atan2(dx, dz) - root.rotation.y;
+  path.scaling.set(CHARGE_PATH_WIDTH, 1, length);
+  mat.alpha = 0.35 + progress * 0.35;
+  const flash = Math.max(0, (progress - 0.85) / 0.15);
+  mat.emissiveColor.set(0.55 + flash * 0.45, 0.16 + flash * 0.76, 0.03 + flash * 0.73);
 }
 
 /**
@@ -1665,6 +1738,12 @@ function buildMesh(
     return root;
   }
 
+  if (kind === "chargePath") {
+    const root = new Mesh(name, scene);
+    buildChargePath(scene, root);
+    return root;
+  }
+
   if (kind === "portal") {
     const root = new Mesh(name, scene);
     buildPortal(scene, root);
@@ -1857,6 +1936,7 @@ export function warmEntityLooks(scene: Scene): () => void {
   const species = creatureSpecies(scene);
   const looks: [MeshKind, string | undefined][] = [
     ["telegraph", undefined],
+    ["chargePath", undefined],
     ["groundArea", undefined],
     ["portal", undefined],
     ["gold", "gold:1:0"],
