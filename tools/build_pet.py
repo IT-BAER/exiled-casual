@@ -606,6 +606,9 @@ BONE_LENGTH = 0.04
 # and the spread PoE's weights are averaged over, in segments.
 TAIL_RADIUS = 0.04
 TAIL_SMOOTH = 1.0
+# A foreleg's weights change only this far either side of the elbow and the
+# wrist, in segments (foreleg_profile).
+LEG_BAND = 0.15
 
 
 def poe_rig():
@@ -944,6 +947,8 @@ def transfer_weights(body, eyes, rig, p0, joints, skin):
     bpy.data.objects.remove(ref, do_unlink=True)
     bpy.data.meshes.remove(me)
     tail_profile(body, rig, p0, joints, skin)
+    for side in "LR":
+        foreleg_profile(body, rig, p0, joints, skin, side)
     groups = {g.index: g for g in body.vertex_groups}
     for v in body.data.vertices:
         keep = sorted(((e.weight, e.group) for e in v.groups if e.weight > 0), reverse=True)[:4]
@@ -982,33 +987,78 @@ def to_tip(chain, co):
     return chain + [chain[-1] + last * max(0.0, float(((near - chain[-1]) @ last).max()))]
 
 
+def poe_chain(rig, p0, skin, chain, own):
+    """PoE's vertices carrying more than `own` of their weight on `chain` (PoE
+    joints in order): each one's place along it (chain_param) and its weights,
+    one column per bone."""
+    at = {n: i for i, n in enumerate(rig["names"])}
+    co, j, w = skin["co"], skin["joint"], skin["weight"]
+    pick = (w * numpy.isin(j, [at[n] for n in chain])).sum(1) > own
+    s, _ = chain_param(co[pick], to_tip([p0[at[n]] for n in chain], co[pick]))
+    full = numpy.zeros((int(pick.sum()), len(rig["names"])))
+    for k in range(4):
+        numpy.add.at(full, (numpy.arange(len(full)), j[pick][:, k]), w[pick][:, k])
+    return s, full
+
+
+def our_chain(body, joints, chain, own):
+    """Ours along the same chain: place, distance off it, and whether a vertex
+    carries at least `own` of its weight on the chain's bones."""
+    vco = numpy.array([tuple(v.co) for v in body.data.vertices])
+    index = {body.vertex_groups[n].index for n in chain}
+    mine = numpy.array([sum(e.weight for e in v.groups if e.group in index) for v in body.data.vertices]) >= own
+    s, d = chain_param(vco, to_tip([joints[n] for n in chain], vco[mine]))
+    return s, d, mine
+
+
+def reweight(body, names, i, mix):
+    """Vertex `i` takes the weights `mix` (one per PoE bone) and no others."""
+    for n in names:
+        if n != AUX:
+            body.vertex_groups[n].remove([int(i)])
+    for b in numpy.nonzero(mix > 1e-3)[0]:
+        body.vertex_groups[names[b]].add([int(i)], float(mix[b]), "REPLACE")
+
+
 def tail_profile(body, rig, p0, joints, skin):
     """The tail past the first half segment takes PoE's tail weights by place
     along the chain, ring by ring: a tube too thin to land on by nearest
     surface, where neighbours round the tail took different bones and every
     turn shredded it. PoE's weights at each of its tail vertices, averaged by
     chain distance, read at each of ours."""
-    names = rig["names"]
-    at = {n: i for i, n in enumerate(names)}
     tail = ["phys_tail_0%d" % (k + 1) for k in range(len(TAIL))]
-    co, j, w = skin["co"], skin["joint"], skin["weight"]
-    on = numpy.isin(j, [at[n] for n in tail])
-    pick = (w * on).sum(1) > 0
-    poe = to_tip([p0[at[n]] for n in tail], co[pick])
-    s_poe, _ = chain_param(co[pick], poe)
-    full = numpy.zeros((int(pick.sum()), len(names)))
-    for k in range(4):
-        numpy.add.at(full, (numpy.arange(len(full)), j[pick][:, k]), w[pick][:, k])
-    vco = numpy.array([tuple(v.co) for v in body.data.vertices])
-    s, d = chain_param(vco, to_tip([joints[n] for n in tail], vco))
-    groups = {n: body.vertex_groups[n] for n in names if n != AUX}
+    s_poe, full = poe_chain(rig, p0, skin, tail, 0.0)
+    s, d, _ = our_chain(body, joints, tail, 0.0)
     for i in numpy.nonzero((s >= 0.5) & (d < TAIL_RADIUS))[0]:
         k = numpy.exp(-((s_poe - s[i]) / TAIL_SMOOTH) ** 2)
-        mix = (full * k[:, None]).sum(0) / k.sum()
-        for g in groups.values():
-            g.remove([int(i)])
-        for b in numpy.nonzero(mix > 1e-3)[0]:
-            groups[names[b]].add([int(i)], float(mix[b]), "REPLACE")
+        reweight(body, rig["names"], i, (full * k[:, None]).sum(0) / k.sum())
+
+
+def foreleg_profile(body, rig, p0, joints, skin, side):
+    """A foreleg from the elbow down takes PoE's weights bone by bone, not ring
+    by ring: the forearm the mean of PoE's mix along its middle, the paw PoE's
+    past the wrist, changing only within LEG_BAND of the wrist, and faded in
+    from the nearest-surface weights across the elbow. PoE's forearm is one
+    straight strip of long triangles between its rings; our dense rings, each
+    weighted between bones on its own, skin into a curve, as nearest surface did."""
+    names = rig["names"]
+    chain = ["%s_%s" % (side, n) for n in ("shoulder", "elbow", "wrist")]
+    s_poe, full = poe_chain(rig, p0, skin, chain, 0.5)
+    mixes = []
+    for lo, hi in ((1.25, 1.75), (2.25, numpy.inf)):
+        part = full[(s_poe >= lo) & (s_poe <= hi)]
+        if not len(part):
+            fail("no PoE vertex on %s between %.2f and %.2f segments" % (chain[0], lo, hi))
+        mixes.append(part.mean(0))
+    s, _, mine = our_chain(body, joints, chain, 0.5)
+    at = {g.index: names.index(g.name) for g in body.vertex_groups}
+    for i in numpy.nonzero(mine & (s >= 1.0 - LEG_BAND))[0]:
+        old = numpy.zeros(len(names))
+        for e in body.data.vertices[int(i)].groups:
+            old[at[e.group]] = e.weight
+        a = numpy.clip((s[i] - (2.0 - LEG_BAND)) / (2 * LEG_BAND), 0.0, 1.0)
+        fade = numpy.clip((s[i] - (1.0 - LEG_BAND)) / (2 * LEG_BAND), 0.0, 1.0)
+        reweight(body, names, i, (1 - fade) * old / old.sum() + fade * ((1 - a) * mixes[0] + a * mixes[1]))
 
 
 class Fit:
