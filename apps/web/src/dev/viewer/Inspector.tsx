@@ -244,7 +244,12 @@ function CreatureSection(p: InspectorProps): React.ReactElement {
 }
 
 function PetSection(p: InspectorProps): React.ReactElement {
-  const label: Record<PetAction, string> = { hover: "Hover", gallop: "Gallop", relaxed: "Relaxed", emerge: "Emerge" };
+  const label: Record<PetAction, string> = {
+    hover: "Hover", gallop: "Gallop", relaxed: "Relaxed", emerge: "Emerge",
+    ground_idle: "Ground Idle", ground_run: "Ground Run", ground_happy: "Ground Happy",
+    ground_relaxed: "Ground Relaxed", ground_relaxed_1: "Ground Relaxed 1",
+    ground_relaxed_2: "Ground Relaxed 2", ground_relaxed_3: "Ground Relaxed 3",
+  };
   return (
     <section className="av-section">
       <h3 className="av-h">Actions</h3>
@@ -258,7 +263,8 @@ function PetSection(p: InspectorProps): React.ReactElement {
       <LoopToggle {...p} />
       <p className="av-note">
         PoE&apos;s four floating clips. Hover is the rest beside the player, Gallop the run in the air with its cloud
-        streaming, Relaxed the idle it rolls a quarter of the hover cycles, Emerge its arrival. Each repeats here.
+        streaming, Relaxed the idle it rolls a quarter of the hover cycles, Emerge its arrival. The Ground clips are
+        the rest of PoE&apos;s cat, standing, for inspection only: in play it always floats. Each repeats here.
       </p>
     </section>
   );

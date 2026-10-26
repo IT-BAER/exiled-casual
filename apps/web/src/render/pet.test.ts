@@ -4,9 +4,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { NullEngine, ParticleSystem, Scene, Vector3, type Mesh, type Texture, type Node, type PBRMaterial, type StandardMaterial, type TransformNode } from "@babylonjs/core";
 import {
-  ANCHOR_BONE, AURA, AURA_SLOW, AURA_STRENGTH, CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_COAT_PLUGIN, PET_FX_NAMES, PET_ID, PET_URL, PetActor, RELAXED_CHANCE, TRAIL_FOLLOW,
+  ANCHOR_BONE, AURA, AURA_SLOW, AURA_STRENGTH, CLIP_SECONDS, FOLLOW, PET_ACTIONS, PET_CLIPS, PET_GROUND_CLIPS, PET_COAT_PLUGIN, PET_FX_NAMES, PET_ID, PET_URL, PetActor, RELAXED_CHANCE, TRAIL_FOLLOW,
   auraSize, followTarget, loadPet, isPetReady, pointOnChain, resetPet, stepFollow,
-  type FollowState, type PetClip,
+  type FollowState, type PetAction, type PetClip,
 } from "./pet";
 
 // `loadPet` fetches a URL; node has no server, so hand the loader the file on disk.
@@ -175,8 +175,16 @@ describe("pet asset", () => {
     expect(meshes.length).toBe(2);
     for (const m of meshes) expect(m.skin).toBeTypeOf("number");
     const names = json.animations.map((a) => a.name);
-    for (const clip of PET_CLIPS) expect(names).toContain(`${PET_ID}|${clip}`);
-    expect(names.length).toBe(PET_CLIPS.length);
+    for (const clip of PET_ACTIONS) expect(names).toContain(`${PET_ID}|${clip}`);
+    expect(names.length).toBe(PET_ACTIONS.length);
+  });
+
+  it("also carries PoE's seven ground clips, for the viewer alone", () => {
+    expect(PET_GROUND_CLIPS).toEqual([
+      "ground_idle", "ground_run", "ground_happy",
+      "ground_relaxed", "ground_relaxed_1", "ground_relaxed_2", "ground_relaxed_3",
+    ]);
+    expect(PET_ACTIONS).toEqual([...PET_CLIPS, ...PET_GROUND_CLIPS]);
   });
 
   it("runs PoE's four floating clips at PoE's lengths", () => {
@@ -197,12 +205,13 @@ describe("pet asset", () => {
     const coat = json.materials.find((m) => m.name === `${PET_ID}.coat`);
     expect(coat?.extensions).toHaveProperty("KHR_materials_emissive_strength");
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(700 * 1024);
+    // The viewer's seven ground clips ride in the same file: 522 KB without them, 930 KB with.
+    expect(glb.byteLength).toBeLessThan(1024 * 1024);
   });
 });
 
 /** Step `pet` `seconds` at 60 Hz with the player standing at (px, pz) facing +z. */
-function stand(pet: PetActor, seconds: number, px = 0, pz = 0, seen?: PetClip[]): void {
+function stand(pet: PetActor, seconds: number, px = 0, pz = 0, seen?: PetAction[]): void {
   for (let i = 0; i < seconds * 60; i++) {
     pet.update(1 / 60, px, pz, { x: 0, y: 1 }, true, false);
     if (seen && pet.playing !== seen[seen.length - 1]) seen.push(pet.playing!);
@@ -236,7 +245,7 @@ describe("pet actor", () => {
     expect(isPetReady(scene)).toBe(true);
     const pet = new PetActor(scene);
     pet.update(1 / 60, 3, 4, { x: 0, y: 1 }, true, false);
-    expect(pet.clipNames().sort()).toEqual([...PET_CLIPS].sort());
+    expect(pet.clipNames().sort()).toEqual([...PET_ACTIONS].sort());
     const meshes = pet.root.getChildMeshes();
     expect(meshes.length).toBeGreaterThan(0);
     for (const m of meshes) expect(m.isPickable).toBe(false);
@@ -396,7 +405,7 @@ describe("pet actor", () => {
     const scene = newScene();
     await loadPet(scene);
     const pet = new PetActor(scene, 1);
-    const seen: PetClip[] = [];
+    const seen: PetAction[] = [];
     stand(pet, CLIP_SECONDS.emerge + 0.5, 0, 0, seen);
     expect(seen.slice(0, 2)).toEqual(["emerge", "hover"]);
     pet.update(1 / 60, 40, 40, { x: 0, y: 1 }, true, true);
@@ -424,9 +433,9 @@ describe("pet actor", () => {
     expect(RELAXED_CHANCE).toBe(0.25);
     const scene = newScene();
     await loadPet(scene);
-    const runs = (seed: number): PetClip[] => {
+    const runs = (seed: number): PetAction[] => {
       const pet = new PetActor(scene, seed);
-      const seen: PetClip[] = [];
+      const seen: PetAction[] = [];
       stand(pet, 60, 0, 0, seen);
       pet.dispose();
       return seen;
@@ -442,12 +451,14 @@ describe("pet actor", () => {
     // The same seed plays the same idle; a walking player never sees it.
     expect(runs(7)).toEqual(seen);
     const pet = new PetActor(scene, 7);
-    const walked: PetClip[] = [];
+    const walked: PetAction[] = [];
     for (let i = 0; i < 60 * 60; i++) {
       pet.update(1 / 60, 0, i / 300, { x: 0, y: 1 }, true, false);
       if (pet.playing !== walked[walked.length - 1]) walked.push(pet.playing!);
     }
     expect(walked).not.toContain("relaxed");
+    // The ground clips are the viewer's: in play the cat always floats.
+    for (const clip of [...seen, ...walked]) expect(PET_CLIPS as readonly string[]).toContain(clip);
     pet.dispose();
   });
 
@@ -479,8 +490,12 @@ describe("pet actor", () => {
     for (let i = 0; i < 60 * 7; i++) pet.previewTick(1 / 60);
     expect(pet.playing).toBe("emerge");
     expect(pet.clipGroups.get("emerge")!.isPlaying).toBe(true);
-    expect(PET_ACTIONS).toEqual(PET_CLIPS);
-    expect(pet.clipGroups.size).toBe(PET_CLIPS.length);
+    pet.previewAction("ground_run");
+    pet.previewTick(1 / 60);
+    expect(pet.playing).toBe("ground_run");
+    expect(pet.clipGroups.get("ground_run")!.isPlaying).toBe(true);
+    expect(pet.clipGroups.get("emerge")!.isPlaying).toBe(false);
+    expect(pet.clipGroups.size).toBe(PET_ACTIONS.length);
     pet.dispose();
   });
 

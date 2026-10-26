@@ -23,6 +23,9 @@ clips and skin out of a local PoE install):
   relaxed  idle_relaxed_floating  once 14.67 s figure swim, ball chasing its tail, uncurl
   emerge   happy_floating         once 3.0 s   the summon: dropping in somersaulting
 
+PoE's seven ground clips (GROUND_CLIPS: idle, run, happy, idle_relaxed and its
+three variants) ride along as `ground_*` for the asset viewer; the game never plays them.
+
 The clips carry PoE's root path, height above the ground included, so the
 runtime stands the cat on the ground at its spot. One change from PoE: where a
 one-shot takes the body under the hover's lowest (the relaxed swim skims the
@@ -576,6 +579,17 @@ CLIPS = [
     ("gallop", "run_floating", True),
     ("relaxed", "idle_relaxed_floating", False),
     ("emerge", "happy_floating", False),
+]
+# The rest of PoE's cat, on the ground, for the asset viewer alone: the game never
+# plays them (the cat always floats), so they are neither lifted nor float-checked.
+GROUND_CLIPS = [
+    ("ground_idle", "idle", True),
+    ("ground_run", "run", True),
+    ("ground_happy", "happy", False),
+    ("ground_relaxed", "idle_relaxed", False),
+    ("ground_relaxed_1", "idle_relaxed_01", False),
+    ("ground_relaxed_2", "idle_relaxed_02", False),
+    ("ground_relaxed_3", "idle_relaxed_03", False),
 ]
 # The cat always floats: where a one-shot takes the body's middle under the
 # hover's lowest middle, or any body point under the hover's lowest (PoE's
@@ -1290,14 +1304,14 @@ def author_clips(arm, body, rig):
     fit = Fit(arm, rig, poe_locals(rig, None, 0))
     arm.animation_data_create()
     lows, middles = {}, {}
-    for clip, poe_clip, loops in CLIPS:
+    for clip, poe_clip, loops in CLIPS + GROUND_CLIPS:
         tracks = poe_tracks(rig, poe_clip)
         length = int(max(k[-1, 0] for t in tracks.values() for k in t if len(k)))
         posed = [even_tail(rig, poe_locals(rig, tracks, f), fit.offset) for f in range(length + 1)]
         poses = [retarget(arm, fit, p, 0.0) for p in posed]
         span = measured(arm, body, poses)
         lift = numpy.zeros(length + 1)
-        if not loops:
+        if not loops and (clip, poe_clip, loops) in CLIPS:
             lift = numpy.maximum(lifts(span[:, 2], middles["hover"]),
                                  lifts(span[:, 0], lows["hover"]))
             if lift.any():
