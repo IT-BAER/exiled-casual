@@ -10,6 +10,49 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- A Celestial Cat companion floats beside you: a black cat with a starry coat
+  and cyan crescent eyes that hovers at your side, gallops through the air
+  when you run, swims and chases its tail when you stand still, and drops in
+  somersaulting when you arrive. Turn it off under Options.
+- Ground Slam breaks the floor: rock chunks and dirt fly along the blow and a
+  jagged crack stays behind, fading over time.
+- Ember Bolt flies as one comet with a white-hot head and a burning tail, and
+  Blink smears a violet comet from where you left to where you arrived.
+- Loot labels use the NeverSink semi-strict filter's styles: currency by its
+  tier, waystones by map tier, and so on.
+- The Strand has its own loading screen.
+
+### Changed
+
+- Energy shield is a ring of crystal segments over the life globe, filling and
+  draining smoothly, like PoE2's.
+- The tower shield is braced low at your flank while you run and attack,
+  instead of swinging around with your arm.
+- Casting turns the wand onto the target from the shoulder instead of
+  stretching the arm wide.
+- Tier 1 maps are area level 2, so the first map no longer starts at level 8.
+- A hovered loot label rises over the labels that overlap it.
+- Walking to a monster, label, portal or the map device routes around
+  obstacles.
+- Brazier flames sit inside their bowls and are fuller at the bottom.
+
+### Fixed
+
+- Items dropped on the hideout floor stay there across map trips and reloads.
+- An orb or Scroll of Wisdom works on a worn piece without taking it off.
+- Swapping or taking off gear with a full backpack says Inventory Full instead
+  of snapping back silently.
+- A stash piece dropped on a paper-doll slot is worn, and the old piece goes
+  to the stash.
+- A boss killed during its wind-up no longer lands the slam.
+- The Ironsworn Tower Shield has its 18 base Armour.
+- Rare item names no longer borrow words from base names.
+- The Emberbound robe and the Stalker coat no longer show the leg through the
+  skirt's slit.
+- Cinder Ground no longer draws a black outline.
+
 ## [0.4.7] - 2026-10-23
 
 ### Added
