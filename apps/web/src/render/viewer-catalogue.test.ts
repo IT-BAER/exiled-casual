@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
-import { CLASS_LIST } from "@exiled/content-runtime";
+import { CLASS_LIST, MONSTERS } from "@exiled/content-runtime";
 import { CLIP_NAME, gaitOf, SLOTS, type RigClip } from "./rig";
 import { SPAWNABLE } from "./gallery";
 import { PET_ACTIONS, PET_CLIPS } from "./pet";
@@ -20,6 +20,9 @@ import {
   rawClipLabel,
   DEFAULT_VIEWER_STATE,
   FX_PREVIEWS,
+  creatureActions,
+  creatureTelegraph,
+  telegraphFrame,
 } from "./viewer-catalogue";
 
 function glbJson(path: string): { meshes?: { name?: string }[]; nodes?: { name?: string }[]; animations?: { name?: string }[] } {
@@ -125,6 +128,57 @@ describe("skill FX previews", () => {
     }
     expect(FX_PREVIEWS.find((f) => f.skillId === "skill.snap_shot.v1")?.kind).toBe("arrow");
     expect(ids).not.toContain("skill.town_portal.v1");
+  });
+});
+
+describe("creature telegraphs", () => {
+  it("offers Charge to the brutes and Slam to the heavies and bosses, nothing to the rest", () => {
+    for (const [id, def] of MONSTERS) {
+      const actions = creatureActions(id);
+      expect(actions.slice(0, 4)).toEqual(["idle", "walk", "attack", "death"]);
+      expect(actions.includes("charge"), id).toBe(def.charge !== undefined);
+      expect(actions.includes("slam"), id).toBe(def.heavy !== undefined || def.boss?.slam !== undefined);
+    }
+    expect(creatureActions("monster.vaal_construct.v1")).toContain("charge");
+    expect(creatureActions("monster.blood_sentinel.v1")).toContain("slam");
+    expect(creatureActions("monster.cinder_warden.v1")).toContain("slam");
+    expect(creatureActions("monster.vaal_husk.v1")).toEqual(["idle", "walk", "attack", "death"]);
+  });
+
+  it("reads a brute's charge in seconds and units: 0.6s rooted, 5.4/s, halfway through its 3..7 reach", () => {
+    const tg = creatureTelegraph("monster.vaal_construct.v1", "charge")!;
+    expect(tg.windupS).toBeCloseTo(0.6, 5);
+    expect(tg.speed).toBeCloseTo(5.4, 5);
+    expect(tg.distance).toBeCloseTo(5, 5);
+    expect(tg.radius).toBeCloseTo(1.1, 5);
+    expect(tg.durationS).toBeCloseTo(0.6 + 5 / 5.4, 5);
+  });
+
+  it("reads a trash heavy's slam and a boss's slam off their own specs", () => {
+    const heavy = creatureTelegraph("monster.blood_sentinel.v1", "slam")!;
+    expect(heavy.windupS).toBeCloseTo(1, 5);
+    expect(heavy.radius).toBeCloseTo(2.6, 5);
+    expect(heavy.durationS).toBeCloseTo(1, 5);
+    const boss = creatureTelegraph("monster.cinder_warden.v1", "slam")!;
+    expect(boss.radius).toBeCloseTo(3.5, 5);
+    expect(boss.windupS).toBeCloseTo(1, 5);
+    expect(creatureTelegraph("monster.vaal_husk.v1", "slam")).toBeNull();
+    expect(creatureTelegraph("monster.blood_sentinel.v1", "charge")).toBeNull();
+  });
+
+  it("roots the brute through the wind-up, then runs it to the landing point at its speed", () => {
+    const tg = creatureTelegraph("monster.vaal_construct.v1", "charge")!;
+    expect(telegraphFrame(tg, 0)).toEqual({ progress: 0, travelled: 0, done: false });
+    expect(telegraphFrame(tg, 0.5).travelled).toBe(0);
+    expect(telegraphFrame(tg, 0.6 + 0.5).travelled).toBeCloseTo(2.7, 5);
+    expect(telegraphFrame(tg, 0.6 + 0.5).progress).toBeCloseTo(1.1 / tg.durationS, 5);
+    expect(telegraphFrame(tg, 9)).toEqual({ progress: 1, travelled: 5, done: true });
+  });
+
+  it("never moves a slammer", () => {
+    const tg = creatureTelegraph("monster.cinder_warden.v1", "slam")!;
+    expect(telegraphFrame(tg, 0.5)).toEqual({ progress: 0.5, travelled: 0, done: false });
+    expect(telegraphFrame(tg, 1).done).toBe(true);
   });
 });
 

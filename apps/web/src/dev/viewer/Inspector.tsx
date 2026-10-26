@@ -4,7 +4,6 @@ import { SLOTS, type Looks, type Slot } from "../../render/rig";
 import { PET_ACTIONS, type PetAction } from "../../render/pet";
 import {
   CAMERAS,
-  CREATURE_ACTIONS,
   DIRECTIONS_8,
   FX_PREVIEWS,
   GAITS,
@@ -56,6 +55,8 @@ export interface InspectorProps {
   onRepeat: (on: boolean) => void;
   onCreature: (action: CreatureAction) => void;
   creatureAction: CreatureAction;
+  /** What this creature can do: the base four plus the tells its spec carries. */
+  creatureActions: readonly CreatureAction[];
   onPet: (action: PetAction) => void;
   petAction: PetAction;
   dead: boolean;
@@ -221,12 +222,12 @@ function LoopToggle(p: InspectorProps): React.ReactElement {
 }
 
 function CreatureSection(p: InspectorProps): React.ReactElement {
-  const label: Record<CreatureAction, string> = { idle: "Idle", walk: "Walk", attack: "Attack", death: "Die" };
+  const label: Record<CreatureAction, string> = { idle: "Idle", walk: "Walk", attack: "Attack", death: "Die", charge: "Charge", slam: "Slam" };
   return (
     <section className="av-section">
       <h3 className="av-h">Actions</h3>
       <div className="av-chips">
-        {CREATURE_ACTIONS.map((a) => (
+        {p.creatureActions.map((a) => (
           <button key={a} type="button" className={`av-chip${a === "death" ? " av-danger" : ""}`}
             aria-pressed={!p.dead && (a === "idle" || a === "walk") && p.creatureAction === a}
             disabled={p.dead} onClick={() => p.onCreature(a)}>
@@ -237,7 +238,7 @@ function CreatureSection(p: InspectorProps): React.ReactElement {
       </div>
       <LoopToggle {...p} />
       <p className="av-note">
-        {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts. Die drops it through the ragdoll."}
+        {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts. Charge and Slam draw the game's floor tell on its own timings. Die drops it through the ragdoll."}
       </p>
     </section>
   );

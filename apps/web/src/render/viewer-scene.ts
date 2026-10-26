@@ -41,7 +41,7 @@ import { attachCreature, loadMonsters, type CreatureRig } from "./monsters";
 import { loadPet, PetActor, type PetAction } from "./pet";
 import { disposeRagdoll, dropDead, enablePhysics } from "./ragdoll";
 import { blinkBurst, meleeImpact, setStreakLength } from "./skill-fx";
-import { makeMesh } from "./meshes";
+import { makeMesh, updateChargePath, updateTelegraph, Y_LIFT } from "./meshes";
 import {
   BETA_AT_DEFAULT,
   CAMERA_ALPHA,
@@ -58,10 +58,13 @@ import { DEFAULT_SETTINGS } from "../settings";
 import {
   CHARACTER_SUBJECT,
   PET_SUBJECT,
+  creatureTelegraph,
   mainGroup,
   ONE_SHOTS,
   rawClipLabel,
+  telegraphFrame,
   type CreatureAction,
+  type CreatureTelegraph,
   type FxPreview,
   type ViewerCamera,
   type ViewerLight,
@@ -157,6 +160,8 @@ export const CAMERA_ANGLES: Record<Exclude<ViewerCamera, "free">, { alpha: numbe
 
 /** Which way an exhibit faces, for what the FX previews throw and where. */
 const FACING = new Vector3(0, 0, 1);
+/** How long a charged body stands on its landing point before going home. */
+const TELL_HOLD_S = 0.6;
 
 /** The clip the timeline is showing, where it is in it, and the clock it runs on. */
 export interface TimelineState {
@@ -366,6 +371,9 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   let floorY = 0;
   /** Timers FX previews left running, so a subject change cancels them. */
   let timers: number[] = [];
+  let subjectId: string | null = null;
+  /** A ground tell playing out; ending it puts a charged body back where it stood. */
+  let tell: { mesh: Mesh; tick: ReturnType<typeof scene.onBeforeRenderObservable.add>; home: Vector3 } | null = null;
 
   scene.onBeforeRenderObservable.add(() => {
     if (moving !== null) {
@@ -376,7 +384,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     if (!paused) pet?.previewTick((engine.getDeltaTime() / 1000) * scene.animationTimeScale);
     if (!repeat || paused || lastAction === null) return;
     const group = lastAction.group();
-    if (group?.isPlaying) { repeatAt = 0; return; }
+    if (group?.isPlaying || tell !== null) { repeatAt = 0; return; }
     const now = performance.now();
     if (repeatAt === 0) repeatAt = now + 400;
     else if (now >= repeatAt) { repeatAt = 0; lastAction.run(); }
@@ -456,7 +464,56 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     for (const m of subjectMeshes()) shadows.addShadowCaster(m, false);
   };
 
+  const endTell = () => {
+    if (tell === null) return;
+    scene.onBeforeRenderObservable.remove(tell.tick);
+    if (!tell.mesh.isDisposed()) tell.mesh.dispose();
+    host?.position.copyFrom(tell.home);
+    creature?.setLocomotion(0);
+    tell = null;
+  };
+
+  /**
+   * A charge or slam as the game draws it: the swing starts with the wind-up
+   * (the sim stamps `lastAttackTick` then), the tell fills on the game's own
+   * mesh, a charger runs down its path after the root, and the tell is gone at
+   * impact. The body holds there a beat before going home, so Repeat can loop it.
+   */
+  const playTell = (c: CreatureRig, tg: CreatureTelegraph) => {
+    endTell();
+    if (host === null) return;
+    const h = host;
+    const home = h.position.clone();
+    const kind = tg.kind === "charge" ? "chargePath" : "telegraph";
+    const at = home.add(FACING.scale(tg.distance));
+    const mesh = makeMesh(scene, kind, `viewer-tell-${tg.kind}-${performance.now()}`);
+    mesh.position.set(at.x, floorY + Y_LIFT[kind], at.z);
+    if (kind === "telegraph") mesh.scaling.set(tg.radius, 1, tg.radius);
+    moving = null;
+    c.noteAttack(++attackTick);
+    let t = 0;
+    const tick = scene.onBeforeRenderObservable.add(() => {
+      if (paused) return;
+      t += (engine.getDeltaTime() / 1000) * scene.animationTimeScale;
+      const f = telegraphFrame(tg, t);
+      if (!mesh.isDisposed()) {
+        if (kind === "chargePath") {
+          h.position.copyFrom(home.add(FACING.scale(f.travelled)));
+          c.setLocomotion(f.travelled > 0 && !f.done ? tg.speed : 0);
+          updateChargePath(mesh, f.progress, { x: h.position.x, y: h.position.z });
+        } else updateTelegraph(mesh, f.progress);
+        if (f.done) {
+          mesh.dispose();
+          c.setLocomotion(0);
+        }
+      }
+      if (t >= tg.durationS + TELL_HOLD_S) endTell();
+    });
+    tell = { mesh, tick, home };
+  };
+
   const takeDown = () => {
+    endTell();
     for (const t of timers) window.clearTimeout(t);
     timers = [];
     clearSkeletons();
@@ -563,6 +620,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     async show(id) {
       takeDown();
       host = new Mesh(`viewer-${id}`, scene);
+      subjectId = id;
       if (id === CHARACTER_SUBJECT.id) {
         rig = attachRig(scene, host);
         if (rig !== null && looks !== null) rig.setLooks(looks);
@@ -619,6 +677,15 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     async creatureAction(action) {
       const c = creature;
       if (c === null || host === null) return false;
+      endTell();
+      if (action === "charge" || action === "slam") {
+        const tg = dead || subjectId === null ? null : creatureTelegraph(subjectId, action);
+        if (tg === null) return false;
+        const run = () => playTell(c, tg);
+        run();
+        lastAction = { run, group: () => c.clipGroups.get("attack") ?? null };
+        return true;
+      }
       if (action === "death") {
         if (dead) return false;
         if (!(await enablePhysics(scene)) || creature !== c || host === null) return false;

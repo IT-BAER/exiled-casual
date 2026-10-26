@@ -6,7 +6,8 @@
  * from what the game already ships (the gallery, the rig's clip table, a class's
  * starting gear), so an asset added to the game appears here unprompted.
  */
-import { characterClass, SKILLS } from "@exiled/content-runtime";
+import { characterClass, MONSTERS, SKILLS } from "@exiled/content-runtime";
+import { FP_SCALE } from "@exiled/fixed-point";
 import { PROP_KINDS } from "./props";
 import { fxProfile } from "./skill-fx";
 import { SPAWNABLE, type Spawnable } from "./gallery";
@@ -111,7 +112,60 @@ export const DIRECTIONS_8 = [
 
 /** What a creature can be asked to do. Death hands the body to the ragdoll. */
 export const CREATURE_ACTIONS = ["idle", "walk", "attack", "death"] as const;
-export type CreatureAction = (typeof CREATURE_ACTIONS)[number];
+export type TelegraphAction = "charge" | "slam";
+export type CreatureAction = (typeof CREATURE_ACTIONS)[number] | TelegraphAction;
+
+const TICK_S = 1 / 30;
+const toUnits = (f: number) => f / FP_SCALE;
+
+/** A ground tell as the viewer plays it, in seconds and world units. */
+export interface CreatureTelegraph {
+  kind: TelegraphAction;
+  radius: number;
+  windupS: number;
+  /** Dash speed after the wind-up; 0 for a slam, which never moves. */
+  speed: number;
+  /** How far ahead the tell lands. */
+  distance: number;
+  durationS: number;
+}
+
+/**
+ * The tell a monster's own spec draws. A charge lands halfway through its reach
+ * (the sim aims at wherever the player stands inside it); a slam sits one radius
+ * out, so its rim meets the body instead of the disc swallowing it.
+ */
+export function creatureTelegraph(defId: string, kind: TelegraphAction): CreatureTelegraph | null {
+  const def = MONSTERS.get(defId);
+  if (kind === "charge") {
+    const c = def?.charge;
+    if (!c) return null;
+    const windupS = c.windupTicks * TICK_S;
+    const speed = toUnits(c.speedFixed);
+    const distance = toUnits(c.minRangeFixed + c.maxRangeFixed) / 2;
+    return { kind, radius: toUnits(c.radiusFixed), windupS, speed, distance, durationS: windupS + distance / speed };
+  }
+  const s = def?.heavy ?? def?.boss?.slam;
+  if (!s) return null;
+  const windupS = s.windupTicks * TICK_S;
+  const radius = toUnits(s.radiusFixed);
+  return { kind, radius, windupS, speed: 0, distance: Math.min(radius, toUnits(s.rangeFixed)), durationS: windupS };
+}
+
+/** Where a tell stands `t` seconds in: its fill progress and how far the body has run. */
+export function telegraphFrame(tg: CreatureTelegraph, t: number): { progress: number; travelled: number; done: boolean } {
+  return {
+    progress: Math.min(1, Math.max(0, t / tg.durationS)),
+    travelled: Math.min(tg.distance, Math.max(0, (t - tg.windupS) * tg.speed)),
+    done: t >= tg.durationS,
+  };
+}
+
+/** The base actions plus the tells this species' spec carries. */
+export function creatureActions(defId: string): CreatureAction[] {
+  const tells = (["charge", "slam"] as const).filter((k) => creatureTelegraph(defId, k) !== null);
+  return [...CREATURE_ACTIONS, ...tells];
+}
 
 /** How a skill reads on screen, which decides what the viewer spawns for it. */
 export type FxKind = "bolt" | "arrow" | "melee" | "ground" | "blink";

@@ -11,7 +11,7 @@ function props(over: Partial<InspectorProps>): InspectorProps {
   return {
     hidden: false, kind: "character", vocab: {}, looks: NO_LOOKS, onLooks: vi.fn(), onPreset: vi.fn(),
     gait: "idle", dir: "f", onMotion: vi.fn(), onShot: vi.fn(), repeat: false, onRepeat: vi.fn(),
-    onCreature: vi.fn(), creatureAction: "idle", dead: false, onReset: vi.fn(),
+    onCreature: vi.fn(), creatureAction: "idle", creatureActions: ["idle", "walk", "attack", "death"], dead: false, onReset: vi.fn(),
     rawClips: [], raw: null, onRaw: vi.fn(), onFx: vi.fn(),
     light: "workshop", camera: "front", toggles: { grid: false, wireframe: false, skeleton: false, turntable: false },
     onLight: vi.fn(), onCamera: vi.fn(), onToggles: vi.fn(), stats: null, onCapture: vi.fn(), onClose: vi.fn(),
@@ -29,5 +29,18 @@ describe("Inspector actions loop", () => {
     expect(onRepeat).toHaveBeenCalledWith(true);
     rerender(<Inspector {...props({ kind, onRepeat, repeat: true })} />);
     expect(screen.getByRole("button", { name: /loop/i })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("Inspector creature tells", () => {
+  it("offers only the tells this creature has, and plays the one pressed", () => {
+    const onCreature = vi.fn();
+    const { rerender } = render(<Inspector {...props({ kind: "creature", onCreature })} />);
+    expect(screen.queryByRole("button", { name: "Charge" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Slam" })).toBeNull();
+    rerender(<Inspector {...props({ kind: "creature", onCreature, creatureActions: ["idle", "walk", "attack", "death", "charge"] })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Charge" }));
+    expect(onCreature).toHaveBeenCalledWith("charge");
+    expect(screen.queryByRole("button", { name: "Slam" })).toBeNull();
   });
 });

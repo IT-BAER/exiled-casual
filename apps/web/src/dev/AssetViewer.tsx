@@ -27,6 +27,7 @@ import {
   CHARACTER_SUBJECT,
   PET_SUBJECT,
   classPreset,
+  creatureActions,
   DIRECTIONS_8,
   FX_PREVIEWS,
   GAITS,
@@ -113,8 +114,8 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     } else if (verb === "fx") {
       const fx = FX_PREVIEWS.find((f) => f.skillId === arg);
       if (fx) v.fireFx(fx);
-    } else if (verb === "attack") {
-      void v.creatureAction("attack");
+    } else if (verb === "attack" || verb === "charge" || verb === "slam") {
+      void v.creatureAction(verb);
     } else if (verb === "pet" && (PET_ACTIONS as readonly string[]).includes(arg)) {
       v.petAction(arg as PetAction);
       setPetAct(arg as PetAction);
@@ -248,7 +249,7 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     if (!v) return;
     void v.creatureAction(a).then((ok) => { if (a === "death" && ok) setDead(true); });
     if (a === "idle" || a === "walk") { setCreatureAct(a); setClip(a === "walk" ? "walk:f" : null); }
-    if (a === "attack") setClip("attack");
+    if (a === "attack" || a === "charge" || a === "slam") setClip(a);
   };
 
   const petDo = (a: PetAction) => {
@@ -331,6 +332,7 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
         onShot={shot}
         onCreature={creature}
         creatureAction={creatureAct}
+        creatureActions={creatureActions(subject)}
         onPet={petDo}
         petAction={petAct}
         dead={dead}
