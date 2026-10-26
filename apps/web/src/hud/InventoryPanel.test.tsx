@@ -58,29 +58,55 @@ describe("InventoryPanel", () => {
     }
   });
 
-  it("opens on the Inventory tab and swaps the paper-doll for Cosmetics, where the cat is switched", () => {
-    const onPetToggle = vi.fn();
-    render(<InventoryPanel inventory={inv} pet={true} onPetToggle={onPetToggle} onClose={() => {}} />);
+  it("carries its two tabs in the header band and opens on the Inventory page", () => {
+    render(<InventoryPanel inventory={inv} onClose={() => {}} />);
+    const band = screen.getByTestId("inventory-close").parentElement!;
+    expect(band.contains(screen.getByTestId("inventory-tab"))).toBe(true);
+    expect(band.contains(screen.getByTestId("cosmetics-tab"))).toBe(true);
     expect(screen.getByTestId("inventory-tab").getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("equip-slot-helmet")).toBeTruthy();
+    expect(screen.getByTestId("currency-strip")).toBeTruthy();
     expect(screen.queryByTestId("cosmetics-page")).toBeNull();
+  });
 
+  it("gives the Cosmetics page the whole pane: PoE1's slot plate and the owned strip, no backpack", () => {
+    render(<InventoryPanel inventory={inv} onClose={() => {}} />);
     fireEvent.click(screen.getByTestId("cosmetics-tab"));
     expect(screen.getByTestId("cosmetics-tab").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("cosmetics-page")).toBeTruthy();
     expect(screen.queryByTestId("equip-slot-helmet")).toBeNull();
-    const page = screen.getByTestId("cosmetics-page");
-    expect(page.textContent).toContain("Pets");
-    expect(page.textContent).toContain("Celestial Cat");
-    // The backpack stays: only the paper-doll's box changes.
-    expect(screen.getByTestId("inventory-item-0")).toBeTruthy();
-
-    const cat = screen.getByRole("checkbox", { name: "Celestial Cat" });
-    expect(cat.getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(cat);
-    expect(onPetToggle).toHaveBeenCalledWith(false);
+    expect(screen.queryByTestId("inventory-item-0")).toBeNull();
+    expect(screen.queryByTestId("currency-strip")).toBeNull();
+    for (const slot of ["weapon1", "weapon2", "helmet", "body", "gloves", "boots", "belt", "amulet", "portrait", "pet"]) {
+      expect(screen.getByTestId(`cosmetic-slot-${slot}`), slot).toBeTruthy();
+    }
+    // Five flask skins between two squares, as the reference has them.
+    for (let i = 1; i <= 5; i++) expect(screen.getByTestId(`cosmetic-slot-flask${i}`)).toBeTruthy();
+    expect(screen.getByTestId("cosmetics-owned")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("inventory-tab"));
     expect(screen.getByTestId("equip-slot-helmet")).toBeTruthy();
+    expect(screen.getByTestId("inventory-item-0")).toBeTruthy();
+  });
+
+  it("puts the Celestial Cat in the Pet slot from the owned strip and takes it back out", () => {
+    const onPetToggle = vi.fn();
+    const { rerender } = render(<InventoryPanel inventory={inv} pet={false} onPetToggle={onPetToggle} onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId("cosmetics-tab"));
+    const pet = () => screen.getByTestId("cosmetic-slot-pet");
+    expect(pet().querySelector("img")).toBeNull();
+
+    const owned = screen.getByTestId("cosmetic-owned-celestial-cat");
+    fireEvent.mouseEnter(owned, { clientX: 100, clientY: 100 });
+    expect(screen.getByTestId("item-tooltip").textContent).toContain("Celestial Cat");
+    fireEvent.mouseLeave(owned);
+    fireEvent.click(owned);
+    expect(onPetToggle).toHaveBeenLastCalledWith(true);
+
+    rerender(<InventoryPanel inventory={inv} pet={true} onPetToggle={onPetToggle} onClose={() => {}} />);
+    expect(pet().querySelector("img")?.getAttribute("alt")).toBe("Celestial Cat");
+    fireEvent.click(pet());
+    expect(onPetToggle).toHaveBeenLastCalledWith(false);
   });
 
   it("captions the flasks with the keys the HUD drinks them on", () => {

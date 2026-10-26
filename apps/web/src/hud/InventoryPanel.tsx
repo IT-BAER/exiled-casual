@@ -9,7 +9,6 @@ import { playDropSound } from "../audio/drop-sound";
 import { playSfx } from "../audio/sfx";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { keyCap } from "../settings";
-import { Gem } from "../menu/OptionsPanel";
 import { BAR_H, ORB_RISE } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
@@ -132,8 +131,10 @@ export const PANE: React.CSSProperties = {
  * cream, and the round stud of a close button in the corner. `bleed` is the
  * pane's own padding, which the band has to pull back over to reach the frame.
  */
-export function PaneHeader({ title, bleed, onClose, testId }: {
+export function PaneHeader({ title, bleed, onClose, testId, left, right }: {
   title: string; bleed?: string; onClose: () => void; testId: string;
+  /** PoE1's page tabs, standing on the band's foot at its left edge and left of the close stud. */
+  left?: React.ReactNode; right?: React.ReactNode;
 }) {
   return (
     <div
@@ -164,6 +165,8 @@ export function PaneHeader({ title, bleed, onClose, testId }: {
       <span style={{ fontFamily: DISPLAY, fontSize: 19, fontWeight: 700, letterSpacing: 5, textTransform: "uppercase", color: "#f2dfae", textShadow: "0 1px 1px rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.6)" }}>
         {title}
       </span>
+      {left && <span style={{ position: "absolute", left: 10, bottom: 0 }}>{left}</span>}
+      {right && <span style={{ position: "absolute", right: 38, bottom: 0 }}>{right}</span>}
       <button
         data-testid={testId}
         onClick={onClose}
@@ -277,6 +280,152 @@ const PAPER_DOLL: { slot: EquipSlotId; x: number; y: number; w: number; h: numbe
   { slot: "belt", x: 4, y: 5, w: 2, h: 1, label: "Belt" },
   { slot: "ring2", x: 6, y: 5, w: 1, h: 1, label: "Ring" },
 ];
+
+/**
+ * PoE1's Cosmetics page: one carved plate of empty frames that mirrors the
+ * paper-doll. Pixel rectangles read off the reference's plate (524 x 615, the
+ * owner's PoE1 capture of 26 October), made symmetric about its centre line and
+ * drawn as percentages of a box of the same aspect. Small frames carry no label:
+ * the word does not fit, and PoE1 shows an emblem there, not a name.
+ */
+const COSMETIC_PLATE = { w: 524, h: 615 };
+const COSMETIC_SLOTS: { id: string; x: number; y: number; w: number; h: number; label?: string }[] = [
+  { id: "weapon1", x: 4, y: 18, w: 106, h: 207, label: "Weapon" },
+  { id: "weapon1-fx1", x: 4, y: 231, w: 51, h: 49 },
+  { id: "weapon1-fx2", x: 59, y: 231, w: 51, h: 49 },
+  { id: "weapon2", x: 414, y: 18, w: 106, h: 207, label: "Weapon" },
+  { id: "weapon2-fx1", x: 414, y: 231, w: 51, h: 49 },
+  { id: "weapon2-fx2", x: 469, y: 231, w: 51, h: 49 },
+  { id: "helmet-attach1", x: 151, y: 8, w: 50, h: 47 },
+  { id: "helmet-attach2", x: 151, y: 60, w: 50, h: 47 },
+  { id: "helmet", x: 209, y: 5, w: 106, h: 107, label: "Helmet" },
+  { id: "body", x: 209, y: 119, w: 106, h: 158, label: "Body" },
+  { id: "back", x: 128, y: 120, w: 73, h: 75, label: "Back" },
+  { id: "wings", x: 128, y: 200, w: 73, h: 75, label: "Wings" },
+  { id: "body-attach1", x: 329, y: 35, w: 56, h: 55 },
+  { id: "body-attach2", x: 329, y: 103, w: 56, h: 55 },
+  { id: "body-attach3", x: 329, y: 171, w: 56, h: 55 },
+  { id: "body-attach4", x: 329, y: 239, w: 56, h: 55 },
+  { id: "gloves-attach1", x: 23, y: 302, w: 51, h: 50 },
+  { id: "gloves-attach2", x: 23, y: 360, w: 51, h: 50 },
+  { id: "gloves", x: 83, y: 302, w: 105, h: 106, label: "Gloves" },
+  { id: "belt", x: 209, y: 287, w: 106, h: 55, label: "Belt" },
+  { id: "amulet", x: 234, y: 356, w: 56, h: 56, label: "Amulet" },
+  { id: "boots", x: 336, y: 302, w: 105, h: 106, label: "Boots" },
+  { id: "boots-attach1", x: 450, y: 302, w: 51, h: 50 },
+  { id: "boots-attach2", x: 450, y: 360, w: 51, h: 50 },
+  { id: "skill1", x: 20, y: 425, w: 84, h: 85, label: "Skill" },
+  ...[127, 182, 237, 292, 347].map((x, i) => ({ id: `flask${i + 1}`, x, y: 425, w: 50, h: 104, label: "Flask" })),
+  { id: "skill2", x: 420, y: 425, w: 84, h: 85, label: "Skill" },
+  { id: "portrait", x: 18, y: 522, w: 85, h: 85, label: "Portrait" },
+  { id: "footprints", x: 146, y: 545, w: 57, h: 57 },
+  { id: "effect", x: 211, y: 542, w: 78, h: 65, label: "Effect" },
+  { id: "pet", x: 298, y: 542, w: 78, h: 65, label: "Pet" },
+  { id: "aura", x: 421, y: 522, w: 85, h: 85, label: "Aura" },
+];
+
+/** The one cosmetic that exists: the companion the Pet slot holds. */
+const CELESTIAL_CAT = {
+  name: "Celestial Cat", rarity: "normal", itemClass: "Pet", lines: [] as string[],
+  icon: "/hud/cosmetic_celestial_cat.webp",
+};
+
+/**
+ * The Cosmetics page under the header: the slot plate, then the strip of what
+ * he owns along the foot (PoE1). The cat goes in from the strip and comes out
+ * of its slot with a click; nothing else is ownable yet, so every other frame
+ * stays empty.
+ */
+function CosmeticsPage({ pet, onPetToggle }: { pet: boolean; onPetToggle?: (on: boolean) => void }) {
+  const [tip, setTip] = React.useState<{ x: number; y: number; worn: boolean } | null>(null);
+  const hover = (worn: boolean) => ({
+    onMouseEnter: (e: React.MouseEvent) => setTip({ x: e.clientX, y: e.clientY, worn }),
+    onMouseMove: (e: React.MouseEvent) => setTip({ x: e.clientX, y: e.clientY, worn }),
+    onMouseLeave: () => setTip(null),
+  });
+  const catImg = <img src={CELESTIAL_CAT.icon} alt={CELESTIAL_CAT.name} draggable={false} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", pointerEvents: "none" }} />;
+  const frame: React.CSSProperties = {
+    background: "radial-gradient(ellipse at 50% 40%, #1c1e1a 0%, #0b0c0a 100%)",
+    border: "1px solid #a98538",
+    boxShadow: "0 0 0 1px #2a1f0c, inset 0 0 0 1px #000, inset 0 0 12px rgba(0,0,0,0.85)",
+    boxSizing: "border-box",
+  };
+  return (
+    <div data-testid="cosmetics-page" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      {/* The plate takes the pane's width unless that makes it taller than the room
+          left above the strip; then it narrows, keeping its aspect, so the pane never scrolls. */}
+      <div style={{ flex: 1, minHeight: 0, containerType: "size", marginBottom: 8 }}>
+      <div
+        style={{
+          position: "relative", margin: "0 auto", aspectRatio: `${COSMETIC_PLATE.w} / ${COSMETIC_PLATE.h}`,
+          width: `min(100cqw, 100cqh * ${COSMETIC_PLATE.w / COSMETIC_PLATE.h})`, boxSizing: "border-box",
+          // The tile alone is lit brighter than the reference's plate; the vignette takes it down to it.
+          backgroundImage: "radial-gradient(ellipse at 50% 45%, rgba(10,8,4,0.25), rgba(10,8,4,0.6)), url(/textures/ui/cosmetic_plate_v1.webp)",
+          backgroundSize: "auto, 256px 256px", backgroundColor: "#4a3d1e",
+          border: `1px solid ${GOLD_DIM}`, boxShadow: "inset 0 0 24px rgba(0,0,0,0.7)",
+        }}
+      >
+        {COSMETIC_SLOTS.map((s) => {
+          const worn = s.id === "pet" && pet;
+          return (
+            <div
+              key={s.id}
+              data-testid={`cosmetic-slot-${s.id}`}
+              onClick={worn ? () => { setTip(null); onPetToggle?.(false); } : undefined}
+              {...(worn ? hover(true) : {})}
+              style={{
+                ...frame,
+                position: "absolute",
+                left: `${(s.x / COSMETIC_PLATE.w) * 100}%`, top: `${(s.y / COSMETIC_PLATE.h) * 100}%`,
+                width: `${(s.w / COSMETIC_PLATE.w) * 100}%`, height: `${(s.h / COSMETIC_PLATE.h) * 100}%`,
+                display: "flex", alignItems: "center", justifyContent: "center", padding: 3,
+                color: "#5a4c30", fontSize: `${U_VW * 0.24}vw`, textAlign: "center", userSelect: "none",
+                cursor: worn ? "pointer" : undefined,
+              }}
+            >
+              {worn ? catImg : s.label}
+            </div>
+          );
+        })}
+      </div>
+      </div>
+      {/* Owned cosmetics along the foot, the way PoE1 lists them under the plate. */}
+      <div
+        data-testid="cosmetics-owned"
+        style={{
+          marginTop: "auto", display: "flex", gap: 6, padding: 6,
+          background: "linear-gradient(180deg,#16130c,#0b0906)",
+          border: `1px solid ${GOLD_DIM}`, boxShadow: "inset 0 0 16px rgba(0,0,0,0.85)",
+        }}
+      >
+        <button
+          type="button"
+          data-testid="cosmetic-owned-celestial-cat"
+          aria-label={CELESTIAL_CAT.name}
+          aria-pressed={pet}
+          onClick={() => { if (!pet) { setTip(null); onPetToggle?.(true); } }}
+          {...hover(pet)}
+          style={{
+            ...frame, width: `calc(${CELL} * 1.25)`, height: `calc(${CELL} * 1.25)`, padding: 3,
+            cursor: pet ? "default" : "pointer",
+            // Worn is in the Pet slot; the strip keeps a dimmed copy where it came from.
+            opacity: pet ? 0.4 : 1,
+          }}
+        >
+          {catImg}
+        </button>
+      </div>
+      {tip && (
+        <ItemTooltip
+          {...CELESTIAL_CAT}
+          flavour="Floats along behind you. It never fights."
+          help={tip.worn ? "Click to take it out of the Pet slot." : "Click to put it in the Pet slot."}
+          x={tip.x} y={tip.y}
+        />
+      )}
+    </div>
+  );
+}
 
 // Life or mana flask, in its socket with the hotkey underneath. Same two flasks the
 // HUD shows, on the keys it drinks them on; they cannot be moved or swapped.
@@ -1033,6 +1182,23 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     );
   };
 
+  const tab = (p: "inventory" | "cosmetics") => (
+    <button
+      type="button"
+      data-testid={`${p}-tab`}
+      aria-pressed={page === p}
+      onClick={() => setPage(p)}
+      style={{
+        fontFamily: DISPLAY, fontSize: 12, letterSpacing: 1, padding: "3px 12px", cursor: "pointer",
+        color: page === p ? "#f2dfae" : "#8a7f66",
+        background: page === p ? "linear-gradient(180deg,#2c2516,#14110a)" : "linear-gradient(180deg,#15140f,#0b0a07)",
+        border: `1px solid ${page === p ? GOLD : GOLD_DIM}`, borderBottom: "none", borderRadius: "4px 4px 0 0",
+      }}
+    >
+      {p === "inventory" ? "Inventory" : "Cosmetics"}
+    </button>
+  );
+
   const equipW = `calc(10 * ${U})`; // paper-doll spans 10 units wide
   const equipH = `calc(6 * ${U})`;
   // The grid is the wider of the two, so it is what sets the content width.
@@ -1196,53 +1362,22 @@ export const InventoryPanel = React.memo(function InventoryPanel({
         // one down the pane's gilt edge reads as a browser, not as the game.
         style={{ ...PANE, overflowY: "auto", scrollbarWidth: "none" }}
       >
-        <PaneHeader title="Inventory" onClose={onClose} testId="inventory-close" />
+        {/* PoE1's pair of tabs on the title band: INVENTORY at the left, COSMETICS
+            beside the close stud (poe1-cosmetics-page.webp). */}
+        <PaneHeader title="Inventory" onClose={onClose} testId="inventory-close" left={tab("inventory")} right={tab("cosmetics")} />
 
         {/* The extra foot of padding is the band the mana globe rises into: the
             strip below is pinned to the bottom of this column, so without it the
             globe lands squarely on the currency and on the backpack's last row. */}
         <div style={{ padding: PANEL_PAD, paddingBottom: `calc(${PANEL_PAD} + ${ORB_RISE})`, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
-          {/* PoE2's pair of tabs on the doll's top edge: INVENTORY at the left,
-              COSMETICS at the right (inventory+equipment.png). */}
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            {(["inventory", "cosmetics"] as const).map((p) => (
-              <button
-                key={p}
-                type="button"
-                data-testid={`${p}-tab`}
-                aria-pressed={page === p}
-                onClick={() => setPage(p)}
-                style={{
-                  fontFamily: SERIF, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase",
-                  padding: "2px 14px", cursor: "pointer",
-                  color: page === p ? GOLD : "#8a7f66",
-                  background: page === p ? "linear-gradient(180deg,#221c11,#12100a)" : "#0b0a07",
-                  border: `1px solid ${GOLD_DIM}`, borderBottom: "none",
-                }}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          {page === "cosmetics" ? (
-            <div data-testid="cosmetics-page" style={{ width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
-              <SectionRule>Pets</SectionRule>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", background: "linear-gradient(180deg,#16130c,#0b0906)", border: `1px solid ${GOLD_DIM}` }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, color: GOLD }}>Celestial Cat</div>
-                  <div style={{ fontSize: 11, color: "#8c8069" }}>Floats along behind you. It never fights.</div>
-                </div>
-                <Gem label="Celestial Cat" on={pet} onToggle={(on) => onPetToggle?.(on)} />
-              </div>
-            </div>
-          ) : (
-          /* Equipment paper-doll. The flasks live inside it, in the block the
+          {page === "cosmetics" ? <CosmeticsPage pet={pet} {...(onPetToggle ? { onPetToggle } : {})} /> : (<>
+          {/* Equipment paper-doll. The flasks live inside it, in the block the
               right-hand weapon leaves empty below itself, rather than in a strip
               of their own under the whole doll: that strip cost a full row of
               panel height and pushed the backpack down into the mana globe.
               PoE2's own screen centres them under the doll (inventory+equipment
               .png), but its doll fills its box and ours does not — two columns of
-              bare panel beside the boots is the more obvious wrong. */
+              bare panel beside the boots is the more obvious wrong. */}
           <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
             <div
               style={{
@@ -1278,7 +1413,6 @@ export const InventoryPanel = React.memo(function InventoryPanel({
               />
             ))}
           </div>
-          )}
 
           {/* Backpack grid (functional) */}
           <SectionRule>Backpack</SectionRule>
@@ -1305,6 +1439,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
             <Currency label="Gold" value={gold} />
             <Currency label="Shards" value={shardTotal} />
           </div>
+          </>)}
         </div>
       </div>
     </div>

@@ -584,7 +584,7 @@ function Row({
 }
 
 /** The round gem checkbox. Two plates, swapped; the art carries the state. */
-export function Gem({
+function Gem({
   label,
   on,
   onToggle,
