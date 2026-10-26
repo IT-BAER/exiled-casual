@@ -216,10 +216,12 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=
     # from the hand (net, chain): the widest run of empty 1%-of-H columns.
     # `thigh`: the thighs' outer edge as a fraction of H, for fists that hang
     # touching them; between `knee` (of H) and the hip joint neither a leg nor
-    # the hips claims anything outside it: that is a hand.
+    # the hips claims anything outside it: that is a hand. A (left, right) pair
+    # when the two sides differ.
     if thigh is not None:
         beside = numpy.array([b.name.startswith("leg") or b.name == "hips" for b in bones])
-        out = (numpy.abs(v[:, 0]) > thigh * H) & (v[:, 2] > knee * H) & \
+        reach = numpy.where(v[:, 0] > 0, *(thigh if isinstance(thigh, tuple) else (thigh, thigh))) * H
+        out = (numpy.abs(v[:, 0]) > reach) & (v[:, 2] > knee * H) & \
             (v[:, 2] < bones[index["hips"]].head_local.z)
         d[numpy.ix_(out, beside)] = numpy.inf
     held = []
@@ -334,11 +336,18 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=
     if fused_arms:
         # An arm the generated shell fused down the flank and thigh: the smoothing
         # has blended each chain into the other across the join, so each side drops
-        # the other's weight, and the join is cut below.
+        # the other's weight, and the join is cut below. The carrying arm is parted
+        # from its slab above and keeps its shoulder on the flank.
         dom = W.argmax(axis=1)
-        fist, body = armish[dom], (legs | hips)[dom]
+        free = numpy.zeros(len(bones), dtype=bool)
+        lateral = numpy.zeros(len(v), dtype=bool)
+        for s, t in ((1, "l"), (-1, "r")):
+            if t != carry:
+                free |= armish & numpy.array([b.name.endswith("_" + t) for b in bones])
+                lateral |= s * v[:, 0] > 0
+        fist, body = free[dom], (legs | hips)[dom] & lateral
         W[numpy.ix_(fist, legs | hips)] = 0.0
-        W[numpy.ix_(body, armish)] = 0.0
+        W[numpy.ix_(body, free)] = 0.0
         W /= W.sum(axis=1, keepdims=True)
         cut = fist if cut is None else cut | fist
     keep = numpy.argsort(-W, axis=1)[:, :4]

@@ -1843,11 +1843,12 @@ def wrack_drowned():
     midline and the flukes start at 0.32 H, so past 0.31 H it is the anchor.
     Feet midpoint measured at x 0.04 H as loaded: the offset centres the stance.
     The empty left hand hangs to 0.21 H against a thigh whose outer edge is 0.20 H,
-    and the shell fused both arms down the flank and thigh: `fused_arms` cuts them.
+    and the shell fused that arm down the flank and thigh: `fused_arms` cuts it. The
+    right thigh keeps 0.225 H, or the arm holding the anchor claims its outer face.
     """
     return GeneratedCreature("monster.wrack_drowned.v1", WRACK_DROWNED_SOURCE, "coast", 1.8,
                              normal=WRACK_DROWNED_NORMAL, offset=(-0.072, 0.0),
-                             carry="r", held=0.31, thigh=0.20, knee=0.20, fused_arms=True)
+                             carry="r", held=0.31, thigh=(0.20, 0.225), knee=0.20, fused_arms=True)
 
 
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
