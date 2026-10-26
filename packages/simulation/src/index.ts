@@ -25,7 +25,7 @@ export { registerGroundAreaTick } from "./systems/ground-area";
 export { registerTelegraphResolve } from "./systems/telegraph-resolve";
 export { registerAilmentTick } from "./systems/ailment";
 export { registerMonsterAI } from "./systems/monster-ai";
-export { registerBossAI } from "./systems/boss-ai";
+export { registerBossAI, SUMMON_RING } from "./systems/boss-ai";
 export { registerDamageResolve } from "./systems/damage-resolve";
 export { registerDeath } from "./systems/death";
 export { registerExpiry } from "./systems/expiry";

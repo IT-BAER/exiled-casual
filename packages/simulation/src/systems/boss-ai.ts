@@ -8,7 +8,7 @@ import type { Position, MonsterC, Faction, BossC, TelegraphC, Health, SessionC }
 // Where phase-2 adds appear, as offsets from the boss. Hand-written literals in
 // the codebase's ring idiom (cf. PORTAL_RING / PACK_RING) — no runtime trig, so
 // the summon is deterministic. addCount imps take the first slots.
-const SUMMON_RING: readonly { dx: number; dy: number }[] = [
+export const SUMMON_RING: readonly { dx: number; dy: number }[] = [
   { dx: fp(2.5),  dy: fp(0) },
   { dx: fp(-2.5), dy: fp(0) },
   { dx: fp(0),    dy: fp(2.5) },

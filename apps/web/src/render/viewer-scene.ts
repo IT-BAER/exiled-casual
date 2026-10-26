@@ -35,13 +35,17 @@ import {
   type LinesMesh,
   type Skeleton,
 } from "@babylonjs/core";
+import { MONSTERS } from "@exiled/content-runtime";
 import { buildSkyEnvironment, ENVIRONMENT_INTENSITY, GROUND_COLOR, SKY_COLOR } from "./environment";
 import { attachProp, loadProps, PROP_KINDS, type PropKind } from "./props";
 import { attachCreature, loadMonsters, type CreatureRig } from "./monsters";
 import { loadPet, PetActor, type PetAction } from "./pet";
 import { disposeRagdoll, dropDead, enablePhysics } from "./ragdoll";
 import { blinkBurst, meleeImpact, setStreakLength } from "./skill-fx";
-import { makeMesh, updateChargePath, updateTelegraph, Y_LIFT } from "./meshes";
+import { makeMesh, setHitFlash, updateChargePath, updateTelegraph, Y_LIFT } from "./meshes";
+import { burnOutGround, EMBER_TAIL_TICKS, GROUND_FADE_TICKS, igniteGround } from "./ground-fx";
+import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
+import { flashPeak, HIT_FLASH_TICKS, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
 import {
   BETA_AT_DEFAULT,
   CAMERA_ALPHA,
@@ -58,10 +62,12 @@ import { DEFAULT_SETTINGS } from "../settings";
 import {
   CHARACTER_SUBJECT,
   PET_SUBJECT,
+  bossSummon,
   creatureTelegraph,
   mainGroup,
   ONE_SHOTS,
   rawClipLabel,
+  shooterBolt,
   telegraphFrame,
   type CreatureAction,
   type CreatureTelegraph,
@@ -162,6 +168,9 @@ export const CAMERA_ANGLES: Record<Exclude<ViewerCamera, "free">, { alpha: numbe
 const FACING = new Vector3(0, 0, 1);
 /** How long a charged body stands on its landing point before going home. */
 const TELL_HOLD_S = 0.6;
+const TICKS_PER_SEC = 30;
+/** The Hit button's blow: a seventh of the body's life, a solid hit that is not a kill. */
+const VIEWER_HIT_SHARE = 0.15;
 
 /** The clip the timeline is showing, where it is in it, and the clock it runs on. */
 export interface TimelineState {
@@ -373,7 +382,11 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   let timers: number[] = [];
   let subjectId: string | null = null;
   /** A ground tell playing out; ending it puts a charged body back where it stood. */
-  let tell: { mesh: Mesh; tick: ReturnType<typeof scene.onBeforeRenderObservable.add>; home: Vector3 } | null = null;
+  let tell: { meshes: Mesh[]; tick: ReturnType<typeof scene.onBeforeRenderObservable.add>; home: Vector3 } | null = null;
+  /** A boss's summoned adds, each on its own root, until the subject changes or it summons again. */
+  let adds: { root: Mesh; rig: CreatureRig | null }[] = [];
+  /** A hit's flash and flinch playing on the subject. */
+  let struck: { tick: ReturnType<typeof scene.onBeforeRenderObservable.add>; end: () => void } | null = null;
 
   scene.onBeforeRenderObservable.add(() => {
     if (moving !== null) {
@@ -467,17 +480,36 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   const endTell = () => {
     if (tell === null) return;
     scene.onBeforeRenderObservable.remove(tell.tick);
-    if (!tell.mesh.isDisposed()) tell.mesh.dispose();
+    for (const m of tell.meshes) if (!m.isDisposed()) m.dispose();
     host?.position.copyFrom(tell.home);
     creature?.setLocomotion(0);
     tell = null;
   };
 
+  const clearAdds = () => {
+    for (const a of adds) {
+      a.rig?.dispose();
+      a.root.dispose();
+    }
+    adds = [];
+  };
+
+  const endStruck = () => {
+    if (struck === null) return;
+    scene.onBeforeRenderObservable.remove(struck.tick);
+    struck.end();
+    struck = null;
+  };
+
+  /** Seconds since the last frame on the viewer's clock: zero while paused, scaled by its speed. */
+  const stepS = () => (paused ? 0 : (engine.getDeltaTime() / 1000) * scene.animationTimeScale);
+
   /**
    * A charge or slam as the game draws it: the swing starts with the wind-up
    * (the sim stamps `lastAttackTick` then), the tell fills on the game's own
    * mesh, a charger runs down its path after the root, and the tell is gone at
-   * impact. The body holds there a beat before going home, so Repeat can loop it.
+   * impact, where a phase-2 slam leaves its burning patch to burn and burn out.
+   * The body holds a beat before going home, so Repeat can loop it.
    */
   const playTell = (c: CreatureRig, tg: CreatureTelegraph) => {
     endTell();
@@ -491,10 +523,12 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     if (kind === "telegraph") mesh.scaling.set(tg.radius, 1, tg.radius);
     moving = null;
     c.noteAttack(++attackTick);
+    let patch: Mesh | null = null;
+    const burnS = (GROUND_FADE_TICKS + EMBER_TAIL_TICKS) / TICKS_PER_SEC;
+    const endS = tg.durationS + (tg.groundS > 0 ? tg.groundS + burnS : TELL_HOLD_S);
     let t = 0;
     const tick = scene.onBeforeRenderObservable.add(() => {
-      if (paused) return;
-      t += (engine.getDeltaTime() / 1000) * scene.animationTimeScale;
+      t += stepS();
       const f = telegraphFrame(tg, t);
       if (!mesh.isDisposed()) {
         if (kind === "chargePath") {
@@ -505,15 +539,76 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         if (f.done) {
           mesh.dispose();
           c.setLocomotion(0);
+          if (tg.groundS > 0) {
+            patch = makeMesh(scene, "groundArea", `viewer-tell-ground-${performance.now()}`);
+            patch.position.set(at.x, floorY + Y_LIFT.groundArea, at.z);
+            patch.scaling.set(tg.radius, 1, tg.radius);
+            tell?.meshes.push(patch);
+          }
         }
       }
-      if (t >= tg.durationS + TELL_HOLD_S) endTell();
+      if (patch !== null) {
+        const since = t - tg.durationS;
+        if (since < tg.groundS) igniteGround(patch, since * TICKS_PER_SEC);
+        else burnOutGround(patch, (since - tg.groundS) * TICKS_PER_SEC);
+      }
+      if (t >= endS) endTell();
     });
-    tell = { mesh, tick, home };
+    tell = { meshes: [mesh], tick, home };
+  };
+
+  /** A boss reaching phase 2: its adds appear on the sim's ring around it, as they do in play. */
+  const summon = (s: NonNullable<ReturnType<typeof bossSummon>>) => {
+    clearAdds();
+    if (host === null) return;
+    for (const [i, spot] of s.spots.entries()) {
+      const root = new Mesh(`viewer-add-${i}`, scene);
+      root.position.set(host.position.x + spot.x, host.position.y, host.position.z + spot.z);
+      adds.push({ root, rig: attachCreature(scene, root, s.addDefId) });
+    }
+  };
+
+  /**
+   * A hit from where the player would stand, through the game's own reaction:
+   * the white flash for HIT_FLASH_TICKS, the flinch away from the blow, and the
+   * spray this species bleeds, at the strength of a VIEWER_HIT_SHARE hit.
+   */
+  const playHit = (boss: boolean) => {
+    endStruck();
+    const h = host;
+    if (h === null) return;
+    const strength = hitStrength(VIEWER_HIT_SHARE);
+    const peak = flashPeak(strength);
+    const f = kick(undefined, 0, -FACING.x, -FACING.z, flinchStrength(VIEWER_HIT_SHARE, 1, boss ? "boss" : "monster"));
+    const base = h.scaling.y;
+    const { min, max } = h.getHierarchyBoundingVectors(true);
+    const at = new Vector3(h.position.x, min.y + (max.y - min.y) * 0.6, max.z);
+    const kind = sprayKindOf(subjectId ?? undefined);
+    if (kind) hitSpray(scene).emit(at, -FACING.x, -FACING.z, strength, kind);
+    let ticks = 0;
+    const end = () => {
+      setHitFlash(h, 0);
+      h.rotation.x = 0;
+      h.rotation.z = 0;
+      h.scaling.setAll(base);
+    };
+    const tick = scene.onBeforeRenderObservable.add(() => {
+      ticks += stepS() * TICKS_PER_SEC;
+      setHitFlash(h, Math.max(0, (HIT_FLASH_TICKS - ticks) / HIT_FLASH_TICKS) * peak);
+      const pose = flinchPose(f, ticks);
+      const tilt = leanToTilt(h.rotation.y, pose.x, pose.z);
+      h.rotation.z = tilt.roll;
+      h.rotation.x = tilt.pitch;
+      h.scaling.set(base * (1 + pose.squash / 2), base * (1 - pose.squash), base * (1 + pose.squash / 2));
+      if (ticks >= Math.max(FLINCH_TICKS, HIT_FLASH_TICKS)) endStruck();
+    });
+    struck = { tick, end };
   };
 
   const takeDown = () => {
     endTell();
+    endStruck();
+    clearAdds();
     for (const t of timers) window.clearTimeout(t);
     timers = [];
     clearSkeletons();
@@ -573,24 +668,21 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   };
 
   /** A projectile thrown from the muzzle along the facing; its dispose is the impact burst. */
-  const fly = (fx: FxPreview) => {
-    const from = muzzle();
-    const mesh = makeMesh(scene, "projectile", `viewer-fx-${fx.skillId}-${performance.now()}`, from, undefined, fx.skillId);
-    if (fx.kind === "arrow") mesh.rotation.y = Math.atan2(FACING.x, FACING.z);
-    const speed = 12;
-    const seconds = 0.8;
+  const launch = (from: Vector3, speed: number, seconds: number, skillId: string | undefined, arrow: boolean) => {
+    const mesh = makeMesh(scene, "projectile", `viewer-fx-${skillId ?? "bolt"}-${performance.now()}`, from, undefined, skillId);
+    if (arrow) mesh.rotation.y = Math.atan2(FACING.x, FACING.z);
     let t = 0;
     const tick = scene.onBeforeRenderObservable.add(() => {
-      if (paused) return;
-      t += (engine.getDeltaTime() / 1000) * scene.animationTimeScale;
+      t += stepS();
       mesh.position.copyFrom(from.add(FACING.scale(speed * t)));
-      if (fx.kind === "arrow") setStreakLength(mesh, speed * t);
+      if (arrow) setStreakLength(mesh, speed * t);
       if (t >= seconds) {
         scene.onBeforeRenderObservable.remove(tick);
         mesh.dispose();
       }
     });
   };
+  const fly = (fx: FxPreview) => launch(muzzle(), 12, 0.8, fx.skillId, fx.kind === "arrow");
 
   const fireFx = (fx: FxPreview) => {
     const anchor = host?.getAbsolutePosition() ?? Vector3.Zero();
@@ -678,7 +770,21 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       const c = creature;
       if (c === null || host === null) return false;
       endTell();
-      if (action === "charge" || action === "slam") {
+      if (action === "hit") {
+        if (dead) return false;
+        playHit(subjectId !== null && MONSTERS.get(subjectId)?.boss !== undefined);
+        // The flash is the hit: nothing plays long enough for Loop to wait on.
+        lastAction = null;
+        return true;
+      }
+      if (action === "summon") {
+        const s = dead || subjectId === null ? null : bossSummon(subjectId);
+        if (s === null) return false;
+        summon(s);
+        lastAction = null;
+        return true;
+      }
+      if (action === "charge" || action === "slam" || action === "slam2") {
         const tg = dead || subjectId === null ? null : creatureTelegraph(subjectId, action);
         if (tg === null) return false;
         const run = () => playTell(c, tg);
@@ -696,7 +802,13 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       }
       if (dead) return false;
       if (action === "attack") {
-        const run = () => c.noteAttack(++attackTick);
+        // A shooter's bolt leaves on the swing's own tick, from its body, as the sim spawns it.
+        const bolt = subjectId === null ? null : shooterBolt(subjectId);
+        const run = () => {
+          c.noteAttack(++attackTick);
+          const h = host;
+          if (bolt && h) launch(new Vector3(h.position.x, floorY + Y_LIFT.projectile, h.position.z), bolt.speed, bolt.range / bolt.speed, undefined, false);
+        };
         run();
         lastAction = { run, group: () => c.clipGroups.get("attack") ?? null };
         return true;

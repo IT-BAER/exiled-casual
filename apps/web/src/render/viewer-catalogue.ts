@@ -8,6 +8,7 @@
  */
 import { characterClass, MONSTERS, SKILLS } from "@exiled/content-runtime";
 import { FP_SCALE } from "@exiled/fixed-point";
+import { SUMMON_RING } from "@exiled/simulation";
 import { PROP_KINDS } from "./props";
 import { fxProfile } from "./skill-fx";
 import { SPAWNABLE, type Spawnable } from "./gallery";
@@ -111,9 +112,10 @@ export const DIRECTIONS_8 = [
 ] as const;
 
 /** What a creature can be asked to do. Death hands the body to the ragdoll. */
-export const CREATURE_ACTIONS = ["idle", "walk", "attack", "death"] as const;
-export type TelegraphAction = "charge" | "slam";
-export type CreatureAction = (typeof CREATURE_ACTIONS)[number] | TelegraphAction;
+export const CREATURE_ACTIONS = ["idle", "walk", "attack", "hit", "death"] as const;
+/** `slam2` is a boss's phase-2 slam: the same tell, leaving its burning patch. */
+export type TelegraphAction = "charge" | "slam" | "slam2";
+export type CreatureAction = (typeof CREATURE_ACTIONS)[number] | TelegraphAction | "summon";
 
 const TICK_S = 1 / 30;
 const toUnits = (f: number) => f / FP_SCALE;
@@ -128,6 +130,8 @@ export interface CreatureTelegraph {
   /** How far ahead the tell lands. */
   distance: number;
   durationS: number;
+  /** How long the patch a phase-2 slam leaves burns after impact; 0 leaves none. */
+  groundS: number;
 }
 
 /**
@@ -143,13 +147,29 @@ export function creatureTelegraph(defId: string, kind: TelegraphAction): Creatur
     const windupS = c.windupTicks * TICK_S;
     const speed = toUnits(c.speedFixed);
     const distance = toUnits(c.minRangeFixed + c.maxRangeFixed) / 2;
-    return { kind, radius: toUnits(c.radiusFixed), windupS, speed, distance, durationS: windupS + distance / speed };
+    return { kind, radius: toUnits(c.radiusFixed), windupS, speed, distance, durationS: windupS + distance / speed, groundS: 0 };
   }
-  const s = def?.heavy ?? def?.boss?.slam;
+  const s = kind === "slam2" ? def?.boss?.slam : def?.heavy ?? def?.boss?.slam;
   if (!s) return null;
   const windupS = s.windupTicks * TICK_S;
   const radius = toUnits(s.radiusFixed);
-  return { kind, radius, windupS, speed: 0, distance: Math.min(radius, toUnits(s.rangeFixed)), durationS: windupS };
+  const groundS = kind === "slam2" ? def!.boss!.phase2.fireGroundDurationTicks * TICK_S : 0;
+  return { kind, radius, windupS, speed: 0, distance: Math.min(radius, toUnits(s.rangeFixed)), durationS: windupS, groundS };
+}
+
+/** A boss's phase-2 adds: which species, and where on the sim's ring around it (world x/z). */
+export function bossSummon(defId: string): { addDefId: string; spots: { x: number; z: number }[] } | null {
+  const p2 = MONSTERS.get(defId)?.boss?.phase2;
+  if (!p2) return null;
+  const spots = SUMMON_RING.slice(0, p2.addCount).map((s) => ({ x: toUnits(s.dx), z: toUnits(s.dy) }));
+  return { addDefId: p2.addDefId, spots };
+}
+
+/** A shooter's bolt: flies the attack's reach at its own speed. */
+export function shooterBolt(defId: string): { speed: number; radius: number; range: number } | null {
+  const def = MONSTERS.get(defId);
+  if (!def?.ranged) return null;
+  return { speed: toUnits(def.ranged.speedFixed), radius: toUnits(def.ranged.radiusFixed), range: toUnits(def.attackRangeFixed) };
 }
 
 /** Where a tell stands `t` seconds in: its fill progress and how far the body has run. */
@@ -161,10 +181,10 @@ export function telegraphFrame(tg: CreatureTelegraph, t: number): { progress: nu
   };
 }
 
-/** The base actions plus the tells this species' spec carries. */
+/** The base actions plus the tells and the summon this species' spec carries. */
 export function creatureActions(defId: string): CreatureAction[] {
-  const tells = (["charge", "slam"] as const).filter((k) => creatureTelegraph(defId, k) !== null);
-  return [...CREATURE_ACTIONS, ...tells];
+  const tells = (["charge", "slam", "slam2"] as const).filter((k) => creatureTelegraph(defId, k) !== null);
+  return [...CREATURE_ACTIONS, ...tells, ...(bossSummon(defId) ? (["summon"] as const) : [])];
 }
 
 /** How a skill reads on screen, which decides what the viewer spawns for it. */

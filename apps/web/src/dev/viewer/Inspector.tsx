@@ -222,7 +222,10 @@ function LoopToggle(p: InspectorProps): React.ReactElement {
 }
 
 function CreatureSection(p: InspectorProps): React.ReactElement {
-  const label: Record<CreatureAction, string> = { idle: "Idle", walk: "Walk", attack: "Attack", death: "Die", charge: "Charge", slam: "Slam" };
+  const label: Record<CreatureAction, string> = {
+    idle: "Idle", walk: "Walk", attack: "Attack", hit: "Hit", death: "Die",
+    charge: "Charge", slam: "Slam", slam2: "Phase 2 Slam", summon: "Summon",
+  };
   return (
     <section className="av-section">
       <h3 className="av-h">Actions</h3>
@@ -238,7 +241,7 @@ function CreatureSection(p: InspectorProps): React.ReactElement {
       </div>
       <LoopToggle {...p} />
       <p className="av-note">
-        {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts. Charge and Slam draw the game's floor tell on its own timings. Die drops it through the ragdoll."}
+        {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts, and a shooter's bolt with it. Charge and Slam draw the game's floor tell on its own timings; a boss's Phase 2 Slam leaves its burning patch and Summon stands its adds. Die drops it through the ragdoll."}
       </p>
     </section>
   );

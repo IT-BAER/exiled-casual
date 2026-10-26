@@ -114,7 +114,7 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     } else if (verb === "fx") {
       const fx = FX_PREVIEWS.find((f) => f.skillId === arg);
       if (fx) v.fireFx(fx);
-    } else if (verb === "attack" || verb === "charge" || verb === "slam") {
+    } else if (verb === "attack" || verb === "charge" || verb === "slam" || verb === "slam2" || verb === "summon") {
       void v.creatureAction(verb);
     } else if (verb === "pet" && (PET_ACTIONS as readonly string[]).includes(arg)) {
       v.petAction(arg as PetAction);
@@ -249,7 +249,7 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     if (!v) return;
     void v.creatureAction(a).then((ok) => { if (a === "death" && ok) setDead(true); });
     if (a === "idle" || a === "walk") { setCreatureAct(a); setClip(a === "walk" ? "walk:f" : null); }
-    if (a === "attack" || a === "charge" || a === "slam") setClip(a);
+    if (a === "attack" || a === "charge" || a === "slam" || a === "slam2" || a === "summon") setClip(a);
   };
 
   const petDo = (a: PetAction) => {

@@ -48,6 +48,13 @@ export function hitStrength(share: number, killed = false): number {
   return Math.min(1, s + (killed ? KILL_BONUS : 0));
 }
 
+/**
+ * Ticks a body stays lit after it is hit. Three is a tenth of a second: long
+ * enough to survive a dropped frame, short enough that a fast weapon reads as a
+ * rhythm of hits rather than a monster that is permanently white.
+ */
+export const HIT_FLASH_TICKS = 3;
+
 /** Peak of the struck body's white flash (and the impact light) for a hit of `strength`. */
 export function flashPeak(strength: number): number {
   return 0.35 + 0.65 * Math.min(1, Math.max(0, strength));

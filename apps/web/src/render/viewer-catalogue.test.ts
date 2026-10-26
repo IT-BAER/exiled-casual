@@ -20,8 +20,10 @@ import {
   rawClipLabel,
   DEFAULT_VIEWER_STATE,
   FX_PREVIEWS,
+  bossSummon,
   creatureActions,
   creatureTelegraph,
+  shooterBolt,
   telegraphFrame,
 } from "./viewer-catalogue";
 
@@ -132,17 +134,46 @@ describe("skill FX previews", () => {
 });
 
 describe("creature telegraphs", () => {
-  it("offers Charge to the brutes and Slam to the heavies and bosses, nothing to the rest", () => {
+  it("offers Charge to the brutes, Slam to the heavies and bosses, phase 2 and Summon to bosses alone", () => {
     for (const [id, def] of MONSTERS) {
       const actions = creatureActions(id);
-      expect(actions.slice(0, 4)).toEqual(["idle", "walk", "attack", "death"]);
+      expect(actions.slice(0, 5)).toEqual(["idle", "walk", "attack", "hit", "death"]);
       expect(actions.includes("charge"), id).toBe(def.charge !== undefined);
       expect(actions.includes("slam"), id).toBe(def.heavy !== undefined || def.boss?.slam !== undefined);
+      expect(actions.includes("slam2"), id).toBe(def.boss !== undefined);
+      expect(actions.includes("summon"), id).toBe(def.boss !== undefined);
     }
     expect(creatureActions("monster.vaal_construct.v1")).toContain("charge");
     expect(creatureActions("monster.blood_sentinel.v1")).toContain("slam");
     expect(creatureActions("monster.cinder_warden.v1")).toContain("slam");
-    expect(creatureActions("monster.vaal_husk.v1")).toEqual(["idle", "walk", "attack", "death"]);
+    expect(creatureActions("monster.vaal_husk.v1")).toEqual(["idle", "walk", "attack", "hit", "death"]);
+  });
+
+  it("leaves a boss's phase-2 slam burning for its patch's lifetime, and gives a trash heavy none", () => {
+    const tg = creatureTelegraph("monster.cinder_warden.v1", "slam2")!;
+    expect(tg.radius).toBeCloseTo(3.5, 5);
+    expect(tg.windupS).toBeCloseTo(1, 5);
+    expect(tg.groundS).toBeCloseTo(4, 5);
+    expect(creatureTelegraph("monster.cinder_warden.v1", "slam")!.groundS).toBe(0);
+    expect(creatureTelegraph("monster.blood_sentinel.v1", "slam2")).toBeNull();
+  });
+
+  it("summons a boss's adds on the sim's ring, its count capped by the ring", () => {
+    const s = bossSummon("monster.cinder_warden.v1")!;
+    expect(s.addDefId).toBe("monster.cinder_imp.v1");
+    expect(s.spots).toEqual([{ x: 2.5, z: 0 }, { x: -2.5, z: 0 }]);
+    for (const [id, def] of MONSTERS) {
+      if (!def.boss) { expect(bossSummon(id)).toBeNull(); continue; }
+      expect(bossSummon(id)!.spots.length).toBe(Math.min(def.boss.phase2.addCount, 6));
+    }
+  });
+
+  it("gives a shooter's attack its bolt, at its speed, size and reach", () => {
+    const b = shooterBolt("monster.dune_spitter.v1")!;
+    expect(b.speed).toBeCloseTo(9, 5);
+    expect(b.radius).toBeCloseTo(0.22, 5);
+    expect(b.range).toBeCloseTo(5, 5);
+    expect(shooterBolt("monster.vaal_construct.v1")).toBeNull();
   });
 
   it("reads a brute's charge in seconds and units: 0.6s rooted, 5.4/s, halfway through its 3..7 reach", () => {

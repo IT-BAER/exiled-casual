@@ -21,7 +21,7 @@ import { CAMERA_ALPHA } from "./engine";
 import { lerp, springAngle } from "./interp";
 import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
 import type { Flinch } from "./hit-reaction";
-import { flashPeak, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
+import { flashPeak, HIT_FLASH_TICKS, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
 import { contactPoint } from "./contact";
 import { burnOutGround, igniteGround, EMBER_TAIL_TICKS, GROUND_FADE_TICKS } from "./ground-fx";
 import { PlayerAilmentFx } from "./player-ailment-fx";
@@ -72,12 +72,6 @@ const TELEPORT_STEP = 2;
 /** Chest height, where the character actually vanishes from. */
 const BLINK_Y = 0.9;
 
-/**
- * Ticks a body stays lit after it is hit. Three is a tenth of a second: long
- * enough to survive a dropped frame, short enough that a fast weapon reads as a
- * rhythm of hits rather than a monster that is permanently white.
- */
-const HIT_FLASH_TICKS = 3;
 /** A monster this far from the player sleeps whatever the camera says (the ground reaches ~10.6-13 units). */
 const SLEEP_RANGE = 20;
 /** A monster sleeps once its bounding sphere is this far outside the view frustum, so it is posed before it shows. */
