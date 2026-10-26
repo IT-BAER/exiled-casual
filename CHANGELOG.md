@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-26
+
 ### Added
 
 - A Celestial Cat companion floats beside you: a black cat with a starry coat
