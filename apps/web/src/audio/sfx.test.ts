@@ -299,7 +299,8 @@ describe("take pools", () => {
       createBufferSource: () => ({
         buffer: null as { url: string } | null, loop: false, playbackRate: { value: 1 },
         connect: () => {},
-        start() { played.push(this.buffer!.url); },
+        // A second per voice: a run of footsteps is a walk, never a burst on one instant.
+        start() { played.push(this.buffer!.url); (fake.ctx as { currentTime: number }).currentTime += 1; },
         stop: () => {},
       }),
       createGain: () => {
@@ -398,6 +399,67 @@ describe("take pools", () => {
   });
 });
 
+describe("stacked one-shots", () => {
+  const clock = { now: 0 };
+  /** The gain nodes made since the last `playSfx`; a one-shot's level is the first. */
+  let made: Array<{ gain: { value: number } }> = [];
+
+  beforeEach(() => {
+    resetSfx();
+    clock.now = 0;
+    vi.stubGlobal("fetch", (url: string) =>
+      Promise.resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(url) }));
+    fake.ctx = {
+      get currentTime() { return clock.now; },
+      decodeAudioData: (url: string) => Promise.resolve({ url, duration: 1.5 }),
+      createBufferSource: () => ({
+        buffer: null, loop: false, playbackRate: { value: 1 }, connect: () => {}, start: () => {}, stop: () => {},
+      }),
+      createGain: () => {
+        const node = { gain: { value: 1, setTargetAtTime: () => {} }, connect: () => {} };
+        made.push(node);
+        return node;
+      },
+      createBiquadFilter: () => ({ type: "", frequency: { value: 0, setTargetAtTime: () => {} }, connect: () => {} }),
+    };
+  });
+  afterEach(() => { fake.ctx = null; vi.unstubAllGlobals(); });
+
+  /** Summed power of the one-shots that started, in units of one voice at its own gain. */
+  function power(name: string, levels: number[]): number {
+    return levels.reduce((s, g) => s + (g / voiceGain(name)) ** 2, 0);
+  }
+
+  /** `n` plays of one cue `gap` seconds apart: the level of each that started. */
+  async function levelsOf(name: string, n: number, gap = 0): Promise<number[]> {
+    await preloadSfx([name]);
+    const out: number[] = [];
+    for (let i = 0; i < n; i++) {
+      made = [];
+      if (playSfx(name) > 0) out.push(made[0]!.gain.value);
+      clock.now += gap;
+    }
+    return out;
+  }
+
+  it("caps one cue at three voices in the same instant, summing to under +1.5 dB of one voice", async () => {
+    const levels = await levelsOf("skill-arrow-impact", 10);
+    expect(levels).toHaveLength(3);
+    // The level jitter is +-1 dB per voice, so one voice alone may already sit 1 dB up.
+    expect(10 * Math.log10(power("skill-arrow-impact", levels))).toBeLessThan(1.5 + 1);
+  });
+
+  it("frees the cue again once the burst is past its attack", async () => {
+    expect(await levelsOf("skill-arrow-impact", 6, 0.2)).toHaveLength(6);
+  });
+
+  it("never quiets one cue for another: a unique drop rings at full level over a pile of normals", async () => {
+    await levelsOf("drop-normal", 5);
+    const [unique] = await levelsOf("drop-unique", 1);
+    expect(unique! / voiceGain("drop-unique")).toBeGreaterThan(10 ** (-1.01 / 20));
+  });
+});
+
 /** A fake AudioParam: `to` is where it is going, set directly or by a glide. */
 interface FakeParam { value: number; to: number; setTargetAtTime(v: number): void }
 function param(v = 0): FakeParam {
@@ -441,7 +503,7 @@ describe("positional voices", () => {
       decodeAudioData: (url: string) => Promise.resolve({ url, duration: 5 }),
       createBufferSource: () => ({
         buffer: null, loop: false, playbackRate: { value: 1 },
-        connect: () => {}, start() { played++; }, stop: () => {},
+        connect: () => {}, start() { played++; (fake.ctx as { currentTime: number }).currentTime += 1; }, stop: () => {},
       }),
       createGain: () => { const n = { gain: param(1), connect: () => {} }; gains.push(n); return n; },
       createBiquadFilter: () => {

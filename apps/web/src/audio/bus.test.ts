@@ -1,5 +1,50 @@
-import { describe, it, expect } from "vitest";
-import { urlVolumeScale, roomImpulse, effectiveWet, type RoomProfile } from "./bus";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { bus, urlVolumeScale, roomImpulse, effectiveWet, type RoomProfile } from "./bus";
+
+describe("the master ceiling", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("puts a hard limiter between the master gain and the speakers", () => {
+    const destination = { name: "destination" };
+    const edges: Array<[unknown, unknown]> = [];
+    const node = (extra: object = {}) => {
+      const n: Record<string, unknown> = { ...extra };
+      n["connect"] = (to: unknown) => { edges.push([n, to]); return to; };
+      return n;
+    };
+    const p = (value = 0) => ({ value, setTargetAtTime: () => {} });
+    const limiters: Array<Record<string, { value: number }>> = [];
+    class FakeContext {
+      state = "running";
+      currentTime = 0;
+      sampleRate = 8000;
+      destination = destination;
+      createGain() { return node({ gain: p(1) }); }
+      createConvolver() { return node({ buffer: null }); }
+      createBiquadFilter() { return node({ type: "", frequency: p(), gain: p() }); }
+      createBuffer(ch: number, len: number) { return { copyToChannel: () => {}, numberOfChannels: ch, length: len }; }
+      createDynamicsCompressor() {
+        const c = node({ threshold: p(-24), knee: p(30), ratio: p(12), attack: p(0.003), release: p(0.25) });
+        limiters.push(c as unknown as Record<string, { value: number }>);
+        return c;
+      }
+    }
+    vi.stubGlobal("AudioContext", FakeContext);
+    if (typeof window === "undefined") vi.stubGlobal("window", { AudioContext: FakeContext });
+    expect(bus()).not.toBeNull();
+
+    expect(limiters).toHaveLength(1);
+    const limiter = limiters[0]!;
+    expect(limiter["threshold"]!.value).toBe(-6);
+    expect(limiter["knee"]!.value).toBe(0);
+    expect(limiter["ratio"]!.value).toBe(20);
+    expect(limiter["attack"]!.value).toBe(0.003);
+    expect(limiter["release"]!.value).toBe(0.25);
+    // The only thing that reaches the speakers is the limiter.
+    const intoSpeakers = edges.filter(([, to]) => to === destination).map(([from]) => from);
+    expect(intoSpeakers).toEqual([limiter]);
+  });
+});
 
 describe("urlVolumeScale", () => {
   it("reads ?volume= as a percentage, defaults a bot run to 10%, leaves play alone", () => {

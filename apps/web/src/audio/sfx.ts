@@ -307,6 +307,26 @@ export const ALL_SFX: readonly string[] = Object.keys(VOICES);
 /** Per-play level wander of a one-shot, in dB either way. Loops hold their level. */
 const LEVEL_JITTER_DB = 1.0;
 
+/**
+ * Most one-shots of one cue inside one attack, and how long an attack lasts. Ten
+ * arrows landing on one tick are one impact to the ear, not ten times as loud: the
+ * n-th voice in a burst plays at 1/n, so three sum to +1.3 dB of one, and a fourth
+ * does not start. Per cue, so a unique drop is never quieted by the normals around it.
+ */
+const MAX_STACK = 3;
+const STACK_WINDOW = 0.1;
+/** Cue -> context times its recent one-shots started at. */
+const stackStarts = new Map<string, number[]>();
+
+/** The level share a new one-shot of `name` gets now, or 0 when the burst is full. */
+function stackShare(name: string, now: number): number {
+  const recent = (stackStarts.get(name) ?? []).filter((t) => now - t < STACK_WINDOW);
+  if (recent.length >= MAX_STACK) return 0;
+  recent.push(now);
+  stackStarts.set(name, recent);
+  return 1 / recent.length;
+}
+
 /** A point in simulation units. */
 interface At { x: number; y: number }
 
@@ -433,6 +453,8 @@ function playVoice(name: string, volume: number, at: At | null): number {
   if (!b) return 0;
   const buf = pickTake(name);
   if (!buf) return 0;
+  const share = stackShare(name, b.ctx.currentTime);
+  if (share === 0) return 0;
   if (at) syncListener(b);
   const panner = at ? pannerAt(b, at) : null;
   const roll = distanceRolloff(distance);
@@ -441,7 +463,7 @@ function playVoice(name: string, volume: number, at: At | null): number {
   src.buffer = buf;
   if (voice.vary > 0) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * voice.vary;
   const g = b.ctx.createGain();
-  g.gain.value = voice.gain * clamp(volume) * 10 ** (((Math.random() * 2 - 1) * LEVEL_JITTER_DB) / 20)
+  g.gain.value = voice.gain * clamp(volume) * share * 10 ** (((Math.random() * 2 - 1) * LEVEL_JITTER_DB) / 20)
     * (at && !panner ? roll : 1);
   src.connect(g);
   // Room grows with distance: what reaches the ear from across a hall is mostly the
@@ -831,5 +853,6 @@ export function resetSfx(): void {
   loading.clear();
   dead.clear();
   lastTake.clear();
+  stackStarts.clear();
   listenerCtx = null;
 }

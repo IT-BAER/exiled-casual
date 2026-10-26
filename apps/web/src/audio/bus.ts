@@ -244,7 +244,15 @@ export function bus(): Bus | null {
   wetBus = ctx.createGain();
   master = ctx.createGain();
   master.gain.value = level;
-  master.connect(ctx.destination);
+  // The ceiling: whatever the per-cue stack limit (sfx.ts) lets through at once, many
+  // different cues summed never clip. Quiet play sits well under -6 dBFS and never touches it.
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -6;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.25;
+  master.connect(limiter).connect(ctx.destination);
   verbs.length = 0;
   for (let i = 0; i < 2; i++) {
     const conv = ctx.createConvolver();
