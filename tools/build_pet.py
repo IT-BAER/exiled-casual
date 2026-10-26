@@ -13,7 +13,7 @@ pet budget, paints the coat (true black with white point stars, dense on the
 head and back; electric-blue veins on the chest and legs) and cyan half-moon
 eyes. Then it rigs the cat after PoE1's Celestial Cat itself: PoE's 29 bones,
 names and rest orientations, their joints fitted onto our mesh, the tail bent
-into PoE's rest curve, and the weights taken over from PoE's own skin. On that
+into PoE's rest curve, the head bowed as PoE's rests, and the weights taken over from PoE's own skin. On that
 skeleton PoE's floating clips play as they are, every bone's local turn and
 offset frame for frame, as four NLA clips (tools/extract_poe_pet.mjs reads rig,
 clips and skin out of a local PoE install):
@@ -278,11 +278,9 @@ CHAINS = [chain for s in ("_L", "_R") for chain in (
     ("pelvis", ["leg1" + s, "leg2" + s, "leg3" + s, "feet" + s]))]
 
 
-def rejoint(arm, body):
-    """Move the leg joints onto the mesh's own, where fit_joints reads them: the
-    sculptor's fore elbow sits in front of the leg. A joint is where the two
-    bones' weights blend. The rest mesh does not move; a bone's tail goes to the
-    next one's head, the last of a chain keeps its length and direction."""
+def blender_of(body):
+    """Where two of the source's bones meet on the mesh: where their weights
+    blend (the sculptor's joints sit off the mesh)."""
     g = {vg.name: vg.index for vg in body.vertex_groups}
     co = numpy.array([tuple(v.co) for v in body.data.vertices])
     w = numpy.zeros((len(co), len(body.vertex_groups)))
@@ -295,7 +293,15 @@ def rejoint(arm, body):
         if k.sum() < 1e-6:
             fail("no weight blend between %s and %s" % (a, b))
         return Vector(((co * k[:, None]).sum(0) / k.sum()).tolist())
+    return blend
 
+
+def rejoint(arm, body):
+    """Move the leg joints onto the mesh's own, where fit_joints reads them: the
+    sculptor's fore elbow sits in front of the leg. A joint is where the two
+    bones' weights blend. The rest mesh does not move; a bone's tail goes to the
+    next one's head, the last of a chain keeps its length and direction."""
+    blend = blender_of(body)
     heads, nxt = {}, {}
     for parent, chain in CHAINS:
         for prev, bone in zip([parent] + chain, chain):
@@ -602,6 +608,9 @@ SEGMENT = {"root": "spine", "spine2": "neck"}
 # The body's middle, where the runtime's clouds are born and the float rule measures.
 MIDDLE = "spine1"
 BONE_LENGTH = 0.04
+# bow_head: degrees the rest head turns nose-down. 30 looks straight ahead through
+# the hover and the stretched gallop; 40 stares at its paws in the gathered one.
+HEAD_BOW = 30.0
 # The tail by chain place (tail_profile): how far off the chain a vertex may be,
 # and the spread PoE's weights are averaged over, in segments.
 TAIL_RADIUS = 0.04
@@ -838,6 +847,25 @@ def curl_tail(arm, body, rig, p0):
         eb[name].head = Vector(new[k].tolist())
         eb[name].tail = Vector(new[k + 1].tolist())
     bpy.ops.object.mode_set(mode="OBJECT")
+
+
+def bow_head(body, meshes):
+    """Bow our rest head HEAD_BOW degrees nose-down about its joint on the
+    mesh, the skin following the source's head weights: the sculptor's cat
+    holds its head high where PoE's bows it, and every head pose of PoE's is a
+    turn from that bow, so an unbowed head floats its whole hover looking at
+    the sky. The neck stays: bowed too, it creases the chest under the throat."""
+    at = numpy.asarray(blender_of(body)("neck", "head"))
+    r = numpy.asarray(Matrix.Rotation(math.radians(HEAD_BOW), 3, "X"))
+    for ob in meshes:
+        head = ob.vertex_groups["head"].index
+        for v in ob.data.vertices:
+            total = sum(e.weight for e in v.groups)
+            share = sum(e.weight for e in v.groups if e.group == head) / total if total else 0.0
+            if share:
+                co = numpy.asarray(v.co)
+                v.co = Vector((co + share * (r @ (co - at) + at - co)).tolist())
+        ob.data.update()
 
 
 def fit_joints(arm, body, rig, p0, skin):
@@ -1341,6 +1369,7 @@ def main():
     coat_material(body)
     eye_material(eyes)
     curl_tail(arm, body, rig, p0)
+    bow_head(body, [body, eyes])
     joints = fit_joints(arm, body, rig, p0, skin)
     poe_skeleton(arm, rig, r0, joints)
     transfer_weights(body, eyes, rig, p0, joints, skin)
