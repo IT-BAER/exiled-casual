@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { CLASS_LIST } from "@exiled/content-runtime";
 import { CLIP_NAME, gaitOf, SLOTS, type RigClip } from "./rig";
 import { SPAWNABLE } from "./gallery";
-import { PET_ACTIONS, PET_CLIPS, PET_GROUND_CLIPS } from "./pet";
+import { PET_ACTIONS, PET_CLIPS } from "./pet";
 import { looksFromPartNames } from "./viewer-scene";
 import {
   PET_SUBJECT,
@@ -46,7 +46,7 @@ describe("subject groups", () => {
   it("lists the companion cat under its own group with every action it has", () => {
     const pets = SUBJECT_GROUPS.find((g) => g.label === "Pet");
     expect(pets?.subjects.map((s) => s.id)).toEqual([PET_SUBJECT.id]);
-    expect(PET_ACTIONS).toEqual([...PET_CLIPS, ...PET_GROUND_CLIPS]);
+    expect(PET_ACTIONS).toEqual(PET_CLIPS);
     expect(parseViewerState("?viewer&subject=pet&clip=pet:relaxed").subject).toBe("pet");
   });
 });

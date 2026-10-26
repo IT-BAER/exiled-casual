@@ -36,8 +36,7 @@ import { warmContainer } from "./warm-shaders";
  * build. Cosmetic and client-only: the sim never hears of it, so replay
  * checksums and the protocol are untouched.
  *
- * `tools/build_pet.py` puts the body and its four clips into `pet.glb` (beside the
- * viewer's seven ground clips), each
+ * `tools/build_pet.py` puts the body and its four clips into `pet.glb`, each
  * carrying PoE's root path with its height above the ground, so the root here
  * stands ON the ground; this is the runtime half. The follow is a critically
  * damped spring to a spot behind and beside the player, pure arithmetic in
@@ -49,15 +48,9 @@ export const PET_ID = "pet.cat.v1";
 /** PoE's idle_floating, run_floating, idle_relaxed_floating, happy_floating. */
 export const PET_CLIPS = ["hover", "gallop", "relaxed", "emerge"] as const;
 export type PetClip = (typeof PET_CLIPS)[number];
-/** PoE's idle, run, happy and four relaxed idles on the ground: the viewer's alone, the cat always floats in play. */
-export const PET_GROUND_CLIPS = [
-  "ground_idle", "ground_run", "ground_happy",
-  "ground_relaxed", "ground_relaxed_1", "ground_relaxed_2", "ground_relaxed_3",
-] as const;
 /** Everything the viewer can ask for: each clip, repeating. */
-export const PET_ACTIONS = [...PET_CLIPS, ...PET_GROUND_CLIPS] as const;
-export type PetAction = (typeof PET_ACTIONS)[number];
-const isPlayClip = (a: PetAction): a is PetClip => (PET_CLIPS as readonly string[]).includes(a);
+export const PET_ACTIONS = PET_CLIPS;
+export type PetAction = PetClip;
 export const CLIP_SECONDS: Record<PetClip, number> = { hover: 2.0, gallop: 1.2, relaxed: 14.67, emerge: 3.0 };
 /** The body's middle on PoE's own skeleton (mid back), where the ground blob sits under it. */
 export const ANCHOR_BONE = "spine1";
@@ -415,8 +408,8 @@ export class PetActor {
   private halo: Mesh | null = null;
   private coat: PetCoatPlugin | null = null;
   /** The clips by name, for the viewer's timeline. */
-  readonly clipGroups = new Map<PetAction, AnimationGroup>();
-  private current: PetAction | null = null;
+  readonly clipGroups = new Map<PetClip, AnimationGroup>();
+  private current: PetClip | null = null;
   /** Seconds into the current clip; a hover counts its cycles from it. */
   private clipT = 0;
   /** The viewer's action, or null in play. */
@@ -445,7 +438,7 @@ export class PetActor {
   }
 
   /** The clip playing, for tests and the DEV handles. */
-  get playing(): PetAction | null {
+  get playing(): PetClip | null {
     return this.current;
   }
 
@@ -517,7 +510,7 @@ export class PetActor {
     if (travelling) {
       // PoE's run cuts any idle short.
       if (this.current !== "gallop") this.start("gallop");
-    } else if (this.current === "gallop" || this.current === null || !isPlayClip(this.current)) {
+    } else if (this.current === "gallop" || this.current === null) {
       this.start("hover");
     } else if (this.clipT >= CLIP_SECONDS[this.current]) {
       // A hover cycle or a one-shot ended: PoE's controller rolls its relaxed idle
@@ -552,7 +545,7 @@ export class PetActor {
   }
 
   /** Start `clip` from its first frame; the viewer repeats every clip. */
-  private start(clip: PetAction): void {
+  private start(clip: PetClip): void {
     this.clipT = 0;
     this.current = clip;
     const group = this.clipGroups.get(clip);
@@ -560,7 +553,7 @@ export class PetActor {
     if (!group) return;
     for (const [name, other] of this.clipGroups) if (name !== clip) other.stop();
     group.stop();
-    group.start((isPlayClip(clip) && LOOPED.includes(clip)) || this.previewed !== null, 1);
+    group.start(LOOPED.includes(clip) || this.previewed !== null, 1);
   }
 
   private attach(): void {
@@ -583,7 +576,7 @@ export class PetActor {
     this.middle = bones.find((n) => n.name === ANCHOR_BONE) ?? null;
     this.chainNodes = MID_CHAIN.map((name) => bones.find((n) => n.name === name)).filter((n) => n !== undefined);
     for (const group of entries.animationGroups) {
-      const clip = PET_ACTIONS.find((c) => group.name.endsWith(`|${c}`));
+      const clip = PET_CLIPS.find((c) => group.name.endsWith(`|${c}`));
       if (!clip) {
         group.dispose();
         continue;
