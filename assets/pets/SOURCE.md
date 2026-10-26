@@ -48,7 +48,7 @@ parameters; each GGG texture is replaced by one of ours in the same role, and
 | aura glows, spark dot | computed by `tools/build_pet_fx.py` from PoE's measured colour stops | - | - | ours |
 | unused backup | `source/lowpoly_cat.glb` | Cat (`3b8e6df1-3478-4150-9df8-0f5a2bf0476f`), rigify, no UVs | ali alipour | royalty_free |
 
-Reproduce the cat with:
+The `.blend` is not committed (gitignored); fetch it before `build_pet.py` runs:
 
 ```
 python tools/fetch_blenderkit.py 6b3bbcc7-db99-4424-9436-8e6678ee9354 --type resolution_1K --out assets/pets/source/domestic_cat_1k.blend
