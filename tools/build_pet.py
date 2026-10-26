@@ -606,9 +606,11 @@ BONE_LENGTH = 0.04
 # and the spread PoE's weights are averaged over, in segments.
 TAIL_RADIUS = 0.04
 TAIL_SMOOTH = 1.0
-# A foreleg's weights change only this far either side of the elbow and the
-# wrist, in segments (foreleg_profile).
-LEG_BAND = 0.15
+# A foreleg's weights fall off as distance to its three bones to the -LEG_POWER
+# (foreleg_profile), eased in from the nearest-surface weights across LEG_FROM
+# (segments along shoulder-elbow-wrist), where the leg leaves the chest.
+LEG_POWER = 3
+LEG_FROM = (0.5, 0.8)
 
 
 def poe_rig():
@@ -948,7 +950,7 @@ def transfer_weights(body, eyes, rig, p0, joints, skin):
     bpy.data.meshes.remove(me)
     tail_profile(body, rig, p0, joints, skin)
     for side in "LR":
-        foreleg_profile(body, rig, p0, joints, skin, side)
+        foreleg_profile(body, rig, joints, side)
     groups = {g.index: g for g in body.vertex_groups}
     for v in body.data.vertices:
         keep = sorted(((e.weight, e.group) for e in v.groups if e.weight > 0), reverse=True)[:4]
@@ -1034,31 +1036,47 @@ def tail_profile(body, rig, p0, joints, skin):
         reweight(body, rig["names"], i, (full * k[:, None]).sum(0) / k.sum())
 
 
-def foreleg_profile(body, rig, p0, joints, skin, side):
-    """A foreleg from the elbow down takes PoE's weights bone by bone, not ring
-    by ring: the forearm the mean of PoE's mix along its middle, the paw PoE's
-    past the wrist, changing only within LEG_BAND of the wrist, and faded in
-    from the nearest-surface weights across the elbow. PoE's forearm is one
-    straight strip of long triangles between its rings; our dense rings, each
-    weighted between bones on its own, skin into a curve, as nearest surface did."""
+def segment_distance(co, a, b):
+    ab = b - a
+    t = numpy.clip(((co - a) @ ab) / (ab @ ab), 0, 1)
+    return numpy.linalg.norm(co - (a + t[:, None] * ab), axis=1)
+
+
+def foreleg_profile(body, rig, joints, side):
+    """A foreleg below the chest weighs its three bones (upper arm, forearm,
+    paw) by inverse distance to each, so every ring takes one smooth mix and
+    the bones trade over a joint about as wide as the leg is thick. Nearest
+    surface off PoE's sparse rings gave each of our dense ones its own mix:
+    the forearm skinned into a curve and slit along its length, and any mix
+    set by hand along the chain folded where it ended. The paw bone runs from
+    the wrist through the middle of the paw: the paw points forward, not on
+    down the forearm."""
     names = rig["names"]
     chain = ["%s_%s" % (side, n) for n in ("shoulder", "elbow", "wrist")]
-    s_poe, full = poe_chain(rig, p0, skin, chain, 0.5)
-    mixes = []
-    for lo, hi in ((1.25, 1.75), (2.25, numpy.inf)):
-        part = full[(s_poe >= lo) & (s_poe <= hi)]
-        if not len(part):
-            fail("no PoE vertex on %s between %.2f and %.2f segments" % (chain[0], lo, hi))
-        mixes.append(part.mean(0))
     s, _, mine = our_chain(body, joints, chain, 0.5)
     at = {g.index: names.index(g.name) for g in body.vertex_groups}
-    for i in numpy.nonzero(mine & (s >= 1.0 - LEG_BAND))[0]:
-        old = numpy.zeros(len(names))
-        for e in body.data.vertices[int(i)].groups:
-            old[at[e.group]] = e.weight
-        a = numpy.clip((s[i] - (2.0 - LEG_BAND)) / (2 * LEG_BAND), 0.0, 1.0)
-        fade = numpy.clip((s[i] - (1.0 - LEG_BAND)) / (2 * LEG_BAND), 0.0, 1.0)
-        reweight(body, names, i, (1 - fade) * old / old.sum() + fade * ((1 - a) * mixes[0] + a * mixes[1]))
+    w = numpy.zeros((len(body.data.vertices), len(names)))
+    for v in body.data.vertices:
+        for e in v.groups:
+            w[v.index, at[e.group]] = e.weight
+    w[mine] /= w[mine].sum(1, keepdims=True)
+    co = numpy.array([tuple(v.co) for v in body.data.vertices])
+    j = [numpy.asarray(joints[n], dtype=numpy.float64) for n in chain]
+    paw = mine & (s > 1.5) & (w[:, names.index(chain[2])] > 0.5)
+    if not paw.any():
+        fail("no paw under %s" % chain[2])
+    tip = j[2] + 2.0 * (co[paw].mean(0) - j[2])
+    d = numpy.stack([segment_distance(co, j[0], j[1]), segment_distance(co, j[1], j[2]),
+                     segment_distance(co, j[2], tip)], 1)
+    near = numpy.maximum(d, 1e-5) ** -LEG_POWER
+    near /= near.sum(1, keepdims=True)
+    t = numpy.clip((s - LEG_FROM[0]) / (LEG_FROM[1] - LEG_FROM[0]), 0, 1)
+    on = t * t * (3 - 2 * t)
+    cols = [names.index(n) for n in chain]
+    for i in numpy.nonzero(mine & (s > LEG_FROM[0]))[0]:
+        mix = (1 - on[i]) * w[i]
+        mix[cols] += on[i] * near[i]
+        reweight(body, names, i, mix)
 
 
 class Fit:
