@@ -261,6 +261,11 @@ export function GameView({
   settingsRef.current = settings;
   const onSettingsChangeRef = useRef(onSettingsChange);
   onSettingsChangeRef.current = onSettingsChange;
+  /** The inventory's Cosmetics tab switching the cat; stable, so the memoised panel skips the 30 Hz renders. */
+  const togglePet = useCallback((pet: boolean) => {
+    const s = settingsRef.current;
+    onSettingsChangeRef.current?.({ ...s, ui: { ...s.ui, pet } });
+  }, []);
   /** One line saying Auto just lowered the preset; cleared after a few seconds. */
   const [graphicsNote, setGraphicsNote] = useState<string | null>(null);
   // The map's layout, kept for the minimap. Null in the hideout, which has none.
@@ -1102,6 +1107,8 @@ export function GameView({
           flaskKeys={{ life: keybinds.flaskLife, mana: keybinds.flaskMana }}
           flasks={snapshot.player.flasks}
           level={snapshot.player.level}
+          pet={settings.ui.pet}
+          onPetToggle={togglePet}
           // socketWanted: panel is open and the socket is empty, so ctrl+click / drag sockets a stone.
           socketWanted={panelOpen && socketedStone === null}
           socketedCell={socketedCell}

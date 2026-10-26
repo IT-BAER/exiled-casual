@@ -58,6 +58,31 @@ describe("InventoryPanel", () => {
     }
   });
 
+  it("opens on the Inventory tab and swaps the paper-doll for Cosmetics, where the cat is switched", () => {
+    const onPetToggle = vi.fn();
+    render(<InventoryPanel inventory={inv} pet={true} onPetToggle={onPetToggle} onClose={() => {}} />);
+    expect(screen.getByTestId("inventory-tab").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("equip-slot-helmet")).toBeTruthy();
+    expect(screen.queryByTestId("cosmetics-page")).toBeNull();
+
+    fireEvent.click(screen.getByTestId("cosmetics-tab"));
+    expect(screen.getByTestId("cosmetics-tab").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByTestId("equip-slot-helmet")).toBeNull();
+    const page = screen.getByTestId("cosmetics-page");
+    expect(page.textContent).toContain("Pets");
+    expect(page.textContent).toContain("Celestial Cat");
+    // The backpack stays: only the paper-doll's box changes.
+    expect(screen.getByTestId("inventory-item-0")).toBeTruthy();
+
+    const cat = screen.getByRole("checkbox", { name: "Celestial Cat" });
+    expect(cat.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(cat);
+    expect(onPetToggle).toHaveBeenCalledWith(false);
+
+    fireEvent.click(screen.getByTestId("inventory-tab"));
+    expect(screen.getByTestId("equip-slot-helmet")).toBeTruthy();
+  });
+
   it("captions the flasks with the keys the HUD drinks them on", () => {
     render(<InventoryPanel inventory={inv} flaskKeys={{ life: "1", mana: "2" }} onClose={() => {}} />);
     expect(screen.getByTestId("inventory-flask-life").textContent).toBe("1");

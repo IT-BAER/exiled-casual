@@ -9,6 +9,7 @@ import { playDropSound } from "../audio/drop-sound";
 import { playSfx } from "../audio/sfx";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { keyCap } from "../settings";
+import { Gem } from "../menu/OptionsPanel";
 import { BAR_H, ORB_RISE } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
 
@@ -336,8 +337,12 @@ const DEFAULT_FLASK_KEYS = { life: "1", mana: "2" };
 export const InventoryPanel = React.memo(function InventoryPanel({
   inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
   socketWanted = false, socketedCell = null, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks, level,
+  pet = false, onPetToggle,
   onClose, onCloseStash, onCloseVendor, onIntent, onRefused, onSocketWaystone,
 }: {
+  /** The Celestial Cat follows him; switched on the Cosmetics tab. */
+  pet?: boolean;
+  onPetToggle?: (on: boolean) => void;
   /** The modifier that, held over an item, shows what is worn in its slot beside it. */
   compareKey?: "ctrl" | "shift";
   /** The keys the HUD drinks each flask on, for the captions under them. */
@@ -391,6 +396,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   // Which of the vendor's pages is showing. Every visit opens on his goods.
   const [vendorPage, setVendorPage] = React.useState<"vendor" | "buyback">("vendor");
   React.useEffect(() => { if (!vendorOpen) setVendorPage("vendor"); }, [vendorOpen]);
+  // PoE2's two pages of the one pane: his gear, or what he looks like. Opens on his gear.
+  const [page, setPage] = React.useState<"inventory" | "cosmetics">("inventory");
 
   // The sale itself is the soundscape's (gold in, piece out). The tenth shard
   // spends the pile on an orb, which drops the total and rings like a unique on top.
@@ -416,7 +423,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   // over the world. Whenever a container comes or goes, the hover goes with it.
   const shelfOpen = vendorOpen;
   const stashShown = stash !== undefined;
-  React.useEffect(() => { setHover(null); }, [shelfOpen, stashShown, vendorPage]);
+  React.useEffect(() => { setHover(null); }, [shelfOpen, stashShown, vendorPage, page]);
   /** The item the cursor is over, as the CURRENT snapshot has it. Gone from its
    *  cell means gone from the screen, which is what a sold or consumed piece is. */
   const at = hover?.at;
@@ -1195,13 +1202,47 @@ export const InventoryPanel = React.memo(function InventoryPanel({
             strip below is pinned to the bottom of this column, so without it the
             globe lands squarely on the currency and on the backpack's last row. */}
         <div style={{ padding: PANEL_PAD, paddingBottom: `calc(${PANEL_PAD} + ${ORB_RISE})`, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
-          {/* Equipment paper-doll. The flasks live inside it, in the block the
+          {/* PoE2's pair of tabs on the doll's top edge: INVENTORY at the left,
+              COSMETICS at the right (inventory+equipment.png). */}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            {(["inventory", "cosmetics"] as const).map((p) => (
+              <button
+                key={p}
+                type="button"
+                data-testid={`${p}-tab`}
+                aria-pressed={page === p}
+                onClick={() => setPage(p)}
+                style={{
+                  fontFamily: SERIF, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase",
+                  padding: "2px 14px", cursor: "pointer",
+                  color: page === p ? GOLD : "#8a7f66",
+                  background: page === p ? "linear-gradient(180deg,#221c11,#12100a)" : "#0b0a07",
+                  border: `1px solid ${GOLD_DIM}`, borderBottom: "none",
+                }}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          {page === "cosmetics" ? (
+            <div data-testid="cosmetics-page" style={{ width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
+              <SectionRule>Pets</SectionRule>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", background: "linear-gradient(180deg,#16130c,#0b0906)", border: `1px solid ${GOLD_DIM}` }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: GOLD }}>Celestial Cat</div>
+                  <div style={{ fontSize: 11, color: "#8c8069" }}>Floats along behind you. It never fights.</div>
+                </div>
+                <Gem label="Celestial Cat" on={pet} onToggle={(on) => onPetToggle?.(on)} />
+              </div>
+            </div>
+          ) : (
+          /* Equipment paper-doll. The flasks live inside it, in the block the
               right-hand weapon leaves empty below itself, rather than in a strip
               of their own under the whole doll: that strip cost a full row of
               panel height and pushed the backpack down into the mana globe.
               PoE2's own screen centres them under the doll (inventory+equipment
               .png), but its doll fills its box and ours does not — two columns of
-              bare panel beside the boots is the more obvious wrong. */}
+              bare panel beside the boots is the more obvious wrong. */
           <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
             <div
               style={{
@@ -1237,6 +1278,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
               />
             ))}
           </div>
+          )}
 
           {/* Backpack grid (functional) */}
           <SectionRule>Backpack</SectionRule>
