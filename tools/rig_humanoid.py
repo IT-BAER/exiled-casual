@@ -185,7 +185,7 @@ def surface_dist(seed, free, ew, p):
             return dist
 
 
-def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None):
+def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=False):
     """Nearest-bone weights, restricted to that bone and its direct neighbours.
 
     Bone heat fails on these generated shells, even on a watertight voxel copy.
@@ -330,6 +330,17 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None):
         W[grip, hand] = 1.0
         if fused is not None:
             slab = grip
+    cut = slab
+    if fused_arms:
+        # An arm the generated shell fused down the flank and thigh: the smoothing
+        # has blended each chain into the other across the join, so each side drops
+        # the other's weight, and the join is cut below.
+        dom = W.argmax(axis=1)
+        fist, body = armish[dom], (legs | hips)[dom]
+        W[numpy.ix_(fist, legs | hips)] = 0.0
+        W[numpy.ix_(body, armish)] = 0.0
+        W /= W.sum(axis=1, keepdims=True)
+        cut = fist if cut is None else cut | fist
     keep = numpy.argsort(-W, axis=1)[:, :4]
     groups = [mesh.vertex_groups.new(name=b.name) for b in bones]
     for vi in range(len(v)):
@@ -339,8 +350,50 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None):
             if wt > 0.01:
                 groups[bi].add([vi], float(wt), "REPLACE")
     print("weights: %d vertices, %d bones" % (len(v), len(bones)))
-    if slab is not None:
-        part(mesh, slab, ~slab & (legs | hips)[W.argmax(axis=1)], 1e-4 * H)
+    if cut is not None:
+        part(mesh, cut, ~cut & (legs | hips)[W.argmax(axis=1)], 1e-4 * H)
+
+
+def boundary_loops(edges):
+    """The boundary edges as closed vertex loops in walking order. A vertex where
+    more than two of them meet makes its loop ambiguous, and that loop is skipped."""
+    edges, loops = set(edges), []
+    while edges:
+        e = edges.pop()
+        loop, prev, at = [e.verts[0]], e.verts[0], e.verts[1]
+        while at is not loop[0]:
+            nxt = [x for x in at.link_edges if x in edges]
+            if len(nxt) != 1:
+                break
+            edges.discard(nxt[0])
+            loop.append(at)
+            prev, at = at, nxt[0].other_vert(at)
+        if at is loop[0] and len(loop) >= 3:
+            loops.append(loop)
+    return loops
+
+
+def split_runs(sides):
+    """For a loop whose vertices are held (1), body (2) or neither (0): the two
+    index spans, junction to junction, that hold one side each, or None when the
+    loop is all one side or changes side more than twice."""
+    n = len(sides)
+    marked = [i for i in range(n) if sides[i]]
+    if len({sides[i] for i in marked}) < 2:
+        return None
+    junctions = []
+    for i in range(n):
+        # The first neither-side vertex of a run between the two sides is its junction.
+        if sides[i] or not sides[i - 1]:
+            continue
+        before = next(sides[(i - k) % n] for k in range(1, n) if sides[(i - k) % n])
+        after = next(sides[(i + k) % n] for k in range(1, n) if sides[(i + k) % n])
+        if before != after:
+            junctions.append(i)
+    if len(junctions) != 2:
+        return None
+    a, b = junctions
+    return [(a, b), (b, a)]
 
 
 def part(mesh, held, body, weld):
@@ -365,10 +418,21 @@ def part(mesh, held, body, weld):
     rim = {e for f in faces for e in f.edges}
     bmesh.ops.delete(bm, geom=faces, context="FACES")
     rim = [e for e in rim if e.is_valid and e.is_boundary]
-    caps = bmesh.ops.holes_fill(bm, edges=rim, sides=0)["faces"]
+    # A strip one face wide leaves ONE hole running down the held side and back up
+    # the body side; a single cap across it would fuse them again. Such a loop is
+    # closed per side, each cap meeting the other only at the two neither-side
+    # vertices where the runs change.
+    caps = []
+    for loop in boundary_loops(rim):
+        for i, j in split_runs([b[side] for b in loop]) or []:
+            seg = loop[i:j + 1] if i < j else loop[i:] + loop[:j + 1]
+            if len(seg) >= 3:
+                caps.append(bm.faces.new(seg))
+    caps += bmesh.ops.holes_fill(bm, edges=[e for e in rim if e.is_boundary], sides=0)["faces"]
     bmesh.ops.recalc_face_normals(bm, faces=caps)
     bmesh.ops.triangulate(bm, faces=caps)
-    print("  parted: %d faces cut, %d rim edges, %d caps" % (len(faces), len(rim), len(caps)))
+    joined = sum(1 for f in bm.faces if cut(f))
+    print("  parted: %d faces cut, %d rim edges, %d caps, %d still joined" % (len(faces), len(rim), len(caps), joined))
     bm.verts.layers.int.remove(side)
     bm.to_mesh(mesh.data)
     bm.free()

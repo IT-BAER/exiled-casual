@@ -1842,11 +1842,12 @@ def wrack_drowned():
     touch the right foot, one piece with it: the foot ends at 0.29 H from the
     midline and the flukes start at 0.32 H, so past 0.31 H it is the anchor.
     Feet midpoint measured at x 0.04 H as loaded: the offset centres the stance.
-    The empty left hand hangs to 0.21 H against a thigh whose outer edge is 0.20 H.
+    The empty left hand hangs to 0.21 H against a thigh whose outer edge is 0.20 H,
+    and the shell fused both arms down the flank and thigh: `fused_arms` cuts them.
     """
     return GeneratedCreature("monster.wrack_drowned.v1", WRACK_DROWNED_SOURCE, "coast", 1.8,
                              normal=WRACK_DROWNED_NORMAL, offset=(-0.072, 0.0),
-                             carry="r", held=0.31, thigh=0.225, knee=0.20)
+                             carry="r", held=0.31, thigh=0.225, knee=0.20, fused_arms=True)
 
 
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
@@ -1887,8 +1888,10 @@ class GeneratedCreature:
     roster. It faces -Y as imported, where a turned node-graph root ends up."""
 
     def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE,
-                 offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25, held=None):
+                 offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25, held=None, fused_arms=False):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
+        # The shell fused the arms down the flank and thigh: cut them free (rig_humanoid.skin).
+        self.fused_arms = fused_arms
         # "l"/"r": the hand carrying a long blade, held low through the walk.
         # `held`, a fraction of H: past it from the midline, that side's floor
         # contact is the carried thing standing on the floor, not the foot.
@@ -1919,7 +1922,7 @@ class GeneratedCreature:
 
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height, self.carry, self.held))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
-        rig.skin(mesh, arm, self.thigh, self.knee, self.carry, self.held)
+        rig.skin(mesh, arm, self.thigh, self.knee, self.carry, self.held, self.fused_arms)
         # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
