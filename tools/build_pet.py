@@ -611,6 +611,13 @@ TAIL_SMOOTH = 1.0
 # (segments along shoulder-elbow-wrist), where the leg leaves the chest.
 LEG_POWER = 3
 LEG_FROM = (0.5, 0.8)
+# foreleg_seam: where a leg's share of a vertex jumps by more than SEAM_JUMP
+# along an edge within SEAM_RADIUS of a shoulder or elbow, SEAM_RINGS rings of
+# vertices average their left-leg / right-leg / body shares SEAM_ROUNDS times.
+SEAM_JUMP = 0.3
+SEAM_RADIUS = 0.12
+SEAM_RINGS = 3
+SEAM_ROUNDS = 10
 
 
 def poe_rig():
@@ -951,6 +958,7 @@ def transfer_weights(body, eyes, rig, p0, joints, skin):
     tail_profile(body, rig, p0, joints, skin)
     for side in "LR":
         foreleg_profile(body, rig, joints, side)
+    foreleg_seam(body, rig, joints)
     groups = {g.index: g for g in body.vertex_groups}
     for v in body.data.vertices:
         keep = sorted(((e.weight, e.group) for e in v.groups if e.weight > 0), reverse=True)[:4]
@@ -1077,6 +1085,65 @@ def foreleg_profile(body, rig, joints, side):
         mix = (1 - on[i]) * w[i]
         mix[cols] += on[i] * near[i]
         reweight(body, names, i, mix)
+
+
+def average_rings(x, edges, degree, zone, rounds):
+    """`x` (one row per vertex) with the rows in `zone` averaged half and half
+    with their neighbours' `rounds` times."""
+    x = x.copy()
+    for _ in range(rounds):
+        s = numpy.zeros_like(x)
+        numpy.add.at(s, edges[:, 0], x[edges[:, 1]])
+        numpy.add.at(s, edges[:, 1], x[edges[:, 0]])
+        x[zone] = 0.5 * x[zone] + 0.5 * s[zone] / degree[zone, None]
+    return x
+
+
+def foreleg_seam(body, rig, joints):
+    """Where a foreleg meets the chest, the throat or the other leg, the
+    source mesh joins them edge to edge (the elbows are sculpted against the
+    chest), and a vertex all leg beside one all neck is pulled out of the
+    skin as a spike when the leg swings. Over a few rings either side of such
+    an edge, each vertex's share of left leg, right leg and body is averaged
+    with its neighbours'; inside a group it mostly belonged to it keeps its
+    own split, so the elbow's shoulder-to-forearm trade stays where
+    foreleg_profile put it."""
+    names = rig["names"]
+    at = {g.index: names.index(g.name) for g in body.vertex_groups}
+    w = numpy.zeros((len(body.data.vertices), len(names)))
+    for v in body.data.vertices:
+        for e in v.groups:
+            w[v.index, at[e.group]] = e.weight
+    w /= w.sum(1, keepdims=True)
+    legs = [[names.index("%s_%s" % (side, n)) for n in ("shoulder", "elbow", "wrist")] for side in "LR"]
+    groups = legs + [[i for i in range(len(names)) if i not in legs[0] + legs[1]]]
+    share = numpy.stack([w[:, g].sum(1) for g in groups], 1)
+    edges = numpy.array([tuple(e.vertices) for e in body.data.edges])
+    co = numpy.array([tuple(v.co) for v in body.data.vertices])
+    near = numpy.zeros(len(w), dtype=bool)
+    for side in "LR":
+        for j in ("shoulder", "elbow"):
+            near |= numpy.linalg.norm(co - numpy.asarray(joints["%s_%s" % (side, j)]), axis=1) < SEAM_RADIUS
+    jump = (numpy.abs(share[edges[:, 0], :2] - share[edges[:, 1], :2]) > SEAM_JUMP).any(1)
+    zone = numpy.zeros(len(w), dtype=bool)
+    zone[edges[jump].ravel()] = True
+    zone &= near
+    for _ in range(SEAM_RINGS):
+        grow = zone.copy()
+        grow[edges[zone[edges[:, 0]], 1]] = True
+        grow[edges[zone[edges[:, 1]], 0]] = True
+        zone = grow & near
+    degree = numpy.zeros(len(w))
+    numpy.add.at(degree, edges.ravel(), 1)
+    new_share = average_rings(share, edges, degree, zone, SEAM_ROUNDS)
+    blur = average_rings(w, edges, degree, zone, SEAM_ROUNDS)
+    mix = numpy.zeros_like(w)
+    for k, g in enumerate(groups):
+        own = w[:, g] / numpy.maximum(share[:, k:k + 1], 1e-9)
+        theirs = blur[:, g] / numpy.maximum(blur[:, g].sum(1, keepdims=True), 1e-9)
+        mix[:, g] = numpy.where(share[:, k:k + 1] >= 0.5, own, theirs) * new_share[:, k:k + 1]
+    for i in numpy.nonzero(zone)[0]:
+        reweight(body, names, i, mix[i] / mix[i].sum())
 
 
 class Fit:
