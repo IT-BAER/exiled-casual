@@ -585,3 +585,16 @@ paced onto the release tick, where the open-palm cast held the wand off a stiff 
 The Emberbound robe and the Stalker coat exported single-sided, so the skirt's inner faces were
 culled and the backing leg showed through the open panel as a leg standing beside the boot. Both
 pieces now export double-sided from the wardrobe build; the glb carries the flag, not the runtime.
+
+## 2026-10-26 · The Celestial Cat
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-10-26-celestial-cat-idle.gif" alt="The Celestial Cat pet in the asset viewer under in-game light, seen from the front left, playing its full relaxed idle: it swims through the air, chases its tail in a ball and uncurls, trailing violet wisps and blue star sparkles" width="100%"><br><sub>The full relaxed idle, played on PoE's own Celestial Cat skeleton and clips.</sub></td>
+</tr>
+</table>
+
+The companion pet follows PoE1's Celestial Cat: a black cat with a starry coat that floats beside
+the player, carried on PoE's own 29-bone skeleton, skin weights and floating clips. Its rest head is
+now bowed to PoE's pose, so it looks straight ahead instead of at the sky. The aura glows a little
+brighter, and the grey cloud patches that read as smoke are nearly gone.
