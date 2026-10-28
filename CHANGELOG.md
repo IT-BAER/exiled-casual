@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-28
+
 ### Added
 
 - The inventory has a Cosmetics page, laid out like PoE1's: a slot for every
