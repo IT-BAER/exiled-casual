@@ -812,7 +812,9 @@ export function createScene(engine: Engine): SceneHandle {
     torchShadows.getShadowMap()!.refreshRate = 2;
     // A dressed body casts whole, bare `base.*` skin with its gear: the torch only
     // LIGHTS the body without it (excludedMeshes below), and a cast without the
-    // skin drew a robe and two gloves with no arms between them.
+    // skin drew a robe and two gloves with no arms between them. Held weapons stay
+    // out: a shield an arm's length from the lamp threw a shadow across half the
+    // room that swung with the walk cycle.
     //
     // Re-tested every frame and not at add time the way the sun's filter is:
     // that one sees a name ONCE, when the mesh is added, so anything renamed
@@ -834,6 +836,7 @@ export function createScene(engine: Engine): SceneHandle {
       if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
       return !(mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name.startsWith(FLAME_MESH)
         || mesh.name.startsWith("groundblob-") || mesh.name === HIDEOUT_EDGE_NAME
+        || mesh.name.startsWith("weapon1.") || mesh.name.startsWith("weapon2.")
         // A loot beam and its floor pool are light, not things standing in it.
         || mesh.name.endsWith("-beam") || mesh.name.endsWith("-pool")
         // Dressing scatter never casts — see isScatterDressing. The range cull

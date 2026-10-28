@@ -282,6 +282,26 @@ describe("torch", () => {
     expect(drawn.has("gloves.ember.wrap_l")).toBe(true);
     expect(drawn.has("base.male.arm_l")).toBe(true);
   });
+
+  it("keeps a held weapon out, or a shield an arm's length from the lamp swings across the room", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const map = (scene.getLightByName("torch") as PointLight).getShadowGenerator()!.getShadowMap()!;
+    for (const [name, x] of [["weapon2.towershield.mesh", 0.4], ["weapon1.broadsword.mesh", -0.4]] as const) {
+      const held = MeshBuilder.CreateBox(name, { size: 0.2 }, scene);
+      held.position.set(x, 1, 0);
+      held.computeWorldMatrix(true);
+    }
+    scene.render();
+
+    const drawn = new Set<string>();
+    for (let f = 0; f < 6; f++) {
+      map.onBeforeRenderObservable.notifyObservers(f);
+      for (const mesh of map.getCustomRenderList!(f, [], 0) ?? []) drawn.add(mesh.name);
+    }
+    expect(drawn.has("weapon2.towershield.mesh")).toBe(false);
+    expect(drawn.has("weapon1.broadsword.mesh")).toBe(false);
+  });
 });
 
 describe("how many lights a surface may take", () => {
