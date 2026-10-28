@@ -89,6 +89,20 @@ describe("InventoryPanel", () => {
     expect(screen.getByTestId("inventory-item-0")).toBeTruthy();
   });
 
+  it("keeps both tabs open into the pane after a switch: no bottom edge", () => {
+    // A `border` shorthand that changes on rerender rewrites the bottom edge under
+    // an unchanged `borderBottom: none`, so the tab picked second grew a line.
+    render(<InventoryPanel inventory={inv} onClose={() => {}} />);
+    fireEvent.click(screen.getByTestId("cosmetics-tab"));
+    fireEvent.click(screen.getByTestId("inventory-tab"));
+    fireEvent.click(screen.getByTestId("cosmetics-tab"));
+    for (const p of ["inventory", "cosmetics"]) {
+      const s = screen.getByTestId(`${p}-tab`).style;
+      expect(s.borderBottomStyle || "none", p).toBe("none");
+      expect(s.borderTopStyle, p).toBe("solid");
+    }
+  });
+
   it("puts the Celestial Cat in the Pet slot from the owned strip and takes it back out", () => {
     const onPetToggle = vi.fn();
     const { rerender } = render(<InventoryPanel inventory={inv} pet={false} onPetToggle={onPetToggle} onClose={() => {}} />);

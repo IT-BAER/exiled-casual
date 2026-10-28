@@ -1192,7 +1192,8 @@ export const InventoryPanel = React.memo(function InventoryPanel({
         fontFamily: DISPLAY, fontSize: 12, letterSpacing: 1, padding: "3px 12px", cursor: "pointer",
         color: page === p ? "#f2dfae" : "#8a7f66",
         background: page === p ? "linear-gradient(180deg,#2c2516,#14110a)" : "linear-gradient(180deg,#15140f,#0b0a07)",
-        border: `1px solid ${page === p ? GOLD : GOLD_DIM}`, borderBottom: "none", borderRadius: "4px 4px 0 0",
+        // No `border` shorthand: it changes with the page and would redraw the bottom edge.
+        borderWidth: 1, borderStyle: "solid solid none", borderColor: page === p ? GOLD : GOLD_DIM, borderRadius: "4px 4px 0 0",
       }}
     >
       {p === "inventory" ? "Inventory" : "Cosmetics"}
