@@ -75,7 +75,9 @@ def landmarks(mesh, H, carry=None, held=None):
     def column_y(lo, hi):
         b = band(lo, hi)
         b = b[numpy.abs(b[:, 0]) < 0.06 * H]
-        return float(numpy.median(b[:, 1])) if len(b) else 0.0
+        # Midway between front and back skin: a vertex median lands on whichever
+        # surface the decimator left denser, and the trunk bones sit in that skin.
+        return float((b[:, 1].min() + b[:, 1].max()) / 2) if len(b) else 0.0
 
     j = {}
     j["hips"] = Vector((0, column_y(0.48, 0.54), 0.51 * H))

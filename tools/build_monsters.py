@@ -1829,26 +1829,22 @@ def bog_drowned():
                              normal=BOG_DROWNED_NORMAL, offset=(-0.015, 0.0))
 
 
-WRACK_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "wrack_drowned_v1.glb")
-WRACK_DROWNED_NORMAL = os.path.join(TEX_DIR, "source", "wrack_drowned_v1_n.png")
+WRACK_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "wrack_drowned_v2.glb")
+WRACK_DROWNED_NORMAL = os.path.join(TEX_DIR, "source", "wrack_drowned_v2_n.png")
 
 
 def wrack_drowned():
     """A drowned sailor gone to bloat, barnacles crusting the shoulders, a
     striped sash, a rusted anchor hanging from the right hand.
 
-    Generated (review/3d/wrack-drowned-v2), volumetric opening res 240 r 2, 4k
-    triangles, rig_humanoid. The anchor's flukes hang into the foot band and
-    touch the right foot, one piece with it: the foot ends at 0.29 H from the
-    midline and the flukes start at 0.32 H, so past 0.31 H it is the anchor.
-    Feet midpoint measured at x 0.04 H as loaded: the offset centres the stance.
-    The empty left hand hangs to 0.21 H against a thigh whose outer edge is 0.20 H,
-    and the shell fused that arm down the flank and thigh: `fused_arms` cuts it. The
-    right thigh keeps 0.225 H, or the arm holding the anchor claims its outer face.
+    Generated (review/3d/wrack-drowned-v3), volumetric opening res 320 r 2 band 3,
+    4k triangles, rig_humanoid. The default band at res 240 closed the anchor's
+    crook and the decimator left a lump. As loaded the anchor hangs from 0.19 H
+    and both hands clear the thighs by ~0.06 H, so no floor split or thigh rule.
+    Feet midpoint measured at x 0.033 H: the offset centres the stance.
     """
     return GeneratedCreature("monster.wrack_drowned.v1", WRACK_DROWNED_SOURCE, "coast", 1.8,
-                             normal=WRACK_DROWNED_NORMAL, offset=(-0.072, 0.0),
-                             carry="r", held=0.31, thigh=(0.20, 0.225), knee=0.20, fused_arms=True)
+                             normal=WRACK_DROWNED_NORMAL, offset=(-0.059, 0.0), carry="r")
 
 
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
