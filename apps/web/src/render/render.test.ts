@@ -260,6 +260,28 @@ describe("torch", () => {
 
     expect(torch.position.y).toBeGreaterThan(2.6);
   });
+
+  it("throws the whole dressed body, bare arms as well as the gear on them", () => {
+    // The bare body is `base.*` and the gear its own slots; a filter that kept
+    // only the body out drew a robe and two gloves with no arms between them.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const map = (scene.getLightByName("torch") as PointLight).getShadowGenerator()!.getShadowMap()!;
+    for (const [name, x] of [["base.male.arm_l", 0.4], ["gloves.ember.wrap_l", -0.4]] as const) {
+      const part = MeshBuilder.CreateBox(name, { size: 0.2 }, scene);
+      part.position.set(x, 1, 0);
+      part.computeWorldMatrix(true);
+    }
+    scene.render();
+
+    const drawn = new Set<string>();
+    for (let f = 0; f < 6; f++) {
+      map.onBeforeRenderObservable.notifyObservers(f);
+      for (const mesh of map.getCustomRenderList!(f, [], 0) ?? []) drawn.add(mesh.name);
+    }
+    expect(drawn.has("gloves.ember.wrap_l")).toBe(true);
+    expect(drawn.has("base.male.arm_l")).toBe(true);
+  });
 });
 
 describe("how many lights a surface may take", () => {

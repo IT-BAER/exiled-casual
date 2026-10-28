@@ -810,13 +810,9 @@ export function createScene(engine: Engine): SceneHandle {
     // flicker, it is every shadow in the pool sitting a step behind where the
     // light actually is. 33 ms of that is a bet; 50 ms is a different one.
     torchShadows.getShadowMap()!.refreshRate = 2;
-    // An actor may not cast from the torch. The lamp rides the player, so the
-    // player's own shadow lands directly under the player as a blob that follows
-    // the feet and reads as a stain on the floor, not as light. Actor parts share
-    // their names across entities (every rig is the same 40 `slot.look.part`
-    // meshes under an `entity-N` root), so there is no way to tell the carrier's
-    // rig from a monster's here — the whole class stays out. The sun still gives
-    // every actor the shadow that matters.
+    // A dressed body casts whole, bare `base.*` skin with its gear: the torch only
+    // LIGHTS the body without it (excludedMeshes below), and a cast without the
+    // skin drew a robe and two gloves with no arms between them.
     //
     // Re-tested every frame and not at add time the way the sun's filter is:
     // that one sees a name ONCE, when the mesh is added, so anything renamed
@@ -837,7 +833,7 @@ export function createScene(engine: Engine): SceneHandle {
       const reach = torch.range + bs.radiusWorld + 2;
       if (dx * dx + dy * dy + dz * dz > reach * reach) return false;
       return !(mesh === ground || mesh.name.startsWith("telegraph-") || mesh.name.startsWith(FLAME_MESH)
-        || mesh.name.startsWith("groundblob-") || mesh.name === HIDEOUT_EDGE_NAME || isWardrobePart(mesh.name)
+        || mesh.name.startsWith("groundblob-") || mesh.name === HIDEOUT_EDGE_NAME
         // A loot beam and its floor pool are light, not things standing in it.
         || mesh.name.endsWith("-beam") || mesh.name.endsWith("-pool")
         // Dressing scatter never casts — see isScatterDressing. The range cull

@@ -16,7 +16,7 @@ function bareScene() {
 describe("isWardrobePart", () => {
   it("covers the wardrobe's one slot", () => {
     // This is what keeps the torch off the character: it excludes him from the
-    // lamp he carries and from its shadow map.
+    // lamp he carries. He still casts from it, skin and gear alike.
     for (const part of [
       "base.male.body", "base.male.brows", "base.male.eyes", "base.male.hair",
       "base.female.body",
