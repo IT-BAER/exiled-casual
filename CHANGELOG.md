@@ -10,6 +10,27 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- The inventory has a Cosmetics page, laid out like PoE1's: a slot for every
+  piece of gear, flask skins, a pet and effects. The Celestial Cat goes into
+  the Pet slot with a click and comes out with another; the Options switch is
+  gone.
+
+### Changed
+
+- A brute's charge shows the path it will run on the floor, from the brute to
+  where it lands, instead of a disc at the landing point.
+- Ground Slam drives the hammer head into the floor, not just the fist.
+- The Wrack Drowned is rebuilt: no glow, an anchor that reads as an anchor,
+  and arms that swing free of its body.
+
+### Fixed
+
+- Many sounds at once no longer stack into one loud blast.
+- Your shadow shows your arms again, and a shield in your hand no longer
+  throws a huge shadow across the room.
+
 ## [0.5.0] - 2026-10-26
 
 ### Added
