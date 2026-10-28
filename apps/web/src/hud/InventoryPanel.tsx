@@ -1359,6 +1359,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
     >
       <div
         ref={boxRef}
+        data-hud-panel=""
         // The wheel still scrolls; PoE has no scrollbar chrome and a pale native
         // one down the pane's gilt edge reads as a browser, not as the game.
         style={{ ...PANE, overflowY: "auto", scrollbarWidth: "none" }}

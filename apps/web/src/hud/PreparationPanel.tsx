@@ -238,6 +238,8 @@ function AtlasMap(props: {
 
 /** atlas_node_header_v1.webp is 512x72; the band keeps that ratio or the filigree shears. */
 const POPUP_W = 340;
+/** Space kept between a place's panel and a docked HUD pane or the screen edge. */
+const POPUP_GAP = 12;
 const HEADER_H = Math.round((POPUP_W * 72) / 512);
 /**
  * atlas_node_socket_v2.webp is 512x464 and its disc fills 76% of that width, so this
@@ -280,14 +282,25 @@ function NodePopup(props: {
   // a fraction of it cannot say whether the panel fits (at 2048x962 it rose off-screen).
   const ref = useRef<HTMLDivElement>(null);
   const [below, setBelow] = useState(node.y < 0.42);
+  // Opening a place opens the inventory, docked right: the panel moves left by
+  // `nudge` px until it clears it, or the socket and Activate sit under the pane.
+  const [nudge, setNudge] = useState(0);
   useLayoutEffect(() => {
     const el = ref.current, field = el?.parentElement;
     if (!el || !field) return;
-    const f = field.getBoundingClientRect(), h = el.getBoundingClientRect().height;
+    const f = field.getBoundingClientRect(), r = el.getBoundingClientRect(), h = r.height;
     const nodeY = f.top + node.y * f.height;
     const roomAbove = nodeY - NODE, roomBelow = window.innerHeight - (nodeY + NODE + 26);
     const want = roomAbove >= h ? false : roomBelow >= h ? true : roomBelow > roomAbove;
     if (want !== below) setBelow(want);
+    // 0.9 of the width, not the edge itself: a pane still scaling in reads a few px short.
+    const coverLeft = Math.min(Infinity, ...[...document.querySelectorAll<HTMLElement>("[data-hud-panel]")]
+      .map((p) => p.getBoundingClientRect())
+      .filter((p) => p.right >= window.innerWidth * 0.9 && p.top < r.bottom && p.bottom > r.top)
+      .map((p) => p.left));
+    const left = r.left + nudge, right = r.right + nudge;
+    const wantNudge = Math.round(Math.max(0, Math.min(right - (coverLeft - POPUP_GAP), left - POPUP_GAP)));
+    if (Math.abs(wantNudge - nudge) > 1) setNudge(wantNudge);
   });
   const anchorY = below
     ? { top: `calc(${(node.y * 100).toFixed(2)}% + ${NODE + 26}px)` }
@@ -302,11 +315,12 @@ function NodePopup(props: {
       data-testid="prep-popup"
       style={{
         position: "absolute",
-        left: `${ax.toFixed(2)}%`,
+        left: nudge ? `calc(${ax.toFixed(2)}% - ${nudge}px)` : `${ax.toFixed(2)}%`,
         ...anchorY,
         transform: "translateX(-50%)",
         width: POPUP_W,
-        zIndex: 3,
+        // Over the nodes, under the inventory (2): this layer is the HUD's, not the map's.
+        zIndex: 1,
         textAlign: "center",
         // Straight sides, no bottom edge, no border: the reference's panel hangs
         // off its header band and fades into the ground under the node, so the map

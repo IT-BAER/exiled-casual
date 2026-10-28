@@ -94,6 +94,48 @@ describe("PreparationPanel", () => {
     expect((screen.getByTestId("prep-activate") as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("keeps the place's panel under the inventory, which docks over the map as in PoE", () => {
+    // The panel's z-index competes in the HUD's layer, beside the inventory's 2: at 3
+    // it covered the backpack's first column, and a stone there could not be dragged.
+    render(
+      <PreparationPanel
+        atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(atlasSeed)[0]!.id}`));
+    const z = Number(screen.getByTestId("prep-popup").style.zIndex);
+    expect(z).toBeGreaterThanOrEqual(1);
+    expect(z).toBeLessThan(2);
+  });
+
+  it("moves a place's panel clear of a panel docked on the right, so its socket stays reachable", () => {
+    // 1366x768: the inventory docks at x 982 and a right-side node's panel ran to 1135.
+    const box = (x: number, y: number, w: number, h: number) =>
+      ({ x, y, left: x, top: y, width: w, height: h, right: x + w, bottom: y + h, toJSON: () => ({}) }) as DOMRect;
+    const nudgeOf = (el: HTMLElement) => Number(/- ([\d.]+)px/.exec(el.style.left)?.[1] ?? 0);
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.hudPanel !== undefined) return box(982, 0, 384, 768);
+      if (this.dataset.testid === "prep-popup") return box(875 - nudgeOf(this), 200, 260, 300);
+      return box(0, 0, 1366, 768);
+    });
+    render(
+      <>
+        <PreparationPanel
+          atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+          onEject={() => {}} onActivate={() => {}} onClose={() => {}}
+        />
+        <div data-hud-panel="" />
+      </>,
+    );
+    fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(atlasSeed)[0]!.id}`));
+    const popup = screen.getByTestId("prep-popup");
+    expect(875 - nudgeOf(popup) + 260).toBeLessThanOrEqual(982);
+    // Not further than it has to: still beside its node, not thrown across the map.
+    expect(nudgeOf(popup)).toBeLessThan(200);
+    rect.mockRestore();
+  });
+
   it("shows the stone in the socket; clicking the socket ejects it", () => {
     const onEject = vi.fn();
     const s = stone();
