@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { waystoneRarity, waystoneMods, waystoneScale, waystoneScaleFor } from "./waystone.js";
+import { waystoneRarity, waystoneMods, waystoneScale, waystoneScaleFor, craftWaystone, waystoneCurrencyAccepts } from "./waystone.js";
 import { offerWaystones, WAYSTONE_OFFER_COUNT } from "./atlas.js";
 
 describe("waystoneRarity", () => {
@@ -113,5 +113,57 @@ describe("the offers a character is given", () => {
       expect(scale.lifeMilli).toBeGreaterThanOrEqual(1000);
       expect(scale.packSizePct).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+describe("craftWaystone", () => {
+  function seedOfRarity(rarity: string): number {
+    for (let s = 1; s < 100_000; s++) if (waystoneRarity(s) === rarity) return s;
+    throw new Error(`no seed rolls ${rarity}`);
+  }
+
+  it("transmutation turns a plain stone magic", () => {
+    const out = craftWaystone("currency.transmutation", seedOfRarity("normal"), 42);
+    expect(out).not.toBeNull();
+    expect(waystoneRarity(out!)).toBe("magic");
+  });
+
+  it("alchemy turns a plain or magic stone rare, elevation a magic one", () => {
+    for (const [id, from] of [["currency.alchemy", "normal"], ["currency.alchemy", "magic"], ["currency.elevation", "magic"]] as const) {
+      const out = craftWaystone(id, seedOfRarity(from), 7);
+      expect(out, `${id} on ${from}`).not.toBeNull();
+      expect(waystoneRarity(out!)).toBe("rare");
+    }
+  });
+
+  it("refuses an orb the stone's rarity does not take, and every full stone", () => {
+    expect(craftWaystone("currency.transmutation", seedOfRarity("magic"), 1)).toBeNull();
+    expect(craftWaystone("currency.elevation", seedOfRarity("normal"), 1)).toBeNull();
+    expect(craftWaystone("currency.alchemy", seedOfRarity("rare"), 1)).toBeNull();
+    expect(craftWaystone("currency.augmentation", seedOfRarity("magic"), 1)).toBeNull();
+    expect(craftWaystone("currency.embers", seedOfRarity("rare"), 1)).toBeNull();
+    expect(craftWaystone("currency.wisdom", seedOfRarity("normal"), 1)).toBeNull();
+  });
+
+  it("is deterministic in the craft seed and varies with it", () => {
+    const plain = seedOfRarity("normal");
+    expect(craftWaystone("currency.alchemy", plain, 99)).toBe(craftWaystone("currency.alchemy", plain, 99));
+    const outs = new Set<number | null>();
+    for (let c = 1; c <= 20; c++) outs.add(craftWaystone("currency.alchemy", plain, c));
+    expect(outs.size).toBeGreaterThan(1);
+  });
+
+  it("never lands on seed 0, the no-stone sentinel", () => {
+    for (let c = 0; c < 500; c++) expect(craftWaystone("currency.transmutation", seedOfRarity("normal"), c)).not.toBe(0);
+  });
+
+  it("the client's guess reads the same table, and never offers the permanent stone", () => {
+    expect(waystoneCurrencyAccepts("currency.transmutation", seedOfRarity("normal"))).toBe(true);
+    expect(waystoneCurrencyAccepts("currency.elevation", seedOfRarity("magic"))).toBe(true);
+    expect(waystoneCurrencyAccepts("currency.alchemy", seedOfRarity("rare"))).toBe(false);
+    expect(waystoneCurrencyAccepts("currency.embers", seedOfRarity("rare"))).toBe(false);
+    expect(waystoneCurrencyAccepts("currency.wisdom", seedOfRarity("normal"))).toBe(false);
+    expect(waystoneCurrencyAccepts("currency.alchemy", 0)).toBe(false);
+    expect(craftWaystone("currency.alchemy", 0, 5)).toBeNull();
   });
 });

@@ -2,7 +2,7 @@ import React from "react";
 import type { ContainerId, DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
 import { SORT_MODES } from "@exiled/protocol";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "@exiled/simulation";
-import { currencyAccepts, currencyResultRarity, SHARDS_PER_ORB } from "@exiled/rules";
+import { currencyAccepts, currencyResultRarity, waystoneCurrencyAccepts, SHARDS_PER_ORB } from "@exiled/rules";
 import { ItemCompare, ItemTooltip } from "./ItemTooltip";
 import { flaskTooltip } from "./flask-tooltip";
 import { playDropSound } from "../audio/drop-sound";
@@ -46,8 +46,8 @@ const isShop = (c: ContainerId): boolean => c === "vendor" || c === "buyback";
  */
 function accepts(currency: GridItem, it: GridItem): boolean {
   if (it.itemClass === "currency" || (it.x === currency.x && it.y === currency.y)) return false;
-  // A waystone's modifiers come from its seed: the sim has no base to roll an orb on.
-  if (it.itemClass === "waystone") return false;
+  // A stone's orbs are its own table: magic and rare stones are full where gear is not.
+  if (it.itemClass === "waystone") return it.waystone !== undefined && waystoneCurrencyAccepts(currency.baseId ?? "", it.waystone.seed);
   return currencyAccepts(currency.baseId ?? "", it.rarity, it.unidentified === true, it.lines.length);
 }
 

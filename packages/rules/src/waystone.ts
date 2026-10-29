@@ -147,6 +147,40 @@ export function waystoneScale(mods: readonly WaystoneMod[]): WaystoneScale {
   return s;
 }
 
+/**
+ * The orbs a stone takes, PoE2's chain (transmute, regal, alch). Augmentation and
+ * Embers are absent because magic (1+1) and rare (2+2) stones are already full.
+ */
+const WAYSTONE_CRAFTS: Record<string, { from: readonly WaystoneRarity[]; to: WaystoneRarity }> = {
+  "currency.transmutation": { from: ["normal"], to: "magic" },
+  "currency.alchemy": { from: ["normal", "magic"], to: "rare" },
+  "currency.elevation": { from: ["magic"], to: "rare" },
+};
+
+/** Does this orb take on this stone? Seed 0, the permanent stone, never does. */
+export function waystoneCurrencyAccepts(currencyId: string, waystoneSeed: number): boolean {
+  if (waystoneSeed === 0) return false;
+  return WAYSTONE_CRAFTS[currencyId]?.from.includes(waystoneRarity(waystoneSeed)) ?? false;
+}
+
+/**
+ * A crafted stone is a RE-SEEDED stone: its modifiers are a function of its seed,
+ * so the orb draws seeds until one rolls the target rarity and the session still
+ * only carries a seed. Elevation therefore re-rolls both modifiers rather than
+ * keeping PoE2's existing one. Null when the orb does not take.
+ */
+export function craftWaystone(currencyId: string, waystoneSeed: number, craftSeed: number): number | null {
+  if (!waystoneCurrencyAccepts(currencyId, waystoneSeed)) return null;
+  const t = WAYSTONE_CRAFTS[currencyId]!;
+  const rnd = mulberry32(craftSeed ^ 0xc4af);
+  // Rare is 15 % of seeds, so 1024 draws all missing is beyond any real run.
+  for (let i = 0; i < 1024; i++) {
+    const seed = rnd();
+    if (seed !== 0 && waystoneRarity(seed) === t.to) return seed;
+  }
+  return null;
+}
+
 /** The scale a run actually uses: the stone's modifiers, read from its seed. */
 export function waystoneScaleFor(waystoneSeed: number): WaystoneScale {
   return waystoneScale(waystoneMods(waystoneSeed));

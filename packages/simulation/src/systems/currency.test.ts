@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { currencyItem, permanentWaystone } from "@exiled/content-runtime";
+import { currencyItem, permanentWaystone, waystoneItem } from "@exiled/content-runtime";
+import { waystoneRarity } from "@exiled/rules";
 import { World } from "../ecs";
 import { Simulation } from "../loop";
 import { registerCurrencySystem } from "./currency";
@@ -101,6 +102,33 @@ describe("currency system", () => {
     apply(sim, [0, 0], [2, 0]);
     expect(inv().items[1]!.item).toEqual(permanentWaystone());
     expect(inv().items[0]!.count, "the orb is not spent on a refusal").toBe(2);
+  });
+
+  /** PoE2's climb: an orb on a stone adds modifiers, and a modded stone pays a tier up. */
+  it("spends one orb to turn a plain waystone magic, keeping its tier", () => {
+    let plain = 1;
+    while (waystoneRarity(plain) !== "normal") plain++;
+    const { sim, inv } = bench([
+      cell(0, 0, currencyItem("currency.transmutation"), 2),
+      cell(2, 0, waystoneItem(plain, 3)),
+    ]);
+    apply(sim, [0, 0], [2, 0]);
+    const stone = inv().items[1]!.item.waystone!;
+    expect(waystoneRarity(stone.seed)).toBe("magic");
+    expect(stone.tier).toBe(3);
+    expect(inv().items[0]!.count).toBe(1);
+  });
+
+  it("charges nothing for an orb the stone does not take", () => {
+    let plain = 1;
+    while (waystoneRarity(plain) !== "normal") plain++;
+    const { sim, inv } = bench([
+      cell(0, 0, currencyItem("currency.embers"), 2),
+      cell(2, 0, waystoneItem(plain, 3)),
+    ]);
+    apply(sim, [0, 0], [2, 0]);
+    expect(inv().items[1]!.item.waystone!.seed).toBe(plain);
+    expect(inv().items[0]!.count).toBe(2);
   });
 
   it("is deterministic: the same tick and cells craft the same item", () => {

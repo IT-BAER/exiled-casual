@@ -4,6 +4,7 @@ import { render, screen, cleanup, fireEvent, act } from "@testing-library/react"
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { ITEM_POOLS, baseOf, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
+import { waystoneRarity } from "@exiled/rules";
 import { Profiler } from "react";
 import { InventoryPanel } from "./InventoryPanel";
 import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
@@ -661,13 +662,34 @@ describe("spending currency on an item", () => {
     expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
   });
 
-  it("will not spend an orb on a waystone: the sim refuses it, so no craft chime and no intent", () => {
-    // A stone's modifiers come from its seed; applyCurrency has no waystone base to roll on.
+  const seedOf = (rarity: string) => { let s = 1; while (waystoneRarity(s) !== rarity) s++; return s; };
+  const stoneBag = (orb: string, rarity: "normal" | "magic" | "rare", lines: string[], seed = seedOf(rarity)) => ({ cols: 12, rows: 5, items: [
+    { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Orb", itemClass: "currency", baseId: orb, lines: [], count: 2 },
+    { x: 4, y: 0, w: 1, h: 1, rarity, name: "Waystone (Tier 2)", itemClass: "waystone", baseId: "map.waystone", lines, waystone: { seed, tier: 2 } },
+  ] });
+
+  it("spends an orb the stone takes: alchemy on a plain waystone sends the craft", () => {
     const seen: unknown[] = [];
-    render(<InventoryPanel inventory={{ cols: 12, rows: 5, items: [
-      { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Orb of Alchemy", itemClass: "currency", baseId: "currency.alchemy", lines: [], count: 2 },
-      { x: 4, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Waystone (Tier 2)", itemClass: "waystone", baseId: "map.waystone", lines: [] },
-    ] }} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    render(<InventoryPanel inventory={stoneBag("currency.alchemy", "normal", [])} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+    expect(seen.filter((i) => (i as { kind: string }).kind === "applyCurrency")).toEqual([
+      { kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 },
+    ]);
+  });
+
+  it("will not spend an orb on the permanent stone, which the sim keeps white", () => {
+    const seen: unknown[] = [];
+    render(<InventoryPanel inventory={stoneBag("currency.alchemy", "normal", ["Not consumed on use", "Cannot be modified"], 0)} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+    expect(seen.filter((i) => (i as { kind: string }).kind === "applyCurrency")).toEqual([]);
+  });
+
+  it("will not spend an orb a full stone refuses: no craft chime and no intent", () => {
+    // A rare stone holds 2+2, so Embers has nothing to add, whatever the gear cap says.
+    const seen: unknown[] = [];
+    render(<InventoryPanel inventory={stoneBag("currency.embers", "rare", ["a", "b", "c", "d"])} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
     vi.mocked(playSfx).mockClear();
     fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
     fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));

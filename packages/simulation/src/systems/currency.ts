@@ -1,4 +1,4 @@
-import { applyCurrency } from "@exiled/rules";
+import { applyCurrency, craftWaystone } from "@exiled/rules";
 import { ITEM_POOLS, isCurrency, baseOf, isPermanentWaystone } from "@exiled/content-runtime";
 import { fnv1a32 } from "../rng";
 import { Simulation } from "../loop";
@@ -87,7 +87,12 @@ function craft(currency: Item, target: Item, where: string): Item | null {
   // The base id is the currency id: content and rules agree on the namespace, so
   // nothing has to carry a second identifier through the wire.
   const currencyId = baseOf(currency.baseId).id;
-  return applyCurrency(ITEM_POOLS, currencyId, target, fnv1a32(`craft:${currencyId}:${where}`));
+  const seed = fnv1a32(`craft:${currencyId}:${where}`);
+  if (target.waystone) {
+    const crafted = craftWaystone(currencyId, target.waystone.seed, seed);
+    return crafted === null ? null : { ...target, waystone: { ...target.waystone, seed: crafted } };
+  }
+  return applyCurrency(ITEM_POOLS, currencyId, target, seed);
 }
 
 /** One unit off the stack at index `src`; the last unit takes the cell with it. */
