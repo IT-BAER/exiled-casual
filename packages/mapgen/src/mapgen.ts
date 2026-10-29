@@ -12,7 +12,6 @@ import { assembleArea } from "./assemble-area";
 import { LOOP_GRAMMAR, type Grammar } from "./loop-grammar";
 import { FIELD_GRAMMAR } from "./field-grammar";
 import { SUNKEN_GRAMMAR } from "./sunken-grammar";
-import { STRAND_GRAMMAR } from "./strand-grammar";
 import { generateCoast } from "./coast";
 import type { AreaLayout } from "./grid";
 
@@ -30,23 +29,22 @@ export { fallbackLayout, GRID_CELLS } from "./fallback";
 /** Which chunk library and branch count an area is built from. `coast` is the
  *  one id that names a GENERATOR rather than a library: a beach is not a route
  *  with wall on both sides, so no chunk vocabulary can express it. */
-export type GrammarId = "loop" | "open-field" | "sunken-ruins" | "strand" | "coast";
+export type GrammarId = "loop" | "open-field" | "sunken-ruins" | "coast";
 export type ChunkGrammarId = Exclude<GrammarId, "coast">;
 
 export const GRAMMARS: Record<ChunkGrammarId, Grammar> = {
   loop: LOOP_GRAMMAR,
   "open-field": FIELD_GRAMMAR,
   "sunken-ruins": SUNKEN_GRAMMAR,
-  strand: STRAND_GRAMMAR,
 };
 
-/** Spawn points a coast aims for. Four over the strand grammar's 16: at 16 the
+/** Spawn points a coast aims for: at 16 the
  *  playtest bot cleared a first map in under 3 minutes with 39 kills. */
 const COAST_SPAWN_TARGET = 24;
 
 export function isGrammarId(v: string): v is GrammarId {
   return v === "loop" || v === "open-field" || v === "sunken-ruins" ||
-    v === "strand" || v === "coast";
+    v === "coast";
 }
 
 export function generateArea(
