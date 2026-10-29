@@ -46,6 +46,8 @@ const isShop = (c: ContainerId): boolean => c === "vendor" || c === "buyback";
  */
 function accepts(currency: GridItem, it: GridItem): boolean {
   if (it.itemClass === "currency" || (it.x === currency.x && it.y === currency.y)) return false;
+  // A waystone's modifiers come from its seed: the sim has no base to roll an orb on.
+  if (it.itemClass === "waystone") return false;
   return currencyAccepts(currency.baseId ?? "", it.rarity, it.unidentified === true, it.lines.length);
 }
 

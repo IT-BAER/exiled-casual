@@ -661,6 +661,20 @@ describe("spending currency on an item", () => {
     expect(seen).toEqual([{ kind: "applyCurrency", fromX: 0, fromY: 0, x: 4, y: 0 }]);
   });
 
+  it("will not spend an orb on a waystone: the sim refuses it, so no craft chime and no intent", () => {
+    // A stone's modifiers come from its seed; applyCurrency has no waystone base to roll on.
+    const seen: unknown[] = [];
+    render(<InventoryPanel inventory={{ cols: 12, rows: 5, items: [
+      { x: 0, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Orb of Alchemy", itemClass: "currency", baseId: "currency.alchemy", lines: [], count: 2 },
+      { x: 4, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Waystone (Tier 2)", itemClass: "waystone", baseId: "map.waystone", lines: [] },
+    ] }} onClose={() => {}} onIntent={(i) => seen.push(i)} />);
+    vi.mocked(playSfx).mockClear();
+    fireEvent.contextMenu(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerDown(screen.getByTestId("inventory-item-1"));
+    expect(seen.filter((i) => (i as { kind: string }).kind === "applyCurrency")).toEqual([]);
+    expect(playSfx).not.toHaveBeenCalled();
+  });
+
   describe("holding shift keeps the armed orb on the cursor, as in PoE", () => {
     const twoUnread = {
       ...withScroll,
