@@ -1756,9 +1756,13 @@ def hoarfrost_spitter():
     band 8, 4k triangles, rig_humanoid. Ankles measured centred within 7 mm.
     The claws hang to 0.15 H and the left hand touches its thigh, whose outer
     edge is 0.17 H: one surface piece, so only the thigh rule keeps it a hand.
+    The elbows rest on the hips at 0.51-0.58 H, and the smoothing left the right
+    hand's weight on the outer shin, which bulges past the thigh line to 0.18 H
+    at 0.20 H: the raised claws drew it up as a spike (+0.30 m). `fused_arms`
+    drops each chain's weight from the other and cuts the elbows free.
     """
     return GeneratedCreature("monster.hoarfrost_spitter.v1", HOARFROST_SPITTER_SOURCE, "forest", 2.0,
-                             normal=HOARFROST_SPITTER_NORMAL, thigh=0.17, knee=0.15)
+                             normal=HOARFROST_SPITTER_NORMAL, thigh=0.17, knee=0.15, fused_arms=True)
 
 
 TIDE_SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "tide_spitter_v1.glb")
@@ -2025,10 +2029,16 @@ def drowned_grubling():
     Generated (review/3d/drowned-grubling-v2), opened by tools/open_volume.py
     --res 240 --radius 2 --band 8 (the default band leaked into the body and kept
     one leg), 4k triangles, rig_humanoid. Feet centroid measured at x 0.015 as
-    loaded: the offset centres the stance.
+    loaded: the offset centres the stance. The left fist hangs to 0.24 H, bridged
+    to the thigh at 0.30-0.34 H, the thigh's outer edge at 0.195 H and the fist's
+    inner face from 0.20 H; the right fist hangs clear of the belly, which reaches
+    0.274 H. Both forearms are fused to the belly's flanks above 0.45 H, and the
+    belly rides the thighs: `fused_arms` cuts both arms free, or raising the right
+    arm pulled the flank up as a sheet (+0.44 m).
     """
     return GeneratedCreature("monster.drowned_grubling.v1", GRUBLING_SOURCE, "swamp", 0.95,
-                             normal=GRUBLING_NORMAL, offset=(-0.015, 0.0))
+                             normal=GRUBLING_NORMAL, offset=(-0.015, 0.0),
+                             thigh=(0.20, 0.28), knee=0.23, fused_arms=True)
 
 
 BOAR_SOURCE = os.path.join(TEX_DIR, "source", "thornhide_boar_v2.glb")
@@ -2157,11 +2167,15 @@ def cinder_warden():
     right shin: past 0.28 H it is the slab, rigid with the hand, its inner face
     joins it by surface distance, and the faces fused to the leg are cut and
     capped. Ankles measured at x -0.25 and 0.65 as loaded: the offset centres the
-    stance.
+    stance. The empty left fist hangs to 0.33 H and is one surface piece with its
+    thigh from 0.37 to 0.41 H, the waist at 0.20 H (the knee bulges to 0.203 H):
+    the left thigh rule sits there, the right one at 0.25 H between the thigh
+    (0.248 H) and the slab (0.256 H), and `fused_arms` cuts the left join, or the
+    strike drew the fist out of the thigh as a sheet (+0.70 m).
     """
     return GeneratedCreature("monster.cinder_warden.v1", CINDER_WARDEN_SOURCE, "cinder", 2.9,
                              normal=CINDER_WARDEN_NORMAL, tex=1024, offset=(-0.20, 0.0),
-                             carry="r", held=0.28)
+                             carry="r", held=0.28, thigh=(0.20, 0.25), knee=0.32, fused_arms=True)
 
 
 SIRRATH_SOURCE = os.path.join(TEX_DIR, "source", "sirrath_v2.glb")

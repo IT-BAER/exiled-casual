@@ -354,6 +354,28 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=
                 free |= armish & numpy.array([b.name.endswith("_" + t) for b in bones])
                 lateral |= s * v[:, 0] > 0
         fist, body = free[dom], (legs | hips)[dom] & lateral
+        # A fist's inner face can lie nearer the hip than the medial-tripled hand, and
+        # cut out of the fist it floats with the thigh: what the fist encloses is
+        # filled in from the fist around it, on the welded points.
+        fw = numpy.zeros(weld.max() + 1, dtype=bool)
+        fw[weld[fist]] = True
+        label = pieces(~fw, ew)
+        rim = ew[fw[ew[:, 0]] != fw[ew[:, 1]]].ravel()
+        near = numpy.unique(label[rim[~fw[rim]]])
+        lp = numpy.isin(label, near[near != numpy.bincount(label[~fw]).argmax()])
+        lone = lp[weld]
+        if lone.any():
+            Wp = numpy.zeros((len(lp), len(bones)))
+            Wp[weld] = W
+            n = numpy.bincount(ew.ravel(), minlength=len(lp))[:, None]
+            for _ in range(32):
+                acc = numpy.zeros_like(Wp)
+                numpy.add.at(acc, ew[:, 0], Wp[ew[:, 1]])
+                numpy.add.at(acc, ew[:, 1], Wp[ew[:, 0]])
+                Wp[lp] = acc[lp] / n[lp]
+            W[lone] = Wp[weld[lone]]
+            fist, body = fist | lone, body & ~lone
+        print("enclosed by the fist: %d vertices" % lone.sum())
         W[numpy.ix_(fist, legs | hips)] = 0.0
         W[numpy.ix_(body, free)] = 0.0
         W /= W.sum(axis=1, keepdims=True)

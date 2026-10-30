@@ -584,11 +584,12 @@ describe("creature instances", () => {
   });
 
   /**
-   * A generated shell can weld a hanging fist to its thigh, and the build cuts
-   * it free (`thigh`, `fused_arms` in `build_monsters.py`). Uncut, the Bog
-   * Drowned's strike drew its right fist out of the knee as a sheet: edges from
-   * an arm vertex to a leg vertex grew 1.1 m. Scored on the skinned attack by
-   * each vertex's strongest bone, counting edges stretched past twice their rest.
+   * A generated shell can weld a hanging fist to its thigh or an elbow to its
+   * hip, and the build cuts it free (`thigh`, `fused_arms` in
+   * `build_monsters.py`). Uncut, the Bog Drowned's strike drew its right fist
+   * out of the knee as a sheet: edges from an arm vertex to a leg vertex grew
+   * 1.1 m. Scored on the skinned attack by each vertex's strongest bone,
+   * counting edges stretched past twice their rest.
    */
   it("keeps a freed fist off its leg through the strike", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
@@ -598,7 +599,7 @@ describe("creature instances", () => {
     new FreeCamera("cam", new Vector3(0, 10, -10), scene);
     try {
       await loadMonsters(scene);
-      for (const id of ["monster.bog_drowned.v1"]) {
+      for (const id of ["monster.bog_drowned.v1", "monster.cinder_warden.v1", "monster.drowned_grubling.v1", "monster.hoarfrost_spitter.v1"]) {
         const root = new Mesh(id, scene);
         const rig = attachCreature(scene, root, id)!;
         for (const g of rig.clipGroups.values()) g.stop();
