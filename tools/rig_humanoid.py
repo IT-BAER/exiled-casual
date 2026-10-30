@@ -226,6 +226,12 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=
         out = (numpy.abs(v[:, 0]) > reach) & (v[:, 2] > knee * H) & \
             (v[:, 2] < bones[index["hips"]].head_local.z)
         d[numpy.ix_(out, beside)] = numpy.inf
+        # Below the wrist it is the fist, and only its hand and forearm move it: a
+        # fist wider than an arm's radius lies medial of the hand bone across its
+        # inner half, and with the hand tripled there the elbow took that half.
+        for s, t in ((1, "l"), (-1, "r")):
+            fist = out & (s * v[:, 0] > 0) & (v[:, 2] < bones[index["hand_" + t]].head_local.z)
+            d[numpy.ix_(fist, [b.name not in ("hand_" + t, "arm_lower_" + t) for b in bones])] = numpy.inf
     held = []
     for s, t in ((1, "l"), (-1, "r")):
         wrist = bones[index["hand_" + t]].head_local

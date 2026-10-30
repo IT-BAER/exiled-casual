@@ -523,6 +523,64 @@ describe("creature instances", () => {
   });
 
   /**
+   * A generated shell can weld a hanging fist to its thigh, and the build cuts
+   * it free (`thigh`, `fused_arms` in `build_monsters.py`). Uncut, the Bog
+   * Drowned's strike drew its right fist out of the knee as a sheet: edges from
+   * an arm vertex to a leg vertex grew 1.1 m. Scored on the skinned attack by
+   * each vertex's strongest bone, counting edges stretched past twice their rest.
+   */
+  it("keeps a freed fist off its leg through the strike", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    new FreeCamera("cam", new Vector3(0, 10, -10), scene);
+    try {
+      await loadMonsters(scene);
+      for (const id of ["monster.bog_drowned.v1"]) {
+        const root = new Mesh(id, scene);
+        const rig = attachCreature(scene, root, id)!;
+        for (const g of rig.clipGroups.values()) g.stop();
+        const strike = rig.clipGroups.get("attack")!;
+        strike.start(false);
+        strike.pause();
+        let torn = 0;
+        for (let f = strike.from; f <= strike.to; f++) {
+          strike.goToFrame(f);
+          scene.render();
+          for (const m of root.getChildMeshes(false) as Mesh[]) {
+            if (!m.skeleton) continue;
+            m.computeWorldMatrix(true);
+            m.skeleton.prepare(true);
+            const rest = m.getPositionData(false, false)!, pose = m.getPositionData(true, true)!;
+            const idx = m.getIndices()!, mi = m.getVerticesData("matricesIndices")!, mw = m.getVerticesData("matricesWeights")!;
+            const part = (v: number) => {
+              let k0 = 0;
+              for (let k = 1; k < 4; k++) if (mw[4 * v + k]! > mw[4 * v + k0]!) k0 = k;
+              const name = m.skeleton!.bones[mi[4 * v + k0]!]!.name;
+              return /^(arm_|hand_)/.test(name) ? "arm" : name.startsWith("leg") ? "leg" : "trunk";
+            };
+            const len = (p: ArrayLike<number>, a: number, b: number) =>
+              Math.hypot(p[3 * a]! - p[3 * b]!, p[3 * a + 1]! - p[3 * b + 1]!, p[3 * a + 2]! - p[3 * b + 2]!);
+            for (let t = 0; t < idx.length; t += 3) {
+              for (const [a, b] of [[idx[t]!, idx[t + 1]!], [idx[t + 1]!, idx[t + 2]!], [idx[t + 2]!, idx[t]!]] as const) {
+                const ends = [part(a), part(b)].sort().join("-");
+                if (ends === "arm-leg" && len(pose, a, b) > 2 * len(rest, a, b) + 0.03) torn++;
+              }
+            }
+          }
+        }
+        expect(torn, `${id}: arm-to-leg edges stretched past 2x through the strike`).toBe(0);
+        root.dispose();
+      }
+    } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
+  /**
    * A paused group still counts as started, so `start` on waking returned early
    * and the creature came back into view frozen mid-step.
    */

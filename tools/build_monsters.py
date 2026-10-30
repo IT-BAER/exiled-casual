@@ -1823,10 +1823,15 @@ def bog_drowned():
 
     Generated (review/3d/bog-drowned-v2), opened by tools/open_volume.py --res 240
     --radius 2 --band 8, 4k triangles, rig_humanoid. Feet centroid measured at
-    x 0.015 as loaded: the offset centres the stance.
+    x 0.015 as loaded: the offset centres the stance. Each fist hangs to 0.20 H
+    and is one surface piece with its thigh up to 0.38 H: the knee bulges to
+    0.246 H and the fist's inner face starts at 0.241 H, so the thigh rule sits
+    at 0.245 H and `fused_arms` cuts the join, or the strike drew the fist out of
+    the knee as a sheet (+1.11 m).
     """
     return GeneratedCreature("monster.bog_drowned.v1", BOG_DROWNED_SOURCE, "swamp", 1.7,
-                             normal=BOG_DROWNED_NORMAL, offset=(-0.015, 0.0))
+                             normal=BOG_DROWNED_NORMAL, offset=(-0.015, 0.0),
+                             thigh=0.245, knee=0.20, fused_arms=True)
 
 
 WRACK_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "wrack_drowned_v2.glb")
