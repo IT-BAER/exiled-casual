@@ -39,6 +39,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The inventory's tabs no longer draw a line under the tab you switch to.
 - The Bog Drowned no longer stretches a sheet of skin from its fist down to
   its knee when it strikes.
+- The Cinder Warden, the Drowned Grubling and the Hoarfrost Spitter no longer
+  stretch sheets of skin from their arms to their legs and flanks when they
+  walk or strike.
 - A map boss now swings when it attacks; it used to hit without moving.
 - The creatures a map boss calls up now get the Waystone's monster resistance
   modifiers, like every other monster there.
