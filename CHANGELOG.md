@@ -27,6 +27,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   so a waystone in its first column can be dragged again, and the panel moves
   aside so the open inventory no longer hides its socket and Activate button.
 - The inventory's tabs no longer draw a line under the tab you switch to.
+- The Bog Drowned no longer stretches a sheet of skin from its fist down to
+  its knee when it strikes.
 
 ## [0.5.1] - 2026-10-28
 
