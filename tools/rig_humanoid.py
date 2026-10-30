@@ -571,31 +571,197 @@ ATTACK_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (7, ATTACK_RAISE, (0, 0.02, -0.0
                (15, ATTACK_STRIKE, (0, -0.06, -0.05)), (22, ATTACK_REST, (0, 0, -0.02))]
 
 
-def ease(t):
-    return t * t * (3 - 2 * t)
+# How a segment reaches its key. Smoothstep stops at every key, which suits a coil
+# and not a blow: `in` accelerates into the contact, so the hit lands at full speed.
+EASE = {"smooth": lambda t: t * t * (3 - 2 * t), "in": lambda t: t * t, "out": lambda t: t * (2 - t)}
 
 
-def clip_attack(k):
-    n = ATTACK_KEYS[-1][0]
+def pose(**bones):
+    return {**ATTACK_REST, **bones}
+
+
+# Own strikes for the armed and the big. Each runs coil, blow, a held contact and
+# recovery; an `attack` lands by frame 8 (0.23 s at the runtime's 1.3x, because
+# the sim hit is already out on the swing), a `slam` is authored at full pace and
+# stretched by the runtime onto its telegraph's impact.
+# Horizontal cleave: blade drawn back at waist height, swept round the front.
+CLEAVE_COIL = pose(spine=(HUNCH - 0.05, 0, -0.20), chest=(0.05, 0, -0.30),
+                   arm_upper_r=(0, 1.15, -0.30), arm_lower_r=(-0.25, 0, 0),
+                   arm_upper_l=(-0.60, -0.30, 0), legL_hip=(-0.25, 0, 0), legL_knee=(0.35, 0, 0),
+                   legR_hip=(0.15, 0, 0), legR_knee=(0.25, 0, 0))
+CLEAVE_CUT = pose(spine=(HUNCH + 0.15, 0, 0.30), chest=(0.15, 0, 0.45),
+                  arm_upper_r=(0, 1.15, 1.40), arm_lower_r=(-0.10, 0, 0),
+                  arm_upper_l=(0.30, -0.20, 0), legL_hip=(-0.45, 0, 0), legL_knee=(0.50, 0, 0),
+                  legR_hip=(0.20, 0, 0), legR_knee=(0.25, 0, 0), legR_ankle=(-0.15, 0, 0))
+CLEAVE_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (4, CLEAVE_COIL, (0, 0.02, -0.04)),
+               (8, CLEAVE_CUT, (0, -0.06, -0.05), "in"),
+               (10, {**CLEAVE_CUT, "arm_upper_r": (0, 1.15, 1.48)}, (0, -0.065, -0.05)),
+               (22, ATTACK_REST, (0, 0, -0.02))]
+# Arms hang off the torso, so leaning it forward swings them back: an arm's x
+# carries the spine and chest pitch on top of where it should point.
+# Overhead chop: blade raised up and out over the right shoulder, chopped onto
+# the floor ahead. Raised sideways, as the rake does: straight overhead tore
+# the shoulder (+0.38 m, 280 sides) against +0.24 m (158) this way.
+CHOP_RAISE = pose(spine=(HUNCH - 0.15, 0, -0.15), chest=(-0.10, 0, -0.10), neck=(0.0, 0, 0),
+                  arm_upper_r=(-1.20, 1.40, 0), arm_lower_r=(-0.90, 0, 0), hand_r=(-0.30, 0, 0),
+                  legL_hip=(-0.15, 0, 0), legR_hip=(0.20, 0, 0))
+CHOP_DOWN = pose(spine=(HUNCH + 0.50, 0, 0.10), chest=(0.30, 0, 0.05), neck=(-0.40, 0, 0),
+                 arm_upper_r=(-1.00, 0.10, 0), arm_lower_r=(-0.05, 0, 0), hand_r=(-0.50, 0, 0),
+                 arm_upper_l=(0.20, -0.25, 0), legL_hip=(-0.55, 0, 0), legL_knee=(0.70, 0, 0),
+                 legR_hip=(0.30, 0, 0), legR_knee=(0.35, 0, 0), legR_ankle=(-0.20, 0, 0))
+CHOP_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (12, CHOP_RAISE, (0, 0.03, 0.0)),
+             (15, {**CHOP_RAISE, "arm_upper_r": (-1.28, 1.40, 0)}, (0, 0.035, 0.0)),
+             (19, CHOP_DOWN, (0, -0.10, -0.09), "in"), (22, CHOP_DOWN, (0, -0.10, -0.09)),
+             (36, ATTACK_REST, (0, 0, -0.02))]
+# Anchor smash: swung up over the right shoulder, down onto the floor ahead, dragged back.
+# The free left arm stays as it hangs: swung, its elbow tore from the hip.
+SMASH_RAISE = pose(spine=(HUNCH - 0.25, 0, -0.20), chest=(-0.05, 0, -0.10),
+                   arm_upper_r=(-2.60, 0.40, 0), arm_lower_r=(-1.20, 0, 0),
+                   legL_hip=(-0.15, 0, 0), legR_hip=(0.20, 0, 0))
+SMASH_DOWN = pose(spine=(HUNCH + 0.65, 0, 0.10), chest=(0.35, 0, 0.05), neck=(-0.45, 0, 0),
+                  arm_upper_r=(-1.55, 0.15, 0), arm_lower_r=(-0.05, 0, 0),
+                  legL_hip=(-0.55, 0, 0), legL_knee=(0.75, 0, 0),
+                  legR_hip=(0.30, 0, 0), legR_knee=(0.40, 0, 0), legR_ankle=(-0.20, 0, 0))
+SMASH_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (4, SMASH_RAISE, (0, 0.03, 0.0)),
+              (8, SMASH_DOWN, (0, -0.10, -0.12), "in"), (10, SMASH_DOWN, (0, -0.10, -0.12)),
+              (15, {**SMASH_DOWN, "arm_upper_r": (-1.25, 0.15, 0)}, (0, -0.06, -0.10)),
+              (24, ATTACK_REST, (0, 0, -0.02))]
+# Left hook: the empty left fist drawn back and out, hooked forward across the
+# front; the slab arm counter-turns and lifts the slab clear of the floor the
+# body dips toward. Held horizontal, the fused left arm tore at the shoulder
+# (+0.37 m, 308 sides); swung low it measures +0.16 m (48).
+HOOK_COIL = pose(spine=(HUNCH, 0, 0.15), chest=(0.05, 0, 0.20),
+                 arm_upper_l=(0.30, -0.40, 0.20), arm_lower_l=(-0.80, 0, 0),
+                 arm_upper_r=(-0.30, 0, -0.35), arm_lower_r=(-0.70, 0, 0),
+                 legL_hip=(0.10, 0, 0), legR_hip=(-0.15, 0, 0), legR_knee=(0.25, 0, 0))
+HOOK_HIT = pose(spine=(HUNCH + 0.15, 0, -0.20), chest=(0.15, 0, -0.25),
+                arm_upper_l=(-1.00, -0.20, -0.60), arm_lower_l=(-0.60, 0, 0),
+                arm_upper_r=(-0.30, 0, 0.45), arm_lower_r=(-0.70, 0, 0),
+                legL_hip=(-0.35, 0, 0), legL_knee=(0.40, 0, 0), legR_hip=(0.15, 0, 0))
+HOOK_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (4, HOOK_COIL, (0, 0.02, -0.03)),
+             (8, HOOK_HIT, (0, -0.05, -0.04), "in"),
+             (10, {**HOOK_HIT, "arm_upper_l": (-1.00, -0.20, -0.68)}, (0, -0.05, -0.04)),
+             (22, ATTACK_REST, (0, 0, -0.02))]
+# Slab slam: the slab swung up and out over the right shoulder, slammed onto the
+# floor ahead with the free hand joining it. Straight overhead, with the left
+# hand up beside it, tore the arms from the head and flank (+0.42 m, 580 sides).
+SLAB_RAISE = pose(spine=(HUNCH - 0.30, 0, 0), chest=(-0.10, 0, 0),
+                  arm_upper_r=(-1.00, 1.60, 0), arm_lower_r=(-0.30, 0, 0),
+                  legL_hip=(-0.10, 0, 0), legR_hip=(0.10, 0, 0))
+SLAB_DOWN = pose(spine=(HUNCH + 0.35, 0, 0), chest=(0.30, 0, 0), neck=(-0.40, 0, 0),
+                 arm_upper_r=(-1.65, 0.10, 0), arm_lower_r=(-0.05, 0, 0),
+                 arm_upper_l=(-1.65, 0.35, 0), arm_lower_l=(-0.20, 0, 0),
+                 legL_hip=(-0.55, 0, 0), legL_knee=(0.70, 0, 0),
+                 legR_hip=(0.30, 0, 0), legR_knee=(0.35, 0, 0), legR_ankle=(-0.20, 0, 0))
+SLAB_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (12, SLAB_RAISE, (0, 0.03, 0.0)),
+             (15, {**SLAB_RAISE, "arm_upper_r": (-1.08, 1.60, 0)}, (0, 0.035, 0.0)),
+             (19, SLAB_DOWN, (0, -0.10, -0.10), "in"), (22, SLAB_DOWN, (0, -0.10, -0.10)),
+             (36, ATTACK_REST, (0, 0, -0.02))]
+# Double-fist hammer: both fists raised up and out, a beat held, smashed down
+# together ahead, knees giving. Straight overhead tore both shoulders (+0.27 m,
+# 348 sides); this raise measures +0.17 m (136).
+HAMMER_RAISE = pose(spine=(HUNCH - 0.20, 0, 0), chest=(-0.10, 0, 0),
+                    arm_upper_r=(-0.90, -1.20, 0), arm_lower_r=(-0.20, 0, 0),
+                    arm_upper_l=(-0.90, 1.20, 0), arm_lower_l=(-0.20, 0, 0))
+HAMMER_DOWN = pose(spine=(HUNCH + 0.55, 0, 0), chest=(0.30, 0, 0), neck=(-0.40, 0, 0),
+                   arm_upper_r=(-1.70, -0.35, 0), arm_lower_r=(-0.10, 0, 0),
+                   arm_upper_l=(-1.70, 0.35, 0), arm_lower_l=(-0.10, 0, 0),
+                   legL_hip=(-0.30, 0, 0), legL_knee=(0.60, 0, 0), legR_hip=(-0.30, 0, 0),
+                   legR_knee=(0.60, 0, 0))
+HAMMER_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (4, HAMMER_RAISE, (0, 0.02, 0.01)),
+               (5, {**HAMMER_RAISE, "arm_upper_r": (-0.95, -1.20, 0), "arm_upper_l": (-0.95, 1.20, 0)},
+                (0, 0.02, 0.01)),
+               (8, HAMMER_DOWN, (0, -0.06, -0.10), "in"), (10, HAMMER_DOWN, (0, -0.06, -0.10)),
+               (22, ATTACK_REST, (0, 0, -0.02))]
+# Lurching grab: both hands swing up from the knees and close together ahead of
+# the belly. Up at the chest both shoulders tore (+0.32 m, 170 sides).
+GRAB_COIL = pose(spine=(HUNCH - 0.10, 0, 0), arm_upper_r=(0.20, 0.30, 0), arm_upper_l=(0.20, -0.30, 0),
+                 legL_knee=(0.20, 0, 0), legR_knee=(0.20, 0, 0))
+GRAB_HIT = pose(spine=(HUNCH + 0.35, 0, 0), chest=(0.25, 0, 0), neck=(-0.40, 0, 0),
+                arm_upper_r=(-1.10, -0.20, 0), arm_lower_r=(-0.70, 0, 0),
+                arm_upper_l=(-1.10, 0.20, 0), arm_lower_l=(-0.70, 0, 0),
+                legL_hip=(-0.40, 0, 0), legL_knee=(0.50, 0, 0), legR_hip=(0.15, 0, 0))
+GRAB_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (4, GRAB_COIL, (0, 0.03, -0.03)),
+             (8, GRAB_HIT, (0, -0.10, -0.06), "in"), (10, GRAB_HIT, (0, -0.10, -0.06)),
+             (22, ATTACK_REST, (0, 0, -0.02))]
+# Overarm throw: the hand cocked behind the head, whipped forward, released early, checked low.
+THROW_COCK = pose(spine=(HUNCH - 0.15, 0, -0.35), chest=(0.0, 0, -0.25),
+                  arm_upper_r=(-2.40, 0.50, 0), arm_lower_r=(-1.60, 0, 0),
+                  arm_upper_l=(-0.90, -0.20, 0), legL_hip=(-0.25, 0, 0), legR_hip=(0.15, 0, 0))
+THROW_RELEASE = pose(spine=(HUNCH + 0.10, 0, 0.25), chest=(0.15, 0, 0.20),
+                     arm_upper_r=(-1.50, 0.50, 0), arm_lower_r=(-0.05, 0, 0), hand_r=(-0.40, 0, 0),
+                     arm_upper_l=(0.30, -0.20, 0), legL_hip=(-0.40, 0, 0), legL_knee=(0.40, 0, 0),
+                     legR_hip=(0.20, 0, 0))
+THROW_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (2, THROW_COCK, (0, 0.02, -0.02)),
+              (4, THROW_RELEASE, (0, -0.05, -0.04), "in"),
+              (6, {**THROW_RELEASE, "arm_upper_r": (-1.20, 0.50, 0.20)}, (0, -0.055, -0.04), "out"),
+              (20, ATTACK_REST, (0, 0, -0.02))]
+# Each style's keys and the frame of them where the blow lands. `rake` is the
+# shared strike the small ones keep.
+STRIKES = {"rake": (ATTACK_KEYS, 12), "cleave": (CLEAVE_KEYS, 8), "chop": (CHOP_KEYS, 19),
+           "smash": (SMASH_KEYS, 8), "hook": (HOOK_KEYS, 8), "slab": (SLAB_KEYS, 19),
+           "hammer": (HAMMER_KEYS, 8), "grab": (GRAB_KEYS, 8), "throw": (THROW_KEYS, 4)}
+
+
+def plant(k, rot, move):
+    """Keep both feet on the floor and level: a hips drop on straight legs pushed
+    the soles up to 0.15 H into it. Each leg is re-solved in its own plane (strike
+    legs turn about X only and the hips never turn) so the ankle stays at least at
+    its rest height where the keys put it ahead or behind."""
+    bones = k.arm.data.bones
+    ang = lambda v: math.atan2(v.z, v.y)
+    for side in "LR":
+        hip, knee, ankle = (bones["leg%s_%s" % (side, j)] for j in ("hip", "knee", "ankle"))
+        thigh, shin = knee.head_local - hip.head_local, ankle.head_local - knee.head_local
+        bend = lambda name: rot.get(name, [(X, 0.0)] * 2)[1][1]
+        a, c = bend(hip.name), bend(knee.name)
+        top = hip.head_local + Vector(move)
+        foot = top + Matrix.Rotation(a, 3, "X") @ thigh + Matrix.Rotation(a + c, 3, "X") @ shin
+        if foot.z < ankle.head_local.z:
+            l1, l2 = Vector((thigh.y, thigh.z)).length, Vector((shin.y, shin.z)).length
+            to = Vector((0.0, foot.y - top.y, ankle.head_local.z - top.z))
+            d = max(min(to.length, l1 + l2 - 1e-5), abs(l1 - l2) + 1e-5)
+            # The knee bends forward (-Y): the thigh turns from the line to the foot by -angle.
+            turn = math.acos(max(-1.0, min(1.0, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))))
+            up = Matrix.Rotation(-turn, 3, "X") @ to.normalized() * l1
+            a = ang(up) - ang(thigh)
+            c = ang(to - up) - ang(shin) - a
+            rot[hip.name] = [(Y, 0.0), (X, a), (Z, 0.0)]
+            rot[knee.name] = [(Y, 0.0), (X, c), (Z, 0.0)]
+        rot[ankle.name] = [(Y, 0.0), (X, -(a + c)), (Z, 0.0)]
+
+
+def clip_keys(k, keys, planted=True):
+    """Key every frame between `keys`: (frame, pose, hips move as fractions of H[, ease into it])."""
+    n = keys[-1][0]
     for f in range(n + 1):
-        i = max(j for j in range(len(ATTACK_KEYS) - 1) if ATTACK_KEYS[j][0] <= f)
-        (f0, p0, m0), (f1, p1, m1) = ATTACK_KEYS[i], ATTACK_KEYS[min(i + 1, len(ATTACK_KEYS) - 1)]
-        t = ease((f - f0) / (f1 - f0)) if f1 > f0 else 0.0
+        i = max(j for j in range(len(keys) - 1) if keys[j][0] <= f)
+        (f0, p0, m0), nxt = keys[i][:3], keys[min(i + 1, len(keys) - 1)]
+        (f1, p1, m1), how = nxt[:3], (nxt[3:] or ("smooth",))[0]
+        t = EASE[how]((f - f0) / (f1 - f0)) if f1 > f0 else 0.0
         rot = {}
         for bone in set(p0) | set(p1):
             a, b = p0.get(bone, (0, 0, 0)), p1.get(bone, (0, 0, 0))
             x, y, z = (a[c] + (b[c] - a[c]) * t for c in range(3))
             rot[bone] = [(Y, y), (X, x), (Z, z)]
         m = [(m0[c] + (m1[c] - m0[c]) * t) * k.H for c in range(3)]
+        if planted:
+            plant(k, rot, m)
         k.pose(f + 1, rot, m)
     return n
 
 
-def author(arm, H, carry=None):
+def author(arm, H, carry=None, attack="rake", slam=None):
+    """Write the clips as NLA tracks; returns each strike's blow as the Blender frame keyed there."""
     k = Keyer(arm, H)
     arm.animation_data_create()
     walk = lambda k: clip_walk(k, carry=carry)
-    for clip, fn in (("walk", walk), ("idle", clip_idle), ("attack", clip_attack)):
+    strikes = {"attack": attack, "slam": slam}
+    # The shared rake keeps its keys as they always were, feet unplanted.
+    clips = [("walk", walk), ("idle", clip_idle)] + [
+        (clip, lambda k, keys=STRIKES[style][0]: clip_keys(k, keys, keys is not ATTACK_KEYS))
+        for clip, style in strikes.items() if style]
+    for clip, fn in clips:
         action = bpy.data.actions.new("%s|%s" % (arm.name, clip))
         action.use_fake_user = True
         slot = action.slots.new("OBJECT", arm.name)
@@ -610,6 +776,8 @@ def author(arm, H, carry=None):
         if hasattr(strip, "action_slot"):
             strip.action_slot = slot
         arm.animation_data.action = None
+    # Keys sit at Blender frame f + 1; the exporter times them at that frame / FPS.
+    return {clip: STRIKES[style][1] + 1 for clip, style in strikes.items() if style}
 
 
 def main():

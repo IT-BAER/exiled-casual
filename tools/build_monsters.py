@@ -70,8 +70,10 @@ Textures are downscaled to 512 and re-encoded as JPEG on the way in: the 1024
 PNG masters embed as ~2.5MB each and no imp on this camera is worth that.
 """
 import importlib.util
+import json
 import math
 import os
+import struct
 import sys
 
 import bpy
@@ -750,6 +752,123 @@ SPINE_SWING = 0.055
 SECONDARY_SWING = 0.085
 ARM_SWING = 0.16
 
+# --- authored strikes ------------------------------------------------------
+# The big ones' own `attack` and `slam`, keyed like the humanoids' in
+# rig_humanoid.py: coil, a blow eased INTO its contact so it lands at full
+# speed, a held contact, recovery, the last key the first. Per key, fractions
+# of the height and radians: `lunge` forward and `rise` up of the trunk,
+# `pitch` of the trunk nose-up about the planted hips, `neck` (nose-up) and
+# `yaw` (to its left) of the head, and `feet`, leg index to an (x right,
+# y forward, z up) offset of that foot. `ride` legs are carried by the trunk.
+# An attack lands by frame 8, a slam is stretched onto its impact at runtime.
+STRIKE_EASE = {"smooth": lambda t: t * t * (3.0 - 2.0 * t), "in": lambda t: t * t,
+               "out": lambda t: t * (2.0 - t)}
+STRIKE_PARAMS = ("lunge", "rise", "pitch", "neck", "yaw")
+
+
+def keyed(keys, frame):
+    """The strike parameters at `frame`: (frame, params[, ease into it]) keys."""
+    i = max(j for j in range(len(keys) - 1) if keys[j][0] <= frame)
+    (f0, a), nxt = keys[i][:2], keys[min(i + 1, len(keys) - 1)]
+    (f1, b), how = nxt[:2], (nxt[2:] or ("smooth",))[0]
+    t = STRIKE_EASE[how]((frame - f0) / (f1 - f0)) if f1 > f0 else 0.0
+    out = {k: a.get(k, 0.0) + (b.get(k, 0.0) - a.get(k, 0.0)) * t for k in STRIKE_PARAMS}
+    fa, fb = a.get("feet", {}), b.get("feet", {})
+    out["feet"] = {i: Vector(fa.get(i, (0.0, 0.0, 0.0))).lerp(Vector(fb.get(i, (0.0, 0.0, 0.0))), t)
+                   for i in set(fa) | set(fb)}
+    return out
+
+
+# Tusk gore: head dipped low, driven forward and tossed up to its right. Tossed
+# left, the neck tore from the right shoulder (+0.17 m).
+GORE = {"contact": 8, "keys": [
+    (0, {}),
+    (4, {"lunge": -0.05, "rise": -0.03, "pitch": -0.08, "neck": -0.45}),
+    (8, {"lunge": 0.10, "rise": -0.01, "pitch": 0.06, "neck": 0.40, "yaw": -0.35}, "in"),
+    (10, {"lunge": 0.10, "rise": -0.01, "pitch": 0.06, "neck": 0.43, "yaw": -0.38}),
+    (22, {})]}
+# Fist swipe: rocks back, the right forefist hooks forward and across. Drawn
+# back higher than 0.15 H the shoulder tore (+0.24 m at 0.25 H).
+SWIPE = {"contact": 8, "ride": (1,), "keys": [
+    (0, {}),
+    (4, {"lunge": -0.06, "pitch": 0.06, "feet": {1: (0.06, -0.06, 0.15)}}),
+    (8, {"lunge": 0.10, "pitch": -0.04, "yaw": -0.10, "feet": {1: (-0.35, 0.42, 0.08)}}, "in"),
+    (10, {"lunge": 0.10, "pitch": -0.04, "yaw": -0.10, "feet": {1: (-0.37, 0.43, 0.07)}}),
+    (22, {})]}
+# Double-fist slam: rears high, both forefists up, slammed down ahead.
+FIST_SLAM = {"contact": 19, "ride": (0, 1), "keys": [
+    (0, {}),
+    (12, {"lunge": -0.06, "rise": 0.04, "pitch": 0.40, "feet": {0: (0, -0.10, 0.10), 1: (0, -0.10, 0.10)}}),
+    (15, {"lunge": -0.06, "rise": 0.04, "pitch": 0.42, "feet": {0: (0, -0.10, 0.11), 1: (0, -0.10, 0.11)}}),
+    (19, {"lunge": 0.08, "rise": -0.04, "pitch": -0.06, "feet": {0: (0.10, 0.15, 0), 1: (-0.10, 0.15, 0)}}, "in"),
+    (22, {"lunge": 0.08, "rise": -0.04, "pitch": -0.06, "feet": {0: (0.10, 0.15, 0), 1: (-0.10, 0.15, 0)}}),
+    (36, {})]}
+# Lurch bite: the front third rears a little, then lunges forward and down. The
+# feet stay planted, so a longer lunge tears the flank between the legs.
+LURCH = {"contact": 8, "keys": [
+    (0, {}),
+    (4, {"lunge": -0.05, "pitch": 0.06, "neck": 0.25}),
+    (8, {"lunge": 0.10, "pitch": -0.04, "neck": -0.40}, "in"),
+    (10, {"lunge": 0.10, "pitch": -0.04, "neck": -0.42}),
+    (22, {})]}
+# Belly slam: the front third rears off its front legs and crashes down. The
+# belly hangs near the floor, so the crash ends level, not nose-down.
+BELLY_SLAM = {"contact": 19, "ride": (0, 1), "keys": [
+    (0, {}),
+    (12, {"rise": 0.02, "pitch": 0.30, "feet": {0: (0, 0, 0.08), 1: (0, 0, 0.08)}}),
+    (15, {"rise": 0.02, "pitch": 0.32, "feet": {0: (0, 0, 0.09), 1: (0, 0, 0.09)}}),
+    (19, {"lunge": 0.06, "rise": -0.01, "pitch": -0.01}, "in"),
+    (22, {"lunge": 0.06, "rise": -0.01, "pitch": -0.01}),
+    (36, {})]}
+# Stilt stab: one front stilt lifts and stabs forward, the hood dips.
+STAB = {"contact": 8, "ride": (0,), "keys": [
+    (0, {}),
+    (4, {"lunge": -0.03, "neck": 0.10, "feet": {0: (0, -0.05, 0.12)}}),
+    (8, {"lunge": 0.05, "pitch": -0.05, "neck": -0.25, "feet": {0: (0, 0.30, 0.02)}}, "in"),
+    (10, {"lunge": 0.05, "pitch": -0.05, "neck": -0.27, "feet": {0: (0, 0.30, 0.02)}}),
+    (22, {})]}
+def stomp(pitch, lift):
+    """Rears on the hind legs, both front legs up `lift`, stamped down ahead."""
+    up, held = ({i: (0, -0.05, lift + d) for i in (0, 1)} for d in (0.0, 0.01))
+    down = {0: (0, 0.08, 0), 1: (0, 0.08, 0)}
+    return {"contact": 19, "ride": (0, 1), "keys": [
+        (0, {}),
+        (12, {"pitch": pitch, "neck": 0.10, "feet": up}),
+        (15, {"pitch": pitch + 0.02, "neck": 0.10, "feet": held}),
+        (19, {"lunge": 0.05, "pitch": -0.05, "neck": -0.20, "feet": down}, "in"),
+        (22, {"lunge": 0.05, "pitch": -0.05, "neck": -0.20, "feet": down}),
+        (36, {})]}
+
+
+# The Sirrath's robe tears between its stilts past this; Ghaltrek's hide holds a higher rear.
+STOMP = stomp(0.25, 0.10)
+FORE_STOMP = stomp(0.35, 0.15)
+# Tendril lash: the front right tendril lifts and whips forward and down. The
+# front left one is webbed to its neighbour, which tore at any lift (+0.29 m).
+LASH = {"contact": 8, "ride": (1,), "keys": [
+    (0, {}),
+    (4, {"lunge": -0.03, "pitch": 0.04, "feet": {1: (0, -0.03, 0.12)}}),
+    (8, {"lunge": 0.04, "feet": {1: (0, 0.20, 0)}}, "in"),
+    (10, {"lunge": 0.04, "feet": {1: (0, 0.21, 0)}}),
+    (22, {})]}
+# Brood heave: the body heaves up and back, the front pair carried with it, and
+# crashes down level on its sac. The same web tears if those tendrils lift any
+# further, and the sac hangs too near the floor to come down nose-first.
+HEAVE = {"contact": 19, "ride": (0, 1), "keys": [
+    (0, {}),
+    (12, {"rise": 0.06, "pitch": 0.10}),
+    (15, {"rise": 0.065, "pitch": 0.11}),
+    (19, {"rise": -0.01}, "in"),
+    (22, {"rise": -0.01}),
+    (36, {})]}
+# Antler sweep: the head swings the rack in a wide arc, right to left.
+SWEEP = {"contact": 8, "keys": [
+    (0, {}),
+    (4, {"lunge": -0.04, "pitch": 0.03, "neck": 0.10, "yaw": -0.45}),
+    (8, {"lunge": 0.06, "pitch": -0.03, "neck": -0.15, "yaw": 0.50}, "in"),
+    (10, {"lunge": 0.06, "pitch": -0.03, "neck": -0.16, "yaw": 0.53}),
+    (22, {})]}
+
 
 def seg_distance(p, a, b):
     """Distance from a point to a bone, treated as the segment head->tail."""
@@ -1046,6 +1165,7 @@ class Gait:
         self.stride_ratio = min((l["stride"] / s for l, s in zip(self.legs, lengths)),
                                 default=0.0)
         self.body_bones = by_part.get(0, [])
+        self.legs_by_hip = {leg["bones"][0].name: leg for leg in self.legs}
         self.root = self.body_bones[0].name if self.body_bones else None
         # A two-legged creature rolls over the planted foot; a six-legged one
         # barely rocks at all.
@@ -1162,7 +1282,56 @@ class Gait:
         amp = (STRIKE_SPINE if bone.spine else STRIKE_SECONDARY) * (0.5 + 0.5 * bone.depth)
         return Matrix.Rotation(-amp * e, 3, "X") @ rest
 
-    def _solve_leg(self, leg, hip, t, moving, posed):
+    def strike_keyed(self, poser, frame, style):
+        """Pose an authored strike (`GORE` and the rest) at `frame` of its keys.
+
+        The trunk pitches as one piece about the hips of the legs that stay
+        planted, so a rear-up lifts the front off the hind legs. A leg in the
+        style's `ride` goes where the trunk carries its foot, plus its own key.
+        """
+        p = keyed(style["keys"], frame)
+        h = self.height
+        ride = style.get("ride", ())
+        hips = [leg["rest"][0] for i, leg in enumerate(self.legs) if i not in ride]
+        pivot = Vector((0.0, sum(v.y for v in hips) / len(hips), sum(v.z for v in hips) / len(hips)))
+        turn = Matrix.Rotation(p["pitch"], 3, "X")
+        shift = Vector((0.0, p["lunge"] * h, p["rise"] * h - self.crouch * 0.5))
+
+        def carried(v):
+            return pivot + turn @ (v - pivot) + shift
+
+        root = self.body_bones[0]
+        targets = {}
+        for i, leg in enumerate(self.legs):
+            foot = p["feet"].get(i, Vector()) * h
+            target = (carried(leg["rest"][2]) if i in ride else leg["rest"][2]) + foot
+            # A carried foot comes down onto the floor, never through it.
+            target.z = max(target.z, leg["rest"][2].z)
+            targets[leg["bones"][0].name] = target
+        # The head hangs off the front of the spine; a tail off its back.
+        front = max(b.tail.y for b in self.body_bones if b.spine) - 1e-6
+        head = turn @ Matrix.Rotation(p["yaw"], 3, "Z") @ Matrix.Rotation(p["neck"], 3, "X")
+        body = {b.name: b for b in self.body_bones}
+
+        def offset_for(name):
+            return carried(root.head) - root.head if name == root.name else None
+
+        def dir_for(name, at, posed):
+            if name in targets:
+                self._solve_leg(self.legs_by_hip[name], at, 0.0, False, posed, targets[name])
+            cached = self._dirs.get(name)
+            if cached is not None:
+                return cached
+            bone = body.get(name)
+            if bone is None:
+                return None
+            rest = (bone.tail - bone.head).normalized()
+            return (head if not bone.spine and bone.head.y >= front else turn) @ rest
+
+        self._dirs = {}
+        return poser.apply(dir_for, offset_for)
+
+    def _solve_leg(self, leg, hip, t, moving, posed, target=None):
         bones, rest = leg["bones"], leg["rest"]
         # The stance shift rides with the crouch: both are walk posture, and a
         # foot that stood in one place through the idle would slide into the
@@ -1170,7 +1339,7 @@ class Gait:
         delta = (Vector((0.0, leg["shift"], 0.0))
                  + foot_offset(t + leg["phase"], leg["stride"], leg["lift"])
                  if moving else Vector())
-        ankle = rest[2] + delta
+        ankle = rest[2] + delta if target is None else target
         knee, upper = solve_ik(hip, ankle, rest, leg["lengths"])
         # A leg that cannot reach its target is a foot hanging in the air or
         # skating along the ground, and neither is visible in a still. The shin
@@ -1206,8 +1375,11 @@ class Gait:
                 @ Matrix.Rotation(angle * 0.6 * math.sin(2.0 * turn - lag), 3, "X") @ rest)
 
 
-def author_clips(arm, gait, bones):
-    """Write `walk`, `idle` and `attack` onto the armature as NLA tracks.
+def author_clips(arm, gait, bones, attack=None, slam=None):
+    """Write `walk`, `idle`, `attack` and any `slam` onto the armature as NLA
+    tracks, and return each strike's blow as the Blender frame keyed there.
+    `attack` and `slam` are authored strikes (`GORE` and the rest); without an
+    `attack` the creature keeps the shared lunge.
 
     One track per clip, named `<species>|<clip>`, because the glTF exporter's
     ACTIONS mode offers every action to every armature in the file and would
@@ -1224,8 +1396,14 @@ def author_clips(arm, gait, bones):
     # Idle is authored over the same frame count as the walk and played back
     # slow (`IDLE_RATIO` in `monsters.ts`). A breath is one long sine — sampling
     # it three times as densely only costs the download.
-    for clip, length, moving in (("walk", walk, True), ("idle", walk, False),
-                                 ("attack", ATTACK_FRAMES, None)):
+    styles = {"attack": attack, "slam": slam}
+    clips = [("walk", walk, True), ("idle", walk, False), ("attack", ATTACK_FRAMES, None)]
+    if slam is not None:
+        clips.append(("slam", None, None))
+    for clip, length, moving in clips:
+        style = styles.get(clip)
+        if style is not None:
+            length = style["keys"][-1][0]
         action = bpy.data.actions.new("%s|%s" % (arm.name, clip))
         action.use_fake_user = True
         slot = action.slots.new("OBJECT", arm.name)
@@ -1235,10 +1413,13 @@ def author_clips(arm, gait, bones):
         arm.animation_data.action_slot = slot
 
         for frame in range(length + 1):
-            # The last frame repeats the first, so the loop has no seam.
-            phase = (frame % length) / length
-            moved = (gait.strike(poser, phase) if moving is None
-                     else gait.pose(poser, phase, moving))
+            if style is not None:
+                moved = gait.strike_keyed(poser, frame, style)
+            else:
+                # The last frame repeats the first, so the loop has no seam.
+                phase = (frame % length) / length
+                moved = (gait.strike(poser, phase) if moving is None
+                         else gait.pose(poser, phase, moving))
             for bone in bones:
                 arm.pose.bones[bone.name].keyframe_insert(
                     "rotation_quaternion", frame=frame + 1)
@@ -1251,6 +1432,10 @@ def author_clips(arm, gait, bones):
         if hasattr(nla, "action_slot"):
             nla.action_slot = slot
         arm.animation_data.action = None
+    # The shared lunge's blow is the frame nearest full extension (`ATTACK_HIT`).
+    blows = {"attack": round(ATTACK_HIT * ATTACK_FRAMES) + 1}
+    blows.update({clip: style["contact"] + 1 for clip, style in styles.items() if style})
+    return blows
 
 
 class Creature:
@@ -1272,6 +1457,8 @@ class Creature:
         self.crag = height * 0.10
         self.body = Part("body", subdiv=subdiv, displace=self.displace, crag=self.crag)
         self.limbs = []
+        # Authored strikes (`GORE` and the rest); none keeps the shared lunge.
+        self.attack = self.slam = None
         # Stride as a fraction of leg span; a splayed six-legged body takes short steps.
         self.stride_k = STRIDE_K
 
@@ -1339,7 +1526,7 @@ class Creature:
         mesh.parent = arm
         skin(mesh, bones, owner, self.height)
         gait = Gait(self, bones)
-        author_clips(arm, gait, bones)
+        self.blows = author_clips(arm, gait, bones, self.attack, self.slam)
         print("  bones %d verts %d legs %d cycle %d frames reach %+.1f%% stride %.2f"
               % (len(bones), len(mesh.data.vertices), len(gait.legs), gait.frames(),
                  gait.reach_error * 100.0, gait.stride_ratio))
@@ -1762,7 +1949,8 @@ def hoarfrost_spitter():
     drops each chain's weight from the other and cuts the elbows free.
     """
     return GeneratedCreature("monster.hoarfrost_spitter.v1", HOARFROST_SPITTER_SOURCE, "forest", 2.0,
-                             normal=HOARFROST_SPITTER_NORMAL, thigh=0.17, knee=0.15, fused_arms=True)
+                             normal=HOARFROST_SPITTER_NORMAL, thigh=0.17, knee=0.15, fused_arms=True,
+                             attack="throw")
 
 
 TIDE_SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "tide_spitter_v1.glb")
@@ -1814,7 +2002,8 @@ def vaal_construct():
     measures 0.22 H: past it the thighs claimed ~80 fist vertices a side.
     """
     return GeneratedCreature("monster.vaal_construct.v1", VAAL_CONSTRUCT_SOURCE, "vaal", 2.0,
-                             normal=VAAL_CONSTRUCT_NORMAL, offset=(0.052, 0.0), thigh=0.225)
+                             normal=VAAL_CONSTRUCT_NORMAL, offset=(0.052, 0.0), thigh=0.225,
+                             attack="hammer")
 
 
 BOG_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "bog_drowned_v2.glb")
@@ -1835,7 +2024,7 @@ def bog_drowned():
     """
     return GeneratedCreature("monster.bog_drowned.v1", BOG_DROWNED_SOURCE, "swamp", 1.7,
                              normal=BOG_DROWNED_NORMAL, offset=(-0.015, 0.0),
-                             thigh=0.245, knee=0.20, fused_arms=True)
+                             thigh=0.245, knee=0.20, fused_arms=True, attack="grab")
 
 
 WRACK_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "wrack_drowned_v2.glb")
@@ -1853,7 +2042,8 @@ def wrack_drowned():
     Feet midpoint measured at x 0.033 H: the offset centres the stance.
     """
     return GeneratedCreature("monster.wrack_drowned.v1", WRACK_DROWNED_SOURCE, "coast", 1.8,
-                             normal=WRACK_DROWNED_NORMAL, offset=(-0.059, 0.0), carry="r")
+                             normal=WRACK_DROWNED_NORMAL, offset=(-0.059, 0.0), carry="r",
+                             attack="smash")
 
 
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
@@ -1894,8 +2084,11 @@ class GeneratedCreature:
     roster. It faces -Y as imported, where a turned node-graph root ends up."""
 
     def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE,
-                 offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25, held=None, fused_arms=False):
+                 offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25, held=None, fused_arms=False,
+                 attack="rake", slam=None):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
+        # Strike styles by name (`rig_humanoid.STRIKES`); `rake` is the shared one.
+        self.attack, self.slam = attack, slam
         # The shell fused the arms down the flank and thigh: cut them free (rig_humanoid.skin).
         self.fused_arms = fused_arms
         # "l"/"r": the hand carrying a long blade, held low through the walk.
@@ -1933,7 +2126,7 @@ class GeneratedCreature:
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
         mesh.data.color_attributes.active_color = layer
-        rig.author(arm, self.height, self.carry)
+        self.blows = rig.author(arm, self.height, self.carry, self.attack, self.slam)
         self.root = arm
         return arm
 
@@ -1994,7 +2187,7 @@ class GeneratedSkin(Creature):
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
         mesh.data.color_attributes.active_color = layer
         gait = Gait(self, bones)
-        author_clips(arm, gait, bones)
+        self.blows = author_clips(arm, gait, bones, self.attack, self.slam)
         print("  bones %d verts %d legs %d cycle %d frames reach %+.1f%% stride %.2f"
               % (len(bones), len(mesh.data.vertices), len(gait.legs), gait.frames(),
                  gait.reach_error * 100.0, gait.stride_ratio))
@@ -2067,6 +2260,7 @@ def thornhide_boar():
         ((0.301, -0.460, 0.471), (0.300, -0.640, 0.240), (0.256, -0.565, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
+    c.attack = GORE
     return c
 
 
@@ -2087,7 +2281,8 @@ def blood_sentinel():
     the offset centres the stance.
     """
     return GeneratedCreature("monster.blood_sentinel.v1", BLOOD_SENTINEL_SOURCE, "vaal", 2.1,
-                             normal=BLOOD_SENTINEL_NORMAL, offset=(0.022, 0.0), carry="r")
+                             normal=BLOOD_SENTINEL_NORMAL, offset=(0.022, 0.0), carry="r",
+                             attack="cleave", slam="chop")
 
 
 COLOSSUS_SOURCE = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v2.glb")
@@ -2115,6 +2310,7 @@ def sunbaked_colossus():
         ((0.342, -0.634, 0.616), (0.520, -0.556, 0.472), (0.547, -0.640, 0.008)),
     ]):
         c.leg_through(i, hip, knee, foot)
+    c.attack, c.slam = SWIPE, FIST_SLAM
     return c
 
 
@@ -2148,6 +2344,7 @@ def rotting_behemoth():
         ((0.616, -0.710, 0.328), (0.849, -0.703, 0.199), (0.911, -0.777, 0.005)),
     ]):
         c.leg_through(i, hip, knee, foot)
+    c.attack, c.slam = LURCH, BELLY_SLAM
     return c
 
 
@@ -2175,7 +2372,8 @@ def cinder_warden():
     """
     return GeneratedCreature("monster.cinder_warden.v1", CINDER_WARDEN_SOURCE, "cinder", 2.9,
                              normal=CINDER_WARDEN_NORMAL, tex=1024, offset=(-0.20, 0.0),
-                             carry="r", held=0.28, thigh=(0.20, 0.25), knee=0.32, fused_arms=True)
+                             carry="r", held=0.28, thigh=(0.20, 0.25), knee=0.32, fused_arms=True,
+                             attack="hook", slam="slab")
 
 
 SIRRATH_SOURCE = os.path.join(TEX_DIR, "source", "sirrath_v2.glb")
@@ -2205,6 +2403,7 @@ def sirrath():
         ((0.451, -0.302, 1.332), (0.794, -0.752, 0.907), (0.939, -1.005, 0.069)),
     ]):
         c.leg_through(i, hip, knee, foot)
+    c.attack, c.slam = STAB, STOMP
     return c
 
 
@@ -2239,6 +2438,7 @@ def mother_vhal():
         ((-0.039, -0.755, 0.392), (0.016, -1.459, 0.443), (0.042, -1.801, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
+    c.attack, c.slam = LASH, HEAVE
     return c
 
 
@@ -2271,6 +2471,7 @@ def ghaltrek():
         ((0.690, -0.722, 1.158), (1.054, -1.096, 0.511), (1.138, -1.107, 0.000)),
     ]):
         c.leg_through(i, hip, knee, foot)
+    c.attack, c.slam = SWEEP, FORE_STOMP
     return c
 
 
@@ -2280,6 +2481,35 @@ BOSS_FAMILIES = {
     "monster.mother_vhal.v1": "swamp",
     "monster.ghaltrek.v1": "forest",
 }
+
+def stamp_blows(path, blows):
+    """Write each strike's blow, seconds on its clip, into its glTF animation's
+    extras. Blender's NLA export writes no animation extras, so the JSON chunk
+    is patched after the fact; Babylon hands them on as `metadata.gltf.extras`."""
+    with open(path, "rb") as handle:
+        data = handle.read()
+    size, kind = struct.unpack_from("<II", data, 12)
+    if kind != 0x4E4F534A:
+        sys.exit("%s: first chunk is not JSON" % path)
+    doc = json.loads(data[20:20 + size])
+    left = dict(blows)
+    for anim in doc["animations"]:
+        blow = left.pop(anim["name"], None)
+        if blow is None:
+            continue
+        times = doc["accessors"][anim["samplers"][0]["input"]]
+        if not times["min"][0] <= blow <= times["max"][0]:
+            sys.exit("%s: blow %.3f s outside its clip" % (anim["name"], blow))
+        anim.setdefault("extras", {})["blow"] = round(blow, 6)
+    if left:
+        sys.exit("no animation for " + ", ".join(sorted(left)))
+    text = json.dumps(doc, separators=(",", ":")).encode("utf-8")
+    text += b" " * (-len(text) % 4)
+    rest = data[20 + size:]
+    with open(path, "wb") as handle:
+        handle.write(struct.pack("<III", 0x46546C67, 2, 20 + len(text) + len(rest)))
+        handle.write(struct.pack("<II", len(text), 0x4E4F534A) + text + rest)
+
 
 SPECIES = [
     cinder_imp, vaal_husk, sand_skitterer, bramble_whelp, brine_scuttler,
@@ -2297,6 +2527,7 @@ def main():
     bpy.context.scene.render.fps = FPS
 
     mats = build_materials()
+    blows = {}
     for make in SPECIES:
         creature = make()
         print(creature.def_id)
@@ -2307,6 +2538,8 @@ def main():
             creature.emit(boss_mats)
         else:
             creature.emit(mats)
+        for clip, frame in creature.blows.items():
+            blows["%s|%s" % (creature.def_id, clip)] = frame / FPS
 
     bpy.ops.export_scene.gltf(
         filepath=OUT,
@@ -2332,6 +2565,7 @@ def main():
         export_cameras=False,
         export_lights=False,
     )
+    stamp_blows(OUT, blows)
     print("wrote", OUT, os.path.getsize(OUT), "bytes")
     faces = sum(len(o.data.polygons) for o in bpy.data.objects if o.type == "MESH")
     print("faces", faces, "objects", len(bpy.data.objects))

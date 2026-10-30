@@ -31,6 +31,16 @@ vi.mock("@babylonjs/core", async (importOriginal) => {
 });
 
 /**
+ * The monsters that own a timed wind-up, a heavy's slam or a boss's: each ships
+ * its own `slam` for that wind-up beside the `attack` it swings in reach.
+ */
+const SLAMS: ReadonlySet<string> = new Set(
+  [...MONSTERS.values()].filter((d) => d.heavy !== undefined || d.boss !== undefined).map((d) => d.id),
+);
+/** Both builders key their clips at 30 fps (`FPS` in `build_monsters.py` and `rig_humanoid.py`). */
+const AUTHORED_FPS = 30;
+
+/**
  * `monsters.glb` is built offline by `tools/build_monsters.py`, and the runtime
  * finds a creature in it by the monster def id the snapshot carries in
  * `SnapshotEntity.species`. Nothing checks that spelling at build time: a
@@ -103,14 +113,15 @@ describe("monsters asset", () => {
    * and ship all thirty-four clips seventeen times over, which still loads and
    * still animates, so only a name count catches it.
    */
-  it("ships a walk, an idle and an attack for every creature, and nothing else", () => {
+  it("ships a walk, an idle and an attack for every creature, a slam for each that winds one up, and nothing else", () => {
     const names = json.animations.map((a) => a.name);
     for (const root of species) {
       expect(names).toContain(`${root}|walk`);
       expect(names).toContain(`${root}|idle`);
       expect(names).toContain(`${root}|attack`);
+      expect(names.includes(`${root}|slam`), `${root}|slam`).toBe(SLAMS.has(root));
     }
-    expect(names.length).toBe(species.length * 3);
+    expect(names.length).toBe(species.length * 3 + SLAMS.size);
   });
 
   /**
@@ -415,6 +426,9 @@ describe("monsters asset", () => {
    * 7.5MB and forty-two images since the Tide Spitter became the Strand's third
    * own species, each 4k triangles with two 512 sheets: measured 7,099,664 ->
    * 7,375,260 packed.
+   *
+   * 7.75MB since the armed and the big swing their own strikes, twelve attacks
+   * and seven slams: measured 7,376,528 -> 7,497,716 packed.
    */
   /**
    * The shader warm that ends the map-entry stall. Every instance of a species
@@ -460,7 +474,7 @@ describe("monsters asset", () => {
     for (const image of json.images) expect(image.mimeType).toBe("image/jpeg");
     expect(json.images.length).toBeLessThanOrEqual(42);
     expect(json.extensionsRequired).toContain("EXT_meshopt_compression");
-    expect(glb.byteLength).toBeLessThan(7_500_000);
+    expect(glb.byteLength).toBeLessThan(7_750_000);
   });
 });
 
@@ -514,6 +528,32 @@ function circleCoverage(meshes: Mesh[], r: number): number {
     body += grid[(gz + n) * side + gx + n]!;
   }
   return body / inside;
+}
+
+/** A strike's blow in seconds on its glTF timeline: the build writes it into the clip's extras, Babylon hands them on as metadata. */
+function blowOf(group: AnimationGroup): number | undefined {
+  return (group.metadata as { gltf?: { extras?: { blow?: number } } } | null | undefined)?.gltf?.extras?.blow;
+}
+
+/** One creature's skinned meshes among a loaded container's. */
+function meshesOf(container: AssetContainer, id: string): Mesh[] {
+  return container.meshes.filter((m) => m.skeleton && partOfCreature(m, id)) as Mesh[];
+}
+
+/** Every vertex of `meshes` as their skeletons pose it now, in world space: x, y, z after x, y, z. */
+function posed(meshes: Mesh[]): number[] {
+  const out: number[] = [];
+  const at = new Vector3();
+  for (const m of meshes) {
+    m.computeWorldMatrix(true);
+    m.skeleton!.prepare(true);
+    const p = m.getPositionData(true, true)!;
+    for (let i = 0; i < p.length; i += 3) {
+      Vector3.TransformCoordinatesFromFloatsToRef(p[i]!, p[i + 1]!, p[i + 2]!, m.getWorldMatrix(), at);
+      out.push(at.x, at.y, at.z);
+    }
+  }
+  return out;
 }
 
 /**
@@ -588,59 +628,248 @@ describe("creature instances", () => {
    * hip, and the build cuts it free (`thigh`, `fused_arms` in
    * `build_monsters.py`). Uncut, the Bog Drowned's strike drew its right fist
    * out of the knee as a sheet: edges from an arm vertex to a leg vertex grew
-   * 1.1 m. Scored on the skinned attack by each vertex's strongest bone,
-   * counting edges stretched past twice their rest.
+   * 1.1 m. Scored on every strike the creature owns, its slam too, by each
+   * vertex's strongest bone, counting edges stretched past twice their rest.
+   * The Wrack Drowned's left elbow stays welded to its hip, uncut, so its
+   * smash leaves that arm hanging (swung, it tore 108 edge-frames).
    */
-  it("keeps a freed fist off its leg through the strike", async () => {
+  it("keeps a freed fist off its leg through every strike", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     const engine = new NullEngine();
     const scene = new Scene(engine);
     new FreeCamera("cam", new Vector3(0, 10, -10), scene);
     try {
-      await loadMonsters(scene);
-      for (const id of ["monster.bog_drowned.v1", "monster.cinder_warden.v1", "monster.drowned_grubling.v1", "monster.hoarfrost_spitter.v1"]) {
-        const root = new Mesh(id, scene);
-        const rig = attachCreature(scene, root, id)!;
-        for (const g of rig.clipGroups.values()) g.stop();
-        const strike = rig.clipGroups.get("attack")!;
-        strike.start(false);
-        strike.pause();
-        let torn = 0;
-        for (let f = strike.from; f <= strike.to; f++) {
-          strike.goToFrame(f);
-          scene.render();
-          for (const m of root.getChildMeshes(false) as Mesh[]) {
-            if (!m.skeleton) continue;
-            m.computeWorldMatrix(true);
-            m.skeleton.prepare(true);
-            const rest = m.getPositionData(false, false)!, pose = m.getPositionData(true, true)!;
-            const idx = m.getIndices()!, mi = m.getVerticesData("matricesIndices")!, mw = m.getVerticesData("matricesWeights")!;
-            const part = (v: number) => {
-              let k0 = 0;
-              for (let k = 1; k < 4; k++) if (mw[4 * v + k]! > mw[4 * v + k0]!) k0 = k;
-              const name = m.skeleton!.bones[mi[4 * v + k0]!]!.name;
-              return /^(arm_|hand_)/.test(name) ? "arm" : name.startsWith("leg") ? "leg" : "trunk";
-            };
-            const len = (p: ArrayLike<number>, a: number, b: number) =>
-              Math.hypot(p[3 * a]! - p[3 * b]!, p[3 * a + 1]! - p[3 * b + 1]!, p[3 * a + 2]! - p[3 * b + 2]!);
-            for (let t = 0; t < idx.length; t += 3) {
-              for (const [a, b] of [[idx[t]!, idx[t + 1]!], [idx[t + 1]!, idx[t + 2]!], [idx[t + 2]!, idx[t]!]] as const) {
-                const ends = [part(a), part(b)].sort().join("-");
-                if (ends === "arm-leg" && len(pose, a, b) > 2 * len(rest, a, b) + 0.03) torn++;
+      const container = await LoadAssetContainerAsync("/models/monsters.glb", scene);
+      container.addAllToScene();
+      for (const g of container.animationGroups) g.stop();
+      for (const id of ["monster.bog_drowned.v1", "monster.cinder_warden.v1", "monster.drowned_grubling.v1", "monster.hoarfrost_spitter.v1", "monster.wrack_drowned.v1"]) {
+        for (const clip of SLAMS.has(id) ? ["attack", "slam"] : ["attack"]) {
+          const strike = container.animationGroups.find((g) => g.name === `${id}|${clip}`);
+          expect(strike, `${id}|${clip}`).toBeDefined();
+          strike!.start(false);
+          strike!.pause();
+          let torn = 0;
+          for (let f = strike!.from; f <= strike!.to; f++) {
+            strike!.goToFrame(f);
+            scene.render();
+            for (const m of meshesOf(container, id)) {
+              m.computeWorldMatrix(true);
+              m.skeleton!.prepare(true);
+              const rest = m.getPositionData(false, false)!, pose = m.getPositionData(true, true)!;
+              const idx = m.getIndices()!, mi = m.getVerticesData("matricesIndices")!, mw = m.getVerticesData("matricesWeights")!;
+              const part = (v: number) => {
+                let k0 = 0;
+                for (let k = 1; k < 4; k++) if (mw[4 * v + k]! > mw[4 * v + k0]!) k0 = k;
+                const name = m.skeleton!.bones[mi[4 * v + k0]!]!.name;
+                return /^(arm_|hand_)/.test(name) ? "arm" : name.startsWith("leg") ? "leg" : "trunk";
+              };
+              const len = (p: ArrayLike<number>, a: number, b: number) =>
+                Math.hypot(p[3 * a]! - p[3 * b]!, p[3 * a + 1]! - p[3 * b + 1]!, p[3 * a + 2]! - p[3 * b + 2]!);
+              for (let t = 0; t < idx.length; t += 3) {
+                for (const [a, b] of [[idx[t]!, idx[t + 1]!], [idx[t + 1]!, idx[t + 2]!], [idx[t + 2]!, idx[t]!]] as const) {
+                  const ends = [part(a), part(b)].sort().join("-");
+                  if (ends === "arm-leg" && len(pose, a, b) > 2 * len(rest, a, b) + 0.03) torn++;
+                }
               }
             }
           }
+          strike!.stop();
+          expect(torn, `${id}: arm-to-leg edges stretched past 2x through the ${clip}`).toBe(0);
         }
-        expect(torn, `${id}: arm-to-leg edges stretched past 2x through the strike`).toBe(0);
-        root.dispose();
+      }
+    } finally {
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 30_000);
+
+  /**
+   * Where the blow lands rides in each strike's glTF extras as `blow`, seconds on
+   * the clip's timeline, so a wind-up's impact can be met by the clip's own
+   * contact rather than one share guessed for every clip. The exporter writes no
+   * animation extras, so the build patches them in, and an instance's clone must
+   * keep them: a creature built from the file is what the runtime times.
+   */
+  it("carries each strike's blow inside its clip, through to every instance", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    try {
+      const container = await LoadAssetContainerAsync("/models/monsters.glb", scene);
+      const strikes = container.animationGroups.filter((g) => /\|(attack|slam)$/.test(g.name));
+      expect(strikes.length).toBe(MONSTERS.size + SLAMS.size);
+      for (const g of strikes) {
+        const blow = blowOf(g);
+        expect(blow, `${g.name} carries no blow`).toBeTypeOf("number");
+        const fps = g.targetedAnimations[0]!.animation.framePerSecond;
+        const at = (blow! * fps - g.from) / (g.to - g.from);
+        expect(at, `${g.name}: the blow sits ${Math.round(at * 100)}% into it`).toBeGreaterThanOrEqual(0.1);
+        expect(at, `${g.name}: the blow sits ${Math.round(at * 100)}% into it`).toBeLessThanOrEqual(0.9);
+      }
+      await loadMonsters(scene);
+      for (const id of MONSTERS.keys()) {
+        const strike = attachCreature(scene, new Mesh(id, scene), id)!.clipGroups.get("attack")!;
+        expect(blowOf(strike), `${id}: an instance's attack`).toBe(blowOf(strikes.find((g) => g.name === `${id}|attack`)!));
       }
     } finally {
       resetMonsters();
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
-  });
+  }, 30_000);
+
+  /**
+   * The blow sits on the contact. Whatever moves furthest in one frame on the
+   * way to it (a blade's tip, a fist, a snapping head) does so in the three
+   * frames before the blow, and two frames after it has all but stopped. A blow
+   * keyed on the coil or the follow-through times the hit to a limb still in
+   * the air.
+   */
+  it("lands each strike's blow where its fastest point stops", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    new FreeCamera("cam", new Vector3(0, 10, -10), scene);
+    try {
+      const container = await LoadAssetContainerAsync("/models/monsters.glb", scene);
+      container.addAllToScene();
+      for (const g of container.animationGroups) g.stop();
+      const strikes = container.animationGroups.filter((g) => /\|(attack|slam)$/.test(g.name));
+      expect(strikes.length).toBe(MONSTERS.size + SLAMS.size);
+      const moved = (a: number[], b: number[], v: number) => Math.hypot(b[v]! - a[v]!, b[v + 1]! - a[v + 1]!, b[v + 2]! - a[v + 2]!);
+      for (const g of strikes) {
+        const blow = blowOf(g);
+        expect(blow, `${g.name} carries no blow`).toBeTypeOf("number");
+        const meshes = meshesOf(container, g.name.split("|")[0]!);
+        const fps = g.targetedAnimations[0]!.animation.framePerSecond;
+        const step = fps / AUTHORED_FPS;
+        g.start(false);
+        g.pause();
+        const frames: number[][] = [];
+        for (let f = g.from; f <= g.to + 1e-6; f += step) {
+          g.goToFrame(f);
+          scene.render();
+          frames.push(posed(meshes));
+        }
+        g.stop();
+        const hit = Math.round((blow! * fps - g.from) / step);
+        let peak = 0, point = 0, at = 0;
+        for (let s = 1; s <= hit; s++) {
+          for (let v = 0; v < frames[s]!.length; v += 3) {
+            const d = moved(frames[s - 1]!, frames[s]!, v);
+            if (d > peak) { peak = d; point = v; at = s; }
+          }
+        }
+        expect(hit - at, `${g.name}: its fastest point peaks ${hit - at} frames before the blow`).toBeLessThan(3);
+        for (let s = hit + 1; s <= Math.min(hit + 2, frames.length - 1); s++) {
+          const d = moved(frames[s - 1]!, frames[s]!, point);
+          expect(d, `${g.name}: ${s - hit} frames after the blow it still moves at ${(d / peak).toFixed(2)} of its peak`).toBeLessThan(peak / 2);
+        }
+      }
+    } finally {
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 30_000);
+
+  /**
+   * The owner's complaint as geometry: a sword "in the hand" that never swings.
+   * The Blood Sentinel's attack carries its blade's tip round the front of its
+   * body and holds it out ahead at the blow; the overhead strikes (the
+   * Sentinel's chop, the Warden's slab, the Wrack Drowned's anchor) bring the
+   * weapon down onto the floor in front. The weapon is what the right hand holds
+   * rigidly (`rig_humanoid.skin`), its tip the held point furthest from the body.
+   */
+  it("swings each carried weapon through its blow", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    new FreeCamera("cam", new Vector3(0, 10, -10), scene);
+    try {
+      const container = await LoadAssetContainerAsync("/models/monsters.glb", scene);
+      container.addAllToScene();
+      for (const g of container.animationGroups) g.stop();
+      scene.render();
+      /** Each creature's rest, taken before its first strike: a stopped group leaves the bones where it stopped. */
+      const rests = new Map<string, number[]>();
+      /** The weapon's points and the world pose at each frame up to the blow, beside the creature's rest height and floor. */
+      const swing = (id: string, clip: string) => {
+        const meshes = meshesOf(container, id);
+        if (!rests.has(id)) rests.set(id, posed(meshes));
+        const rest = rests.get(id)!;
+        const held: number[] = [];
+        let base = 0;
+        for (const m of meshes) {
+          const mi = m.getVerticesData("matricesIndices")!, mw = m.getVerticesData("matricesWeights")!;
+          for (let v = 0; v < mw.length / 4; v++) {
+            for (let k = 0; k < 4; k++) {
+              if (mw[4 * v + k]! > 0.999 && m.skeleton!.bones[mi[4 * v + k]!]!.name === "hand_r") held.push(3 * (base + v));
+            }
+          }
+          base += m.getTotalVertices();
+        }
+        let floor = Infinity, top = -Infinity;
+        for (let v = 1; v < rest.length; v += 3) { floor = Math.min(floor, rest[v]!); top = Math.max(top, rest[v]!); }
+        const g = container.animationGroups.find((a) => a.name === `${id}|${clip}`);
+        expect(g, `${id}|${clip}`).toBeDefined();
+        const blow = blowOf(g!);
+        expect(blow, `${id}|${clip} carries no blow`).toBeTypeOf("number");
+        const fps = g!.targetedAnimations[0]!.animation.framePerSecond;
+        g!.start(false);
+        g!.pause();
+        const frames: number[][] = [];
+        for (let f = g!.from; f < blow! * fps + 1e-6; f += fps / AUTHORED_FPS) {
+          g!.goToFrame(f);
+          scene.render();
+          frames.push(posed(meshes));
+        }
+        g!.goToFrame(blow! * fps);
+        scene.render();
+        const atBlow = posed(meshes);
+        g!.stop();
+        return { rest, held, frames, atBlow, floor, H: top - floor };
+      };
+
+      const cleave = swing("monster.blood_sentinel.v1", "attack");
+      const isHeld = new Set(cleave.held);
+      let tip = cleave.held[0]!, far = 0;
+      for (const h of cleave.held) {
+        let near = Infinity;
+        for (let v = 0; v < cleave.rest.length; v += 3) {
+          if (isHeld.has(v)) continue;
+          near = Math.min(near, Math.hypot(cleave.rest[v]! - cleave.rest[h]!, cleave.rest[v + 1]! - cleave.rest[h + 1]!, cleave.rest[v + 2]! - cleave.rest[h + 2]!));
+        }
+        if (near > far) { far = near; tip = h; }
+      }
+      // The tip's bearing round the vertical through the creature, unwound frame to frame.
+      let turn = 0, lo = 0, hi = 0;
+      let last = Math.atan2(cleave.frames[0]![tip]!, cleave.frames[0]![tip + 2]!);
+      for (const p of cleave.frames.slice(1)) {
+        const a = Math.atan2(p[tip]!, p[tip + 2]!);
+        turn += ((a - last + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+        last = a;
+        lo = Math.min(lo, turn);
+        hi = Math.max(hi, turn);
+      }
+      expect(((hi - lo) * 180) / Math.PI, "degrees the Sentinel's blade sweeps round its body to the blow").toBeGreaterThanOrEqual(120);
+      expect(cleave.atBlow[tip + 2]! / cleave.H, "the blade's tip ahead of the Sentinel at the blow, in heights").toBeGreaterThanOrEqual(0.4);
+
+      for (const [id, clip] of [["monster.blood_sentinel.v1", "slam"], ["monster.cinder_warden.v1", "slam"], ["monster.wrack_drowned.v1", "attack"]] as const) {
+        const s = swing(id, clip);
+        let low = s.held[0]!;
+        for (const h of s.held) if (s.atBlow[h + 1]! < s.atBlow[low + 1]!) low = h;
+        expect((s.atBlow[low + 1]! - s.floor) / s.H, `${id}|${clip}: the weapon's lowest point above the floor at the blow, in heights`).toBeLessThanOrEqual(0.08);
+        expect(s.atBlow[low + 2]! / s.H, `${id}|${clip}: that point ahead of the body, in heights`).toBeGreaterThanOrEqual(0.5);
+      }
+    } finally {
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 30_000);
 
   /**
    * A paused group still counts as started, so `start` on waking returned early
