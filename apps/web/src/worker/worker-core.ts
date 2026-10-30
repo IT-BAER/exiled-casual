@@ -172,7 +172,8 @@ export class WorkerCore {
   /** DEV: a cheat or inspection op. Returns the dump for `dump`, else undefined. */
   dev(op: DevOp): unknown {
     if (op.op === "dump") return devDump(this.world, this.sim.tick);
-    applyDevOp(this.world, op);
+    const collision = op.op === "boss" && this.area === "map" ? areaCollision(this.world, "map", this.areaLayout) : undefined;
+    applyDevOp(this.world, op, collision ? (x, y, r) => collision.isWalkable(x, y, r) : undefined);
     return undefined;
   }
 

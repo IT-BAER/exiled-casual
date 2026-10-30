@@ -19,10 +19,14 @@ describe("__dev", () => {
     api.level(12);
     api.teleport("gallowsmoor", 7);
     api.currency("currency.alchemy", 4);
+    api.boss(3);
+    api.boss();
     expect(posted).toEqual([
       { type: "dev", op: { op: "setLevel", level: 12 } },
       { type: "dev", op: { op: "teleport", atlasNodeId: "node.gallowsmoor", tier: 7 } },
       { type: "dev", op: { op: "grantCurrency", baseId: "currency.alchemy", count: 4 } },
+      { type: "dev", op: { op: "boss", phase: 3 } },
+      { type: "dev", op: { op: "boss", phase: 1 } },
     ]);
   });
 

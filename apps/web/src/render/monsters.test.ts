@@ -4,8 +4,12 @@ import { fileURLToPath } from "node:url";
 import { MONSTERS } from "@exiled/content-runtime";
 import { toNumber } from "@exiled/fixed-point";
 import { partOfCreature, CreatureRig, loadMonsters, isMonstersReady, attachCreature, resetMonsters } from "./monsters";
-import { setHitFlash } from "./meshes";
+import { creatureOf, setHitFlash } from "./meshes";
 import { hasRim } from "./rim";
+import { createScene } from "./engine";
+import { SnapshotRenderer } from "./renderer";
+import { testPlayer } from "../test-fixtures";
+import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { contactPoint } from "./contact";
 import { warmContainer } from "./warm-shaders";
@@ -204,6 +208,63 @@ describe("monsters asset", () => {
     fresh.noteAttack(undefined);
     fresh.noteAttack(200);
     expect(started, "the first swing while in view").toEqual([`${species}|attack:once`]);
+  });
+
+  /**
+   * A boss's heavy swing starts on the wind-up's first tick and the hit lands a
+   * second later: played at its own pace the blow would fall on empty air long
+   * before the floor erupts. The coil stretches so the blow frame meets the impact.
+   */
+  it("slows a heavy's coil so its blow lands on the impact, then finishes at its own pace", () => {
+    const groups = new Map<string, { speedRatio: number }>();
+    const group = (name: string): AnimationGroup => {
+      // The authored strike: 15 frames at 30 fps, keyed by the glTF loader at 60.
+      const g = {
+        name,
+        speedRatio: 1,
+        enableBlending: false,
+        blendingSpeed: 0,
+        from: 0,
+        to: 30,
+        targetedAnimations: [{ animation: { framePerSecond: 60 } }],
+        start: (_loop: boolean, ratio?: number) => { if (ratio !== undefined) g.speedRatio = ratio; },
+        stop: () => {},
+        dispose: () => {},
+        onAnimationGroupEndObservable: { addOnce: () => {} },
+      };
+      groups.set(name, g);
+      return g as unknown as AnimationGroup;
+    };
+    const species = "monster.cinder_warden.v1";
+    const rig = new CreatureRig(
+      {
+        animationGroups: ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
+        rootNodes: [],
+        skeletons: [],
+        dispose: () => {},
+      } as unknown as InstantiatedEntries,
+      species,
+    );
+    const attack = groups.get(`${species}|attack`)!;
+    const now = vi.spyOn(performance, "now").mockReturnValue(1000);
+    try {
+      rig.noteAttack(1); // first report: seeds the edge
+      // The blow is 56% into the half-second clip, 0.28 s at its own pace:
+      // landing 1.12 s out takes a quarter of it.
+      rig.noteAttack(2, 1.12);
+      expect(attack.speedRatio).toBeCloseTo(0.25, 3);
+      now.mockReturnValue(1000 + 1110);
+      rig.setLocomotion(0);
+      expect(attack.speedRatio, "still coiling").toBeCloseTo(0.25, 3);
+      now.mockReturnValue(1000 + 1130);
+      rig.setLocomotion(0);
+      expect(attack.speedRatio, "past the blow: the strike's own quick pace").toBeCloseTo(1.3, 3);
+
+      rig.noteAttack(3);
+      expect(attack.speedRatio, "a plain swing keeps that pace").toBeCloseTo(1.3, 3);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("stops its clip while asleep and starts the latest one on waking", () => {
@@ -625,6 +686,47 @@ describe("creature instances", () => {
       expect(flash(struck!).length).toBeGreaterThan(0);
       expect(flash(struck!).every((f) => f === 1)).toBe(true);
       expect(flash(other!).every((f) => f === 0)).toBe(true);
+    } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
+  /**
+   * The sim stamps a boss's swing on the wind-up's first tick. Drawn from the
+   * snapshot, the Warden's strike stretches to land on its slam's impact a second
+   * out, and a plain swing does not. Measured on the packed glb: the Warden's rake
+   * peaks 0.433 s into its strike (`rig_humanoid.py` frame 12 of 22, after the
+   * exporter's leading frame), so a blow a second away plays it at 0.433.
+   */
+  it("times a boss's strike to the heavy wind-up it casts", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    try {
+      await loadMonsters(scene);
+      const renderer = new SnapshotRenderer(scene);
+      const snap = (tick: number, entities: SnapshotEntity[]): Snapshot => ({
+        tick, player: testPlayer({ x: 2, y: 2 }), area: "map", portalsLeft: 0, mapOpen: false, areaTier: 0,
+        atlasSeed: 0, completedNodes: [], entities,
+        inventory: { cols: 12, rows: 5, items: [] }, stash: { cols: 12, rows: 12, items: [] },
+        vendor: { cols: 12, rows: 12, items: [] }, shards: {}, equipment: {},
+      });
+      // In front of the camera: a creature off screen sleeps and skips a swing nobody sees.
+      const warden = (attackTick: number): SnapshotEntity => ({
+        id: 7, kind: "monster", boss: true, species: "monster.cinder_warden.v1", x: 0, y: 0, attackTick,
+      });
+      const slam: SnapshotEntity = { id: 8, kind: "telegraph", x: 1, y: 1, radius: 3.5, progress: 0, ownerId: 7, impactIn: 1, heavy: true };
+
+      renderer.apply(null, snap(1, [warden(0)]), 0);
+      const strike = creatureOf(scene.getMeshByName("entity-7") as Mesh)!.clipGroups.get("attack")!;
+      renderer.apply(null, snap(2, [warden(2), slam]), 0);
+      expect(strike.speedRatio).toBeCloseTo(0.433, 2);
+
+      renderer.apply(null, snap(3, [warden(3)]), 0);
+      expect(strike.speedRatio, "a plain swing").toBeCloseTo(1.3, 3);
     } finally {
       resetMonsters();
       engine.dispose();

@@ -3,6 +3,7 @@ import { CLASS_LIST } from "@exiled/content-runtime";
 import { SLOTS, type Looks, type Slot } from "../../render/rig";
 import { PET_ACTIONS, type PetAction } from "../../render/pet";
 import {
+  abilityLabel,
   CAMERAS,
   DIRECTIONS_8,
   FX_PREVIEWS,
@@ -222,10 +223,12 @@ function LoopToggle(p: InspectorProps): React.ReactElement {
 }
 
 function CreatureSection(p: InspectorProps): React.ReactElement {
-  const label: Record<CreatureAction, string> = {
+  const named: Record<Exclude<CreatureAction, `ability:${string}`>, string> = {
     idle: "Idle", walk: "Walk", attack: "Attack", hit: "Hit", death: "Die",
-    charge: "Charge", slam: "Slam", slam2: "Phase 2 Slam", summon: "Summon",
+    charge: "Charge", slam: "Slam", slam2: "Phase 2 Slam", summon: "Summon", phase3: "Phase 3",
   };
+  const label = (a: CreatureAction): string =>
+    a.startsWith("ability:") ? abilityLabel(a.slice("ability:".length)) : named[a as keyof typeof named];
   return (
     <section className="av-section">
       <h3 className="av-h">Actions</h3>
@@ -234,14 +237,14 @@ function CreatureSection(p: InspectorProps): React.ReactElement {
           <button key={a} type="button" className={`av-chip${a === "death" ? " av-danger" : ""}`}
             aria-pressed={!p.dead && (a === "idle" || a === "walk") && p.creatureAction === a}
             disabled={p.dead} onClick={() => p.onCreature(a)}>
-            {label[a]}
+            {label(a)}
           </button>
         ))}
         {p.dead && <button type="button" className="av-chip" onClick={p.onReset}>Stand up again</button>}
       </div>
       <LoopToggle {...p} />
       <p className="av-note">
-        {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts, and a shooter's bolt with it. Charge and Slam draw the game's floor tell on its own timings; a boss's Phase 2 Slam leaves its burning patch and Summon stands its adds. Die drops it through the ragdoll."}
+        {p.dead ? "The body is the ragdoll's now, as in play." : "Attack plays the swing the sim's attack tick starts, and a shooter's bolt with it. Charge and Slam draw the game's floor tell on its own timings; a boss's Phase 2 Slam leaves its burning patch and Summon stands its adds. A boss's own attacks draw their marks for a player five units ahead and land through the game's effects; Phase 3 plays its entry. Die drops it through the ragdoll."}
       </p>
     </section>
   );

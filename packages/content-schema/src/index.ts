@@ -221,8 +221,77 @@ export interface RangedSpec {
   radiusFixed: Fixed;
 }
 
+/**
+ * A boss's attacks beyond its slam. `line`, `ring` and `nova` are heavies: one
+ * rooted wind-up, one telegraph. A `volley` drops marks while the boss keeps
+ * moving; a `brood` raises adds out of harmless marks on a timer of its own.
+ */
+export const BOSS_ABILITY_KINDS = ["line", "ring", "nova", "volley", "brood"] as const;
+export type BossAbilityKind = (typeof BOSS_ABILITY_KINDS)[number];
+
+interface BossAbilityBase {
+  /** Names its look and sound on the client; unique within the boss. */
+  id: string;
+  /** The first phase it is cast in. */
+  fromPhase: 1 | 2 | 3;
+  /** Its own cooldown on top of the boss's cadence; a brood's wave interval. */
+  cooldownTicks: number;
+  /** A heavy's rooted wind-up, or how long a volley's or brood's mark shows before it lands. */
+  windupTicks: number;
+}
+interface BossStrike extends BossAbilityBase {
+  /** Cast only with the player this close to the boss. */
+  rangeFixed: Fixed;
+  damage: DamageSpec;
+}
+/** A lane from the boss toward the player, lengthFixed long and twice halfWidthFixed wide. */
+export interface BossLineAbility extends BossStrike {
+  kind: "line";
+  lengthFixed: Fixed;
+  halfWidthFixed: Fixed;
+  /** Run the lane this far past the player instead, clamped to minLengthFixed..lengthFixed. */
+  overshootFixed?: Fixed;
+  minLengthFixed?: Fixed;
+  /** At impact the boss runs the lane to its end, at this speed per second. */
+  dashSpeedFixed?: Fixed;
+}
+/** A donut on the boss, safe inside innerFixed and past radiusFixed; cast only on a player in the band. */
+export interface BossRingAbility extends BossStrike { kind: "ring"; innerFixed: Fixed; radiusFixed: Fixed }
+/** A disc on the boss itself. */
+export interface BossNovaAbility extends BossStrike { kind: "nova"; radiusFixed: Fixed }
+/**
+ * `count` marks, each landing windupTicks after it shows: discs of radiusFixed or
+ * lanes from the boss. Lanes and `follow` discs show one every everyTicks, aimed at
+ * the player each time; other discs all show at once round him, landing everyTicks apart.
+ */
+export interface BossVolleyAbility extends BossStrike {
+  kind: "volley";
+  count: number;
+  everyTicks: number;
+  radiusFixed?: Fixed;
+  lengthFixed?: Fixed;
+  halfWidthFixed?: Fixed;
+  follow?: boolean;
+}
+/** `count` adds rise from marks every cooldownTicks (phase3CooldownTicks in phase 3), at most maxAlive at once. */
+export interface BossBroodAbility extends BossAbilityBase {
+  kind: "brood";
+  addDefId: string;
+  count: number;
+  maxAlive: number;
+  phase3CooldownTicks: number;
+}
+export type BossAbility =
+  | BossLineAbility | BossRingAbility | BossNovaAbility | BossVolleyAbility | BossBroodAbility;
+
 export interface BossSpec {
   phase2AtLifePct: number;
+  /** Phase 3 below this life, once; absent = two phases. Needs phase3CadenceMulPct. */
+  phase3AtLifePct?: number;
+  /** Phase 3's cadence as a percentage of phase 2's. */
+  phase3CadenceMulPct?: number;
+  /** Preferred in this order over the slam, each when unlocked, off its cooldown and in range. */
+  abilities?: BossAbility[];
   slam: SlamSpec;
   phase2: {
     fireGroundDurationTicks: number;
@@ -672,9 +741,92 @@ export function validateMonsterDef(v: unknown): ValidationResult {
           errors.push("boss.phase2.cadenceMulPct: must be an integer in 1..100");
         }
       }
+      const pct3 = b["phase3AtLifePct"];
+      if (pct3 !== undefined) {
+        if (!isPct(pct3) || (typeof pct === "number" && (pct3 as number) >= pct)) {
+          errors.push("boss.phase3AtLifePct: must be an integer in 1..100 below phase2AtLifePct");
+        }
+        if (!isPct(b["phase3CadenceMulPct"])) {
+          errors.push("boss.phase3CadenceMulPct: must be an integer in 1..100");
+        }
+      } else if (b["phase3CadenceMulPct"] !== undefined) {
+        errors.push("boss.phase3CadenceMulPct: only with phase3AtLifePct");
+      }
+      if (b["abilities"] !== undefined) validateBossAbilities(b["abilities"], pct3 !== undefined, errors);
     }
   }
   return { ok: errors.length === 0, errors };
+}
+
+function isPct(v: unknown): boolean {
+  return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 100;
+}
+
+/** The numbers each kind requires besides cooldownTicks and windupTicks. A volley's shape is checked apart. */
+const ABILITY_FIELDS: Record<BossAbilityKind, readonly string[]> = {
+  line: ["rangeFixed", "lengthFixed", "halfWidthFixed"],
+  ring: ["rangeFixed", "innerFixed", "radiusFixed"],
+  nova: ["rangeFixed", "radiusFixed"],
+  volley: ["rangeFixed", "count", "everyTicks"],
+  brood: ["count", "maxAlive", "phase3CooldownTicks"],
+};
+
+function validateBossAbilities(v: unknown, hasPhase3: boolean, errors: string[]): void {
+  if (!Array.isArray(v)) {
+    errors.push("boss.abilities: must be an array");
+    return;
+  }
+  const ids = new Set<unknown>();
+  v.forEach((a: unknown, i) => {
+    const at = `boss.abilities[${i}]`;
+    if (!isObj(a)) {
+      errors.push(`${at}: must be an object`);
+      return;
+    }
+    const kind = a["kind"] as BossAbilityKind;
+    if (!BOSS_ABILITY_KINDS.includes(kind)) {
+      errors.push(`${at}.kind: must be one of ${BOSS_ABILITY_KINDS.join(", ")}, got "${String(kind)}"`);
+      return;
+    }
+    if (typeof a["id"] !== "string" || !/^[a-z][a-z0-9_]*$/.test(a["id"]) || ids.has(a["id"])) {
+      errors.push(`${at}.id: must be a snake_case name unique within the boss`);
+    }
+    ids.add(a["id"]);
+    const phase = a["fromPhase"];
+    if (phase !== 1 && phase !== 2 && phase !== 3) errors.push(`${at}.fromPhase: must be 1, 2 or 3`);
+    else if (phase === 3 && !hasPhase3) errors.push(`${at}.fromPhase: 3 needs boss.phase3AtLifePct`);
+
+    const disc = a["radiusFixed"] !== undefined;
+    const volleyShape = kind !== "volley" ? [] : disc ? ["radiusFixed"] : ["lengthFixed", "halfWidthFixed"];
+    for (const f of ["cooldownTicks", "windupTicks", ...ABILITY_FIELDS[kind], ...volleyShape]) {
+      if (!isNonNegInt(a[f])) errors.push(`${at}.${f}: must be a non-negative integer`);
+    }
+    for (const f of ["count", "maxAlive"]) {
+      if (a[f] === 0) errors.push(`${at}.${f}: must be at least 1`);
+    }
+    for (const f of ["overshootFixed", "minLengthFixed", "dashSpeedFixed"]) {
+      if (a[f] !== undefined && !isNonNegInt(a[f])) errors.push(`${at}.${f}: must be a non-negative integer`);
+    }
+    if (kind === "brood") {
+      if (typeof a["addDefId"] !== "string" || !ID_PATTERN.test(a["addDefId"])) {
+        errors.push(`${at}.addDefId: must match ID_PATTERN`);
+      }
+      return;
+    }
+    validateDamageSpec(a["damage"], `${at}.damage`, errors);
+    if (kind === "ring" && (a["innerFixed"] as number) >= (a["radiusFixed"] as number)) {
+      errors.push(`${at}.innerFixed: must be below radiusFixed`);
+    }
+    if (kind === "line" && (a["overshootFixed"] === undefined) !== (a["minLengthFixed"] === undefined)) {
+      errors.push(`${at}.minLengthFixed: comes with overshootFixed, both or neither`);
+    }
+    if (kind === "volley" && disc && (a["lengthFixed"] !== undefined || a["halfWidthFixed"] !== undefined)) {
+      errors.push(`${at}.radiusFixed: a volley is discs or lanes (lengthFixed, halfWidthFixed), not both`);
+    }
+    if (kind === "volley" && a["follow"] !== undefined && typeof a["follow"] !== "boolean") {
+      errors.push(`${at}.follow: must be a boolean`);
+    }
+  });
 }
 
 /** Present-iff-required check for an all-non-negative-integer sub-spec. */

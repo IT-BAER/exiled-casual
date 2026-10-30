@@ -1,18 +1,22 @@
 // DEV-only cheats and inspection for the release playtest: put the world into any
 // state in one message instead of farming it. The worker accepts them only in a
 // dev build (sim-worker.ts); nothing in normal play calls this module.
-import { ITEM_POOLS, baseOf, currencyItem, waystoneItem } from "@exiled/content-runtime";
+import { ITEM_POOLS, MONSTERS, baseOf, currencyItem, waystoneItem } from "@exiled/content-runtime";
 import type { Item } from "@exiled/content-schema";
+import { fp, type Fixed } from "@exiled/fixed-point";
 import { MAP_PORTALS, type DevOp } from "@exiled/protocol";
 import { atlasGraph, magicName, mapSeedFor, rollItem } from "@exiled/rules";
 import { spawnPortalRing } from "./areas";
-import type { InventoryC, ProgressC, SessionC } from "./components";
+import type { BossC, Health, InventoryC, MonsterC, MoveTarget, PlayerC, Position, ProgressC, SessionC } from "./components";
 import { recomputePlayerStats } from "./derived";
 import type { World } from "./ecs";
 import { placeFirstFit } from "./inventory";
 import { grantSkills } from "./persist";
 
-export function applyDevOp(world: World, op: DevOp): void {
+/** Whether a body of radius `r` fits at (x, y): the area's collision, which only the worker holds. */
+type Walkable = (x: Fixed, y: Fixed, r: Fixed) => boolean;
+
+export function applyDevOp(world: World, op: DevOp, walkable?: Walkable): void {
   const sessionE = world.query("session")[0];
   if (sessionE === undefined) return;
   const session = world.get<SessionC>(sessionE, "session")!;
@@ -70,8 +74,52 @@ export function applyDevOp(world: World, op: DevOp): void {
     case "toHideout":
       if (session.area !== "hideout") world.set<SessionC>(sessionE, "session", { ...session, pendingArea: "hideout" });
       return;
+    case "boss":
+      readyBoss(world, op.phase, walkable);
+      return;
     case "dump":
       return;
+  }
+}
+
+/** Eight ways round a boss, unit vectors x1000: literals, like the sim's rings. */
+const AROUND: readonly (readonly [number, number])[] = [
+  [1000, 0], [707, 707], [0, 1000], [-707, 707], [-1000, 0], [-707, -707], [0, -1000], [707, -707],
+];
+/** How far off the boss the player is put: inside its wake radius (10) and every kit's reach. */
+const BESIDE_BOSS = fp(7);
+
+/**
+ * The area's boss made ready to show `phase`: back in phase 1 with every attack off
+ * cooldown and nothing rooted, its life just under that phase's line so it crosses
+ * into it on its next ticks, and the player put beside it on open floor, the way
+ * he already stood first so the camera does not swing across the arena.
+ */
+function readyBoss(world: World, phase: 1 | 2 | 3, walkable?: Walkable): void {
+  const boss = world.query("boss", "monster", "position", "health")[0];
+  const player = world.query("player", "position")[0];
+  if (boss === undefined || player === undefined) return;
+  const spec = MONSTERS.get(world.get<MonsterC>(boss, "monster")!.defId)?.boss;
+  if (!spec) return;
+  const h = world.get<Health>(boss, "health")!;
+  const line = phase === 3 ? spec.phase3AtLifePct ?? spec.phase2AtLifePct : spec.phase2AtLifePct;
+  world.set<Health>(boss, "health", { ...h, life: phase === 1 ? h.maxLife : Math.trunc((h.maxLife * (line - 1)) / 100) });
+  const { volleyAbility: _a, volleyLeft: _l, volleyAtTick: _t, ...b } = world.get<BossC>(boss, "boss")!;
+  world.set<BossC>(boss, "boss", { ...b, phase: 1, nextAbilityTick: 0, rootedUntilTick: 0, abilityReadyTicks: [], broodAtTick: 0 });
+  // Its phase-2 entry raises adds again, on top of any the last call raised.
+  for (const m of world.query("monster").filter((m) => world.get<MonsterC>(m, "monster")!.summoned === 1)) world.destroy(m);
+  const bp = world.get<Position>(boss, "position")!;
+  const pp = world.get<Position>(player, "position")!;
+  const r = world.get<PlayerC>(player, "player")?.bodyRadius ?? fp(0.4);
+  const toward = ([dx, dy]: readonly [number, number]) => dx * (pp.x - bp.x) + dy * (pp.y - bp.y);
+  for (const [dx, dy] of [...AROUND].sort((a, c) => toward(c) - toward(a))) {
+    const x = bp.x + Math.trunc((dx * BESIDE_BOSS) / 1000);
+    const y = bp.y + Math.trunc((dy * BESIDE_BOSS) / 1000);
+    if (walkable && !walkable(x, y, r)) continue;
+    world.set<Position>(player, "position", { x, y });
+    const target = world.get<MoveTarget>(player, "moveTarget");
+    if (target) world.set<MoveTarget>(player, "moveTarget", { x, y, active: 0 });
+    return;
   }
 }
 

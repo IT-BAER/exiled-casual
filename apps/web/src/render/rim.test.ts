@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { FreeCamera, Mesh, MeshBuilder, NullEngine, PBRMaterial, Scene, StandardMaterial, Vector3 } from "@babylonjs/core";
 import type { SubMesh, UniformBuffer } from "@babylonjs/core";
 import { addRim } from "./rim";
-import { setHitFlash, setHovered, setTier } from "./meshes";
+import { setDangerGlow, setHitFlash, setHovered, setTier } from "./meshes";
 
 let engine: NullEngine | undefined;
 afterEach(() => {
@@ -310,5 +310,64 @@ describe("hover outline through the rim plugin", () => {
     expect((aura.metadata as { hovered?: boolean } | null)?.hovered).toBeUndefined();
     setHovered(root, false);
     expect((body.metadata as { hovered?: boolean }).hovered).toBeUndefined();
+  });
+});
+
+/**
+ * PoE2's tell for an attack that must be dodged: the boss glows red through the
+ * wind-up. It rides per-mesh metadata like the flash, so one Warden winding up
+ * leaves another standing beside it dark.
+ */
+describe("danger glow through the rim plugin", () => {
+  function fakeUbo(): { floats: Record<string, number>; ubo: UniformBuffer } {
+    const floats: Record<string, number> = {};
+    const ubo = {
+      updateFloat: (name: string, v: number) => { floats[name] = v; },
+      updateColor3: () => {},
+    } as unknown as UniformBuffer;
+    return { floats, ubo };
+  }
+
+  it("declares the dangerGlow uniform and applies it after tone mapping", () => {
+    const material = new PBRMaterial("hide", scene());
+    addRim(material);
+    const plugin = material.pluginManager!.getPlugin("ExiledRim")!;
+    expect(plugin.getUniforms().ubo!.map((u) => u.name)).toContain("dangerGlow");
+    expect(plugin.getCustomCode("fragment")!.CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR).toContain("dangerGlow");
+  });
+
+  it("binds the winding-up mesh's glow and none for any other", () => {
+    const s = scene();
+    const material = new PBRMaterial("hide", s);
+    addRim(material);
+    const plugin = material.pluginManager!.getPlugin("ExiledRim")!;
+    const sub = (metadata: unknown) => ({ getMesh: () => ({ metadata }) }) as unknown as SubMesh;
+
+    const lit = fakeUbo();
+    plugin.hardBindForSubMesh(lit.ubo, s, engine!, sub({ dangerGlow: 0.6 }));
+    expect(lit.floats["dangerGlow"]).toBeCloseTo(0.6, 5);
+
+    const plain = fakeUbo();
+    plugin.hardBindForSubMesh(plain.ubo, s, engine!, sub({ hovered: true }));
+    expect(plain.floats["dangerGlow"]).toBe(0);
+  });
+
+  it("setDangerGlow marks the body meshes only and clears again", () => {
+    const s = scene();
+    const root = new Mesh("actor", s);
+    const body = new Mesh("body", s);
+    body.parent = root;
+    const hide = new PBRMaterial("hide", s);
+    addRim(hide);
+    body.material = hide;
+    const blob = new Mesh("groundblob-actor", s);
+    blob.parent = root;
+    blob.material = hide;
+
+    setDangerGlow(root, 0.8);
+    expect((body.metadata as { dangerGlow?: number }).dangerGlow).toBeCloseTo(0.8, 5);
+    expect((blob.metadata as { dangerGlow?: number } | null)?.dangerGlow).toBeUndefined();
+    setDangerGlow(root, 0);
+    expect((body.metadata as { dangerGlow?: number }).dangerGlow).toBeUndefined();
   });
 });

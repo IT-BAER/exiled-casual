@@ -3,11 +3,13 @@ import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
 import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength, strikesTheFloor } from "./skill-fx";
 import { clearFxPools } from "./fx-pool";
+import { dangerGlow, landed } from "./boss-tells";
+import { bossFx, clearBossFx, isBossMark, PHASE_SHAKE, shakeFor } from "./boss-fx";
 import { slamDebris } from "./slam-debris";
 import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillShakeWeight, swingWeight } from "./juice";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import type { WakeBody } from "./wake";
-import { animateActor, keepGroundBlobFlat, makeMesh, setHitFlash, setHovered, setTier, updateTelegraph, updateChargePath, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { animateActor, keepGroundBlobFlat, makeMesh, setDangerGlow, setHitFlash, setHovered, setTier, markKind, updateMark, RADIUS_SCALED, updateChargePath, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
 import { rigOf } from "./rig";
@@ -309,7 +311,7 @@ function kindOf(e: SnapshotEntity): MeshKind {
     return e.rare ? "rare" : "monster";
   }
   if (e.kind === "projectile") return "projectile";
-  if (e.kind === "telegraph") return e.fromX !== undefined ? "chargePath" : "telegraph";
+  if (e.kind === "telegraph") return e.fromX !== undefined ? "chargePath" : markKind(e);
   if (e.kind === "portal") return "portal";
   if (e.kind === "mapDevice") return "mapDevice";
   if (e.kind === "stash") return "stash";
@@ -375,6 +377,12 @@ export class SnapshotRenderer {
   private hoveredEntityId: number | null = null;
   /** The monster wearing the red hover outline; cleared before its mesh becomes a corpse. */
   private outlinedId: number | null = null;
+  /** Monsters glowing through a heavy wind-up; cleared when it lands or they die. */
+  private readonly glowing = new Set<number>();
+  /** Boss marks as last drawn, for their impact as they leave: a burst of snapshots can skip the one before. */
+  private readonly marks = new Map<number, SnapshotEntity>();
+  /** Each boss's phase as last drawn, so its entry into phase 3 bursts once. */
+  private readonly phases = new Map<number, number>();
   /** The last snapshot applied, for the DEV handles alone. */
   private lastSnapshot: Snapshot | null = null;
   /** The area the last applied snapshot was of; drives areaChanged. */
@@ -488,6 +496,8 @@ export class SnapshotRenderer {
     this.now = next.tick + alpha;
     this.lastSnapshot = next;
     const ms = performance.now();
+    /** Seconds since the last drawn frame, for what runs on the frame clock. */
+    const frame = this.lastFrameMs > 0 ? Math.min(0.1, (ms - this.lastFrameMs) / 1000) : 0;
     if (this.lastFrameMs > 0) this.shakeTrauma = decayTrauma(this.shakeTrauma, (ms - this.lastFrameMs) / 1000);
     this.lastFrameMs = ms;
     if (this.hitStopUntil > 0 && ms >= this.hitStopUntil) {
@@ -584,6 +594,14 @@ export class SnapshotRenderer {
         .map((e) => e.id)
         .sort((a, b) => a - b)
       : [];
+
+    // Each monster's heavy wind-up, the one nearest its blow: it glows and times its swing to it.
+    const winding = new Map<number, SnapshotEntity>();
+    for (const e of next.entities) {
+      if (e.kind !== "telegraph" || !e.heavy || e.ownerId === undefined) continue;
+      const was = winding.get(e.ownerId);
+      if (!was || (e.impactIn ?? 0) < (was.impactIn ?? 0)) winding.set(e.ownerId, e);
+    }
 
     // Entities
     const view = viewPlanes(this.scene);
@@ -695,7 +713,23 @@ export class SnapshotRenderer {
         if (e.spent) mesh.metadata = { ...(mesh.metadata ?? {}), struck: true };
       }
       // The sim swung: one-shot strike over whatever locomotion was playing.
-      creatureOf(mesh)?.noteAttack(e.attackTick);
+      const windup = e.kind === "monster" ? winding.get(e.id) : undefined;
+      const left = windup ? (windup.impactIn ?? 0) - alpha / TICKS_PER_SEC : undefined;
+      creatureOf(mesh)?.noteAttack(e.attackTick, left);
+      if (windup) {
+        setDangerGlow(mesh, dangerGlow(windup.progress ?? 0, left!));
+        this.glowing.add(e.id);
+      } else if (this.glowing.delete(e.id)) {
+        setDangerGlow(mesh, 0);
+      }
+      if (e.boss && e.bossPhase !== undefined) {
+        // Below 3, not 2: the sim spends one tick in phase 2 on the way, and a slow frame skips it.
+        if (e.bossPhase === 3 && (this.phases.get(e.id) ?? 3) < 3) {
+          bossFx(this.scene).phaseThree(e, e.species);
+          this.shakeTrauma = addTrauma(this.shakeTrauma, 1, PHASE_SHAKE);
+        }
+        this.phases.set(e.id, e.bossPhase);
+      }
       // Struck: life is the only report of a hit the client gets, and it is the
       // honest one — a swing that missed or was absorbed never moves it.
       if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
@@ -732,7 +766,12 @@ export class SnapshotRenderer {
       const arriving = arrivingPortals.indexOf(e.id);
       if (arriving >= 0) portalAppear(this.scene, mesh, arriving * PORTAL_STAGGER_MS, arriving === 0);
       if (e.kind === "telegraph") {
-        if (this.kinds.get(e.id) !== "chargePath") updateTelegraph(mesh, e.progress ?? 0);
+        if (isBossMark(e)) {
+          this.marks.set(e.id, e);
+          bossFx(this.scene).windup(e, (e.impactIn ?? 0) - alpha / TICKS_PER_SEC, frame);
+        }
+        const drawn = this.kinds.get(e.id);
+        if (drawn !== "chargePath") updateMark(mesh, drawn, e, e.progress ?? 0, this.now / TICKS_PER_SEC);
         else if (e.fromX === undefined || e.fromY === undefined) updateChargePath(mesh, e.progress ?? 0, undefined);
         else {
           // The brute moves at 30 Hz like everything else; its end of the path is interpolated with it.
@@ -823,6 +862,7 @@ export class SnapshotRenderer {
       hitSparkle(this.scene).clear();
       slamDebris(this.scene).clear();
       clearFxPools(this.scene);
+      clearBossFx(this.scene);
       for (const patch of this.embers) patch.mesh.dispose();
       this.embers.length = 0;
     }
@@ -835,6 +875,20 @@ export class SnapshotRenderer {
           setHovered(mesh, false);
           this.outlinedId = null;
         }
+        if (this.glowing.delete(id)) setDangerGlow(mesh, 0);
+        const mark = this.marks.get(id);
+        if (mark) {
+          this.marks.delete(id);
+          const fx = bossFx(this.scene);
+          if (!areaChanged && landed(mark)) {
+            const owner = next.entities.find((o) => o.id === mark.ownerId);
+            fx.land(mark, owner?.species, owner);
+            const shake = shakeFor(mark, next.player.x, next.player.y);
+            if (shake > 0) this.shakeTrauma = addTrauma(this.shakeTrauma, 1, shake);
+          }
+          fx.forget(id);
+        }
+        this.phases.delete(id);
         // A body dies at its own size: a squash caught mid-flinch would freeze into the corpse.
         const struck = this.flinch.get(id);
         if (struck) mesh.scaling.setAll(struck.base);
@@ -1157,8 +1211,8 @@ export class SnapshotRenderer {
     mesh.position.z = z;
     mesh.position.y = Y_LIFT[kind];
 
-    // Scale telegraph and groundArea on x/z only to match their world radius.
-    if ((kind === "telegraph" || kind === "groundArea") && radius !== undefined) {
+    // Scale the round decals on x/z only to match their world radius (a ring's is its outer edge).
+    if (RADIUS_SCALED.has(kind) && radius !== undefined) {
       mesh.scaling.x = radius;
       mesh.scaling.z = radius;
     }

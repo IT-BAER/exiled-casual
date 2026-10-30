@@ -88,6 +88,15 @@ export const HOVER_COLOR = new Color3(0.9, 0.12, 0.08);
 export const HOVER_STRENGTH = 0.9;
 const HOVER_POWER = 2.5;
 
+/**
+ * PoE2's heavy wind-up: the boss glows red over its whole body, not along a
+ * line, so it never reads as the hover outline on the boss under the cursor.
+ * `DANGER_BODY` is the share at the centre of the body, the outline takes all of it.
+ */
+export const DANGER_COLOR = new Color3(1.0, 0.16, 0.06);
+const DANGER_BODY = 0.35;
+const DANGER_POWER = 1.2;
+
 class RimPlugin extends MaterialPluginBase {
   constructor(material: Material) {
     // After lighting and tone mapping, like the dissolve edge: this is its own
@@ -118,6 +127,7 @@ class RimPlugin extends MaterialPluginBase {
         { name: "tierColor", size: 3, type: "vec3" },
         { name: "glowTime", size: 1, type: "float" },
         { name: "hoverGlow", size: 1, type: "float" },
+        { name: "dangerGlow", size: 1, type: "float" },
       ],
       fragment: `
         uniform float rimIntensity;
@@ -128,6 +138,7 @@ class RimPlugin extends MaterialPluginBase {
         uniform vec3 tierColor;
         uniform float glowTime;
         uniform float hoverGlow;
+        uniform float dangerGlow;
       `,
     };
   }
@@ -141,13 +152,14 @@ class RimPlugin extends MaterialPluginBase {
   // Every draw, not `bindForSubMesh`: PBR skips that one when the same material
   // draws again, and the next mesh would inherit the previous one's flash.
   override hardBindForSubMesh(uniformBuffer: UniformBuffer, _scene: Scene, _engine: AbstractEngine, subMesh: SubMesh): void {
-    const meta = subMesh.getMesh().metadata as { hitFlash?: number; tier?: Tier; hovered?: boolean } | null;
+    const meta = subMesh.getMesh().metadata as { hitFlash?: number; tier?: Tier; hovered?: boolean; dangerGlow?: number } | null;
     uniformBuffer.updateFloat("hitFlash", meta?.hitFlash ?? 0);
     const tier = meta?.tier ? TIER_GLOW[meta.tier] : undefined;
     uniformBuffer.updateFloat("tierGlow", tier?.strength ?? 0);
     uniformBuffer.updateColor3("tierColor", tier?.color ?? NO_TIER);
     uniformBuffer.updateFloat("glowTime", tier ? (performance.now() / 1000) % 1000 : 0);
     uniformBuffer.updateFloat("hoverGlow", meta?.hovered ? HOVER_STRENGTH : 0);
+    uniformBuffer.updateFloat("dangerGlow", meta?.dangerGlow ?? 0);
   }
 
   override getCustomCode(shaderType: string): Record<string, string> | null {
@@ -162,6 +174,7 @@ class RimPlugin extends MaterialPluginBase {
           darkFloor *= fog; // fogFragment's factor: a creature in the fog stays in it
         #endif
         finalColor.rgb = max(finalColor.rgb, pow(surfaceAlbedo, vec3(1.0 / 2.2)) * darkFloor);
+        float dangerShape = ${DANGER_BODY.toFixed(3)};
         #ifdef NORMAL
           float rimFacing = 1.0 - clamp(dot(normalize(normalW), viewDirectionW), 0.0, 1.0);
           finalColor.rgb += rimColor * pow(rimFacing, rimPower) * rimIntensity;
@@ -172,7 +185,10 @@ class RimPlugin extends MaterialPluginBase {
             finalColor.rgb = mix(finalColor.rgb, tierColor, clamp(pow(rimFacing, ${TIER_POWER.toFixed(2)}) * shimmer * tierGlow, 0.0, 1.0));
           }
           finalColor.rgb += vec3(${HOVER_COLOR.r.toFixed(3)}, ${HOVER_COLOR.g.toFixed(3)}, ${HOVER_COLOR.b.toFixed(3)}) * pow(rimFacing, ${HOVER_POWER.toFixed(2)}) * hoverGlow;
+          dangerShape += ${(1 - DANGER_BODY).toFixed(3)} * pow(rimFacing, ${DANGER_POWER.toFixed(2)});
         #endif
+        // Mixed like the tier glow: added red is lost on a pale hide.
+        finalColor.rgb = mix(finalColor.rgb, vec3(${DANGER_COLOR.r.toFixed(3)}, ${DANGER_COLOR.g.toFixed(3)}, ${DANGER_COLOR.b.toFixed(3)}), clamp(dangerShape * dangerGlow, 0.0, 1.0));
         finalColor.rgb = mix(finalColor.rgb, vec3(${HIT_TINT.r.toFixed(3)}, ${HIT_TINT.g.toFixed(3)}, ${HIT_TINT.b.toFixed(3)}), hitFlash * ${HIT_ALPHA.toFixed(3)});
       `,
     };

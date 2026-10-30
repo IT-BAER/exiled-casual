@@ -69,6 +69,15 @@ import type { Health, Mana, Position, MonsterC, SessionC, SkillsC, Cooldowns } f
  * whole shape of the change: the bands below were widened to what it measured,
  * not what would have kept them green.
  *
+ * With the boss kits and the third phase (boss-ai.ts), each boss casts its
+ * signature in the slam's cadence and turns meaner below 25% life:
+ *
+ *   kill    vaal_stone boss 11.8s | desert 12.6s | swamp 8.7s | forest 10.0s | coast 8.7s
+ *   die     Warden phase 1 16.0s | phase 2 6.6s | phase 3 5.9s
+ *
+ * Phase 3 outpaces phase 2 only because Cinder Rain lands its discs ON a player
+ * who stands still (VOLLEY_RING), since a phase-3 cast takes the slam's slot.
+ *
  * Measured for gem levels (Tier 0, no gear, one rare template, bolt+ground
  * rotation): a gem 1 caster kills the reference rare in 7.7s, gem 20 in 3.2s,
  * a 2.4x speedup, short of the 3.03x that 19 steps of 6%-per-level damage
@@ -237,6 +246,13 @@ function ticksToDeath({ sim, world, player }: Rig, maxSecs = 120): number {
 function forcePhase2(r: Rig): void {
   for (let i = 0; i < 3; i++) spawnLabActors(r.world, "hurtboss", 0, 0);
   r.sim.step([]); // bossAI reads the new life and transitions
+}
+
+/** Past the phase-3 threshold the same way: the first step is phase 2, the second phase 3. */
+function forcePhase3(r: Rig): void {
+  for (let i = 0; i < 4; i++) spawnLabActors(r.world, "hurtboss", 0, 0);
+  r.sim.step([]);
+  r.sim.step([]);
 }
 
 /**
@@ -501,6 +517,16 @@ describe("time to death, player standing still and doing nothing", () => {
     const ticks = ticksToDeath(r);
     expect(ticks).toBeLessThan(phase1);
     expect(ticks / HZ).toBeGreaterThan(3);
+  });
+
+  it("phase 3 is deadlier than phase 2, but still leaves two and a half seconds to walk out", () => {
+    const phase2 = (() => { const r = rig(); spawnWarden(r); forcePhase2(r); return ticksToDeath(r); })();
+    const r = rig();
+    spawnWarden(r);
+    forcePhase3(r);
+    const ticks = ticksToDeath(r);
+    expect(ticks).toBeLessThan(phase2);
+    expect(ticks / HZ).toBeGreaterThan(2.5);
   });
 
   it("the phase-2 burning ground alone needs four seconds to burn a base life pool", () => {

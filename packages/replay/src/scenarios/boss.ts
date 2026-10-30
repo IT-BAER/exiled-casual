@@ -4,6 +4,9 @@ import {
   buildSnapshot,
   checksumWorld,
   intentToCommand,
+  spawnMonster,
+  type BossC,
+  type Position,
   type Command,
   type World,
   type Simulation,
@@ -91,22 +94,43 @@ export interface BossArena {
   portalId: Entity;
 }
 
+export interface BossArenaOpts {
+  nearPhase2?: boolean;
+  /** Another boss def in the warden's place, as its own biome would spawn it. */
+  species?: string;
+  /**
+   * Phase 2 already and less than one resisted Ember Bolt (27) above the phase-3
+   * line, with the player 7 units off and too sturdy to die, so a run sees the
+   * boss's whole third phase.
+   */
+  nearPhase3?: boolean;
+}
+
 /** Build the boss encounter on the area run loop, isolated and optionally near-threshold. */
-export function buildBossArena(
-  seed: number = BOSS_SEED,
-  opts: { nearPhase2?: boolean } = {},
-): BossArena {
+export function buildBossArena(seed: number = BOSS_SEED, opts: BossArenaOpts = {}): BossArena {
   const { sim, world, playerEntity } = createCombatSim(seed, { area: "map", layout: FLAT_LAYOUT });
   isolateBoss(world);
 
-  const bossId = world.query("boss")[0]!;
+  let bossId = world.query("boss")[0]!;
+  if (opts.species !== undefined) {
+    const at = world.get<Position>(bossId, "position")!;
+    world.destroy(bossId);
+    bossId = spawnMonster(world, MONSTERS.get(opts.species)!, at.x, at.y, false);
+  }
+  const spec = MONSTERS.get(world.get<MonsterC>(bossId, "monster")!.defId)!.boss!;
   if (opts.nearPhase2) {
     const h = world.get<Health>(bossId, "health")!;
-    const pct = MONSTERS.get("monster.cinder_warden.v1")!.boss!.phase2AtLifePct;
     // Two Ember Bolts' worth above the line, so the scripted log still drives the
     // transition however the warden's life, resistance or bolt damage is tuned.
-    const life = Math.trunc((h.maxLife * pct) / 100) + fp(30);
+    const life = Math.trunc((h.maxLife * spec.phase2AtLifePct) / 100) + fp(30);
     world.set<Health>(bossId, "health", { ...h, life: Math.min(life, h.maxLife) });
+  }
+  if (opts.nearPhase3) {
+    const h = world.get<Health>(bossId, "health")!;
+    world.set<Health>(bossId, "health", { ...h, life: Math.trunc((h.maxLife * spec.phase3AtLifePct!) / 100) + fp(20) });
+    world.set<BossC>(bossId, "boss", { ...world.get<BossC>(bossId, "boss")!, phase: 2 });
+    world.set<Position>(playerEntity, "position", { x: fp(0), y: fp(5) });
+    world.set<Health>(playerEntity, "health", { life: fp(100000), maxLife: fp(100000) });
   }
 
   const portalId = world
@@ -130,7 +154,7 @@ export interface BossReplayResult {
 export function runBossReplay(
   commandsByTick: Command[][],
   ticks: number,
-  opts: { seed?: number; nearPhase2?: boolean } = {},
+  opts: BossArenaOpts & { seed?: number } = {},
 ): BossReplayResult {
   const { sim, world } = buildBossArena(opts.seed ?? BOSS_SEED, opts);
   const checksums: number[] = [];

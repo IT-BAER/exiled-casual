@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { MONSTERS } from "@exiled/content-runtime";
+import { fp } from "@exiled/fixed-point";
+import { spawnMonster } from "./areas";
 import { createCombatSim } from "./combat-sim";
 import { applyDevOp, devDump } from "./dev-ops";
-import type { InventoryC, ProgressC, SessionC, Health } from "./components";
+import type { BossC, InventoryC, MonsterC, MoveTarget, Position, ProgressC, SessionC, Health } from "./components";
 
 const fresh = () => createCombatSim(42, { area: "hideout", classId: "class.ironsworn" });
 const sessionOf = (w: ReturnType<typeof fresh>["world"]) => w.query("session")[0]!;
@@ -76,6 +79,54 @@ describe("DEV ops", () => {
     const { world } = fresh();
     applyDevOp(world, { op: "openAtlas" });
     expect(world.get<SessionC>(sessionOf(world), "session")!.completedNodes.length).toBe(15);
+  });
+
+  describe("boss", () => {
+    function withWarden() {
+      const game = fresh();
+      const boss = spawnMonster(game.world, MONSTERS.get("monster.cinder_warden.v1")!, fp(10), fp(10), false);
+      // East of it, so east is the first way tried.
+      game.world.set<Position>(game.playerEntity, "position", { x: fp(30), y: fp(10) });
+      return { ...game, boss };
+    }
+
+    it("puts the player 7 units off the area's boss on open floor, and it crosses into the phase asked for", () => {
+      const { world, sim, playerEntity, boss } = withWarden();
+      applyDevOp(world, { op: "boss", phase: 3 }, (x) => x < fp(16));
+      const b = world.get<Position>(boss, "position")!;
+      const p = world.get<Position>(playerEntity, "position")!;
+      expect(Math.abs(Math.hypot(p.x - b.x, p.y - b.y) - fp(7))).toBeLessThan(fp(0.01));
+      expect(p.x, "east of it is wall").toBeLessThan(fp(16));
+      expect(world.get<MoveTarget>(playerEntity, "moveTarget")!.active, "no walk back").toBe(0);
+      sim.step();
+      sim.step();
+      expect(world.get<BossC>(boss, "boss")!.phase).toBe(3);
+      const h = world.get<Health>(boss, "health")!;
+      expect(h.life * 100).toBeLessThanOrEqual(h.maxLife * 25);
+    });
+
+    it("stands it back up in phase 1, whole and with every attack ready", () => {
+      const { world, sim, boss } = withWarden();
+      applyDevOp(world, { op: "boss", phase: 2 });
+      sim.step();
+      expect(world.get<BossC>(boss, "boss")!.phase).toBe(2);
+      applyDevOp(world, { op: "boss", phase: 1 });
+      const h = world.get<Health>(boss, "health")!;
+      expect(h.life).toBe(h.maxLife);
+      expect(world.get<BossC>(boss, "boss")).toMatchObject({ phase: 1, nextAbilityTick: 0, rootedUntilTick: 0, abilityReadyTicks: [] });
+    });
+
+    it("clears the adds the last call raised, so calling it again does not stack them", () => {
+      const { world, sim } = withWarden();
+      const adds = () => world.query("monster").filter((m) => world.get<MonsterC>(m, "monster")!.summoned === 1).length;
+      applyDevOp(world, { op: "boss", phase: 2 });
+      sim.step();
+      const first = adds();
+      expect(first).toBeGreaterThan(0);
+      applyDevOp(world, { op: "boss", phase: 2 });
+      sim.step();
+      expect(adds()).toBe(first);
+    });
   });
 
   it("dumps the player and session components as plain JSON", () => {

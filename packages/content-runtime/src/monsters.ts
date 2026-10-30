@@ -96,6 +96,16 @@ const MONSTER_DEFS: MonsterDef[] = [
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(3) },
     boss: {
       phase2AtLifePct: 50,
+      phase3AtLifePct: 25,
+      phase3CadenceMulPct: 85,
+      // A lane of molten rock from the Warden through you (PoE2's Sundering Slam); near the end, falling
+      // rocks round where you stood, landing one after another (PoE1 Atziri's Storm Call).
+      abilities: [
+        { id: "cinder_rain", kind: "volley", fromPhase: 3, cooldownTicks: 240, windupTicks: 36, rangeFixed: fp(9),
+          damage: { type: "fire", amountFixed: fp(9) }, count: 5, everyTicks: 5, radiusFixed: fp(1.3) },
+        { id: "magma_rift", kind: "line", fromPhase: 1, cooldownTicks: 200, windupTicks: 30, rangeFixed: fp(9),
+          damage: { type: "fire", amountFixed: fp(18) }, lengthFixed: fp(9), halfWidthFixed: fp(0.9) },
+      ],
       slam: { windupTicks: 30, radiusFixed: fp(3.5), damageFixed: fp(20), cooldownTicks: 150, rangeFixed: fp(9) },
       phase2: {
         fireGroundDurationTicks: 120,
@@ -135,6 +145,17 @@ const MONSTER_DEFS: MonsterDef[] = [
     defenses: { resPct: resBlock({ fire: 25 }), armourFixed: fp(2) },
     boss: {
       phase2AtLifePct: 50,
+      phase3AtLifePct: 25,
+      phase3CadenceMulPct: 85,
+      // A ring of fire that spares only his feet and the far side of it (PoE1's
+      // Elder ring), so closing is the answer; at the end, lances of sunlight
+      // re-aimed at you one after another (the lane is PoE2's, the volley ours).
+      abilities: [
+        { id: "sunlance", kind: "volley", fromPhase: 3, cooldownTicks: 240, windupTicks: 27, rangeFixed: fp(12),
+          damage: { type: "fire", amountFixed: fp(9) }, count: 3, everyTicks: 9, lengthFixed: fp(12), halfWidthFixed: fp(0.6) },
+        { id: "kiln_ring", kind: "ring", fromPhase: 1, cooldownTicks: 210, windupTicks: 36, rangeFixed: fp(7),
+          damage: { type: "fire", amountFixed: fp(16) }, innerFixed: fp(2.4), radiusFixed: fp(7) },
+      ],
       // Half the Warden's radius at nearly twice its cadence and range: the same
       // pressure spread thinner, so it punishes standing rather than misreading.
       slam: { windupTicks: 26, radiusFixed: fp(2.3), damageFixed: fp(14), cooldownTicks: 96, rangeFixed: fp(12) },
@@ -162,6 +183,17 @@ const MONSTER_DEFS: MonsterDef[] = [
     defenses: { resPct: resBlock({ chaos: 30 }), armourFixed: fp(3) },
     boss: {
       phase2AtLifePct: 55,
+      phase3AtLifePct: 25,
+      phase3CadenceMulPct: 85,
+      // Most players meet her first, so phase 1 stays one slam. Hurt, she keeps
+      // calling her brood out of the water (PoE2's Executioner calls his adds the
+      // same way); at the end the bog erupts where you walk.
+      abilities: [
+        { id: "bog_geyser", kind: "volley", fromPhase: 3, cooldownTicks: 240, windupTicks: 30, rangeFixed: fp(10),
+          damage: { type: "chaos", amountFixed: fp(10) }, count: 3, everyTicks: 12, radiusFixed: fp(1.6), follow: true },
+        { id: "brood", kind: "brood", fromPhase: 2, cooldownTicks: 300, windupTicks: 24, addDefId: "monster.fen_wisp.v1",
+          count: 2, maxAlive: 6, phase3CooldownTicks: 210 },
+      ],
       // 10 units across (radius 5), taller than the 9.5-unit view, with a 48-tick wind-up: it cannot be dodged by reaction
       // and does not need to be. It is a question about where you were standing
       // a second and a half ago.
@@ -191,6 +223,17 @@ const MONSTER_DEFS: MonsterDef[] = [
     defenses: { resPct: resBlock({ cold: 20 }), armourFixed: fp(4) },
     boss: {
       phase2AtLifePct: 45,
+      phase3AtLifePct: 25,
+      phase3CadenceMulPct: 85,
+      // He charges down a lane of bursting thorns and runs it to the end (PoE2's
+      // Brambleghast Vine Slam); at the end thorns burst round where he stands.
+      abilities: [
+        { id: "briar_nova", kind: "nova", fromPhase: 3, cooldownTicks: 120, windupTicks: 15, rangeFixed: fp(3.5),
+          damage: { type: "physical", amountFixed: fp(12) }, radiusFixed: fp(3) },
+        { id: "bramble_charge", kind: "line", fromPhase: 1, cooldownTicks: 150, windupTicks: 18, rangeFixed: fp(7),
+          damage: { type: "physical", amountFixed: fp(14) }, lengthFixed: fp(9), halfWidthFixed: fp(0.8),
+          overshootFixed: fp(2), minLengthFixed: fp(4), dashSpeedFixed: fp(14) },
+      ],
       slam: { windupTicks: 21, radiusFixed: fp(3.0), damageFixed: fp(16), cooldownTicks: 108, rangeFixed: fp(7) },
       phase2: {
         fireGroundDurationTicks: 90,

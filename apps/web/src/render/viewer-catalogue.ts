@@ -8,7 +8,7 @@
  */
 import { characterClass, MONSTERS, SKILLS } from "@exiled/content-runtime";
 import { FP_SCALE } from "@exiled/fixed-point";
-import { SUMMON_RING } from "@exiled/simulation";
+import { BROOD_MARK_RADIUS, SUMMON_RING, VOLLEY_RING } from "@exiled/simulation";
 import { PROP_KINDS } from "./props";
 import { fxProfile } from "./skill-fx";
 import { SPAWNABLE, type Spawnable } from "./gallery";
@@ -115,7 +115,8 @@ export const DIRECTIONS_8 = [
 export const CREATURE_ACTIONS = ["idle", "walk", "attack", "hit", "death"] as const;
 /** `slam2` is a boss's phase-2 slam: the same tell, leaving its burning patch. */
 export type TelegraphAction = "charge" | "slam" | "slam2";
-export type CreatureAction = (typeof CREATURE_ACTIONS)[number] | TelegraphAction | "summon";
+/** `ability:<id>` is one of a boss's kit (`BossSpec.abilities`); `phase3` its entry into the last phase. */
+export type CreatureAction = (typeof CREATURE_ACTIONS)[number] | TelegraphAction | "summon" | "phase3" | `ability:${string}`;
 
 const TICK_S = 1 / 30;
 const toUnits = (f: number) => f / FP_SCALE;
@@ -181,10 +182,98 @@ export function telegraphFrame(tg: CreatureTelegraph, t: number): { progress: nu
   };
 }
 
-/** The base actions plus the tells and the summon this species' spec carries. */
+/** The base actions plus the tells, the summon, the kit and the last phase this species' spec carries. */
 export function creatureActions(defId: string): CreatureAction[] {
   const tells = (["charge", "slam", "slam2"] as const).filter((k) => creatureTelegraph(defId, k) !== null);
-  return [...CREATURE_ACTIONS, ...tells, ...(bossSummon(defId) ? (["summon"] as const) : [])];
+  const boss = MONSTERS.get(defId)?.boss;
+  return [
+    ...CREATURE_ACTIONS, ...tells, ...(bossSummon(defId) ? (["summon"] as const) : []),
+    ...(boss?.abilities ?? []).map((a): CreatureAction => `ability:${a.id}`),
+    ...(boss?.phase3AtLifePct !== undefined ? (["phase3"] as const) : []),
+  ];
+}
+
+/** "magma_rift" -> "Magma Rift". */
+export function abilityLabel(id: string): string {
+  return id.split("_").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+}
+
+/** One mark of a boss ability, round the boss at the origin facing +y, in seconds from the cast and world units. */
+export interface ViewerMark {
+  showS: number;
+  landS: number;
+  /** The snapshot telegraph's own fields, which the game's meshes and effects read. */
+  mark: {
+    x: number; y: number; radius: number; ability: string;
+    shape?: "line" | "ring"; dirX?: number; dirY?: number; length?: number; inner?: number; heavy?: true;
+  };
+}
+
+/** A boss ability as the viewer plays it. */
+export interface BossTell {
+  heavy: boolean;
+  marks: ViewerMark[];
+  /** A charge's run down its lane once it lands; 0 for anything that stands. */
+  dashSpeed: number;
+}
+
+/** Where the viewer stands its player: ahead of the boss, inside every ability's reach. */
+const VIEWER_PLAYER = 5;
+/** Where that player has stepped as each aimed mark shows: a lance or a geyser follows him. */
+const VIEWER_DRIFT = [{ x: 0, y: 0 }, { x: 1.2, y: 0.4 }, { x: -1.1, y: 0.9 }, { x: 0.6, y: -1.2 }];
+
+/**
+ * A boss ability's marks where the sim lays them for a player standing
+ * `VIEWER_PLAYER` ahead: a heavy's one mark from the boss, a brood on the summon
+ * ring, Cinder Rain round the player at once, lances and geysers one after another.
+ */
+export function bossTell(defId: string, abilityId: string): BossTell | null {
+  const a = MONSTERS.get(defId)?.boss?.abilities?.find((x) => x.id === abilityId);
+  if (!a) return null;
+  const windupS = a.windupTicks * TICK_S;
+  if (a.kind === "line" || a.kind === "ring" || a.kind === "nova") {
+    const base = { x: 0, y: 0, ability: a.id, heavy: true as const };
+    const mark: ViewerMark["mark"] = a.kind === "ring"
+      ? { ...base, shape: "ring", radius: toUnits(a.radiusFixed), inner: toUnits(a.innerFixed) }
+      : a.kind === "nova"
+        ? { ...base, radius: toUnits(a.radiusFixed) }
+        : {
+          ...base, shape: "line", dirX: 0, dirY: 1, radius: toUnits(a.halfWidthFixed),
+          length: a.overshootFixed === undefined ? toUnits(a.lengthFixed)
+            : Math.min(toUnits(a.lengthFixed), Math.max(toUnits(a.minLengthFixed!), VIEWER_PLAYER + toUnits(a.overshootFixed))),
+        };
+    const dashSpeed = a.kind === "line" && a.dashSpeedFixed !== undefined ? toUnits(a.dashSpeedFixed) : 0;
+    return { heavy: true, marks: [{ showS: 0, landS: windupS, mark }], dashSpeed };
+  }
+  if (a.kind === "brood") {
+    const marks = SUMMON_RING.slice(0, a.count).map((s): ViewerMark => ({
+      showS: 0, landS: windupS, mark: { x: toUnits(s.dx), y: toUnits(s.dy), radius: toUnits(BROOD_MARK_RADIUS), ability: a.id },
+    }));
+    return { heavy: false, marks, dashSpeed: 0 };
+  }
+  const marks: ViewerMark[] = [];
+  for (let k = 0; k < a.count; k++) {
+    const after = k * a.everyTicks * TICK_S;
+    if (a.radiusFixed !== undefined && !a.follow) {
+      const o = VOLLEY_RING[k % VOLLEY_RING.length]!;
+      marks.push({
+        showS: 0, landS: windupS + after,
+        mark: { x: toUnits(o.dx), y: VIEWER_PLAYER + toUnits(o.dy), radius: toUnits(a.radiusFixed), ability: a.id },
+      });
+      continue;
+    }
+    const step = VIEWER_DRIFT[k % VIEWER_DRIFT.length]!;
+    const px = step.x;
+    const py = VIEWER_PLAYER + step.y;
+    const d = Math.hypot(px, py);
+    marks.push({
+      showS: after, landS: after + windupS,
+      mark: a.radiusFixed !== undefined
+        ? { x: px, y: py, radius: toUnits(a.radiusFixed), ability: a.id }
+        : { x: 0, y: 0, radius: toUnits(a.halfWidthFixed!), ability: a.id, shape: "line", dirX: px / d, dirY: py / d, length: toUnits(a.lengthFixed!) },
+    });
+  }
+  return { heavy: false, marks, dashSpeed: 0 };
 }
 
 /** How a skill reads on screen, which decides what the viewer spawns for it. */

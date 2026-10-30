@@ -19,8 +19,8 @@ const SINK_SECONDS = 1.2;
 /** Seconds a crack shows, at full strength for the first `CRACK_HOLD`. */
 export const CRACK_SECONDS = 6;
 export const CRACK_HOLD = 2;
-/** Cracks kept at once; a fourth slam reuses the oldest. */
-const CRACK_POOL = 3;
+/** Cracks kept at once, enough for a boss's volley of five; one more reuses the oldest. */
+const CRACK_POOL = 6;
 
 const STONES = 14;
 const CLODS = 26;
@@ -196,12 +196,13 @@ export class SlamDebris {
     scene.onBeforeRenderObservable.add(() => this.step(Math.min(0.05, scene.getEngine().getDeltaTime() / 1000)));
   }
 
-  /** A slam landing at `at`, the blow travelling along (facingX, facingZ). */
-  emit(at: Vector3, facingX: number, facingZ: number): void {
+  /** A slam landing at `at`, the blow travelling along (facingX, facingZ); `rubble` is the share of a slam's chunks. */
+  emit(at: Vector3, facingX: number, facingZ: number, rubble = 1): void {
     const len = Math.hypot(facingX, facingZ) || 1;
     const base = Math.atan2(facingX / len, facingZ / len);
-    for (let n = 0; n < STONES + CLODS; n++) {
-      const stone = n < STONES;
+    const stones = Math.round(STONES * rubble);
+    for (let n = 0; n < stones + Math.round(CLODS * rubble); n++) {
+      const stone = n < stones;
       const i = this.next;
       this.next = (this.next + 1) % DEBRIS_CAPACITY;
       if (this.age[i]! < 0) this.live++;

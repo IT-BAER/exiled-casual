@@ -11,7 +11,7 @@ import {
   sfxCategory, startSfxLoop, startSfxLoopAt, stopAmbient, stopSfxLoop, toListenerSpace,
 } from "./sfx";
 import { VARKIS_SFX } from "./varkis-voice";
-import { ITEM_MATERIALS } from "./soundscape";
+import { ITEM_MATERIALS, ABILITY_CUES } from "./soundscape";
 
 /** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom.
  *  `sends` records every `send(b, node, wet, category, spatial)` and hands back its wet gain. */
@@ -40,7 +40,8 @@ function voiceTakes(): Record<string, number> {
   const body = readFileSync(SRC, "utf8");
   const table = body.slice(body.indexOf("const VOICES"), body.indexOf("export type SfxName"));
   return Object.fromEntries([...table.matchAll(/"([a-z0-9-]+)":\s*\{[^}]*\}/g)]
-    .map((m) => [m[1]!, Number(/takes:\s*(\d+)/.exec(m[0])?.[1] ?? 1)]));
+    // An alias (`src`) plays another cue's files and owns none.
+    .map((m) => [m[1]!, /\bsrc:/.test(m[0]) ? 0 : Number(/takes:\s*(\d+)/.exec(m[0])?.[1] ?? 1)]));
 }
 
 function voiceNames(): string[] {
@@ -50,7 +51,7 @@ function voiceNames(): string[] {
 /** Every file the cues need on disk, without the extension: `<cue>-1..n` for a pool. */
 function voiceFiles(): string[] {
   return Object.entries(voiceTakes()).flatMap(([name, n]) =>
-    n < 2 ? [name] : Array.from({ length: n }, (_, i) => `${name}-${i + 1}`));
+    n === 0 ? [] : n < 2 ? [name] : Array.from({ length: n }, (_, i) => `${name}-${i + 1}`));
 }
 
 function voiceGain(name: string): number {
@@ -88,6 +89,8 @@ describe("sfx assets", () => {
     const fx = [...fxBody.matchAll(/(?:flightCue|impactCue):\s*"([a-z0-9-]+)"/g)].map((m) => m[1]!);
     expect(emitted.length + fx.length).toBeGreaterThan(5);
     for (const name of [...emitted, ...cast, ...fx]) expect(voices.has(name), name).toBe(true);
+    const boss = Object.values(ABILITY_CUES).flatMap((c) => [...(c.windup ? [c.windup] : []), ...c.impact]);
+    for (const name of boss) expect(voices.has(name), name).toBe(true);
   });
 
   /**
@@ -283,12 +286,13 @@ describe("distanceCutoff", () => {
 describe("take pools", () => {
   const urls: string[] = [];
   const played: string[] = [];
+  const rates: number[] = [];
   const gainNodes: Array<{ gain: { value: number } }> = [];
   let missing = new Set<string>();
 
   beforeEach(() => {
     resetSfx();
-    urls.length = 0; played.length = 0; gainNodes.length = 0; missing = new Set();
+    urls.length = 0; played.length = 0; rates.length = 0; gainNodes.length = 0; missing = new Set();
     vi.stubGlobal("fetch", (url: string) => {
       urls.push(url);
       return Promise.resolve({ ok: !missing.has(url), status: 404, arrayBuffer: () => Promise.resolve(url) });
@@ -300,7 +304,11 @@ describe("take pools", () => {
         buffer: null as { url: string } | null, loop: false, playbackRate: { value: 1 },
         connect: () => {},
         // A second per voice: a run of footsteps is a walk, never a burst on one instant.
-        start() { played.push(this.buffer!.url); (fake.ctx as { currentTime: number }).currentTime += 1; },
+        start() {
+          played.push(this.buffer!.url);
+          rates.push(this.playbackRate.value);
+          (fake.ctx as { currentTime: number }).currentTime += 1;
+        },
         stop: () => {},
       }),
       createGain: () => {
@@ -325,6 +333,15 @@ describe("take pools", () => {
     await preloadSfx(["ui-click"]);
     expect(playSfx("ui-click")).toBeGreaterThan(1.5 / 1.1);
     expect(playSfx("not-a-sound")).toBe(0);
+  });
+
+  it("an alias fetches and plays its source's takes, at its own rate", async () => {
+    await preloadSfx(["boss-meteor-impact"]);
+    expect([...urls].sort()).toEqual([1, 2, 3].map((n) => `/audio/skill-ember-bolt-impact-${n}.webm`));
+    playSfx("boss-meteor-impact");
+    expect(played[0]).toMatch(/\/skill-ember-bolt-impact-\d\.webm$/);
+    expect(rates[0]).toBeGreaterThan(0.65);
+    expect(rates[0]).toBeLessThan(0.85);
   });
 
   it("a single-take cue still fetches <cue>.webm", async () => {

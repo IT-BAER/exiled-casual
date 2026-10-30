@@ -1216,7 +1216,7 @@ export function Hud({
                 textShadow: "0 1px 3px #000",
               }}
             >
-              {boss.bossPhase === 2 ? "II" : "I"}
+              {"I".repeat(boss.bossPhase ?? 1)}
             </div>
           </div>
           <img src="/hud/boss-bar-frame-v1.webp" alt="" style={{ position: "relative", display: "block", width: "100%" }} />

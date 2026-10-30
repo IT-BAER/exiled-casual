@@ -7,6 +7,7 @@ import { SKILLS, DEFAULT_ATTACK_BY_CLASS, MONSTERS, isCurrency } from "@exiled/c
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import { hasLineOfSight, type Collision } from "./collision";
 import { bodyRadiusOf } from "./body";
+import { telegraphCovers } from "./systems/telegraph-resolve";
 import type { Simulation, Command } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
@@ -245,9 +246,10 @@ export class Bot {
     const w = this.g.world;
     for (const e of w.query("telegraph", "position")) {
       const t = w.get<TelegraphC>(e, "telegraph")!;
-      if (t.team === 0 || tick - t.startTick < REACTION_TICKS) continue;
-      const c = w.get<Position>(e, "position")!;
-      if (dist(p, c) < t.radius + this.body) return { c, out: t.radius + this.body + fp(0.5) - dist(p, c) };
+      // A brood mark lands with no damage: nothing to leave.
+      if (t.team === 0 || t.damage === 0 || tick - t.startTick < REACTION_TICKS) continue;
+      const at = w.get<Position>(e, "position")!;
+      if (telegraphCovers(t, at, p.x, p.y, this.body)) return clearOf(t, at, p, this.body);
     }
     for (const e of w.query("groundArea", "position")) {
       const a = w.get<GroundAreaC>(e, "groundArea")!;
@@ -489,5 +491,30 @@ function sess(g: BotGame): SessionC { return g.world.get<SessionC>(g.session, "s
 function progress(g: BotGame): ProgressC { return g.world.get<ProgressC>(g.session, "progress")!; }
 function dist(a: Position, b: Position): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/**
+ * What to walk away from to clear a telegraph he stands in, and how far: square
+ * out of a lane, into a ring's hole when that is nearer than its outer edge, and
+ * straight out of a disc or a lane's round end.
+ */
+function clearOf(t: TelegraphC, at: Position, p: Position, body: number): { c: Position; out: number } {
+  const margin = fp(0.5);
+  if (t.shape === "line") {
+    const along = ((p.x - at.x) * t.dirX! + (p.y - at.y) * t.dirY!) / 1000;
+    if (along > t.length!) {
+      const end = { x: at.x + Math.trunc((t.dirX! * t.length!) / 1000), y: at.y + Math.trunc((t.dirY! * t.length!) / 1000) };
+      return { c: end, out: t.radius + body + margin - dist(p, end) };
+    }
+    // A unit back across the lane, so "away" is square to it even on its centre line.
+    const across = ((p.x - at.x) * t.dirY! - (p.y - at.y) * t.dirX!) / 1000;
+    const side = across >= 0 ? 1 : -1;
+    return { c: { x: p.x - side * t.dirY!, y: p.y + side * t.dirX! }, out: t.radius + body + margin - Math.abs(across) };
+  }
+  const d = dist(p, at);
+  const hole = t.shape === "ring" ? t.inner! - body - margin : 0;
+  // Away from the centre's mirror through him is toward the centre.
+  if (hole > 0 && d - hole < t.radius + body + margin - d) return { c: { x: 2 * p.x - at.x, y: 2 * p.y - at.y }, out: d - hole };
+  return { c: at, out: t.radius + body + margin - d };
 }
 

@@ -20,4 +20,20 @@ describe("suspendArea", () => {
     expect(back.has(e!, "poison")).toBe(false);
     expect(back.has(e!, "bleeding")).toBe(false);
   });
+
+  it("rebases a boss's cast, volley and brood ticks, each ability's cooldown included", () => {
+    const world = new World();
+    const b = world.create();
+    const boss = {
+      phase: 3, nextAbilityTick: 110, spawnX: 0, spawnY: 0, rootedUntilTick: 0,
+      abilityReadyTicks: [0, 150], volleyAbility: 0, volleyLeft: 2, volleyAtTick: 105, broodAtTick: 200,
+    };
+    world.set(b, "boss", boss);
+    const held = suspendArea(world, new Set(), { mapSeed: 1, activeNodeId: "n" }, 100);
+    const back = new World();
+    restoreArea(back, held, 1100);
+    expect(back.get(back.query("boss")[0]!, "boss")).toEqual({
+      ...boss, nextAbilityTick: 1110, abilityReadyTicks: [1000, 1150], volleyAtTick: 1105, broodAtTick: 1200,
+    });
+  });
 });

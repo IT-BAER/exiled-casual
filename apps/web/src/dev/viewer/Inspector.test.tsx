@@ -43,4 +43,13 @@ describe("Inspector creature tells", () => {
     expect(onCreature).toHaveBeenCalledWith("charge");
     expect(screen.queryByRole("button", { name: "Slam" })).toBeNull();
   });
+
+  it("names a boss's own attacks and its last phase, and plays the one pressed", () => {
+    const onCreature = vi.fn();
+    render(<Inspector {...props({ kind: "creature", onCreature, creatureActions: ["idle", "attack", "ability:magma_rift", "phase3"] })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Magma Rift" }));
+    expect(onCreature).toHaveBeenCalledWith("ability:magma_rift");
+    fireEvent.click(screen.getByRole("button", { name: "Phase 3" }));
+    expect(onCreature).toHaveBeenCalledWith("phase3");
+  });
 });

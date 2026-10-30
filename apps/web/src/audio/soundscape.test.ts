@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
-import { createSoundscape, ROOM_PROFILE, HIDEOUT_PROFILE } from "./soundscape";
+import { createSoundscape, ROOM_PROFILE, HIDEOUT_PROFILE, ABILITY_CUES } from "./soundscape";
 import type { RoomProfile } from "./bus";
 import { ambientCue, AMBIENT_BY_BIOME } from "./sfx";
-import { BIOMES } from "@exiled/content-runtime";
+import { BIOMES, MONSTERS } from "@exiled/content-runtime";
 
 describe("area ambience", () => {
   it("gives the hideout and each biome a deliberate loop", () => {
@@ -165,6 +165,52 @@ describe("createSoundscape", () => {
       snap({ tick: 2, entities: [tele] }),
       snap({ tick: 3, entities: [] }),
     ])).toEqual(["monster-slam-windup", "monster-slam-impact"]);
+  });
+
+  describe("boss abilities", () => {
+    const mark = (id: number, ability?: string, impactIn = 0.03): SnapshotEntity =>
+      ({ id, kind: "telegraph", x: 1, y: 0, radius: 2, progress: 0.9, impactIn, ...(ability ? { ability } : {}) });
+
+    it("a heavy winds up and lands with its own cues", () => {
+      expect(run([
+        snap({ tick: 1, entities: [] }),
+        snap({ tick: 2, entities: [mark(9, "magma_rift", 1)] }),
+        snap({ tick: 3, entities: [mark(9, "magma_rift")] }),
+        snap({ tick: 4, entities: [] }),
+      ])).toEqual(["monster-slam-windup", "boss-rift-impact", "boss-rift-flames"]);
+    });
+
+    it("a volley shows without a wind-up, and marks landing together are one impact", () => {
+      expect(run([
+        snap({ tick: 1, entities: [] }),
+        snap({ tick: 2, entities: [mark(9, "cinder_rain"), mark(10, "cinder_rain")] }),
+        snap({ tick: 3, entities: [] }),
+      ])).toEqual(["boss-meteor-impact"]);
+    });
+
+    it("a mark cut short by its boss dying mid-wind-up does not land", () => {
+      expect(run([
+        snap({ tick: 1, entities: [] }),
+        snap({ tick: 2, entities: [mark(9, undefined, 0.6)] }),
+        snap({ tick: 3, entities: [] }),
+      ])).toEqual(["monster-slam-windup"]);
+    });
+
+    it("a boss entering its third phase sounds once", () => {
+      const boss = (bossPhase: 2 | 3): SnapshotEntity =>
+        ({ id: 3, kind: "monster", x: 0, y: 0, boss: true, bossPhase, life: 100, maxLife: 400 });
+      expect(run([
+        snap({ tick: 1, entities: [boss(2)] }),
+        snap({ tick: 2, entities: [boss(3)] }),
+        snap({ tick: 3, entities: [boss(3)] }),
+      ])).toEqual(["boss-phase-three"]);
+    });
+
+    it("every ability the content gives a boss has cues of its own, and no cue names one it lacks", () => {
+      const abilities = [...MONSTERS.values()].flatMap((m) => m.boss?.abilities?.map((a) => a.id) ?? []);
+      expect(abilities.length).toBeGreaterThan(0);
+      expect(Object.keys(ABILITY_CUES).sort()).toEqual([...new Set(abilities)].sort());
+    });
   });
 
   it("tells his own bolt from a spitter's by the team on it", () => {

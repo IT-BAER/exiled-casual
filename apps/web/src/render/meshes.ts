@@ -22,9 +22,11 @@ import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
 import { groundMaterial } from "./ground-fx";
 import { hasRim, HIT_TINT, HIT_ALPHA, type Tier } from "./rim";
+import { BROOD_ABILITY } from "./boss-tells";
 import { playSfxAt } from "../audio/sfx";
+import type { SnapshotEntity } from "@exiled/protocol";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "chargePath" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "telegraphLane" | "telegraphRing" | "broodMark" | "chargePath" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -41,6 +43,9 @@ const Y_LIFT: Record<MeshKind, number> = {
   projectile: 0.8,
   groundArea: 0.05,
   telegraph: 0.06,
+  telegraphLane: 0.06,
+  telegraphRing: 0.06,
+  broodMark: 0.06,
   chargePath: 0.06,
   // portal children self-position (inner disc at y=1.75 in local space); root sits on ground
   portal: 0,
@@ -56,6 +61,9 @@ const Y_LIFT: Record<MeshKind, number> = {
 };
 
 export { Y_LIFT };
+
+/** The round decals: scaled on x/z alone to their world radius (a ring's is its outer edge). */
+export const RADIUS_SCALED: ReadonlySet<MeshKind> = new Set<MeshKind>(["telegraph", "telegraphRing", "broodMark", "groundArea"]);
 
 /**
  * Matte diffuse+emissive material, shared per key across every actor part.
@@ -377,6 +385,16 @@ export function setHovered(root: Mesh, on: boolean): void {
   }
 }
 
+/** Glow a winding-up boss red (rim.ts), body meshes only; `t` at or below 0 clears it. */
+export function setDangerGlow(root: Mesh, t: number): void {
+  for (const m of [root, ...root.getChildMeshes(false)]) {
+    if (m.name.startsWith("groundblob-") || m.name === "rare-aura" || !hasRim(m.material)) continue;
+    const meta = (m.metadata ??= {}) as { dangerGlow?: number };
+    if (t > 0) meta.dangerGlow = Math.min(1, t);
+    else delete meta.dangerGlow;
+  }
+}
+
 /**
  * Flat disc + bright rim ring for a boss telegraph.
  * Built at radius=1 so the renderer can scale it to any real radius.
@@ -384,24 +402,8 @@ export function setHovered(root: Mesh, on: boolean): void {
  * without re-allocating per frame.
  */
 function buildTelegraph(scene: Scene, root: Mesh): void {
-  // Per-entity materials (not cached by key) so multiple live telegraphs each
-  // animate their own alpha/emissive independently.
-  // Black diffuse on both: the danger zone must not be lit by the scene, or the
-  // key light washes it into a pale spotlight. Emissive carries all the colour.
-  const fillMat = new StandardMaterial(`${root.name}-tel-fill`, scene);
-  fillMat.diffuseColor = new Color3(0, 0, 0);
-  fillMat.emissiveColor = new Color3(0.55, 0.1, 0.02);
-  fillMat.specularColor = new Color3(0, 0, 0);
-  fillMat.alpha = 0.12;
-  fillMat.backFaceCulling = false;
-
-  const rimMat = new StandardMaterial(`${root.name}-tel-rim`, scene);
-  rimMat.diffuseColor = new Color3(0, 0, 0);
-  rimMat.emissiveColor = new Color3(0.55, 0.16, 0.03);
-  rimMat.specularColor = new Color3(0, 0, 0);
-  rimMat.alpha = 0.5;
-  // Additive: a dark red blended over the floor drew a near-black outline.
-  rimMat.alphaMode = 1; // ALPHA_ADD
+  const fillMat = dangerFill(scene, root);
+  const rimMat = dangerRim(scene, root);
 
   // diameter=2 → radius=1; renderer scales x/z to match entity.radius
   const fill = MeshBuilder.CreateCylinder("telegraph-fill", { diameter: 2, height: 0.02, tessellation: 32 }, scene);
@@ -415,7 +417,51 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
   rim.material = rimMat;
   rim.receiveShadows = false;
 
-  root.metadata = { fill: fillMat, rim: rimMat };
+  // The fill says where; this says when: a bright edge grows from the centre and
+  // meets the rim on the impact tick.
+  const front = MeshBuilder.CreateTorus("telegraph-front", { diameter: 2, thickness: 0.012, tessellation: 48 }, scene);
+  front.parent = root;
+  front.material = dangerFront(scene, root);
+  front.receiveShadows = false;
+
+  root.metadata = { fill: fillMat, rim: rimMat, front };
+}
+
+// The danger palette, shared by every hostile decal so red always means "get out".
+// Per-entity materials (not cached by key) so multiple live telegraphs each
+// animate their own alpha/emissive independently.
+// Black diffuse on each: the danger zone must not be lit by the scene, or the
+// key light washes it into a pale spotlight. Emissive carries all the colour.
+function dangerFill(scene: Scene, root: Mesh): StandardMaterial {
+  const m = new StandardMaterial(`${root.name}-tel-fill`, scene);
+  m.diffuseColor = new Color3(0, 0, 0);
+  m.emissiveColor = new Color3(0.55, 0.1, 0.02);
+  m.specularColor = new Color3(0, 0, 0);
+  m.alpha = 0.12;
+  m.backFaceCulling = false;
+  return m;
+}
+
+function dangerRim(scene: Scene, root: Mesh): StandardMaterial {
+  const m = new StandardMaterial(`${root.name}-tel-rim`, scene);
+  m.diffuseColor = new Color3(0, 0, 0);
+  m.emissiveColor = new Color3(0.55, 0.16, 0.03);
+  m.specularColor = new Color3(0, 0, 0);
+  m.alpha = 0.5;
+  // Additive: a dark red blended over the floor drew a near-black outline.
+  m.alphaMode = 1; // ALPHA_ADD
+  return m;
+}
+
+/** The closing front's additive line, brighter than the rim so it reads against it. */
+function dangerFront(scene: Scene, root: Mesh): StandardMaterial {
+  const m = new StandardMaterial(`${root.name}-tel-front`, scene);
+  m.diffuseColor = new Color3(0, 0, 0);
+  m.emissiveColor = new Color3(0.95, 0.42, 0.1);
+  m.specularColor = new Color3(0, 0, 0);
+  m.alpha = 0.75;
+  m.alphaMode = 1; // ALPHA_ADD
+  return m;
 }
 
 /**
@@ -425,17 +471,258 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
  */
 export function updateTelegraph(root: Mesh, progress: number): void {
   const parts = root.metadata as
-    | { fill: StandardMaterial; rim: StandardMaterial }
+    | { fill: StandardMaterial; rim: StandardMaterial; front: Mesh }
     | null;
   if (!parts?.fill) return;
+  const at = Math.max(0.02, progress);
+  parts.front.scaling.set(at, 1, at);
+  paintDanger(parts.fill, parts.rim, progress);
+}
+
+function paintDanger(fill: StandardMaterial, rim: StandardMaterial, progress: number): void {
   // The fill only ever deepens — it marks the ground, it must not light it.
-  parts.fill.alpha = 0.12 + progress * 0.18;
-  parts.fill.emissiveColor.set(0.55 + progress * 0.35, 0.1 + progress * 0.12, 0.02);
+  fill.alpha = 0.12 + progress * 0.18;
+  fill.emissiveColor.set(0.55 + progress * 0.35, 0.1 + progress * 0.12, 0.02);
   // The rim carries the urgency, and only whitens in the last moment before
   // impact, so the flash reads as "now" instead of a slow fade to white.
   const flash = Math.max(0, (progress - 0.85) / 0.15);
-  parts.rim.emissiveColor.set(0.55 + flash * 0.45, 0.16 + flash * 0.76, 0.03 + flash * 0.73);
-  parts.rim.alpha = 0.5 + flash * 0.5;
+  rim.emissiveColor.set(0.55 + flash * 0.45, 0.16 + flash * 0.76, 0.03 + flash * 0.73);
+  rim.alpha = 0.5 + flash * 0.5;
+}
+
+/** Segments round a lane's far end. */
+const LANE_ARC = 16;
+/** A lane's outline, in world units: about a 4-unit disc's rim. */
+const LANE_RIM_WIDTH = 0.05;
+/** How deep a lane's front bar is, along the lane. */
+const LANE_FRONT_DEPTH = 0.1;
+
+/** A lane's edge as [x, z], flat across the boss's end (z = 0) and round past `length`; clockwise seen from above. */
+function laneEdge(length: number, half: number): [number, number][] {
+  const edge: [number, number][] = [[half, 0], [-half, 0], [-half, length]];
+  for (let i = 1; i < LANE_ARC; i++) {
+    const a = Math.PI * (1 - i / LANE_ARC);
+    edge.push([Math.cos(a) * half, length + Math.sin(a) * half]);
+  }
+  edge.push([half, length]);
+  return edge;
+}
+
+/** A flat, updatable floor mesh. The caller winds `indices` to face up: Babylon culls by winding. */
+function floorMesh(scene: Scene, name: string, parent: TransformNode, vertices: number, indices: number[], material: StandardMaterial): Mesh {
+  const mesh = new Mesh(name, scene);
+  const normals = new Array<number>(vertices * 3).fill(0).map((_, i) => (i % 3 === 1 ? 1 : 0));
+  Object.assign(new VertexData(), { positions: new Array<number>(vertices * 3).fill(0), normals, indices }).applyToMesh(mesh, true);
+  mesh.parent = parent;
+  mesh.material = material;
+  mesh.isPickable = false;
+  mesh.receiveShadows = false;
+  return mesh;
+}
+
+interface LaneParts {
+  lane: TransformNode;
+  fill: StandardMaterial;
+  rim: StandardMaterial;
+  fillMesh: Mesh;
+  rimMesh: Mesh;
+  front: Mesh;
+  /** The size the meshes were last shaped to. */
+  length: number;
+  half: number;
+}
+
+/**
+ * A boss's lane (Magma Rift, Sunlance, Bramble Charge): the sim's line telegraph
+ * drawn as it hits, flat at the boss and round at the far end, in the disc's
+ * danger palette. Shaped to a default size here so the warm-up draws a real one.
+ */
+function buildTelegraphLane(scene: Scene, root: Mesh): void {
+  const lane = new TransformNode(`${root.name}-lane`, scene);
+  lane.parent = root;
+  const n = LANE_ARC + 3;
+  const fan: number[] = [];
+  for (let i = 0; i < n; i++) fan.push(0, 1 + ((i + 1) % n), 1 + i);
+  const ribbon: number[] = [];
+  for (let k = 0; k < n * 4; k += 4) ribbon.push(k, k + 3, k + 2, k, k + 2, k + 1);
+  const fill = dangerFill(scene, root);
+  const rim = dangerRim(scene, root);
+  const fillMesh = floorMesh(scene, "lane-fill", lane, n + 1, fan, fill);
+  const rimMesh = floorMesh(scene, "lane-rim", lane, n * 4, ribbon, rim);
+  rimMesh.position.y = 0.004;
+  const front = MeshBuilder.CreateGround("lane-front", { width: 2, height: 1 }, scene);
+  front.parent = lane;
+  front.material = dangerFront(scene, root);
+  front.isPickable = false;
+  front.receiveShadows = false;
+  front.position.y = 0.008;
+  root.metadata = { lane, fill, rim, fillMesh, rimMesh, front, length: -1, half: -1 } satisfies LaneParts;
+  updateTelegraphLane(root, 0, 0, 1, 4, 1);
+}
+
+/**
+ * Turn a lane to its direction, shape it to its size when that changed (once per
+ * lane), and run its front from the boss to the far end as the wind-up runs out.
+ */
+export function updateTelegraphLane(root: Mesh, progress: number, dirX: number, dirY: number, length: number, half: number): void {
+  const parts = root.metadata as LaneParts | null;
+  if (!parts?.lane) return;
+  // The root may be turned by the shared yaw code; the lane answers to world axes.
+  parts.lane.rotation.y = Math.atan2(dirX, dirY) - root.rotation.y;
+  if (parts.length !== length || parts.half !== half) {
+    parts.length = length;
+    parts.half = half;
+    const edge = laneEdge(length, half);
+    const fillAt = [0, 0, length / 2];
+    for (const [x, z] of edge) fillAt.push(x, 0, z);
+    const rimAt: number[] = [];
+    const w = LANE_RIM_WIDTH / 2;
+    edge.forEach(([ax, az], i) => {
+      const [bx, bz] = edge[(i + 1) % edge.length]!;
+      const d = Math.hypot(bx - ax, bz - az) || 1;
+      const nx = (-(bz - az) / d) * w;
+      const nz = ((bx - ax) / d) * w;
+      rimAt.push(ax - nx, 0, az - nz, ax + nx, 0, az + nz, bx + nx, 0, bz + nz, bx - nx, 0, bz - nz);
+    });
+    parts.fillMesh.updateVerticesData(VertexBuffer.PositionKind, fillAt, true);
+    parts.rimMesh.updateVerticesData(VertexBuffer.PositionKind, rimAt, true);
+  }
+  const reach = length + half;
+  const at = Math.min(Math.max(progress * reach, LANE_FRONT_DEPTH / 2), reach - LANE_FRONT_DEPTH / 2);
+  const across = at <= length ? half : Math.sqrt(Math.max(0, half * half - (at - length) ** 2));
+  parts.front.position.z = at;
+  parts.front.scaling.set(Math.max(0.02, across), 1, LANE_FRONT_DEPTH);
+  paintDanger(parts.fill, parts.rim, progress);
+}
+
+/** Segments round a ring telegraph. */
+const RING_SEGMENTS = 64;
+
+interface RingParts {
+  fill: StandardMaterial;
+  rim: StandardMaterial;
+  fillMesh: Mesh;
+  innerRim: Mesh;
+  front: Mesh;
+  /** The hole the fill was last shaped to, as a share of the outer edge. */
+  hole: number;
+}
+
+/**
+ * A boss's ring (Kiln Ring, after PoE1's Elder): the band between the hole and
+ * the outer edge, built at an outer radius of 1 like the disc and scaled by the
+ * renderer. The hole stays EMPTY, so the safe spot is the bare floor.
+ */
+function buildTelegraphRing(scene: Scene, root: Mesh): void {
+  const fill = dangerFill(scene, root);
+  const rim = dangerRim(scene, root);
+  // Vertex 2j is the outer edge at segment j, 2j + 1 the hole's; wound counter-clockwise from above.
+  const band: number[] = [];
+  for (let j = 0; j < RING_SEGMENTS; j++) {
+    const o = j * 2;
+    const o2 = ((j + 1) % RING_SEGMENTS) * 2;
+    band.push(o, o2, o2 + 1, o, o2 + 1, o + 1);
+  }
+  const fillMesh = floorMesh(scene, "ring-fill", root, RING_SEGMENTS * 2, band, fill);
+  const torus = (name: string, material: StandardMaterial): Mesh => {
+    const t = MeshBuilder.CreateTorus(name, { diameter: 2, thickness: 0.012, tessellation: RING_SEGMENTS }, scene);
+    t.parent = root;
+    t.material = material;
+    t.isPickable = false;
+    t.receiveShadows = false;
+    return t;
+  };
+  torus("ring-rim-outer", rim);
+  const innerRim = torus("ring-rim-inner", rim);
+  const front = torus("ring-front", dangerFront(scene, root));
+  root.metadata = { fill, rim, fillMesh, innerRim, front, hole: -1 } satisfies RingParts;
+  updateTelegraphRing(root, 0, 0.5);
+}
+
+/** Shape a ring's hole when it changed (once per ring) and close its front from the outer edge in to the hole. */
+export function updateTelegraphRing(root: Mesh, progress: number, hole: number): void {
+  const parts = root.metadata as RingParts | null;
+  if (!parts?.innerRim) return;
+  if (parts.hole !== hole) {
+    parts.hole = hole;
+    const at: number[] = [];
+    for (let j = 0; j < RING_SEGMENTS; j++) {
+      const a = (2 * Math.PI * j) / RING_SEGMENTS;
+      at.push(Math.cos(a), 0, Math.sin(a), Math.cos(a) * hole, 0, Math.sin(a) * hole);
+    }
+    parts.fillMesh.updateVerticesData(VertexBuffer.PositionKind, at, true);
+    const h = Math.max(0.02, hole);
+    parts.innerRim.scaling.set(h, 1, h);
+  }
+  const edge = Math.max(0.02, 1 - progress * (1 - hole));
+  parts.front.scaling.set(edge, 1, edge);
+  paintDanger(parts.fill, parts.rim, progress);
+}
+
+/** Ripples a brood mark sends out per second. */
+const BROOD_RIPPLE_HZ = 1.6;
+
+/**
+ * Where Mother Vhal's brood rises: murky water stirring. Never the danger
+ * palette, because it warns "something comes up here", not "this hurts".
+ * Built at radius 1, like the disc.
+ */
+function buildBroodMark(scene: Scene, root: Mesh): void {
+  const water = new StandardMaterial(`${root.name}-brood-fill`, scene);
+  water.diffuseColor = new Color3(0, 0, 0);
+  water.emissiveColor = new Color3(0.1, 0.13, 0.06);
+  water.specularColor = new Color3(0, 0, 0);
+  water.alpha = 0.35;
+  water.backFaceCulling = false;
+  const fill = MeshBuilder.CreateCylinder("brood-fill", { diameter: 2, height: 0.02, tessellation: 32 }, scene);
+  fill.parent = root;
+  fill.material = water;
+  fill.isPickable = false;
+  fill.receiveShadows = false;
+
+  const stir = new StandardMaterial(`${root.name}-brood-ripple`, scene);
+  stir.diffuseColor = new Color3(0, 0, 0);
+  stir.emissiveColor = new Color3(0.3, 0.36, 0.18);
+  stir.specularColor = new Color3(0, 0, 0);
+  stir.alpha = 0.5;
+  stir.alphaMode = 1; // ALPHA_ADD
+  const ripples = [0, 1].map((i) => {
+    const r = MeshBuilder.CreateTorus(`brood-ripple-${i}`, { diameter: 2, thickness: 0.03, tessellation: 32 }, scene);
+    r.parent = root;
+    r.material = stir;
+    r.isPickable = false;
+    r.receiveShadows = false;
+    return r;
+  });
+  root.metadata = { ripples };
+  updateBroodMark(root, 0);
+}
+
+/** Send a brood mark's rings out from its centre, each fading as it spreads; `seconds` is any steady clock. */
+export function updateBroodMark(root: Mesh, seconds: number): void {
+  const ripples = (root.metadata as { ripples?: Mesh[] } | null)?.ripples;
+  if (!ripples) return;
+  ripples.forEach((r, i) => {
+    const phase = (seconds * BROOD_RIPPLE_HZ + i / ripples.length) % 1;
+    const s = 0.15 + phase * 0.85;
+    r.scaling.set(s, 1, s);
+    r.visibility = 1 - phase;
+  });
+}
+
+/** The decal a mark is drawn on, by its shape. A charge's path (`fromX`) is the renderer's own. */
+export function markKind(e: SnapshotEntity): MeshKind {
+  if (e.shape === "line") return "telegraphLane";
+  if (e.shape === "ring") return "telegraphRing";
+  return e.ability === BROOD_ABILITY ? "broodMark" : "telegraph";
+}
+
+/** Fill a mark's decal (`markKind`) to `progress`; a brood mark churns on `seconds`, any steady clock. */
+export function updateMark(root: Mesh, kind: MeshKind | undefined, e: SnapshotEntity, progress: number, seconds: number): void {
+  if (kind === "telegraphLane") updateTelegraphLane(root, progress, e.dirX ?? 0, e.dirY ?? 1, e.length ?? 0, e.radius ?? 0);
+  else if (kind === "telegraphRing") updateTelegraphRing(root, progress, (e.inner ?? 0) / Math.max(e.radius ?? 1, 0.01));
+  else if (kind === "broodMark") updateBroodMark(root, seconds);
+  else updateTelegraph(root, progress);
 }
 
 /** Width of a charge's path on the floor: a lane, far narrower than the 2.2 hit disc it replaces. */
@@ -1738,6 +2025,24 @@ function buildMesh(
     return root;
   }
 
+  if (kind === "telegraphLane") {
+    const root = new Mesh(name, scene);
+    buildTelegraphLane(scene, root);
+    return root;
+  }
+
+  if (kind === "telegraphRing") {
+    const root = new Mesh(name, scene);
+    buildTelegraphRing(scene, root);
+    return root;
+  }
+
+  if (kind === "broodMark") {
+    const root = new Mesh(name, scene);
+    buildBroodMark(scene, root);
+    return root;
+  }
+
   if (kind === "chargePath") {
     const root = new Mesh(name, scene);
     buildChargePath(scene, root);
@@ -1936,6 +2241,9 @@ export function warmEntityLooks(scene: Scene): () => void {
   const species = creatureSpecies(scene);
   const looks: [MeshKind, string | undefined][] = [
     ["telegraph", undefined],
+    ["telegraphLane", undefined],
+    ["telegraphRing", undefined],
+    ["broodMark", undefined],
     ["chargePath", undefined],
     ["groundArea", undefined],
     ["portal", undefined],

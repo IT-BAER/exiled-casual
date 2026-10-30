@@ -18,6 +18,16 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   with modifiers pays a second waystone one tier higher when you clear its
   map, so you choose when to climb the Atlas instead of waiting for a lucky
   drop.
+- Every map boss has new attacks and a third phase. The Cinder Warden tears a
+  line of molten rock toward you and, near death, calls down burning rocks.
+  Sirrath raises a ring of fire that spares only those at his feet or beyond
+  its edge, and in his last phase fires lances of sunlight at you. Mother Vhal
+  keeps calling her brood out of the water once she is hurt, and at the end
+  makes the bog erupt where you walk. Ghaltrek charges down a path of bursting
+  thorns, and in his last phase thorns burst all around him.
+- Heavy boss attacks are easier to read: the boss glows red and coils its
+  swing while it winds up, the marking on the ground shows when the hit lands
+  as well as where, and every hit lands with its own effect and sound.
 
 ### Fixed
 
@@ -29,6 +39,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The inventory's tabs no longer draw a line under the tab you switch to.
 - The Bog Drowned no longer stretches a sheet of skin from its fist down to
   its knee when it strikes.
+- A map boss now swings when it attacks; it used to hit without moving.
+- The creatures a map boss calls up now get the Waystone's monster resistance
+  modifiers, like every other monster there.
 
 ## [0.5.1] - 2026-10-28
 

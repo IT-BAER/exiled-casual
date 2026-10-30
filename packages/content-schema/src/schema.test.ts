@@ -7,6 +7,7 @@ import {
   validateMonsterDef,
   type SkillDef,
   type MonsterDef,
+  type BossAbility,
 } from "./index.js";
 
 const validSkill: SkillDef = {
@@ -348,6 +349,63 @@ describe("validateMonsterDef — boss field", () => {
     });
     expect(r.ok).toBe(false);
     expect(r.errors.some((e) => e.includes("boss.phase2.fireGround"))).toBe(true);
+  });
+
+  describe("a kit and a third phase", () => {
+    const fire = { type: "fire", amountFixed: fp(9) } as const;
+    const kit: BossAbility[] = [
+      { id: "rain", kind: "volley", fromPhase: 3, cooldownTicks: 240, windupTicks: 36, rangeFixed: fp(9), damage: fire,
+        count: 5, everyTicks: 5, radiusFixed: fp(1.3) },
+      { id: "lances", kind: "volley", fromPhase: 3, cooldownTicks: 240, windupTicks: 27, rangeFixed: fp(12), damage: fire,
+        count: 3, everyTicks: 9, lengthFixed: fp(12), halfWidthFixed: fp(0.6) },
+      { id: "rift", kind: "line", fromPhase: 1, cooldownTicks: 200, windupTicks: 30, rangeFixed: fp(9), damage: fire,
+        lengthFixed: fp(9), halfWidthFixed: fp(0.9) },
+      { id: "charge", kind: "line", fromPhase: 1, cooldownTicks: 150, windupTicks: 18, rangeFixed: fp(7), damage: fire,
+        lengthFixed: fp(9), halfWidthFixed: fp(0.8), overshootFixed: fp(2), minLengthFixed: fp(4), dashSpeedFixed: fp(14) },
+      { id: "ring", kind: "ring", fromPhase: 1, cooldownTicks: 210, windupTicks: 36, rangeFixed: fp(7), damage: fire,
+        innerFixed: fp(2.4), radiusFixed: fp(7) },
+      { id: "nova", kind: "nova", fromPhase: 3, cooldownTicks: 120, windupTicks: 15, rangeFixed: fp(3.5), damage: fire,
+        radiusFixed: fp(3) },
+      { id: "brood", kind: "brood", fromPhase: 2, cooldownTicks: 300, windupTicks: 24, addDefId: "monster.cinder_imp.v1",
+        count: 2, maxAlive: 6, phase3CooldownTicks: 210 },
+    ];
+    /** The kitted boss, with `patch` over its boss block and `at` over one ability. */
+    const kitted = (patch: Record<string, unknown> = {}, at?: [number, Record<string, unknown>]) => ({
+      ...validBossMonster,
+      boss: {
+        ...validBossMonster.boss!, phase3AtLifePct: 25, phase3CadenceMulPct: 85,
+        abilities: kit.map((a, i) => (at?.[0] === i ? { ...a, ...at[1] } : a)),
+        ...patch,
+      },
+    });
+
+    it("accepts every kind of ability with a third phase", () => {
+      expect(validateMonsterDef(kitted()).errors).toEqual([]);
+    });
+
+    it.each<[string, unknown]>([
+      ["boss.phase3AtLifePct", kitted({ phase3AtLifePct: 50 })],
+      ["boss.phase3CadenceMulPct", kitted({ phase3CadenceMulPct: undefined })],
+      ["boss.abilities: must be an array", kitted({ abilities: {} })],
+      ["boss.abilities[0].kind", kitted({}, [0, { kind: "beam" }])],
+      ["boss.abilities[1].id", kitted({}, [1, { id: "rain" }])],
+      ["boss.abilities[2].id", kitted({}, [2, { id: "Rift!" }])],
+      ["boss.abilities[2].fromPhase", kitted({}, [2, { fromPhase: 4 }])],
+      ["boss.abilities[0].fromPhase", kitted({ phase3AtLifePct: undefined, phase3CadenceMulPct: undefined })],
+      ["boss.abilities[2].lengthFixed", kitted({}, [2, { lengthFixed: undefined }])],
+      ["boss.abilities[3].minLengthFixed", kitted({}, [3, { minLengthFixed: undefined }])],
+      ["boss.abilities[3].dashSpeedFixed", kitted({}, [3, { dashSpeedFixed: -1 }])],
+      ["boss.abilities[4].innerFixed", kitted({}, [4, { innerFixed: fp(7) }])],
+      ["boss.abilities[5].damage", kitted({}, [5, { damage: { type: "holy", amountFixed: 1 } }])],
+      ["boss.abilities[5].rangeFixed", kitted({}, [5, { rangeFixed: undefined }])],
+      ["boss.abilities[0].radiusFixed", kitted({}, [0, { lengthFixed: fp(3), halfWidthFixed: fp(1) }])],
+      ["boss.abilities[0].count", kitted({}, [0, { count: 0 }])],
+      ["boss.abilities[0].follow", kitted({}, [0, { follow: "yes" }])],
+      ["boss.abilities[6].addDefId", kitted({}, [6, { addDefId: "imp" }])],
+      ["boss.abilities[6].maxAlive", kitted({}, [6, { maxAlive: 0 }])],
+    ])("reports %s", (path, def) => {
+      expect(validateMonsterDef(def).errors.join("\n")).toContain(path);
+    });
   });
 });
 

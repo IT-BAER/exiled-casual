@@ -5,6 +5,8 @@ import {
   intentToCommand,
   type Position,
   type Health,
+  type BossC,
+  type TelegraphC,
 } from "@exiled/simulation";
 import { CONTENT_VERSION } from "@exiled/content-runtime";
 import type { Intent } from "@exiled/protocol";
@@ -56,6 +58,32 @@ describe("boss golden (c): slam telegraph deals damage on impact", () => {
     const after = a.world.get<Health>(a.playerEntity, "health")!.life;
 
     expect(after).toBeLessThan(before);
+  });
+});
+
+describe("boss golden (e): every boss's kit replays the same through its third phase", () => {
+  const PHASE3_ABILITY: Record<string, string> = {
+    "monster.cinder_warden.v1": "cinder_rain",
+    "monster.sirrath.v1": "sunlance",
+    "monster.mother_vhal.v1": "bog_geyser",
+    "monster.ghaltrek.v1": "briar_nova",
+  };
+  it.each(Object.entries(PHASE3_ABILITY))("%s reaches phase 3, casts %s, and two runs agree", (species, ability) => {
+    const opts = { species, nearPhase3: true };
+    const a = buildBossArena(BOSS_SEED, opts);
+    // The bolt released in these ticks pushes it over the line; then the boss fights on alone.
+    const cmds = boltSpamCommands(a.playerEntity, 18);
+    const seen = new Set<string>();
+    for (let t = 0; t < 600; t++) {
+      a.sim.step(cmds[t] ?? []);
+      for (const e of a.world.query("telegraph")) seen.add(a.world.get<TelegraphC>(e, "telegraph")!.ability ?? "slam");
+    }
+    expect(a.world.get<BossC>(a.bossId, "boss")!.phase).toBe(3);
+    expect([...seen]).toContain(ability);
+
+    const run1 = runBossReplay(cmds, 600, opts);
+    const run2 = runBossReplay(cmds, 600, opts);
+    expect(firstDifference(run1.checksums, run2.checksums)).toBeNull();
   });
 });
 

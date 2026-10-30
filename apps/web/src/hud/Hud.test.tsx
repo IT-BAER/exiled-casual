@@ -209,6 +209,17 @@ describe("Hud", () => {
     expect(screen.getByTestId("boss-fill")).toHaveStyle({ width: "60%" });
   });
 
+  it("shows III on the boss bar in the third phase", () => {
+    render(
+      <Hud
+        snapshot={makeSnap({
+          entities: [{ id: 10, kind: "monster", x: 3, y: 0, boss: true, bossAwake: true, bossPhase: 3, life: 200, maxLife: 1000 }],
+        })}
+      />,
+    );
+    expect(screen.getByTestId("boss-phase")).toHaveTextContent(/^III$/);
+  });
+
   it("renders no boss bar when no boss entity is present", () => {
     render(<Hud snapshot={makeSnap({})} />);
     expect(screen.queryByTestId("boss-bar")).toBeNull();

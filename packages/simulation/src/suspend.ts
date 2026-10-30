@@ -50,7 +50,7 @@ const TRANSIENT_COMPONENT = ["ailment", "poison", "bleeding"];
  */
 const REBASED: readonly { comp: string; fields: readonly string[] }[] = [
   { comp: "monster", fields: ["attackReadyTick", "slamReadyTick", "rootedUntilTick", "chargeReadyTick", "dashUntilTick", "strollAtTick"] },
-  { comp: "boss", fields: ["nextAbilityTick"] },
+  { comp: "boss", fields: ["nextAbilityTick", "volleyAtTick", "broodAtTick", "abilityReadyTicks"] },
 ];
 
 /**
@@ -114,6 +114,7 @@ function rebase(name: string, data: unknown, elapsed: number): unknown {
   for (const field of spec.fields) {
     const v = next[field];
     if (typeof v === "number") next[field] = v + elapsed;
+    else if (Array.isArray(v)) next[field] = v.map((t: number) => t + elapsed);
   }
   return next;
 }

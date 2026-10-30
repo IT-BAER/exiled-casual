@@ -638,6 +638,19 @@ function anchor(layout: AreaLayout, id: string): { x: number; y: number } {
   return a;
 }
 
+/**
+ * A monster a boss raises mid-fight: the Waystone's resistances, base life and
+ * damage. Tier-scaled adds pushed the bot playtests' class parity past its band
+ * (1.27 at level 1, 1.33 at level 10). Without a session it rises unscaled.
+ */
+export function spawnAdd(world: World, def: MonsterDef, x: number, y: number): Entity {
+  const sessionE = world.query("session")[0];
+  const session = sessionE === undefined ? undefined : world.get<SessionC>(sessionE, "session");
+  const e = spawnMonster(world, session === undefined ? def : withMonsterRes(def, waystoneScaleFor(session.waystoneSeed).monsterResAdd), x, y, false);
+  world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, summoned: 1 });
+  return e;
+}
+
 export function spawnMonster(
   world: World,
   def: MonsterDef,

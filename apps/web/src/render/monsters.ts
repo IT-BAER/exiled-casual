@@ -118,6 +118,22 @@ type Clip = "walk" | "idle" | "attack";
 /** The strike plays a shade quick — authored over the walk's frames, it reads
  *  sluggish at 1.0 against a swing that has already landed in the sim. */
 const ATTACK_RATIO = 1.3;
+/**
+ * Where the blow lands in the exported strike, as a share of the clip: measured on
+ * the packed `monsters.glb` at 0.562 for `build_monsters.py`'s clips and 0.565 for
+ * `rig_humanoid.py`'s. Not the builder's 0.52: the exporter adds a leading frame.
+ */
+const BLOW_AT = 0.56;
+/** The slowest a heavy's coil stretches; a wind-up longer than that lands its blow early. */
+const COIL_RATIO_MIN = 0.15;
+
+/** The strike's rate that lands its blow `impactIn` seconds out, inside the range it still reads at. */
+function coilRatio(group: AnimationGroup, impactIn: number): number {
+  const fps = group.targetedAnimations[0]?.animation.framePerSecond;
+  if (!fps || impactIn <= 0) return ATTACK_RATIO;
+  const toBlow = (BLOW_AT * (group.to - group.from)) / fps;
+  return Math.min(ATTACK_RATIO, Math.max(COIL_RATIO_MIN, toBlow / impactIn));
+}
 
 /**
  * Ground speed, in units per second, at which a walk cycle plays back unscaled.
@@ -153,6 +169,8 @@ export class CreatureRig {
   private striking = false;
   /** Last swing tick seen, so only the change fires the clip. */
   private lastAttackTick: number | undefined;
+  /** `performance.now()` at which a heavy's slowed blow lands; the follow-through plays at full pace. */
+  private blowAt: number | undefined;
   private seen = false;
   /** Seconds stood still, so the breath can settle the way the player's does. */
   private standing = 0;
@@ -210,9 +228,10 @@ export class CreatureRig {
   /**
    * The sim swung (snapshot `attackTick` changed): play the strike once, over
    * whatever locomotion asks for, then hand the body back. The tick is only an
-   * edge — its value never schedules anything client-side.
+   * edge — its value never schedules anything client-side. A heavy wind-up passes
+   * the seconds until its hit, and the coil stretches to land the blow on it.
    */
-  noteAttack(tick: number | undefined): void {
+  noteAttack(tick: number | undefined, impactIn?: number): void {
     // The first report only seeds the edge, "no swing yet" included. A creature
     // that comes into view carrying a swing from before it was drawn must not
     // greet the camera with one, but its first swing in view must play.
@@ -225,9 +244,11 @@ export class CreatureRig {
     if (!group) return;
     this.striking = true;
     for (const [name, other] of this.groups) if (name !== "attack") other.stop();
-    group.speedRatio = ATTACK_RATIO;
+    const ratio = impactIn === undefined ? ATTACK_RATIO : coilRatio(group, impactIn);
+    this.blowAt = impactIn === undefined ? undefined : performance.now() + impactIn * 1000;
+    group.speedRatio = ratio;
     group.enableBlending = this.blend;
-    group.start(false, ATTACK_RATIO);
+    group.start(false, ratio);
     group.onAnimationGroupEndObservable.addOnce(() => {
       this.striking = false;
       this.playing = null; // force the next setLocomotion to restart its clip
@@ -236,6 +257,11 @@ export class CreatureRig {
   }
 
   setLocomotion(speed: number): void {
+    if (this.blowAt !== undefined && performance.now() >= this.blowAt) {
+      this.blowAt = undefined;
+      const strike = this.groups.get("attack");
+      if (strike && this.striking) strike.speedRatio = ATTACK_RATIO;
+    }
     if (this.striking) return;
     if (speed <= MOVING) {
       // Same settle as the player rig, off the same clock: a creature that has

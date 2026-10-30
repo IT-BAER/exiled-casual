@@ -20,7 +20,9 @@ import {
   rawClipLabel,
   DEFAULT_VIEWER_STATE,
   FX_PREVIEWS,
+  abilityLabel,
   bossSummon,
+  bossTell,
   creatureActions,
   creatureTelegraph,
   shooterBolt,
@@ -156,6 +158,60 @@ describe("creature telegraphs", () => {
     expect(tg.groundS).toBeCloseTo(4, 5);
     expect(creatureTelegraph("monster.cinder_warden.v1", "slam")!.groundS).toBe(0);
     expect(creatureTelegraph("monster.blood_sentinel.v1", "slam2")).toBeNull();
+  });
+
+  it("offers each boss its own abilities and its last phase, and nobody else either", () => {
+    for (const [id, def] of MONSTERS) {
+      const actions = creatureActions(id);
+      for (const a of def.boss?.abilities ?? []) expect(actions, id).toContain(`ability:${a.id}`);
+      expect(actions.filter((a) => a.startsWith("ability:")).length, id).toBe(def.boss?.abilities?.length ?? 0);
+      expect(actions.includes("phase3"), id).toBe(def.boss?.phase3AtLifePct !== undefined);
+    }
+    expect(abilityLabel("magma_rift")).toBe("Magma Rift");
+  });
+
+  it("plays a heavy as the sim casts it: one rooted mark from the boss toward the player", () => {
+    const rift = bossTell("monster.cinder_warden.v1", "magma_rift")!;
+    expect(rift.heavy).toBe(true);
+    expect(rift.marks).toHaveLength(1);
+    expect(rift.marks[0]!.landS).toBeCloseTo(1, 5);
+    expect(rift.marks[0]!.mark).toMatchObject({ x: 0, y: 0, shape: "line", dirX: 0, dirY: 1, length: 9, radius: 0.9, heavy: true });
+    // Ghaltrek's lane runs 2 past the player (5 out) and he dashes it at 14 a second.
+    const charge = bossTell("monster.ghaltrek.v1", "bramble_charge")!;
+    expect(charge.marks[0]!.mark.length).toBeCloseTo(7, 5);
+    expect(charge.dashSpeed).toBeCloseTo(14, 5);
+    expect(bossTell("monster.sirrath.v1", "kiln_ring")!.marks[0]!.mark).toMatchObject({ shape: "ring", inner: 2.4, radius: 7 });
+    expect(bossTell("monster.ghaltrek.v1", "briar_nova")!.marks[0]!.mark).toMatchObject({ x: 0, y: 0, radius: 3 });
+  });
+
+  it("drops Cinder Rain round the player all at once, landing one after another", () => {
+    const rain = bossTell("monster.cinder_warden.v1", "cinder_rain")!;
+    expect(rain.heavy).toBe(false);
+    expect(rain.marks).toHaveLength(5);
+    rain.marks.forEach((m, k) => {
+      expect(m.showS).toBe(0);
+      expect(m.landS).toBeCloseTo((36 + k * 5) / 30, 5);
+      expect(Math.hypot(m.mark.x, m.mark.y - 5)).toBeLessThanOrEqual(1.6);
+    });
+    expect(rain.marks[0]!.mark).toMatchObject({ x: 0, y: 5, radius: 1.3 });
+  });
+
+  it("aims each lance and geyser as it shows, and raises the brood on the summon ring", () => {
+    const lance = bossTell("monster.sirrath.v1", "sunlance")!;
+    expect(lance.marks).toHaveLength(3);
+    lance.marks.forEach((m, k) => {
+      expect(m.showS).toBeCloseTo((k * 9) / 30, 5);
+      expect(m.landS - m.showS).toBeCloseTo(27 / 30, 5);
+      expect(m.mark).toMatchObject({ x: 0, y: 0, shape: "line", length: 12 });
+      expect(Math.hypot(m.mark.dirX!, m.mark.dirY!)).toBeCloseTo(1, 5);
+    });
+    const geyser = bossTell("monster.mother_vhal.v1", "bog_geyser")!;
+    expect(geyser.marks).toHaveLength(3);
+    geyser.marks.forEach((m, k) => expect(m.showS).toBeCloseTo(k * 0.4, 5));
+    const brood = bossTell("monster.mother_vhal.v1", "brood")!;
+    expect(brood.marks.map((m) => [m.mark.x, m.mark.y])).toEqual([[2.5, 0], [-2.5, 0]]);
+    expect(brood.marks.every((m) => m.mark.radius === 1 && m.mark.heavy === undefined)).toBe(true);
+    expect(bossTell("monster.cinder_warden.v1", "brood")).toBeNull();
   });
 
   it("summons a boss's adds on the sim's ring, its count capped by the ring", () => {

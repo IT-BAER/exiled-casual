@@ -30,6 +30,8 @@ export function createDevApi(d: DevApiDeps) {
       op: "teleport", atlasNodeId: node.startsWith("node.") ? node : `node.${node}`, tier, ...(seed !== undefined ? { seed } : {}),
     }),
     hideout: () => op({ op: "toHideout" }),
+    /** The area's boss ready to show `phase` (its life just under the line), the player 7 units off it. */
+    boss: (phase: 1 | 2 | 3 = 1) => op({ op: "boss", phase }),
     dump: () => new Promise<unknown>((resolve) => { waiters.push(resolve); op({ op: "dump" }); }),
     /** Stops the sim clock and the render loop: the canvas keeps its last frame, nothing moves. */
     freeze: () => {

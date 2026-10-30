@@ -382,7 +382,14 @@ export function buildSnapshot(
       x: toNumber(tp.x), y: toNumber(tp.y),
       radius: toNumber(tg.radius),
       progress: Math.min(1, Math.max(0, raw)),
+      ownerId: tg.ownerId,
+      impactIn: Math.max(0, tg.impactTick - tick) / 30,
       ...(from ? { fromX: toNumber(from.x), fromY: toNumber(from.y) } : {}),
+      ...(tg.shape ? { shape: tg.shape } : {}),
+      ...(tg.shape === "line" ? { dirX: tg.dirX! / 1000, dirY: tg.dirY! / 1000, length: toNumber(tg.length!) } : {}),
+      ...(tg.shape === "ring" ? { inner: toNumber(tg.inner!) } : {}),
+      ...(tg.ability ? { ability: tg.ability } : {}),
+      ...(tg.heavy ? { heavy: true } : {}),
     });
   }
 

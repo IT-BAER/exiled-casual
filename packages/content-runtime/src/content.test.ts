@@ -194,6 +194,15 @@ describe("MONSTERS", () => {
     const addId = def.boss?.phase2.addDefId ?? "";
     expect(MONSTERS.has(addId)).toBe(true);
   });
+
+  it("every boss's adds, phase 2's and its brood's, resolve in MONSTERS: a typo would raise nothing", () => {
+    const bosses = [...MONSTERS.values()].filter((d) => d.boss);
+    expect(bosses.length).toBeGreaterThan(1);
+    for (const d of bosses) {
+      const adds = [d.boss!.phase2.addDefId, ...(d.boss!.abilities ?? []).flatMap((a) => (a.kind === "brood" ? [a.addDefId] : []))];
+      for (const id of adds) expect(MONSTERS.has(id), `${d.id} raises ${id}`).toBe(true);
+    }
+  });
 });
 
 describe("monster pools", () => {

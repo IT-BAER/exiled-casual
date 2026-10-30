@@ -114,7 +114,7 @@ const FLASH_DECAY = 4.5; // per second, multiplicative
  * one instance means two hits in the same tick share a flash, which is a far
  * cheaper lie than the torch blinking out.
  */
-function flash(scene: Scene, at: Vector3, level = 1): void {
+export function flash(scene: Scene, at: Vector3, level = 1): void {
   let light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (!light) {
     light = new PointLight(FLASH_NAME, at.clone(), scene);
@@ -745,7 +745,7 @@ const MELEE_IMPACT: Record<string, MeleeImpactStyle> = {
 const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 
 /** Warm floor dust, alpha-blended so it veils rather than glows. */
-function dustPuff(scene: Scene, x: number, z: number, size: number, delay = 0, drift = 0.8): void {
+export function dustPuff(scene: Scene, x: number, z: number, size: number, delay = 0, drift = 0.8): void {
   const a = Math.random() * Math.PI * 2;
   fxPools(scene).smoke.emit({
     x: x + Math.cos(a) * 0.15, y: 0.12, z: z + Math.sin(a) * 0.15,

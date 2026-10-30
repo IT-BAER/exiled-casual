@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { fp } from "@exiled/fixed-point";
+import { fp, fpMul } from "@exiled/fixed-point";
 import { resBlock } from "@exiled/content-schema";
+import { MONSTERS } from "@exiled/content-runtime";
+import { monsterTierScale, waystoneScaleFor } from "@exiled/rules";
 import { Simulation } from "../loop";
-import { registerTelegraphResolve } from "./telegraph-resolve";
+import { registerTelegraphResolve, telegraphCovers } from "./telegraph-resolve";
 import { registerDamageResolve } from "./damage-resolve";
-import type { Position, Health, MonsterC, PlayerC, Faction, TelegraphC, DefensesC, GroundAreaC } from "../components";
+import type {
+  Position, Health, MonsterC, PlayerC, Faction, TelegraphC, DefensesC, GroundAreaC, SessionC,
+} from "../components";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +88,69 @@ function makePlayer(sim: Simulation, x = fp(1), y = 0, team = 0, bodyRadius = fp
 // ── tests ─────────────────────────────────────────────────────────────────────
 
 describe("registerTelegraphResolve", () => {
+  it("a lane hits the body standing on it and spares the one beside it", () => {
+    const sim = new Simulation();
+    registerTelegraphResolve(sim);
+    const e = makeTelegraph(sim, { impactTick: 0, radius: fp(0.9), team: 1 });
+    sim.world.set<TelegraphC>(e, "telegraph", {
+      ...sim.world.get<TelegraphC>(e, "telegraph")!, shape: "line", dirX: 1000, dirY: 0, length: fp(9),
+    });
+    const onLane = makeMonster(sim, fp(5), 0, 0);
+    makeMonster(sim, fp(5), fp(3), 0);
+
+    sim.step();
+    expect(sim.damageQueue.map((d) => d.target)).toEqual([onLane]);
+  });
+
+  it("a brood mark hurts nobody and raises its add, summoned, on the owner's team", () => {
+    const sim = new Simulation();
+    registerTelegraphResolve(sim, MONSTERS);
+    const mark = makeTelegraph(sim, { x: fp(2), y: fp(2), impactTick: 0, damage: 0, team: 1 });
+    sim.world.set<TelegraphC>(mark, "telegraph", {
+      ...sim.world.get<TelegraphC>(mark, "telegraph")!, spawnDefId: "monster.cinder_imp.v1",
+    });
+    makePlayer(sim, fp(2), fp(2), 0);
+
+    sim.step();
+    expect(sim.damageQueue).toHaveLength(0);
+    expect(sim.world.alive.has(mark)).toBe(false);
+    const adds = sim.world.query("monster").map((m) => ({
+      mon: sim.world.get<MonsterC>(m, "monster")!,
+      pos: sim.world.get<Position>(m, "position")!,
+      team: sim.world.get<Faction>(m, "faction")!.team,
+    }));
+    expect(adds).toHaveLength(1);
+    expect(adds[0]!.mon).toMatchObject({ defId: "monster.cinder_imp.v1", summoned: 1 });
+    expect(adds[0]!.pos).toEqual({ x: fp(2), y: fp(2) });
+    expect(adds[0]!.team).toBe(1);
+  });
+
+  it("a brood add on a tier-7 map takes the stone's resistances but keeps its base life and damage", () => {
+    // A stone that adds monster resistances and monster life.
+    const seed = Array.from({ length: 5000 }, (_, i) => i + 1).find((s) => {
+      const ws = waystoneScaleFor(s);
+      return ws.monsterResAdd > 0 && ws.lifeMilli > 1000;
+    })!;
+    const sim = new Simulation();
+    registerTelegraphResolve(sim, MONSTERS);
+    sim.world.set<SessionC>(sim.world.create(), "session", {
+      area: "map", atlasSeed: 1, mapSeed: 99, waystoneSeed: seed, areaTier: 7,
+      activeNodeId: "node.the_wrackline", completedNodes: [], portalsLeft: 6, mapOpen: 1, pendingArea: "",
+    });
+    const mark = makeTelegraph(sim, { impactTick: 0, damage: 0, team: 1 });
+    sim.world.set<TelegraphC>(mark, "telegraph", {
+      ...sim.world.get<TelegraphC>(mark, "telegraph")!, spawnDefId: "monster.cinder_imp.v1",
+    });
+
+    sim.step();
+    const add = sim.world.query("monster")[0]!;
+    const def = MONSTERS.get("monster.cinder_imp.v1")!;
+    expect(monsterTierScale(7).lifeMilli).toBeGreaterThan(1000);
+    expect(sim.world.get<Health>(add, "health")!.maxLife).toBe(def.maxLifeFixed);
+    expect(sim.world.get<MonsterC>(add, "monster")!.attackDamage).toBe(def.attackDamage.amountFixed);
+    expect(sim.world.get<DefensesC>(add, "defenses")!.res.fire).toBe(def.defenses.resPct.fire + waystoneScaleFor(seed).monsterResAdd);
+  });
+
   it("enqueues damage for an enemy inside the radius at impactTick", () => {
     const sim = new Simulation();
     registerTelegraphResolve(sim);
@@ -264,5 +331,60 @@ describe("registerTelegraphResolve", () => {
     expect(lifeB).toBe(fp(100) - fp(10));
     // B took less than A
     expect(lifeB).toBeGreaterThan(lifeA);
+  });
+});
+
+describe("telegraphCovers", () => {
+  const BODY = fp(0.5);
+  const at = { x: 0, y: 0 };
+  const base: TelegraphC = {
+    ownerId: 1, team: 1, radius: fp(2), startTick: 0, impactTick: 30, damage: fp(10), damageType: 1, leavesGroundTicks: 0,
+  };
+  const covers = (tg: TelegraphC, x: number, y: number) => telegraphCovers(tg, at, fp(x), fp(y), BODY);
+
+  it("a disc reaches its radius plus the body, no further", () => {
+    expect(covers(base, 2.5, 0)).toBe(true);
+    expect(covers(base, 2.6, 0)).toBe(false);
+  });
+
+  describe("a lane 9 long and 1.8 wide along +x", () => {
+    const lane: TelegraphC = { ...base, shape: "line", dirX: 1000, dirY: 0, length: fp(9), radius: fp(0.9) };
+    it("covers its inside and its edge plus the body", () => {
+      expect(covers(lane, 4, 0.5)).toBe(true);
+      expect(covers(lane, 4, -1.4)).toBe(true);
+      expect(covers(lane, 4, 1.5)).toBe(false);
+    });
+    it("spares the boss's back, beyond the body's overlap", () => {
+      expect(covers(lane, -0.4, 0)).toBe(true);
+      expect(covers(lane, -1, 0)).toBe(false);
+    });
+    it("ends in a round cap", () => {
+      expect(covers(lane, 9.9, 0)).toBe(true);
+      expect(covers(lane, 10.5, 0)).toBe(false);
+      // sqrt(0.8² + 1.2²) = 1.44 from the end: inside the square corner, outside the cap.
+      expect(covers(lane, 9.8, 1.2)).toBe(false);
+    });
+  });
+
+  it("a diagonal lane measures across its own axis", () => {
+    // Direction (0.6, 0.8); 3 units along it is (1.8, 2.4); its normal is (-0.8, 0.6).
+    const lane: TelegraphC = { ...base, shape: "line", dirX: 600, dirY: 800, length: fp(5), radius: fp(1) };
+    expect(covers(lane, 1.8, 2.4)).toBe(true);
+    expect(covers(lane, 1.8 - 0.8 * 1.4, 2.4 + 0.6 * 1.4)).toBe(true);
+    expect(covers(lane, 1.8 - 0.8 * 1.6, 2.4 + 0.6 * 1.6)).toBe(false);
+  });
+
+  describe("a ring with a 2.4 hole and a 7 outer edge", () => {
+    const ring: TelegraphC = { ...base, shape: "ring", inner: fp(2.4), radius: fp(7) };
+    it("spares a body wholly in the hole", () => {
+      expect(covers(ring, 1.8, 0)).toBe(false);
+      expect(covers(ring, 0, 0)).toBe(false);
+      expect(covers(ring, 2.0, 0)).toBe(true);
+    });
+    it("covers the band and its outer edge plus the body", () => {
+      expect(covers(ring, 0, 4)).toBe(true);
+      expect(covers(ring, 7.5, 0)).toBe(true);
+      expect(covers(ring, 7.6, 0)).toBe(false);
+    });
   });
 });

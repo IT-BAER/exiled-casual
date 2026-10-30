@@ -6,7 +6,8 @@ import { spawnLabActors } from "./combat-sim";
 import { spawnMonster } from "./areas";
 import { MONSTERS, waystoneItem } from "@exiled/content-runtime";
 import type { Collision } from "./collision";
-import type { Position, GroundAreaC, MonsterC, PlayerC, ItemC } from "./components";
+import type { Position, GroundAreaC, MonsterC, PlayerC, ItemC, TelegraphC } from "./components";
+import { telegraphCovers } from "./systems/telegraph-resolve";
 
 const OPEN: Collision = { isWalkable: () => true };
 const GROUND = "skill.cinder_ground.v1";
@@ -183,6 +184,45 @@ describe("Bot", () => {
     const to = move?.data as { x: number; y: number } | undefined;
     expect(to, "no move at all").toBeDefined();
     expect(Math.hypot(to!.x - me.x, to!.y - me.y)).toBeGreaterThan(fp(5));
+  });
+
+  describe("a boss's telegraphs", () => {
+    /** An Ironsworn with a hostile telegraph `tg` standing at `at` (offset from him), seen a second ago. */
+    function under(off: { x: number; y: number }, tg: Partial<TelegraphC>) {
+      const g = newCharacter("class.ironsworn", 1, 10);
+      const me = g.world.get<Position>(g.player, "position")!;
+      const at = { x: me.x + off.x, y: me.y + off.y };
+      const full: TelegraphC = {
+        ownerId: 0, team: 1, radius: fp(2), startTick: g.sim.tick - 30, impactTick: g.sim.tick + 30,
+        damage: fp(18), damageType: 0, leavesGroundTicks: 0, ...tg,
+      };
+      const e = g.world.create();
+      g.world.set<Position>(e, "position", at);
+      g.world.set<TelegraphC>(e, "telegraph", full);
+      const body = g.world.get<PlayerC>(g.player, "player")!.bodyRadius;
+      const to = () => new Bot(g, OPEN, {}).decide(false).find((c) => c.type === "moveTo")?.data as { x: number; y: number };
+      return { g, me, at, tg: full, body, to };
+    }
+
+    it("steps square out of a lane rather than running down it", () => {
+      const { me, at, tg, body, to } = under({ x: -fp(4), y: 0 }, { shape: "line", dirX: 1000, dirY: 0, length: fp(9), radius: fp(0.9) });
+      expect(telegraphCovers(tg, at, to().x, to().y, body)).toBe(false);
+      expect(Math.hypot(to().x - me.x, to().y - me.y)).toBeLessThan(fp(3));
+    });
+
+    it("walks into a ring's hole when that is the shorter way out", () => {
+      const { at, tg, body, to } = under({ x: -fp(3), y: 0 }, { shape: "ring", inner: fp(2.4), radius: fp(7) });
+      expect(telegraphCovers(tg, at, to().x, to().y, body)).toBe(false);
+      expect(Math.hypot(to().x - at.x, to().y - at.y)).toBeLessThan(fp(2.4));
+    });
+
+    it("does not flee a brood mark, which hurts nobody", () => {
+      const g = newCharacter("class.ironsworn", 1, 10);
+      const calm = new Bot(g, OPEN, {}).decide(false);
+      const { g: marked, to } = under({ x: 0, y: 0 }, { damage: 0, spawnDefId: "monster.cinder_imp.v1" });
+      expect(marked.world.query("telegraph")).toHaveLength(1);
+      expect(to()).toEqual(calm.find((c) => c.type === "moveTo")?.data);
+    });
   });
 
   it("a Stalker looses Piercing Shot from where it stands", () => {

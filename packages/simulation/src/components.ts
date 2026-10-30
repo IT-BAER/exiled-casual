@@ -342,10 +342,22 @@ export interface GroundAreaC {
   skillId?: string;
 }
 export interface BossC {
-  phase: 1 | 2;
+  phase: 1 | 2 | 3;
   nextAbilityTick: number;
   spawnX: Fixed; spawnY: Fixed;
   rootedUntilTick: number;
+  /**
+   * Per BossSpec.abilities entry, the tick it is off its own cooldown. Optional
+   * like every field below and absent until first written, so a world whose boss
+   * only slams serializes as it did.
+   */
+  abilityReadyTicks?: number[];
+  /** A volley still dropping marks: its ability index, the marks left, the tick of the next. */
+  volleyAbility?: number;
+  volleyLeft?: number;
+  volleyAtTick?: number;
+  /** The tick of the next brood wave. */
+  broodAtTick?: number;
 }
 export interface TelegraphC {
   ownerId: Entity; team: number;
@@ -364,6 +376,21 @@ export interface TelegraphC {
     ailmentDuration: number;
     maxStacks: number;
   };
+  /** Absent = a disc of `radius` round the position. Every field below is optional for the same reason. */
+  shape?: "line" | "ring";
+  /** line: runs from the position along this unit direction, x1000. */
+  dirX?: number;
+  dirY?: number;
+  /** line: how far it runs; `radius` is half its width and its far end is round. */
+  length?: Fixed;
+  /** ring: the safe hole round the position; `radius` is the outer edge. */
+  inner?: Fixed;
+  /** The boss ability that cast it, for the client's look and sound. Absent = a slam. */
+  ability?: string;
+  /** 1 = a heavy wind-up: its owner glows and swings into the hit. */
+  heavy?: 1;
+  /** A brood mark: hurts nobody and raises one of these (summoned) at impact. */
+  spawnDefId?: string;
 }
 /** Burning on "ailment"; poison and bleeding reuse the shape on their own components, stacks always 1. */
 export interface AilmentC {

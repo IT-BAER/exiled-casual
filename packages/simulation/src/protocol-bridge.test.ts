@@ -431,6 +431,39 @@ describe("buildSnapshot — boss & telegraph", () => {
     expect(tg(charge).fromX).toBeCloseTo(3, 5);
   });
 
+  it("a lane and a ring carry their shape, ability, owner and time to impact; a plain disc no shape", () => {
+    const { world } = makeMinimalWorld();
+    const boss = addBoss(world, 0, 0);
+    const lane = addTelegraph(world, 0, 0, 10, 40);
+    world.set<TelegraphC>(lane, "telegraph", {
+      ...world.get<TelegraphC>(lane, "telegraph")!, ownerId: boss,
+      shape: "line", dirX: 600, dirY: 800, length: fp(9), radius: fp(0.9), ability: "magma_rift", heavy: 1,
+    });
+    const ring = addTelegraph(world, 0, 0, 10, 40);
+    world.set<TelegraphC>(ring, "telegraph", {
+      ...world.get<TelegraphC>(ring, "telegraph")!, ownerId: boss, shape: "ring", inner: fp(2.4), radius: fp(7),
+    });
+    const disc = addTelegraph(world, 4, 4, 10, 40);
+
+    const snap = buildSnapshot(world, {} as never, 25, "test");
+    const tg = (id: number) => snap.entities.find((e) => e.id === id)!;
+    expect(tg(lane)).toMatchObject({
+      shape: "line", dirX: 0.6, dirY: 0.8, length: 9, radius: 0.9, ability: "magma_rift", heavy: true,
+      ownerId: boss, impactIn: 0.5,
+    });
+    expect(tg(ring)).toMatchObject({ shape: "ring", inner: 2.4, radius: 7, ownerId: boss });
+    expect(tg(ring).heavy).toBeUndefined();
+    expect(tg(disc)).toMatchObject({ ownerId: 0, impactIn: 0.5 });
+    for (const k of ["shape", "dirX", "length", "inner", "ability", "heavy"] as const) expect(tg(disc)[k]).toBeUndefined();
+  });
+
+  it("a boss in its third phase reports bossPhase 3", () => {
+    const { world } = makeMinimalWorld();
+    const e = addBoss(world, 5, 3);
+    world.set<BossC>(e, "boss", { ...world.get<BossC>(e, "boss")!, phase: 3 });
+    expect(buildSnapshot(world, {} as never, 0, "test").entities.find((x) => x.boss)!.bossPhase).toBe(3);
+  });
+
   it("zero-length wind-up (startTick === impactTick) yields progress 1", () => {
     const { world } = makeMinimalWorld();
     addTelegraph(world, 0, 0, 10, 10);

@@ -42,7 +42,12 @@ import { attachCreature, loadMonsters, type CreatureRig } from "./monsters";
 import { loadPet, PetActor, type PetAction } from "./pet";
 import { disposeRagdoll, dropDead, enablePhysics } from "./ragdoll";
 import { blinkBurst, meleeImpact, setStreakLength } from "./skill-fx";
-import { makeMesh, setHitFlash, updateChargePath, updateTelegraph, Y_LIFT } from "./meshes";
+import {
+  makeMesh, markKind, RADIUS_SCALED, setDangerGlow, setHitFlash, updateChargePath, updateMark, updateTelegraph, Y_LIFT,
+} from "./meshes";
+import type { SnapshotEntity } from "@exiled/protocol";
+import { bossFx } from "./boss-fx";
+import { BROOD_ABILITY, dangerGlow } from "./boss-tells";
 import { burnOutGround, EMBER_TAIL_TICKS, GROUND_FADE_TICKS, igniteGround } from "./ground-fx";
 import { FLINCH_TICKS, flinchPose, flinchStrength, kick, leanToTilt } from "./hit-reaction";
 import { flashPeak, HIT_FLASH_TICKS, hitSpray, hitStrength, sprayKindOf } from "./hit-spray";
@@ -63,12 +68,14 @@ import {
   CHARACTER_SUBJECT,
   PET_SUBJECT,
   bossSummon,
+  bossTell,
   creatureTelegraph,
   mainGroup,
   ONE_SHOTS,
   rawClipLabel,
   shooterBolt,
   telegraphFrame,
+  type BossTell,
   type CreatureAction,
   type CreatureTelegraph,
   type FxPreview,
@@ -482,6 +489,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     scene.onBeforeRenderObservable.remove(tell.tick);
     for (const m of tell.meshes) if (!m.isDisposed()) m.dispose();
     host?.position.copyFrom(tell.home);
+    if (host) setDangerGlow(host, 0);
     creature?.setLocomotion(0);
     tell = null;
   };
@@ -555,6 +563,72 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       if (t >= endS) endTell();
     });
     tell = { meshes: [mesh], tick, home };
+  };
+
+  /**
+   * A boss ability as play draws it: each mark on the game's own decal, filling
+   * on its own clock; through a heavy the boss glows and its swing coils to land
+   * with the blow, as the renderer has it; each landing goes through the game's
+   * own effects (`boss-fx.ts`), and a charge then runs its lane.
+   */
+  const playAbility = (c: CreatureRig, t: BossTell, species: string) => {
+    endTell();
+    if (host === null) return;
+    const h = host;
+    const home = h.position.clone();
+    // A mark's +y is the way the boss faces, its +x the boss's right.
+    const fx = FACING.x;
+    const fz = FACING.z;
+    const effects = bossFx(scene);
+    const marks = t.marks.map(({ showS, landS, mark }, i) => {
+      const { x, y, dirX, dirY, ...rest } = mark;
+      const e: SnapshotEntity = {
+        ...rest, id: -1 - i, kind: "telegraph", x: home.x + fz * x + fx * y, y: home.z - fx * x + fz * y,
+        ...(dirX !== undefined && dirY !== undefined ? { dirX: fz * dirX + fx * dirY, dirY: -fx * dirX + fz * dirY } : {}),
+      };
+      return { showS, landS, e, kind: markKind(e), mesh: null as Mesh | null, landed: false };
+    });
+    const lastS = Math.max(...marks.map((m) => m.landS));
+    const lane = marks[0]!.e;
+    const runS = t.dashSpeed > 0 ? (lane.length ?? 0) / t.dashSpeed : 0;
+    moving = null;
+    // The sim stamps the swing on every cast but the brood's, which runs on its own timer.
+    if (lane.ability !== BROOD_ABILITY) c.noteAttack(++attackTick, t.heavy ? marks[0]!.landS : undefined);
+    let time = 0;
+    const tick = scene.onBeforeRenderObservable.add(() => {
+      const dt = stepS();
+      time += dt;
+      let glow = 0;
+      for (const m of marks) {
+        if (m.landed || time < m.showS) continue;
+        const left = m.landS - time;
+        const progress = Math.min(1, (time - m.showS) / (m.landS - m.showS));
+        const e = { ...m.e, progress, impactIn: Math.max(0, left) };
+        if (m.mesh === null) {
+          m.mesh = makeMesh(scene, m.kind, `viewer-ability-${m.e.id}-${performance.now()}`);
+          m.mesh.position.set(e.x, floorY + Y_LIFT[m.kind], e.y);
+          if (RADIUS_SCALED.has(m.kind)) m.mesh.scaling.set(e.radius ?? 1, 1, e.radius ?? 1);
+          tell?.meshes.push(m.mesh);
+        }
+        updateMark(m.mesh, m.kind, e, progress, time);
+        effects.windup(e, left, dt);
+        if (t.heavy) glow = Math.max(glow, dangerGlow(progress, left));
+        if (left <= 0) {
+          m.landed = true;
+          m.mesh.dispose();
+          effects.land(e, species, { x: home.x, y: home.z });
+          effects.forget(e.id);
+        }
+      }
+      setDangerGlow(h, glow);
+      if (runS > 0 && time >= lastS) {
+        const run = Math.min(lane.length ?? 0, (time - lastS) * t.dashSpeed);
+        h.position.set(home.x + (lane.dirX ?? 0) * run, home.y, home.z + (lane.dirY ?? 0) * run);
+        c.setLocomotion(time - lastS < runS ? t.dashSpeed : 0);
+      }
+      if (time >= lastS + runS + TELL_HOLD_S) endTell();
+    });
+    tell = { meshes: [], tick, home };
   };
 
   /** A boss reaching phase 2: its adds appear on the sim's ring around it, as they do in play. */
@@ -782,6 +856,21 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         if (s === null) return false;
         summon(s);
         lastAction = null;
+        return true;
+      }
+      if (action === "phase3") {
+        if (dead || subjectId === null) return false;
+        bossFx(scene).phaseThree({ x: host.position.x, y: host.position.z }, subjectId);
+        lastAction = null;
+        return true;
+      }
+      if (action.startsWith("ability:")) {
+        const species = subjectId;
+        const t = dead || species === null ? null : bossTell(species, action.slice("ability:".length));
+        if (t === null || species === null) return false;
+        const run = () => playAbility(c, t, species);
+        run();
+        lastAction = { run, group: () => c.clipGroups.get("attack") ?? null };
         return true;
       }
       if (action === "charge" || action === "slam" || action === "slam2") {

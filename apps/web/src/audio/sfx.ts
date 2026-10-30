@@ -41,6 +41,10 @@ interface Voice {
   gain: number; wet: number; vary: number;
   /** Files `<cue>-1..N` the cue draws from; absent means the one file `<cue>.webm`. */
   takes?: number;
+  /** Another cue whose files this one plays, at `rate`: a sound with no master of its own yet. */
+  src?: string;
+  /** Playback rate before `vary`; under 1 is lower and slower. */
+  rate?: number;
 }
 
 const VOICES: Record<string, Voice> = {
@@ -119,6 +123,16 @@ const VOICES: Record<string, Voice> = {
   "monster-spit":             { gain: 0.222, wet: 0.14, vary: 0.10, takes: 3 },
   "monster-slam-windup":      { gain: 0.222, wet: 0.20, vary: 0.03, takes: 3 },
   "monster-slam-impact":      { gain: 0.325, wet: 0.30, vary: 0.04, takes: 3 },
+  // Boss abilities (soundscape.ts ABILITY_CUES), shipped masters at another pitch
+  // until the library is on hand for their own.
+  "boss-rift-impact":         { gain: 0.36, wet: 0.30, vary: 0.04, src: "monster-slam-impact", rate: 0.8 },
+  "boss-rift-flames":         { gain: 0.26, wet: 0.22, vary: 0.04, src: "skill-cinder-ground-cast" },
+  "boss-meteor-impact":       { gain: 0.30, wet: 0.24, vary: 0.06, src: "skill-ember-bolt-impact", rate: 0.75 },
+  "boss-kiln-ring":           { gain: 0.34, wet: 0.26, vary: 0.04, src: "skill-cinder-ground-cast", rate: 0.85 },
+  "boss-sunlance":            { gain: 0.30, wet: 0.22, vary: 0.06, src: "skill-ember-spark-impact", rate: 0.7 },
+  "boss-bog-burst":           { gain: 0.25, wet: 0.20, vary: 0.10, src: "footstep-mud", rate: 0.6 },
+  "boss-thorns":              { gain: 0.34, wet: 0.22, vary: 0.05, src: "skill-ground-slam-impact", rate: 1.15 },
+  "boss-phase-three":         { gain: 0.40, wet: 0.35, vary: 0, src: "monster-slam-impact", rate: 0.6 },
   "player-hurt":              { gain: 0.194, wet: 0.10, vary: 0.08, takes: 3 },
   "player-death":             { gain: 0.36, wet: 0.20, vary: 0.03, takes: 3 },
   // Varkis (varkis-voice.ts). A voice never wanders in pitch: that is a different man.
@@ -212,6 +226,8 @@ const lastTake = new Map<string, string>();
 
 /** The files of a cue: itself, or `<cue>-1..N` for a pool. */
 function files(name: string): string[] {
+  const src = VOICES[name]?.src;
+  if (src) return files(src);
   const n = VOICES[name]?.takes ?? 1;
   return n < 2 ? [name] : Array.from({ length: n }, (_, i) => `${name}-${i + 1}`);
 }
@@ -461,7 +477,7 @@ function playVoice(name: string, volume: number, at: At | null): number {
 
   const src = b.ctx.createBufferSource();
   src.buffer = buf;
-  if (voice.vary > 0) src.playbackRate.value = 1 + (Math.random() * 2 - 1) * voice.vary;
+  src.playbackRate.value = (voice.rate ?? 1) * (1 + (Math.random() * 2 - 1) * voice.vary);
   const g = b.ctx.createGain();
   g.gain.value = voice.gain * clamp(volume) * share * 10 ** (((Math.random() * 2 - 1) * LEVEL_JITTER_DB) / 20)
     * (at && !panner ? roll : 1);

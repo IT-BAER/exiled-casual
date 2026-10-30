@@ -238,6 +238,11 @@ export type DevOp =
   /** From the hideout into any node at any tier, skipping the stone, fog and tier rules. */
   | { op: "teleport"; atlasNodeId: string; tier?: number; seed?: number }
   | { op: "toHideout" }
+  /**
+   * The area's boss back in phase 1 with every attack ready and its life just under
+   * `phase`'s line, so it crosses into it on its next ticks; the player 7 units off it.
+   */
+  | { op: "boss"; phase: 1 | 2 | 3 }
   /** Answered with a FromWorker_DevDump of the player's and session's components. */
   | { op: "dump" };
 export interface ToWorker_Dev    { type: "dev"; op: DevOp }
@@ -302,7 +307,7 @@ export interface SnapshotEntity {
   /** true for the boss monster; kind stays "monster" so existing consumers keep working */
   boss?: boolean;
   /** boss phase, present only when boss === true */
-  bossPhase?: 1 | 2;
+  bossPhase?: 1 | 2 | 3;
   /** boss only: boss-ai has woken it (in range AND in sight); the HUD raises the boss bar on this */
   bossAwake?: boolean;
   /** telegraph wind-up progress: 0 at cast → 1 at impact, for fill animation */
@@ -310,6 +315,23 @@ export interface SnapshotEntity {
   /** telegraph of a charge only: where the charging monster stands now; the renderer draws a path from here to x/y */
   fromX?: number;
   fromY?: number;
+  /** telegraph only: absent = a disc of `radius`. */
+  shape?: "line" | "ring";
+  /** telegraph line: runs from x/y along this unit direction; `radius` is half its width and its far end is round. */
+  dirX?: number;
+  dirY?: number;
+  /** telegraph line: how far it runs. */
+  length?: number;
+  /** telegraph ring: the safe hole round x/y; `radius` is the outer edge. */
+  inner?: number;
+  /** telegraph: the boss ability that cast it, absent on a slam. A plain string, like skillId. */
+  ability?: string;
+  /** telegraph: a heavy wind-up. The client glows its owner and times the owner's swing to land with it. */
+  heavy?: boolean;
+  /** telegraph: the monster winding it up. */
+  ownerId?: number;
+  /** telegraph: seconds until it lands. */
+  impactIn?: number;
   /** portal/mapDevice only: the player is close enough to activate it */
   inRange?: boolean;
   /** portal/mapDevice only: fixed yaw in radians, so the renderer angles it consistently */

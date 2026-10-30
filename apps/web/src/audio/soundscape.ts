@@ -6,6 +6,7 @@ import {
 import { setRoom, type RoomProfile } from "./bus";
 import { playCoinPickup } from "./drop-sound";
 import { fxProfile, strikesTheFloor } from "../render/skill-fx";
+import { landed as markLanded } from "../render/boss-tells";
 
 /**
  * The fight, heard rather than described.
@@ -236,6 +237,23 @@ interface Options {
   coins?: (at: At) => void;
 }
 
+/**
+ * A boss ability's cue as its mark shows and as it lands, keyed by the
+ * telegraph's `ability`; a mark without one is a slam. A volley shows without a
+ * wind-up cue: PoE2 gives that to the heavy hits. Most are aliases (sfx.ts `src`).
+ */
+export const ABILITY_CUES: Record<string, { windup?: string; impact: readonly string[] }> = {
+  magma_rift: { windup: "monster-slam-windup", impact: ["boss-rift-impact", "boss-rift-flames"] },
+  cinder_rain: { impact: ["boss-meteor-impact"] },
+  kiln_ring: { windup: "monster-slam-windup", impact: ["boss-kiln-ring"] },
+  sunlance: { impact: ["boss-sunlance"] },
+  brood: { windup: "boss-bog-burst", impact: ["boss-bog-burst"] },
+  bog_geyser: { impact: ["boss-bog-burst"] },
+  bramble_charge: { windup: "monster-slam-windup", impact: ["boss-thorns"] },
+  briar_nova: { windup: "monster-slam-windup", impact: ["boss-thorns"] },
+};
+const SLAM_CUES = { windup: "monster-slam-windup", impact: ["monster-slam-impact"] };
+
 function playAnywhere(name: string, volume = 1, at?: At): void {
   if (at) playSfxAt(name, at.x, at.y, volume);
   else playSfx(name, volume);
@@ -311,6 +329,14 @@ export function createSoundscape(opts: Options = {}): Soundscape {
 
       // Where a world cue sounds from; sfx.ts makes level, bearing and muffle of it.
       const at = (e: SnapshotEntity): At => ({ x: e.x, y: e.y });
+      // A mark's cue once per snapshot: a volley landing on one tick is one hit to the ear.
+      const marked = new Set<string>();
+      const markCue = (name: string, e: SnapshotEntity): void => {
+        if (marked.has(name)) return;
+        marked.add(name);
+        play(name, 1, at(e));
+      };
+      const cuesOf = (e: SnapshotEntity) => (e.ability === undefined ? SLAM_CUES : ABILITY_CUES[e.ability] ?? SLAM_CUES);
 
       // ── Gone ────────────────────────────────────────────────────────────────
       let deaths = 0;
@@ -320,8 +346,8 @@ export function createSoundscape(opts: Options = {}): Soundscape {
           deaths++;
           play(cueFor("monster-death", e.species), 1, at(e));
         } else if (e.kind === "telegraph") {
-          // A ring only ever leaves the world by landing.
-          play("monster-slam-impact", 1, at(e));
+          // Gone on its impact tick, or before it with its boss dead mid-wind-up.
+          if (markLanded(e)) for (const name of cuesOf(e).impact) markCue(name, e);
         } else if (e.kind === "projectile" && (e.team ?? 0) === 0) {
           // His own bolt, spent: it either hit something or ran out of range, and
           // both are the same burst as far as the ear is concerned.
@@ -342,8 +368,10 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       const loosed = new Set<string>();
       for (const [id, e] of now) {
         if (was.has(id)) continue;
-        if (e.kind === "telegraph") play("monster-slam-windup", 1, at(e));
-        else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", 1, at(e));
+        if (e.kind === "telegraph") {
+          const windup = cuesOf(e).windup;
+          if (windup) markCue(windup, e);
+        } else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", 1, at(e));
         else if (e.kind === "projectile") {
           const launch = fxProfile(e.skillId).launchCue;
           if (launch && !loosed.has(launch)) {
@@ -364,6 +392,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         if (e.kind === "container" && e.opened && was.get(id)?.kind === "container" && !was.get(id)!.opened) {
           play("container-open", 1, at(e));
         }
+        if (e.bossPhase === 3 && was.get(id)?.bossPhase === 2) play("boss-phase-three", 1, at(e));
       }
 
       // A voice already running follows its source: a bolt crossing the screen and a

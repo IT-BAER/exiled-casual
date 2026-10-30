@@ -50,6 +50,7 @@ import { LootLabels } from "./hud/LootLabels";
 import { NpcLabels } from "./hud/NpcLabels";
 import { MonsterHealthBars } from "./hud/MonsterHealthBars";
 import { warmSkillFx } from "./render/skill-fx";
+import { warmBossFx } from "./render/boss-fx";
 import { warmEntityLooks, warmProjectiles } from "./render/meshes";
 import { Minimap } from "./hud/Minimap";
 import { BuffBar } from "./hud/BuffBar";
@@ -711,6 +712,7 @@ export function GameView({
         // per area: buildLevel just replaced the level materials, so the flash
         // light's fourth-light recompile has to be paid again for the new set.
         warmSkillFx(scene);
+        warmBossFx(scene);
         warmProjectiles(scene);
         releaseWarm?.();
         releaseWarm = warmEntityLooks(scene);

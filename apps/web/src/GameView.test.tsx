@@ -110,6 +110,7 @@ vi.mock("./audio/sfx", async (importOriginal) => ({
 // container. Same reason the level and the rig are mocked: none of it is what this
 // file is about, and render/hideout.test.ts owns the placements.
 vi.mock("./render/skill-fx", () => ({ warmSkillFx: vi.fn() }));
+vi.mock("./render/boss-fx", () => ({ warmBossFx: vi.fn() }));
 vi.mock("./render/meshes", () => ({ warmProjectiles: vi.fn(), warmEntityLooks: vi.fn() }));
 vi.mock("./render/hideout", () => ({
   buildHideoutDecor: vi.fn(), clearHideoutDecor: vi.fn(),
