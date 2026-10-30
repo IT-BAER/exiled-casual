@@ -222,57 +222,115 @@ describe("monsters asset", () => {
   });
 
   /**
-   * A boss's heavy swing starts on the wind-up's first tick and the hit lands a
-   * second later: played at its own pace the blow would fall on empty air long
-   * before the floor erupts. The coil stretches so the blow frame meets the impact.
+   * Clips as the glTF loader keys them (60 fps), each strike carrying the blow
+   * `build_monsters.py` stamps into its extras, in seconds: the attack's at 0.3 s
+   * of 0.77, the slam's at 0.667 s of 1.23, as the packed glb has them.
    */
-  it("slows a heavy's coil so its blow lands on the impact, then finishes at its own pace", () => {
-    const groups = new Map<string, { speedRatio: number }>();
-    const group = (name: string): AnimationGroup => {
-      // The authored strike: 15 frames at 30 fps, keyed by the glTF loader at 60.
+  const striker = (species: string, clips: readonly string[]) => {
+    const groups = new Map<string, { speedRatio: number; isPlaying: boolean }>();
+    const started: string[] = [];
+    const ends: (() => void)[] = [];
+    const STRIKES: Record<string, { to: number; blow: number }> = {
+      attack: { to: 46, blow: 0.3 },
+      slam: { to: 74, blow: 0.666667 },
+    };
+    const group = (clip: string): AnimationGroup => {
+      const name = `${species}|${clip}`;
+      const strike = STRIKES[clip];
       const g = {
         name,
         speedRatio: 1,
+        isPlaying: false,
         enableBlending: false,
         blendingSpeed: 0,
         from: 0,
-        to: 30,
+        to: strike?.to ?? 46,
         targetedAnimations: [{ animation: { framePerSecond: 60 } }],
-        start: (_loop: boolean, ratio?: number) => { if (ratio !== undefined) g.speedRatio = ratio; },
-        stop: () => {},
+        metadata: strike ? { gltf: { extras: { blow: strike.blow } } } : null,
+        start: (loop: boolean, ratio?: number) => {
+          if (ratio !== undefined) g.speedRatio = ratio;
+          g.isPlaying = true;
+          started.push(`${clip}${loop ? "" : ":once"}`);
+        },
+        stop: () => { g.isPlaying = false; },
         dispose: () => {},
-        onAnimationGroupEndObservable: { addOnce: () => {} },
+        onAnimationGroupEndObservable: { addOnce: (fn: () => void) => ends.push(fn) },
       };
-      groups.set(name, g);
+      groups.set(clip, g);
       return g as unknown as AnimationGroup;
     };
-    const species = "monster.cinder_warden.v1";
     const rig = new CreatureRig(
-      {
-        animationGroups: ["walk", "idle", "attack"].map((c) => group(`${species}|${c}`)),
-        rootNodes: [],
-        skeletons: [],
-        dispose: () => {},
-      } as unknown as InstantiatedEntries,
+      { animationGroups: clips.map(group), rootNodes: [], skeletons: [], dispose: () => {} } as unknown as InstantiatedEntries,
       species,
     );
-    const attack = groups.get(`${species}|attack`)!;
+    started.length = 0; // the constructor's arrival breath
+    return { rig, groups, started, ends };
+  };
+
+  /**
+   * A heavy's swing starts on the wind-up's first tick and the hit lands a second
+   * later: played at its own pace the blow would fall on empty air long before the
+   * floor erupts. A species that owns a slam plays it for the wind-up, and its coil
+   * stretches so the slam's own blow meets the impact; one without plays its attack.
+   */
+  it("slams into a wind-up, its coil slowed so the slam's blow lands on the impact", () => {
     const now = vi.spyOn(performance, "now").mockReturnValue(1000);
     try {
+      const { rig, groups, started } = striker("monster.cinder_warden.v1", ["walk", "idle", "attack", "slam"]);
+      const slam = groups.get("slam")!;
+      const attack = groups.get("attack")!;
       rig.noteAttack(1); // first report: seeds the edge
-      // The blow is 56% into the half-second clip, 0.28 s at its own pace:
-      // landing 1.12 s out takes a quarter of it.
       rig.noteAttack(2, 1.12);
-      expect(attack.speedRatio).toBeCloseTo(0.25, 3);
+      expect(started).toEqual(["slam:once"]);
+      // The slam's blow is 0.667 s in: landing 1.12 s out plays it at 0.595.
+      expect(slam.speedRatio).toBeCloseTo(0.666667 / 1.12, 3);
       now.mockReturnValue(1000 + 1110);
       rig.setLocomotion(0);
-      expect(attack.speedRatio, "still coiling").toBeCloseTo(0.25, 3);
+      expect(slam.speedRatio, "still coiling").toBeCloseTo(0.666667 / 1.12, 3);
       now.mockReturnValue(1000 + 1130);
       rig.setLocomotion(0);
-      expect(attack.speedRatio, "past the blow: the strike's own quick pace").toBeCloseTo(1.3, 3);
+      expect(slam.speedRatio, "past the blow: the strike's own quick pace").toBeCloseTo(1.3, 3);
 
+      started.length = 0;
       rig.noteAttack(3);
-      expect(attack.speedRatio, "a plain swing keeps that pace").toBeCloseTo(1.3, 3);
+      expect(started, "a plain swing is the attack").toEqual(["attack:once"]);
+      expect(attack.speedRatio, "at its quick pace").toBeCloseTo(1.3, 3);
+      expect(slam.isPlaying, "the slam lets go of the bones").toBe(false);
+
+      const plain = striker("monster.vaal_construct.v1", ["walk", "idle", "attack"]);
+      plain.rig.noteAttack(1);
+      plain.rig.noteAttack(2, 1.12);
+      expect(plain.started, "no slam: the attack takes the wind-up").toEqual(["attack:once"]);
+      expect(plain.groups.get("attack")!.speedRatio).toBeCloseTo(0.3 / 1.12, 3);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
+  /**
+   * A charger's wind-up is the run: the hit lands where the dash ends, a second or
+   * more out, and a coil stretched over the whole run would hold the body bent
+   * while it sprints. The strike instead starts late, at its own pace, so its blow
+   * falls on the impact; until then the legs run.
+   */
+  it("starts a charge's strike late so its blow lands on the impact, running until then", () => {
+    const now = vi.spyOn(performance, "now").mockReturnValue(1000);
+    try {
+      const { rig, groups, started } = striker("monster.thornhide_boar.v1", ["walk", "idle", "attack"]);
+      rig.noteAttack(1);
+      rig.noteAttack(2, 1, true);
+      expect(started, "nothing swings at the start of the run").toEqual([]);
+      rig.setLocomotion(6);
+      expect(started).toEqual(["walk"]);
+      // The blow is 0.3 s in at 1.3x: the strike starts 0.231 s before the impact.
+      const startAt = 1000 + (1 - 0.3 / 1.3) * 1000;
+      now.mockReturnValue(startAt - 5);
+      rig.setLocomotion(6);
+      expect(started, "still running").toEqual(["walk"]);
+      now.mockReturnValue(startAt + 5);
+      rig.setLocomotion(6);
+      expect(started).toEqual(["walk", "attack:once"]);
+      expect(groups.get("attack")!.speedRatio).toBeCloseTo(1.3, 3);
     } finally {
       now.mockRestore();
     }
@@ -923,14 +981,29 @@ describe("creature instances", () => {
     }
   });
 
+  /** A map snapshot holding `entities`, the player standing off to one side. */
+  const snap = (tick: number, entities: SnapshotEntity[]): Snapshot => ({
+    tick, player: testPlayer({ x: 2, y: 2 }), area: "map", portalsLeft: 0, mapOpen: false, areaTier: 0,
+    atlasSeed: 0, completedNodes: [], entities,
+    inventory: { cols: 12, rows: 5, items: [] }, stash: { cols: 12, rows: 12, items: [] },
+    vendor: { cols: 12, rows: 12, items: [] }, shards: {}, equipment: {},
+  });
+  /** Whether any part of the actor drawn for entity `id` glows through a wind-up. */
+  const glowing = (scene: Scene, id: number) => {
+    const root = scene.getMeshByName(`entity-${id}`) as Mesh;
+    return [root, ...root.getChildMeshes(false)]
+      .some((m) => ((m.metadata as { dangerGlow?: number } | null)?.dangerGlow ?? 0) > 0);
+  };
+
   /**
    * The sim stamps a boss's swing on the wind-up's first tick. Drawn from the
-   * snapshot, the Warden's strike stretches to land on its slam's impact a second
-   * out, and a plain swing does not. Measured on the packed glb: the Warden's rake
-   * peaks 0.433 s into its strike (`rig_humanoid.py` frame 12 of 22, after the
-   * exporter's leading frame), so a blow a second away plays it at 0.433.
+   * snapshot, the Warden slams for its heavy, the slam stretched to land on the
+   * impact a second out, and a plain swing is its attack at its own pace.
+   * Measured on the packed glb: the Warden's slam lands its blow 0.667 s in
+   * (`rig_humanoid.py` frame 20, stamped by `build_monsters.py`), so a blow a
+   * second away plays it at 0.667.
    */
-  it("times a boss's strike to the heavy wind-up it casts", async () => {
+  it("times a boss's slam to the heavy wind-up it casts", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     const engine = new NullEngine();
@@ -938,26 +1011,83 @@ describe("creature instances", () => {
     try {
       await loadMonsters(scene);
       const renderer = new SnapshotRenderer(scene);
-      const snap = (tick: number, entities: SnapshotEntity[]): Snapshot => ({
-        tick, player: testPlayer({ x: 2, y: 2 }), area: "map", portalsLeft: 0, mapOpen: false, areaTier: 0,
-        atlasSeed: 0, completedNodes: [], entities,
-        inventory: { cols: 12, rows: 5, items: [] }, stash: { cols: 12, rows: 12, items: [] },
-        vendor: { cols: 12, rows: 12, items: [] }, shards: {}, equipment: {},
-      });
       // In front of the camera: a creature off screen sleeps and skips a swing nobody sees.
       const warden = (attackTick: number): SnapshotEntity => ({
         id: 7, kind: "monster", boss: true, species: "monster.cinder_warden.v1", x: 0, y: 0, attackTick,
       });
-      const slam: SnapshotEntity = { id: 8, kind: "telegraph", x: 1, y: 1, radius: 3.5, progress: 0, ownerId: 7, impactIn: 1, heavy: true };
+      // Half filled: a fresh tell glows 0, so the glow is only told apart once it fills.
+      const slam: SnapshotEntity = { id: 8, kind: "telegraph", x: 1, y: 1, radius: 3.5, progress: 0.5, ownerId: 7, impactIn: 1, heavy: true };
+      const volley: SnapshotEntity = { id: 9, kind: "telegraph", x: 1, y: 1, radius: 1.3, progress: 0, ownerId: 7, impactIn: 1, ability: "cinder_rain" };
 
       renderer.apply(null, snap(1, [warden(0)]), 0);
-      const strike = creatureOf(scene.getMeshByName("entity-7") as Mesh)!.clipGroups.get("attack")!;
+      const clips = creatureOf(scene.getMeshByName("entity-7") as Mesh)!.clipGroups;
       renderer.apply(null, snap(2, [warden(2), slam]), 0);
-      expect(strike.speedRatio).toBeCloseTo(0.433, 2);
+      expect(clips.get("slam")!.isPlaying, "the heavy is the slam").toBe(true);
+      expect(clips.get("slam")!.speedRatio).toBeCloseTo(0.667, 2);
+      expect(glowing(scene, 7), "a boss's heavy glows").toBe(true);
 
       renderer.apply(null, snap(3, [warden(3)]), 0);
-      expect(strike.speedRatio, "a plain swing").toBeCloseTo(1.3, 3);
+      expect(clips.get("attack")!.isPlaying, "a plain swing is the attack").toBe(true);
+      expect(clips.get("attack")!.speedRatio).toBeCloseTo(1.3, 3);
+
+      renderer.apply(null, snap(4, [warden(4), volley]), 0);
+      expect(clips.get("attack")!.speedRatio, "a boss's light mark never times its swing").toBeCloseTo(1.3, 3);
     } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
+  /**
+   * Trash wind-ups carry no `heavy` flag, so drawn as before every trash slam and
+   * charge was a plain swing that landed long before the hit. A trash heavy's
+   * slam now stretches to its impact without the boss's red glow, and a charger
+   * runs its dash and starts its strike late, so the blow falls on the impact.
+   */
+  it("times a trash heavy's slam without a glow, and a charge's strike to the end of its run", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const now = vi.spyOn(performance, "now");
+    try {
+      await loadMonsters(scene);
+      now.mockReturnValue(1000);
+      const renderer = new SnapshotRenderer(scene);
+      const sentinel = (attackTick: number): SnapshotEntity => ({
+        id: 7, kind: "monster", species: "monster.blood_sentinel.v1", x: 0, y: 0, attackTick,
+      });
+      const boar = (attackTick: number): SnapshotEntity => ({
+        id: 9, kind: "monster", species: "monster.thornhide_boar.v1", x: -1, y: 0, attackTick,
+      });
+      // Half filled: a fresh tell glows 0 even for a boss.
+      const slam: SnapshotEntity = { id: 8, kind: "telegraph", x: 1, y: 1, radius: 2.6, progress: 0.5, ownerId: 7, impactIn: 1 };
+      const charge: SnapshotEntity = {
+        id: 10, kind: "telegraph", x: 2, y: 2, radius: 1, progress: 0, ownerId: 9, impactIn: 1, fromX: -1, fromY: 0,
+      };
+
+      renderer.apply(null, snap(1, [sentinel(0), boar(0)]), 0);
+      const heavy = creatureOf(scene.getMeshByName("entity-7") as Mesh)!.clipGroups;
+      const runner = creatureOf(scene.getMeshByName("entity-9") as Mesh)!.clipGroups;
+      renderer.apply(null, snap(2, [sentinel(2), boar(2), slam, charge]), 0);
+      expect(heavy.get("slam")!.isPlaying, "the trash heavy slams").toBe(true);
+      expect(heavy.get("slam")!.speedRatio).toBeCloseTo(0.667, 2);
+      expect(glowing(scene, 7), "the glow stays the boss's").toBe(false);
+      expect(runner.get("attack")!.isPlaying ?? false, "no swing at the start of the run").toBe(false);
+
+      // The boar's blow is 0.3 s in at 1.3x: its strike starts 0.231 s before the impact.
+      const startAt = 1000 + (1 - 0.3 / 1.3) * 1000;
+      const late = { ...charge, impactIn: 0.25 };
+      now.mockReturnValue(startAt - 5);
+      renderer.apply(null, snap(2, [sentinel(2), boar(2), slam, late]), 0);
+      expect(runner.get("attack")!.isPlaying ?? false, "still running").toBe(false);
+      now.mockReturnValue(startAt + 5);
+      renderer.apply(null, snap(2, [sentinel(2), boar(2), slam, late]), 0);
+      expect(runner.get("attack")!.isPlaying, "the strike, a frame before its blow is due").toBe(true);
+      expect(runner.get("attack")!.speedRatio).toBeCloseTo(1.3, 3);
+    } finally {
+      now.mockRestore();
       resetMonsters();
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;

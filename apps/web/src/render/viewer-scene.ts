@@ -530,7 +530,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     mesh.position.set(at.x, floorY + Y_LIFT[kind], at.z);
     if (kind === "telegraph") mesh.scaling.set(tg.radius, 1, tg.radius);
     moving = null;
-    c.noteAttack(++attackTick);
+    c.noteAttack(++attackTick, tg.durationS, tg.kind === "charge");
     let patch: Mesh | null = null;
     const burnS = (GROUND_FADE_TICKS + EMBER_TAIL_TICKS) / TICKS_PER_SEC;
     const endS = tg.durationS + (tg.groundS > 0 ? tg.groundS + burnS : TELL_HOLD_S);
@@ -543,7 +543,10 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
           h.position.copyFrom(home.add(FACING.scale(f.travelled)));
           c.setLocomotion(f.travelled > 0 && !f.done ? tg.speed : 0);
           updateChargePath(mesh, f.progress, { x: h.position.x, y: h.position.z });
-        } else updateTelegraph(mesh, f.progress);
+        } else {
+          updateTelegraph(mesh, f.progress);
+          c.setLocomotion(0); // where the slam's coil gives way to its own pace at the blow
+        }
         if (f.done) {
           mesh.dispose();
           c.setLocomotion(0);
@@ -870,7 +873,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         if (t === null || species === null) return false;
         const run = () => playAbility(c, t, species);
         run();
-        lastAction = { run, group: () => c.clipGroups.get("attack") ?? null };
+        lastAction = { run, group: () => (t.heavy ? c.clipGroups.get("slam") : undefined) ?? c.clipGroups.get("attack") ?? null };
         return true;
       }
       if (action === "charge" || action === "slam" || action === "slam2") {
@@ -878,7 +881,8 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         if (tg === null) return false;
         const run = () => playTell(c, tg);
         run();
-        lastAction = { run, group: () => c.clipGroups.get("attack") ?? null };
+        const strike = tg.kind === "charge" ? "attack" : "slam";
+        lastAction = { run, group: () => c.clipGroups.get(strike) ?? c.clipGroups.get("attack") ?? null };
         return true;
       }
       if (action === "death") {

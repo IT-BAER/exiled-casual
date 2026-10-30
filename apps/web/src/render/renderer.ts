@@ -595,10 +595,12 @@ export class SnapshotRenderer {
         .sort((a, b) => a - b)
       : [];
 
-    // Each monster's heavy wind-up, the one nearest its blow: it glows and times its swing to it.
+    // Each monster's wind-up, the one nearest its blow: it times its swing to it, and a heavy
+    // glows. A boss times only its heavies; its light marks fall around it while it swings on.
+    const bosses = new Set(next.entities.filter((e) => e.kind === "monster" && e.boss).map((e) => e.id));
     const winding = new Map<number, SnapshotEntity>();
     for (const e of next.entities) {
-      if (e.kind !== "telegraph" || !e.heavy || e.ownerId === undefined) continue;
+      if (e.kind !== "telegraph" || e.ownerId === undefined || (!e.heavy && bosses.has(e.ownerId))) continue;
       const was = winding.get(e.ownerId);
       if (!was || (e.impactIn ?? 0) < (was.impactIn ?? 0)) winding.set(e.ownerId, e);
     }
@@ -715,8 +717,8 @@ export class SnapshotRenderer {
       // The sim swung: one-shot strike over whatever locomotion was playing.
       const windup = e.kind === "monster" ? winding.get(e.id) : undefined;
       const left = windup ? (windup.impactIn ?? 0) - alpha / TICKS_PER_SEC : undefined;
-      creatureOf(mesh)?.noteAttack(e.attackTick, left);
-      if (windup) {
+      creatureOf(mesh)?.noteAttack(e.attackTick, left, windup?.fromX !== undefined);
+      if (windup?.heavy) {
         setDangerGlow(mesh, dangerGlow(windup.progress ?? 0, left!));
         this.glowing.add(e.id);
       } else if (this.glowing.delete(e.id)) {

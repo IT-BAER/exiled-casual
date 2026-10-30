@@ -112,27 +112,33 @@ export function partOfCreature(entity: { name: string }, species: string): boole
   return isUnder(entity as Node, species);
 }
 
-/** The clips `build_monsters.py` authors, one NLA track each. */
-type Clip = "walk" | "idle" | "attack";
+/** The clips `build_monsters.py` authors, one NLA track each; a slam only for a species that winds one up. */
+type Clip = "walk" | "idle" | "attack" | "slam";
+const CLIPS: readonly Clip[] = ["walk", "idle", "attack", "slam"];
+type Strike = "attack" | "slam";
 
 /** The strike plays a shade quick — authored over the walk's frames, it reads
  *  sluggish at 1.0 against a swing that has already landed in the sim. */
 const ATTACK_RATIO = 1.3;
-/**
- * Where the blow lands in the exported strike, as a share of the clip: measured on
- * the packed `monsters.glb` at 0.562 for `build_monsters.py`'s clips and 0.565 for
- * `rig_humanoid.py`'s. Not the builder's 0.52: the exporter adds a leading frame.
- */
-const BLOW_AT = 0.56;
 /** The slowest a heavy's coil stretches; a wind-up longer than that lands its blow early. */
 const COIL_RATIO_MIN = 0.15;
 
+/**
+ * Seconds from a strike's start to its blow at its own pace. `build_monsters.py`
+ * stamps each strike's contact into its glTF animation as `extras.blow` (clip
+ * time, seconds), which Babylon hands over as `metadata.gltf.extras`.
+ */
+function toBlow(group: AnimationGroup): number {
+  const fps = group.targetedAnimations[0]?.animation.framePerSecond;
+  const blow = (group.metadata as { gltf?: { extras?: { blow?: number } } } | null)?.gltf?.extras?.blow;
+  return fps && blow !== undefined ? blow - group.from / fps : 0;
+}
+
 /** The strike's rate that lands its blow `impactIn` seconds out, inside the range it still reads at. */
 function coilRatio(group: AnimationGroup, impactIn: number): number {
-  const fps = group.targetedAnimations[0]?.animation.framePerSecond;
-  if (!fps || impactIn <= 0) return ATTACK_RATIO;
-  const toBlow = (BLOW_AT * (group.to - group.from)) / fps;
-  return Math.min(ATTACK_RATIO, Math.max(COIL_RATIO_MIN, toBlow / impactIn));
+  const s = toBlow(group);
+  if (s <= 0 || impactIn <= 0) return ATTACK_RATIO;
+  return Math.min(ATTACK_RATIO, Math.max(COIL_RATIO_MIN, s / impactIn));
 }
 
 /**
@@ -167,6 +173,10 @@ export class CreatureRig {
   private playing: Clip | null = null;
   /** Mid one-shot strike: locomotion keeps its hands off the bones. */
   private striking = false;
+  /** Which strike is playing, or last played. */
+  private strike: Strike = "attack";
+  /** `performance.now()` at which a charge's strike starts, so its blow falls where the run ends. */
+  private swingAt: number | undefined;
   /** Last swing tick seen, so only the change fires the clip. */
   private lastAttackTick: number | undefined;
   /** `performance.now()` at which a heavy's slowed blow lands; the follow-through plays at full pace. */
@@ -187,10 +197,7 @@ export class CreatureRig {
   ) {
     this.scene = scene;
     for (const group of entries.animationGroups) {
-      const clip = group.name.endsWith("walk") ? "walk"
-        : group.name.endsWith("idle") ? "idle"
-        : group.name.endsWith("attack") ? "attack"
-        : null;
+      const clip = CLIPS.find((c) => group.name.endsWith(c)) ?? null;
       // Babylon clones every group in the container, and a group whose targets
       // were pruned falls back to the SOURCE nodes — which would animate the
       // shared container out from under every other monster.
@@ -228,10 +235,12 @@ export class CreatureRig {
   /**
    * The sim swung (snapshot `attackTick` changed): play the strike once, over
    * whatever locomotion asks for, then hand the body back. The tick is only an
-   * edge — its value never schedules anything client-side. A heavy wind-up passes
-   * the seconds until its hit, and the coil stretches to land the blow on it.
+   * edge — its value never schedules anything client-side. A wind-up passes the
+   * seconds until its hit: the species' slam (its attack where it has none)
+   * plays, its coil stretched to land the blow on it. A charge's wind-up is the
+   * run, so its attack starts late instead, and the legs run until then.
    */
-  noteAttack(tick: number | undefined, impactIn?: number): void {
+  noteAttack(tick: number | undefined, impactIn?: number, charge = false): void {
     // The first report only seeds the edge, "no swing yet" included. A creature
     // that comes into view carrying a swing from before it was drawn must not
     // greet the camera with one, but its first swing in view must play.
@@ -240,28 +249,29 @@ export class CreatureRig {
     this.lastAttackTick = tick;
     if (!this.awake) return; // a swing nobody can see
 
-    const group = this.groups.get("attack");
+    if (impactIn === undefined) {
+      this.swing("attack", ATTACK_RATIO);
+      return;
+    }
+    const attack = this.groups.get("attack");
+    if (charge) {
+      this.swingAt = performance.now() + (impactIn - (attack ? toBlow(attack) : 0) / ATTACK_RATIO) * 1000;
+      return;
+    }
+    const strike: Strike = this.groups.has("slam") ? "slam" : "attack";
+    const group = this.groups.get(strike);
     if (!group) return;
-    this.striking = true;
-    for (const [name, other] of this.groups) if (name !== "attack") other.stop();
-    const ratio = impactIn === undefined ? ATTACK_RATIO : coilRatio(group, impactIn);
-    this.blowAt = impactIn === undefined ? undefined : performance.now() + impactIn * 1000;
-    group.speedRatio = ratio;
-    group.enableBlending = this.blend;
-    group.start(false, ratio);
-    group.onAnimationGroupEndObservable.addOnce(() => {
-      this.striking = false;
-      this.playing = null; // force the next setLocomotion to restart its clip
-    });
-    this.playing = "attack";
+    this.swing(strike, coilRatio(group, impactIn));
+    this.blowAt = performance.now() + impactIn * 1000;
   }
 
   setLocomotion(speed: number): void {
     if (this.blowAt !== undefined && performance.now() >= this.blowAt) {
       this.blowAt = undefined;
-      const strike = this.groups.get("attack");
+      const strike = this.groups.get(this.strike);
       if (strike && this.striking) strike.speedRatio = ATTACK_RATIO;
     }
+    if (this.swingAt !== undefined && performance.now() >= this.swingAt) this.swing("attack", ATTACK_RATIO);
     if (this.striking) return;
     if (speed <= MOVING) {
       // Same settle as the player rig, off the same clock: a creature that has
@@ -286,8 +296,9 @@ export class CreatureRig {
     if (awake === this.awake) return;
     this.awake = awake;
     if (!awake) {
+      this.swingAt = undefined;
       if (this.striking) {
-        this.groups.get("attack")?.stop();
+        this.groups.get(this.strike)?.stop();
         this.striking = false;
         this.playing = null;
       }
@@ -313,7 +324,28 @@ export class CreatureRig {
   stopForDeath(): void {
     for (const group of this.groups.values()) group.stop();
     this.striking = false;
+    this.swingAt = undefined;
     this.playing = null;
+  }
+
+  /** One strike, once, over whatever locomotion was playing; the body goes back to locomotion at its end. */
+  private swing(strike: Strike, ratio: number): void {
+    const group = this.groups.get(strike);
+    if (!group) return;
+    for (const [name, other] of this.groups) if (name !== strike) other.stop();
+    this.swingAt = undefined;
+    this.blowAt = undefined;
+    this.striking = true;
+    this.strike = strike;
+    group.speedRatio = ratio;
+    group.enableBlending = this.blend;
+    group.start(false, ratio);
+    group.onAnimationGroupEndObservable.addOnce(() => {
+      if (this.playing !== strike) return; // cut short by the other strike
+      this.striking = false;
+      this.playing = null; // force the next setLocomotion to restart its clip
+    });
+    this.playing = strike;
   }
 
   private play(clip: Clip, ratio: number): void {
