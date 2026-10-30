@@ -28,6 +28,12 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Heavy boss attacks are easier to read: the boss glows red and coils its
   swing while it winds up, the marking on the ground shows when the hit lands
   as well as where, and every hit lands with its own effect and sound.
+- The larger monsters no longer all attack with the same swipe. Each strikes
+  in its own way: sword bearers swing their blades through the hit, brutes
+  gore, grab or club with their fists, and the big beasts stomp. The heavy
+  monsters and the map bosses have a separate slam for their big attacks,
+  which lands exactly when the marking on the ground fills, and a charging
+  monster runs all the way in and strikes as it arrives.
 
 ### Fixed
 
