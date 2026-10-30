@@ -10,6 +10,24 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Orbs craft waystones. An Orb of Transmutation makes a normal waystone magic,
+  an Orb of Alchemy makes a normal or magic one rare, and an Orb of Elevation
+  turns a magic waystone rare with all its modifiers rolled anew. A waystone
+  with modifiers pays a second waystone one tier higher when you clear its
+  map, so you choose when to climb the Atlas instead of waiting for a lucky
+  drop.
+
+### Fixed
+
+- An orb that cannot change a waystone no longer plays the craft sound as if
+  it had worked.
+- On smaller screens the Atlas panel for a map no longer covers the backpack,
+  so a waystone in its first column can be dragged again, and the panel moves
+  aside so the open inventory no longer hides its socket and Activate button.
+- The inventory's tabs no longer draw a line under the tab you switch to.
+
 ## [0.5.1] - 2026-10-28
 
 ### Added
