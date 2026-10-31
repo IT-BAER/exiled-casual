@@ -1039,6 +1039,38 @@ describe("creature instances", () => {
     }
   });
 
+  it("tells a shooter's legs how far off its facing it moves, and nothing while it walks where it faces", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const told = vi.spyOn(CreatureRig.prototype, "setMoveAngle");
+    try {
+      await loadMonsters(scene);
+      const renderer = new SnapshotRenderer(scene);
+      // Turned to a target on +y while it goes: square across (+x), straight back, and then straight at it.
+      const spitter = (x: number, y: number, heading?: { x: number; y: number }): SnapshotEntity => ({
+        id: 7, kind: "monster", species: "monster.dune_spitter.v1", x, y, ...(heading ? { heading } : {}),
+      });
+      const last = () => told.mock.calls.at(-1)![0];
+      renderer.apply(null, snap(1, [spitter(0, 0, { x: 0, y: 1 })]), 1);
+      // Come round to the heading it was sent: the headless turn steps a millisecond a frame.
+      scene.getMeshByName("entity-7")!.rotation.y = 0;
+      renderer.apply(snap(40, [spitter(0, 0, { x: 0, y: 1 })]), snap(41, [spitter(0.05, 0, { x: 0, y: 1 })]), 0.5);
+      expect(last()).toBeCloseTo(Math.PI / 2, 1);
+      renderer.apply(snap(41, [spitter(0.05, 0, { x: 0, y: 1 })]), snap(42, [spitter(0.05, -0.05, { x: 0, y: 1 })]), 0.5);
+      expect(Math.abs(last())).toBeCloseTo(Math.PI, 1);
+      // No target sent: the body turns into its walk, and the lag of that turn is no sidestep.
+      renderer.apply(snap(42, [spitter(0.05, -0.05)]), snap(43, [spitter(0.1, -0.05)]), 0.5);
+      expect(last()).toBe(0);
+    } finally {
+      told.mockRestore();
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
   /**
    * Trash wind-ups carry no `heavy` flag, so drawn as before every trash slam and
    * charge was a plain swing that landed long before the hit. A trash heavy's
@@ -1098,6 +1130,71 @@ describe("creature instances", () => {
    * The walk's push-off roll run on the idle rocks each foot 17 degrees about its
    * ankle while the creature stands still.
    */
+  /**
+   * A shooter strafes square to the player and backs off it while its body
+   * stays turned to its target, and the forward walk played under that slid it
+   * sideways on legs stepping ahead. Each foot's stance (its lowest quarter of
+   * the cycle) must push against the way the body really goes, as it does on a
+   * plain walk: sideways for a strafe, ahead for a backpedal.
+   */
+  it("steps its legs the way it moves, not the way it faces", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    scene.useConstantAnimationDeltaTime = true;
+    new FreeCamera("cam", new Vector3(0, 10, -10), scene);
+    try {
+      await loadMonsters(scene);
+      const strafers = [...MONSTERS.values()].filter((d) => d.ranged !== undefined).map((d) => d.id);
+      expect(strafers.length).toBeGreaterThanOrEqual(4);
+      let legged = 0;
+      /** Each foot's lowest point walking ahead. */
+      const lowest = new Map<string, number>();
+      for (const id of strafers) {
+        for (const rel of [0, Math.PI / 2, -Math.PI / 2, Math.PI]) {
+          const root = new Mesh(`${id}-${rel}`, scene);
+          const rig = attachCreature(scene, root, id)!;
+          const feet = root.getDescendants(false).filter((n) => /^(leg\d+_2|leg[LR]_ankle)$/.test(n.name)) as TransformNode[];
+          if (feet.length === 0) { root.dispose(); rig.dispose(); continue; }
+          if (rel === 0) legged++;
+          const track = new Map<TransformNode, Vector3[]>(feet.map((f) => [f, []]));
+          for (let frame = 0; frame < 150; frame++) {
+            rig.setLocomotion(2);
+            rig.setMoveAngle(rel);
+            scene.render();
+            if (frame < 60) continue;
+            for (const f of feet) track.get(f)!.push(f.getAbsolutePosition().clone());
+          }
+          const move = new Vector3(Math.sin(rel), 0, Math.cos(rel));
+          const across = new Vector3(move.z, 0, -move.x);
+          for (const [f, at] of track) {
+            const ys = at.map((p) => p.y);
+            const low = Math.min(...ys) + (Math.max(...ys) - Math.min(...ys)) * 0.25;
+            const push = new Vector3();
+            for (let k = 1; k < at.length; k++) if (at[k]!.y <= low && at[k - 1]!.y <= low) push.addInPlace(at[k]!.subtract(at[k - 1]!));
+            const along = Vector3.Dot(push, move);
+            const side = Math.abs(Vector3.Dot(push, across));
+            const label = `${id} ${f.name} at ${Math.round((rel * 180) / Math.PI)} deg: along ${along.toFixed(3)} across ${side.toFixed(3)}`;
+            expect(along, label).toBeLessThan(0);
+            expect(-along, label).toBeGreaterThan(side);
+            // Planted on the floor the clip puts it on, neither sunk nor lifted.
+            const floor = Math.min(...ys);
+            const ahead = lowest.get(`${id} ${f.name}`) ?? (lowest.set(`${id} ${f.name}`, floor), floor);
+            expect(Math.abs(floor - ahead), label).toBeLessThan(0.01);
+          }
+          root.dispose();
+          rig.dispose();
+        }
+      }
+      expect(legged, "strafers with legs").toBe(3);
+    } finally {
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
   it("keeps every foot at one angle to the ground through the idle", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;

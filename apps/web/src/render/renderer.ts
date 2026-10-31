@@ -1270,6 +1270,8 @@ export class SnapshotRenderer {
     // is turning INTO its move, and the lag of that turn is not a sidestep.
     const rel = moving && facing ? Math.atan2(dx, dz) - mesh.rotation.y : 0;
     rigOf(mesh)?.setMoveAngle(rel, yawStep);
+    // A monster sent a heading faces its target while it strafes or backs off: its legs walk the way it goes.
+    creatureOf(mesh)?.setMoveAngle(moving && sent !== null ? Math.atan2(dx, dz) - mesh.rotation.y : 0);
     rigOf(mesh)?.setLookYaw(moving ? (sent ?? Math.atan2(dx, dz)) : null);
     // A stopped actor still needs frames to settle back upright. Skipping this
     // call used to freeze the last running bank indefinitely. Turning to a

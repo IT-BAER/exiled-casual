@@ -1,10 +1,15 @@
 import {
   LoadAssetContainerAsync,
+  Matrix,
+  Quaternion,
+  TransformNode,
+  Vector3,
   type AnimationGroup,
   type AssetContainer,
   type InstantiatedEntries,
   type Mesh,
   type Node,
+  type Observer,
   type Scene,
 } from "@babylonjs/core";
 import { addRim } from "./rim";
@@ -159,6 +164,59 @@ const RATIO_RANGE = [0.7, 1.55] as const;
 const IDLE_RATIO = 0.4;
 /** Below this an actor is standing still, in the renderer's own units. */
 const MOVING = 0.05;
+/** Time constant the move's yaw off the facing eases over: the sim turns it on a 30 Hz tick. */
+const MOVE_EASE_SEC = 0.08;
+/** A leg's hip, knee and foot as either builder names them: the generated bodies' `leg<i>_<0-2>`, the humanoid's. */
+const LEG_JOINT = /^leg(\d+|[LR])_(0|1|2|hip|knee|ankle)$/;
+const LEG_PART: Readonly<Record<string, 0 | 1 | 2>> = { 0: 0, 1: 1, 2: 2, hip: 0, knee: 1, ankle: 2 };
+
+const wrapPi = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** One leg the stride is turned on. */
+interface Leg {
+  joints: [TransformNode, TransformNode, TransformNode];
+  /** Where the foot stands at rest, in the host's frame: the point its stride swings about. */
+  rest: Vector3;
+  /** The clip's own pose of each joint this frame, put back before the next one animates. */
+  clip: [Quaternion, Quaternion, Quaternion];
+}
+
+/** World matrices from the top of the hierarchy down to `node`, so a pose set this frame reads true. */
+function refresh(node: TransformNode): void {
+  const chain: TransformNode[] = [];
+  for (let n: Node | null = node; n; n = n.parent) if (n instanceof TransformNode) chain.unshift(n);
+  for (const n of chain) n.computeWorldMatrix(true);
+}
+
+const axis = new Vector3();
+const local = new Quaternion();
+const inverse = new Matrix();
+
+/**
+ * Turn `node` by `angle` about the world `dir`, on top of its pose. Set through
+ * its parent's frame: glTF's handedness flip mirrors that frame, and a mirror
+ * turns every rotation the other way.
+ */
+function turnInWorld(node: TransformNode, dir: Vector3, angle: number): void {
+  const q = node.rotationQuaternion;
+  if (!q || !(node.parent instanceof TransformNode)) return;
+  const parent = node.parent.getWorldMatrix();
+  parent.invertToRef(inverse);
+  Vector3.TransformNormalToRef(dir, inverse, axis);
+  axis.normalize();
+  Quaternion.RotationAxisToRef(axis, parent.determinant() < 0 ? -angle : angle, local);
+  local.multiplyToRef(q, q);
+}
+
+/** The world turn taking direction `from` onto `to` (both any length), as an axis and an angle; null when they agree. */
+function turnBetween(from: Vector3, to: Vector3): { dir: Vector3; angle: number } | null {
+  const a = from.normalizeToNew();
+  const b = to.normalizeToNew();
+  const dir = Vector3.Cross(a, b);
+  const sin = dir.length();
+  const angle = Math.atan2(sin, Vector3.Dot(a, b));
+  return sin < 1e-6 ? null : { dir: dir.scaleInPlace(1 / sin), angle };
+}
 
 /**
  * One creature's authored clips, and which one is playing.
@@ -189,6 +247,13 @@ export class CreatureRig {
   /** Cross-fade on a clip start. Applied AT a start only, so a ramp already running never snaps. */
   private blend = true;
   private readonly scene: Scene | null;
+  /** The move's yaw off the way the body faces, positive to its right, eased; and where it eases to. */
+  private moveRel = 0;
+  private moveTo = 0;
+  private readonly legs: Leg[] = [];
+  private readonly observers: Observer<Scene>[] = [];
+  /** The legs were turned this frame and hold that, not the clip's pose. */
+  private turned = false;
 
   constructor(
     private readonly entries: InstantiatedEntries,
@@ -209,9 +274,99 @@ export class CreatureRig {
       group.blendingSpeed = 0.1;
       this.groups.set(clip, group);
     }
+    this.findLegs();
     // The first breath after being built is the arrival one; the settle starts
     // from there, exactly as it does when a creature stops walking.
     this.play("idle", IDLE_RATIO);
+  }
+
+  /**
+   * Every leg whose hip, knee and foot are all there, and where its foot stands
+   * at rest, read before any clip has posed it.
+   */
+  private findLegs(): void {
+    const host = this.entries.rootNodes[0]?.parent;
+    if (!this.scene || !(host instanceof TransformNode)) return;
+    const found = new Map<string, TransformNode[]>();
+    for (const n of this.entries.rootNodes.flatMap((r) => r.getDescendants(false))) {
+      const m = LEG_JOINT.exec(n.name);
+      if (!m || !(n instanceof TransformNode) || !n.rotationQuaternion) continue;
+      const leg = found.get(m[1]!) ?? [];
+      leg[LEG_PART[m[2]!]!] = n;
+      found.set(m[1]!, leg);
+    }
+    for (const [hip, knee, foot] of found.values()) {
+      if (!hip || !knee || !foot) continue;
+      refresh(foot);
+      const rest = Vector3.TransformCoordinates(foot.getAbsolutePosition(), host.getWorldMatrix().clone().invert());
+      this.legs.push({ joints: [hip, knee, foot], rest, clip: [new Quaternion(), new Quaternion(), new Quaternion()] });
+    }
+    if (this.legs.length === 0) return;
+    const scene = this.scene;
+    this.observers.push(scene.onBeforeAnimationsObservable.add(() => {
+      if (!this.turned) return;
+      for (const leg of this.legs) leg.joints.forEach((j, i) => j.rotationQuaternion?.copyFrom(leg.clip[i]!));
+      this.turned = false;
+    }));
+    this.observers.push(scene.onAfterAnimationsObservable.add(() => {
+      // A loop-less engine (headless) reports 0; a frame is the step it takes.
+      const dt = (scene.getEngine?.()?.getDeltaTime?.() || 16) / 1000;
+      this.moveRel = wrapPi(this.moveRel + wrapPi(this.moveTo - this.moveRel) * (1 - Math.exp(-dt / MOVE_EASE_SEC)));
+      if (this.playing !== "walk" || !this.awake || Math.abs(this.moveRel) < 1e-3) return;
+      this.turnLegs(host, this.moveRel);
+    }));
+  }
+
+  /**
+   * Walk the legs `rel` off the way the body faces. Each foot keeps the clip's
+   * lift but its stride, its way off where it stands at rest, is turned about
+   * the vertical by `rel`; hip and knee reach for it with the clip's own knee
+   * bend, and the foot keeps the clip's angle to the ground. So the stride the
+   * forward walk takes along the body is taken along the move: across it for a
+   * strafe, back down it for a backpedal.
+   */
+  private turnLegs(host: TransformNode, rel: number): void {
+    const cos = Math.cos(rel);
+    const sin = Math.sin(rel);
+    const hostWorld = host.getWorldMatrix();
+    for (const leg of this.legs) {
+      const [hip, knee, foot] = leg.joints;
+      leg.joints.forEach((j, i) => leg.clip[i]!.copyFrom(j.rotationQuaternion!));
+      refresh(foot);
+      const h = hip.getAbsolutePosition().clone();
+      const k = knee.getAbsolutePosition().clone();
+      const f = foot.getAbsolutePosition().clone();
+      const home = Vector3.TransformCoordinates(leg.rest, hostWorld);
+      // Babylon's yaw by rel: +z (ahead) onto (sin, 0, cos), the move.
+      const dx = f.x - home.x;
+      const dz = f.z - home.z;
+      const target = new Vector3(home.x + dx * cos + dz * sin, f.y, home.z - dx * sin + dz * cos);
+      const a = Vector3.Distance(h, k);
+      const b = Vector3.Distance(k, f);
+      const reach = target.subtract(h);
+      const d = Math.min(a + b - 1e-4, Math.max(Math.abs(a - b) + 1e-4, reach.length()));
+      const u = reach.normalize();
+      // The knee bends where the clip bends it, off the line from hip to foot.
+      const line = f.subtract(h).normalize();
+      const bend = k.subtract(h);
+      bend.subtractInPlace(line.scale(Vector3.Dot(bend, line)));
+      bend.subtractInPlace(u.scale(Vector3.Dot(bend, u)));
+      if (bend.lengthSquared() < 1e-10) continue;
+      bend.normalize();
+      const cosA = Math.min(1, Math.max(-1, (a * a + d * d - b * b) / (2 * a * d)));
+      const kneeTo = h.add(u.scale(a * cosA)).addInPlace(bend.scale(a * Math.sqrt(1 - cosA * cosA)));
+      const footTo = h.add(u.scale(d));
+      const atHip = turnBetween(k.subtract(h), kneeTo.subtract(h));
+      if (atHip) turnInWorld(hip, atHip.dir, atHip.angle);
+      refresh(foot);
+      const atKnee = turnBetween(foot.getAbsolutePosition().subtract(knee.getAbsolutePosition()), footTo.subtract(knee.getAbsolutePosition()));
+      if (atKnee) turnInWorld(knee, atKnee.dir, atKnee.angle);
+      refresh(foot);
+      // The foot undoes both turns above it, so it meets the floor as the clip set it down.
+      if (atKnee) turnInWorld(foot, atKnee.dir, -atKnee.angle);
+      if (atHip) turnInWorld(foot, atHip.dir, -atHip.angle);
+    }
+    this.turned = true;
   }
 
   /**
@@ -223,6 +378,8 @@ export class CreatureRig {
    * makes; the renderer invokes this wherever it disposes an actor mesh.
    */
   dispose(): void {
+    for (const o of this.observers) o.remove();
+    this.observers.length = 0;
     this.entries.dispose();
     this.groups.clear();
   }
@@ -263,6 +420,15 @@ export class CreatureRig {
     if (!group) return;
     this.swing(strike, coilRatio(group, impactIn));
     this.blowAt = performance.now() + impactIn * 1000;
+  }
+
+  /**
+   * The move's yaw off the way the body faces (radians, positive to its right),
+   * 0 when it walks where it faces. A shooter turned to its target while it
+   * strafes or backs off walks its legs that way instead of stepping ahead.
+   */
+  setMoveAngle(rel: number): void {
+    this.moveTo = wrapPi(rel);
   }
 
   setLocomotion(speed: number): void {
