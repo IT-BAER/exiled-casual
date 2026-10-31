@@ -133,6 +133,13 @@ describe("roster", () => {
       }
     });
 
+    it("rejects the Hangul fillers, letters that draw as nothing", () => {
+      for (const name of ["ㅤㅤ", "ᅟᅠᅟ", "ﾠﾠﾠ", "Vㅤㅤss"]) {
+        expect(nameError(r, name), JSON.stringify(name)).toMatch(/Letters/);
+      }
+      expect(nameError(r, "한국어")).toBeNull();
+    });
+
     it("rejects a letter stacked with marks (zalgo)", () => {
       expect(nameError(r, "Za\u0300\u0301\u0302\u0303\u0304\u0305\u0306lgo")).toMatch(/Letters/);
     });

@@ -77,9 +77,11 @@ export const NAME_MAX = 20;
 /**
  * A letter of any script, then letters, their marks, decimal digits or `_`.
  * Everything else is out, which covers controls (Cc), bidi overrides and
- * zero-width joiners (Cf), and every kind of space (Z*).
+ * zero-width joiners (Cf), and every kind of space (Z*). The Hangul fillers
+ * are letters (Lo) that draw as nothing, so ignorables are refused on top.
  */
 const NAME_CHARS = /^\p{L}[\p{L}\p{M}\p{Nd}_]*$/u;
+const INVISIBLE = /\p{Default_Ignorable_Code_Point}/u;
 /** Han, kana and Hangul are drawn about twice as wide as a Latin letter. */
 const WIDE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 /** Devanagari stacks reach 3 marks on one letter; zalgo uses many more. */
@@ -139,7 +141,7 @@ export function nameError(roster: RosterBlob, name: string): string | null {
   const width = nameWidth(normal);
   if (width < NAME_MIN) return `At least ${NAME_MIN} characters.`;
   if (width > NAME_MAX) return `At most ${NAME_MAX} characters.`;
-  if (!NAME_CHARS.test(normal) || letters(normal).some((l) => (l.match(MARK)?.length ?? 0) > MARKS_PER_LETTER)) {
+  if (!NAME_CHARS.test(normal) || INVISIBLE.test(normal) || letters(normal).some((l) => (l.match(MARK)?.length ?? 0) > MARKS_PER_LETTER)) {
     return "Letters, digits and underscores, starting with a letter.";
   }
   if (isNameTaken(roster, normal)) return "That name is taken.";
