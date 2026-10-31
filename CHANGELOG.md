@@ -54,6 +54,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The death screen ends with the one thing to do next: resurrect at the
   checkpoint while the map has a portal to spare, or in the hideout, where the
   Map Device opens the map again.
+- The monsters a boss calls into the fight, such as Mother Vhal's brood, are
+  as strong as the rest of the map's monsters: they grow with the map's tier
+  and its waystone instead of keeping their base life and damage.
 
 ### Fixed
 
