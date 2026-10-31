@@ -34,6 +34,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   monsters and the map bosses have a separate slam for their big attacks,
   which lands exactly when the marking on the ground fills, and a charging
   monster runs all the way in and strikes as it arrives.
+- The main menu tells you when your device cannot play well: on a touch-only
+  phone or tablet that the game needs a keyboard and mouse, and when the
+  browser has hardware acceleration turned off. Play stays open either way.
 
 ### Fixed
 
