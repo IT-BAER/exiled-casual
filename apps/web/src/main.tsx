@@ -5,6 +5,7 @@ import { gpuRenderer } from "./gpu";
 import { telemetry } from "./telemetry/client";
 import { installErrorCapture } from "./telemetry/errors";
 import { loadLiveConfig } from "./telemetry/liveops";
+import { captureInstallPrompt } from "./menu/install-prompt";
 
 /**
  * Arms the gilt focus ring (`body[data-kbd] :focus-visible` in `index.html`) on
@@ -115,6 +116,9 @@ void logoPainted.then(() => {
  * registered there — and any worker left over from a production build on the
  * same origin is torn out instead.
  */
+// Before the browser can fire it: the roster makes the offer after a session.
+captureInstallPrompt();
+
 if ("serviceWorker" in navigator) {
   if (import.meta.env.PROD) {
     window.addEventListener("load", () => {

@@ -21,6 +21,8 @@ import { nameKey, type CharacterHeader } from "@exiled/persistence";
 import { characterClass } from "@exiled/content-runtime";
 import { Atmosphere, type BrazierSpot } from "./atmos";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
+import { installPrompt, useInstallOffer } from "./install-prompt";
+import type { NextGoal } from "./next-goal";
 
 /**
  * The hall's two braziers, as fractions of `select_backdrop.jpg`. The art holds
@@ -45,6 +47,8 @@ export interface CharacterSelectProps {
   onImport: (file: File) => void;
   /** How many characters this world holds. Local is one; online is uncapped. */
   cap: number;
+  /** The selected character's nearest step on the fixed-ratio track (next-goal.ts). */
+  nextGoal?: NextGoal | null;
 }
 
 export function CharacterSelect({
@@ -59,6 +63,7 @@ export function CharacterSelect({
   onExport,
   onImport,
   cap,
+  nextGoal = null,
 }: CharacterSelectProps): React.ReactElement {
   const [confirming, setConfirming] = React.useState<CharacterHeader | null>(null);
   const importRef = React.useRef<HTMLInputElement>(null);
@@ -151,6 +156,8 @@ export function CharacterSelect({
           )}
         </div>
 
+        {nextGoal && <NextGoalLine goal={nextGoal} />}
+
         <Divider />
 
         <div style={{ display: "flex", gap: 8 }}>
@@ -198,6 +205,40 @@ export function CharacterSelect({
             onDelete(id);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Where PoE's roster has its filter row: the one step the selected character is
+ * closest to, and, where the browser offers it, Install beside it.
+ */
+function NextGoalLine({ goal }: { goal: NextGoal }): React.ReactElement {
+  const canInstall = useInstallOffer();
+  const [what, why] = goal.kind === "level"
+    ? [`Level ${goal.level}`, `${goal.percent}% of the way there.`]
+    : goal.first
+      ? [`Clear your first map: ${goal.name}`, "Its boss always pays out."]
+      : [`Next on the Atlas: ${goal.name}, Tier ${goal.tier}`, "Its boss always pays out."];
+  return (
+    <div data-testid="next-goal" style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 4px" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 2, textTransform: "uppercase", color: GOLD_DIM }}>
+          Next goal
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: 14, color: PARCHMENT, lineHeight: 1.4 }}>{what}</div>
+        <div style={{ fontFamily: SERIF, fontSize: 12, color: GOLD_DIM, lineHeight: 1.4 }}>{why}</div>
+      </div>
+      {canInstall && (
+        <MenuButton
+          height={34}
+          style={{ flex: "0 0 auto", minWidth: 96 }}
+          title="Install Exiled Casual as an app, one click from your desktop or home screen."
+          onClick={() => { void installPrompt()?.().catch(() => undefined); }}
+        >
+          Install
+        </MenuButton>
       )}
     </div>
   );

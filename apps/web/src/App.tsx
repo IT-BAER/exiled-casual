@@ -19,6 +19,7 @@ import { MainMenu } from "./menu/MainMenu";
 import { ModeDialog } from "./menu/ModeDialog";
 import { Presence, ScreenFade } from "./presence";
 import { CharacterSelect } from "./menu/CharacterSelect";
+import { nextGoal } from "./menu/next-goal";
 import { CreateCharacter } from "./menu/CreateCharacter";
 import { LoadingScreen, LOADING_ART } from "./LoadingScreen";
 import { pickTip } from "./tips";
@@ -394,6 +395,7 @@ export function App(): React.ReactElement {
             characters={rows}
             selectedId={selectedId}
             cap={cap}
+            nextGoal={nextGoal(roster.characters.find((c) => c.id === selectedId))}
             onSelect={setSelectedId}
             onPlay={(id) => {
               markGameEntry();

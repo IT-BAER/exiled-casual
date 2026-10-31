@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type React from "react";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 import type { CharacterHeader } from "@exiled/persistence";
 import { CharacterSelect } from "./CharacterSelect";
+import { _resetInstallPrompt, captureInstallPrompt } from "./install-prompt";
 
 afterEach(cleanup);
 
@@ -143,5 +144,42 @@ describe("CharacterSelect", () => {
       expect(screen.queryByTestId("confirm-delete")).toBeNull();
       expect(onDelete).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("CharacterSelect, the next goal", () => {
+  afterEach(() => _resetInstallPrompt());
+
+  it("names the first map for a character back from its first session", () => {
+    view({ nextGoal: { kind: "node", name: "The Wrackline", tier: 1, first: true } });
+    expect(screen.getByTestId("next-goal").textContent).toMatch(/first map.*The Wrackline/i);
+    expect(screen.getByTestId("next-goal").textContent).toMatch(/boss/i);
+  });
+
+  it("names the next Atlas place with its tier", () => {
+    view({ nextGoal: { kind: "node", name: "Sunken Hollow", tier: 2, first: false } });
+    expect(screen.getByTestId("next-goal").textContent).toMatch(/Sunken Hollow.*Tier 2/);
+  });
+
+  it("names the next level and how close it is", () => {
+    view({ nextGoal: { kind: "level", level: 7, percent: 82 } });
+    expect(screen.getByTestId("next-goal").textContent).toMatch(/Level 7.*82%/);
+  });
+
+  it("says nothing without a goal", () => {
+    view();
+    expect(screen.queryByTestId("next-goal")).toBeNull();
+  });
+
+  it("offers to install only when the browser has an offer, and uses it once", () => {
+    captureInstallPrompt(window);
+    view({ nextGoal: { kind: "level", level: 7, percent: 82 } });
+    expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
+    const e = new Event("beforeinstallprompt", { cancelable: true }) as Event & { prompt: () => Promise<void> };
+    e.prompt = vi.fn(() => Promise.resolve());
+    act(() => { window.dispatchEvent(e); });
+    fireEvent.click(screen.getByRole("button", { name: /install/i }));
+    expect(e.prompt).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
   });
 });
