@@ -78,6 +78,8 @@ export interface UiSettings {
   keybinds: Record<ControlMode, Keybinds>;
   /** Each character's control mode by character id. Absent: never chose, plays mouse. */
   controls: Record<string, ControlMode>;
+  /** Ids of the characters that have stood in a map, oldest first. See hud/first-map.ts. */
+  mapEntered: string[];
   /** Held over an item, shows what is worn in its slot beside it. */
   compareKey: CompareKey;
   /**
@@ -186,7 +188,7 @@ function keybindProfiles(raw: unknown): Record<ControlMode, Keybinds> {
 }
 
 /** More characters than any roster holds; a bound on what a hand-edited save can grow. */
-const MAX_CONTROL_ENTRIES = 64;
+export const MAX_CONTROL_ENTRIES = 64;
 
 function controls(raw: unknown): Record<string, ControlMode> {
   const out: Record<string, ControlMode> = {};
@@ -198,6 +200,13 @@ function controls(raw: unknown): Record<string, ControlMode> {
     n++;
   }
   return out;
+}
+
+/** A list of character ids, the newest MAX_CONTROL_ENTRIES, each once. */
+function characterIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const ids = raw.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 64);
+  return [...new Set(ids)].slice(-MAX_CONTROL_ENTRIES);
 }
 
 /** The mode a character plays in: mouse until he has chosen. */
@@ -244,6 +253,7 @@ export const DEFAULT_SETTINGS: Settings = {
     pet: true,
     keybinds: { mouse: { ...DEFAULT_KEYBINDS_BY_MODE.mouse }, wasd: { ...DEFAULT_KEYBINDS_BY_MODE.wasd } },
     controls: {},
+    mapEntered: [],
     compareKey: "ctrl",
     debugLogging: false,
   },
@@ -371,6 +381,7 @@ export function sanitize(raw: unknown, renderer?: string): Settings {
       pet: bool(u["pet"], d.ui.pet),
       keybinds: keybindProfiles(u["keybinds"]),
       controls: controls(u["controls"]),
+      mapEntered: characterIds(u["mapEntered"]),
       compareKey: member(u["compareKey"], COMPARE_KEYS, d.ui.compareKey),
       debugLogging: bool(u["debugLogging"], d.ui.debugLogging),
     },

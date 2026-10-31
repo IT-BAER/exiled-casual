@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Mesh, Scene } from "@babylonjs/core";
-import { attachProp, isPropsReady, loadProps, PROP_KINDS, resetProps } from "./props";
+import { attachProp, deviceBeckon, isPropsReady, loadProps, PROP_KINDS, resetProps } from "./props";
 
 /**
  * The container the loader would hand back, with the one call this module makes
@@ -183,5 +183,17 @@ describe("loading into two scenes", () => {
     await loadProps(scene);
     await loadProps(scene);
     expect(isPropsReady(scene)).toBe(true);
+  });
+});
+
+describe("deviceBeckon", () => {
+  it("swells from nothing to full and back once every 1.5 s of sim ticks", () => {
+    expect(deviceBeckon(0)).toBeCloseTo(0, 6);
+    expect(deviceBeckon(22.5)).toBeCloseTo(1, 6);
+    expect(deviceBeckon(45)).toBeCloseTo(0, 6);
+    for (let t = 0; t < 90; t += 0.7) {
+      expect(deviceBeckon(t)).toBeGreaterThanOrEqual(0);
+      expect(deviceBeckon(t)).toBeLessThanOrEqual(1);
+    }
   });
 });

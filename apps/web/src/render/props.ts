@@ -179,3 +179,15 @@ export function attachProp(
   });
   return materials;
 }
+
+/** One swell of the device's beckon, in 30 Hz sim ticks: 1.5 s. */
+const BECKON_TICKS = 45;
+
+/**
+ * How far the Map Device swells toward its hover glow, 0..1, for a character
+ * that has never opened a map (hud/first-map.ts). A slow breath on the device's
+ * own brass, not a marker over it: nothing 2D stands in the scene.
+ */
+export function deviceBeckon(tick: number): number {
+  return 0.5 - 0.5 * Math.cos((2 * Math.PI * tick) / BECKON_TICKS);
+}

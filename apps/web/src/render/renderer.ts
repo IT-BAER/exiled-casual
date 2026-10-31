@@ -10,6 +10,7 @@ import { HIT_STOP_SCALE, addTrauma, decayTrauma, hitStopMs, shakeOffset, skillSh
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import type { WakeBody } from "./wake";
 import { animateActor, keepGroundBlobFlat, makeMesh, setDangerGlow, setHitFlash, setHovered, setTier, markKind, updateMark, RADIUS_SCALED, updateChargePath, updatePortal, updateMapDevice, updateStash, updateVendor, updateContainer, updateGroundItem, updateRareElement, portalAppear, portalVanish, isPortalMesh, PORTAL_STAGGER_MS, Y_LIFT } from "./meshes";
+import { deviceBeckon } from "./props";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
 import { rigOf } from "./rig";
@@ -375,6 +376,7 @@ export class SnapshotRenderer {
   private playerId: number | null = null;
   /** Entity id the mouse is hovering; drives mesh highlight, NOT inRange. */
   private hoveredEntityId: number | null = null;
+  private beckonDevice = false;
   /** The monster wearing the red hover outline; cleared before its mesh becomes a corpse. */
   private outlinedId: number | null = null;
   /** Monsters glowing through a heavy wind-up; cleared when it lands or they die. */
@@ -418,6 +420,11 @@ export class SnapshotRenderer {
         return true;
       };
     }
+  }
+
+  /** Breathe the Map Device's glow until the character has opened a map (hud/first-map.ts). */
+  setMapDeviceBeckon(on: boolean): void {
+    this.beckonDevice = on;
   }
 
   /** Show or put away the companion cat (`ui.pet`). */
@@ -797,7 +804,7 @@ export class SnapshotRenderer {
         updatePortal(mesh, this.hoveredEntityId === e.id);
       }
       if (e.kind === "mapDevice") {
-        updateMapDevice(mesh, this.hoveredEntityId === e.id);
+        updateMapDevice(mesh, this.hoveredEntityId === e.id, this.beckonDevice ? deviceBeckon(this.now) : 0);
       }
       if (e.kind === "stash") {
         updateStash(mesh, this.hoveredEntityId === e.id);

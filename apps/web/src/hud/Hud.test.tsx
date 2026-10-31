@@ -366,6 +366,18 @@ describe("Hud", () => {
     expect(screen.getByTestId("area-label")).toHaveTextContent("The Wrackline");
   });
 
+  // --- first-map objective ---
+
+  it("tracks the objective to open the Map Device while pointed at it", () => {
+    render(<Hud snapshot={makeSnap({ area: "hideout" })} mapPointer />);
+    expect(screen.getByTestId("objective-tracker")).toHaveTextContent(/Open the Map Device/);
+  });
+
+  it("tracks no objective once the character has been in a map", () => {
+    render(<Hud snapshot={makeSnap({ area: "hideout" })} />);
+    expect(screen.queryByTestId("objective-tracker")).toBeNull();
+  });
+
   // --- portal counter ---
 
   it("shows portal counter with correct budget when map is open", () => {

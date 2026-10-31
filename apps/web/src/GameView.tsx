@@ -60,6 +60,7 @@ import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/f
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { settleGate } from "./settle";
 import { pickTip } from "./tips";
+import { hasEnteredMap, useFirstMap } from "./hud/first-map";
 import { OptionsPanel } from "./menu/OptionsPanel";
 import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT, controlModeOf, presetOf, stepDown, type ControlMode, type Settings } from "./settings";
 import { enforceMode, socketForKey } from "./controls";
@@ -303,7 +304,7 @@ export function GameView({
   // The tab names the place the character is standing in.
   useEffect(() => { setTitle(area.name); }, [area.name]);
   /** Chosen when a load STARTS, so a re-render mid-load cannot swap the line being read. */
-  const [tip, setTip] = useState(() => pickTip());
+  const [tip, setTip] = useState(() => pickTip(Math.random, !hasEnteredMap(settings, characterId)));
 
   // Resolve the socketed item on each render; clear the cell when the item is gone.
   const socketedItem = socketedCell && snapshot
@@ -679,7 +680,7 @@ export function GameView({
         clearTimeout(fadeTimer);
         setLoading(true);
         setLeaving(false);
-        setTip(pickTip());
+        setTip(pickTip(Math.random, msg.area === "hideout" && !hasEnteredMap(settingsRef.current, characterId)));
         const biome = base ? BIOMES[base.biomeId] : null;
         setArea({
           name: biome?.name ?? "Hideout",
@@ -940,6 +941,12 @@ export function GameView({
     rendererRef.current?.setPet(settings.ui.pet);
   }, [settings.ui.pet]);
 
+  /** Until the character first stands in a map: an objective line and a breathing device. */
+  const mapPointer = useFirstMap(settings, onSettingsChange, characterId, snapshot);
+  useEffect(() => {
+    rendererRef.current?.setMapDeviceBeckon(mapPointer);
+  }, [mapPointer]);
+
   /**
    * Auto graphics: from the plate lifting until the next area, one fps reading a
    * second; a slow window steps the preset down once (`FpsGuard`). Never up.
@@ -1055,6 +1062,7 @@ export function GameView({
         keybinds={keybinds}
         controlMode={controlMode}
         refusedSeq={refusedSeq}
+        mapPointer={mapPointer}
       />
       {settings.ui.minimap && (
         <Minimap

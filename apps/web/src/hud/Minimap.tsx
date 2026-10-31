@@ -17,7 +17,7 @@ import { SERIF } from "./ItemTooltip";
  */
 
 /** Minimap box, a fraction of the viewport as the rest of the HUD is. */
-const MAP_VW = 13;
+export const MAP_VW = 13;
 /**
  * Gap to the top-right corner, in the same viewport units.
  *
@@ -25,7 +25,7 @@ const MAP_VW = 13;
  * it, so a generous inset just floats it in the middle of a corner instead of
  * anchoring it to one, and the space it leaves is world the player cannot use.
  */
-const MAP_INSET_VW = 0.6;
+export const MAP_INSET_VW = 0.6;
 /** World units the player reveals around themselves. */
 const REVEAL_RADIUS = 9;
 /**

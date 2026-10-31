@@ -8,6 +8,7 @@ import { flaskTooltip } from "./flask-tooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
+import { MAP_INSET_VW, MAP_VW } from "./Minimap";
 import { TargetFrame } from "./TargetFrame";
 import { playDropSound } from "../audio/drop-sound";
 import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_ACTIONS, SKILL_SLOT_COUNT, keyCap, type ControlMode, type Keybinds } from "../settings";
@@ -605,6 +606,8 @@ interface HudProps {
   targetId?: number | null;
   /** Bumped by a transfer the inventory panel refused itself; shows Inventory Full like the sim's refusal. */
   refusedSeq?: number;
+  /** Track "Open the Map Device": the character has never been in a map (hud/first-map.ts). */
+  mapPointer?: boolean;
 }
 
 /**
@@ -888,6 +891,7 @@ export function Hud({
   controlMode = "mouse",
   targetId = null,
   refusedSeq = 0,
+  mapPointer = false,
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
   // Length-normalised here rather than trusted: the bar rides in the save, and a
@@ -1312,6 +1316,34 @@ export function Hud({
       >
         {snapshot.area === "hideout" ? "Hideout" : mapName ?? "Map"}
       </div>
+
+      {/* PoE2's quest tracker: right-aligned under the minimap, the quest in
+          gold capitals over its objective in parchment, on a shade that fades
+          out toward the playfield. */}
+      {mapPointer && (
+        <div
+          data-testid="objective-tracker"
+          role="status"
+          style={{
+            position: "absolute",
+            top: `calc(${MAP_INSET_VW + MAP_VW}vw + 10px)`,
+            right: `${MAP_INSET_VW}vw`,
+            padding: "6px 10px 7px 40px",
+            textAlign: "right",
+            background: "linear-gradient(to left, rgba(0,0,0,0.62), rgba(0,0,0,0.4) 60%, rgba(0,0,0,0))",
+            textShadow: "0 1px 3px #000",
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontFamily: DISPLAY, fontSize: 13, letterSpacing: 1.5, textTransform: "uppercase", color: "#c9a84c" }}>
+            First Map
+          </div>
+          <div style={{ fontFamily: SERIF, fontSize: 14, color: "#e8dcc0", marginTop: 3, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7 }}>
+            <span style={{ width: 5, height: 5, transform: "rotate(45deg)", border: "1px solid #c9a84c", flex: "0 0 auto" }} />
+            Open the Map Device
+          </div>
+        </div>
+      )}
 
       {/* Portal budget — shown while a map is open, next to the area label */}
       {snapshot.mapOpen && (

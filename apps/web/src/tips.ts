@@ -22,12 +22,17 @@ export const TIPS: readonly string[] = [
   "Blink costs mana and crosses a gap. It is a defensive skill wearing a movement skill's coat.",
 ];
 
+/** What a character that has never been in a map reads instead (hud/first-map.ts). */
+export const FIRST_MAP_TIP =
+  "Your first map starts at the Map Device in your hideout: click it, drag a Waystone into its socket and press Activate.";
+
 /**
- * One tip per load, chosen at random.
+ * One tip per load, chosen at random, except before the character's first map.
  *
  * Deliberately not sequential: a rotation the player can predict stops being
  * read after the third map, which is the whole failure mode of loading tips.
  */
-export function pickTip(rand: () => number = Math.random): string {
+export function pickTip(rand: () => number = Math.random, firstMap = false): string {
+  if (firstMap) return FIRST_MAP_TIP;
   return TIPS[Math.floor(rand() * TIPS.length)] ?? TIPS[0]!;
 }

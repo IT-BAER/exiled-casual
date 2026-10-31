@@ -1977,12 +1977,13 @@ function buildGoldPile(scene: Scene, root: Mesh, amount: number, jackpot: boolea
 }
 
 /** Brighten the device emissive on mouse hover so it reads as interactive. */
-export function updateMapDevice(root: Mesh, hovered: boolean): void {
+export function updateMapDevice(root: Mesh, hovered: boolean, beckon = 0): void {
   const parts = root.metadata as { brassBody: StandardMaterial; brassRim: StandardMaterial } | null;
   if (!parts?.brassBody) return;
   // Idle: faint warm glow so it reads in a dark scene. Hovered: push enough
-  // emissive that the GlowLayer produces a visible warm halo.
-  const e = hovered ? 0.28 : 0.06;
+  // emissive that the GlowLayer produces a visible warm halo. Beckon (0..1)
+  // breathes the idle glow up past hover, for a character's first map.
+  const e = hovered ? 0.28 : 0.06 + 0.26 * beckon;
   parts.brassBody.emissiveColor.set(e, e * 0.67, e * 0.17);
   parts.brassRim.emissiveColor.set(e * 1.4, e, e * 0.25);
 }

@@ -84,6 +84,7 @@ vi.mock("./render/renderer", () => ({
     setHoveredEntity = vi.fn();
     setAim = vi.fn();
     setPet = vi.fn();
+    setMapDeviceBeckon = vi.fn();
     cameraShake = () => ({ x: 0, z: 0 });
     wadingBodies = () => [];
   },
@@ -242,6 +243,29 @@ describe("GameView", () => {
 
     sendArea("map.swamp");
     expect(vi.mocked(playSfx).mock.calls.map(([name]) => name)).toContain("portal-enter");
+  });
+
+  it("points a new character at the map device until its first map, then marks it entered", () => {
+    const onSettingsChange = vi.fn();
+    mountWithSnapshot({ characterId: "c1", onSettingsChange });
+    const fresh = { ...testPlayer(), level: 1 };
+    act(() => {
+      hoisted.worker?.onmessage?.({ data: { type: "snapshot", snapshot: { ...makeSnap(), player: fresh } } });
+    });
+    expect(screen.getByTestId("objective-tracker").textContent).toMatch(/Open the Map Device/);
+    expect(onSettingsChange).not.toHaveBeenCalled();
+    act(() => {
+      hoisted.worker?.onmessage?.({ data: { type: "snapshot", snapshot: { ...makeSnap(), area: "map", player: fresh } } });
+    });
+    expect(onSettingsChange).toHaveBeenCalledWith(
+      expect.objectContaining({ ui: expect.objectContaining({ mapEntered: ["c1"] }) }),
+    );
+    expect(screen.queryByTestId("objective-tracker")).toBeNull();
+  });
+
+  it("does not point a character that has been in a map", () => {
+    mountWithSnapshot({ characterId: "c1", settings: { ...DEFAULT_SETTINGS, ui: { ...DEFAULT_SETTINGS.ui, mapEntered: ["c1"] } } });
+    expect(screen.queryByTestId("objective-tracker")).toBeNull();
   });
 
   it("F3 toggles the performance readout, even while down", () => {
