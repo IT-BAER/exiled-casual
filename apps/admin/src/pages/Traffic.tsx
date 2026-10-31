@@ -9,7 +9,7 @@ export function TrafficView({ t }: { t: TrafficData }) {
   const humans = sum(t.days.map((d) => d.humans));
   const bots = sum(t.days.map((d) => d.bots));
   const sessions = sum(t.days.map((d) => d.sessions));
-  const boots = sum(t.days.map((d) => d.boots));
+  const boots = sum(t.days.map((d) => d.boots ?? 0));
   const statuses = [...t.statuses].sort((a, b) => a.status - b.status);
   return (
     <>
@@ -56,7 +56,7 @@ export function TrafficView({ t }: { t: TrafficData }) {
                   <td className="num" data-label="Page loads">{formatNumber(d.pageLoads)}</td>
                   <td className="num" data-label="Humans">{formatNumber(d.humans)}</td>
                   <td className="num" data-label="Bots">{formatNumber(d.bots)}</td>
-                  <td className="num" data-label="Boots">{formatNumber(d.boots)}</td>
+                  <td className="num" data-label="Boots">{d.boots === null ? <span className="faint">-</span> : formatNumber(d.boots)}</td>
                   <td className="num" data-label="Sessions">{formatNumber(d.sessions)}</td>
                 </tr>
               ))}

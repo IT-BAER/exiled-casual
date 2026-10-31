@@ -146,8 +146,10 @@ export function createApp(opts: AppOptions): App {
       `INSERT INTO daily (day, sessions, visitors, play_seconds, page_loads, humans, bots, boots) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(day) DO UPDATE SET sessions = excluded.sessions, visitors = excluded.visitors, play_seconds = excluded.play_seconds,
          page_loads = MAX(page_loads, excluded.page_loads), humans = MAX(humans, excluded.humans), bots = MAX(bots, excluded.bots),
-         boots = MAX(boots, excluded.boots)`,
-    ).run(day, s.n, s.v, s.p, h.pl, h.hu, h.bo, h.bt);
+         boots = COALESCE(MAX(boots, excluded.boots), boots, excluded.boots)`,
+    // A day the hits prune has cut into (it cuts at the time of day) has lost hours, so its
+    // boots stay what they were, or unknown: MAX keeps the other counts for the same reason.
+    ).run(day, s.n, s.v, s.p, h.pl, h.hu, h.bo, from < now() - MAX_DAYS * DAY ? null : h.bt);
   }
 
   let rolledAll = false;

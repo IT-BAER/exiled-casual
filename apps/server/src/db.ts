@@ -141,17 +141,21 @@ const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `,
   // 2: boots (GET /api/config) are the landing count, since only a client that ran the
-  // game's code fetches it. The bot filter grew too, so every stored hit is read again,
-  // and a day that still has its hits gets rolled up afresh: the rollup only ever raises
-  // a day's numbers (it must survive its own raw hits), so they are cleared for it here.
+  // game's code fetches it. NULL is "not counted": every day rolled up before this, and
+  // any row an older server writes. The bot filter grew too, so every stored hit is read
+  // again, and a day that still has all its hits gets rolled up afresh: the rollup only
+  // ever raises a day's numbers (it must survive its own raw hits), so they are cleared
+  // for it here. Not the oldest hit day: pruning cuts at the time of day, so that one
+  // holds only the hours after the cut, and recounting it would lose the rest.
   (db) => {
-    db.exec("ALTER TABLE daily ADD COLUMN boots INTEGER NOT NULL DEFAULT 0");
+    db.exec("ALTER TABLE daily ADD COLUMN boots INTEGER");
     const flag = db.prepare("UPDATE hits SET bot = 1 WHERE id = ?");
     for (const h of db.prepare("SELECT id, ua, path FROM hits WHERE bot = 0").all() as { id: number; ua: string; path: string }[]) {
       if (isBot(h.ua, h.path)) flag.run(h.id);
     }
     db.exec(`UPDATE daily SET page_loads = 0, humans = 0, bots = 0
-      WHERE day IN (SELECT DISTINCT date(t / 1000, 'unixepoch') FROM hits)`);
+      WHERE day IN (SELECT DISTINCT date(t / 1000, 'unixepoch') FROM hits)
+        AND day > (SELECT date(MIN(t) / 1000, 'unixepoch') FROM hits)`);
   },
 ];
 

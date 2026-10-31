@@ -324,6 +324,32 @@ describe("admin routes", () => {
     expect((await j(get("/api/traffic"))).days[0]).toMatchObject({ pageLoads: 2, boots: 1 });
   });
 
+  it("leaves a day whose boots were never counted out of the bounce, instead of calling it all bounced", async () => {
+    const s = await setup();
+    const { get } = await loggedIn(s);
+    // Rolled up before boots were counted, or by an older server that does not write the column.
+    s.app.db.prepare("INSERT INTO daily (day, sessions, visitors, play_seconds, page_loads, humans, bots) VALUES ('2026-10-15', 3, 3, 90, 40, 45, 5)").run();
+    s.app.db.prepare("INSERT INTO daily (day, sessions, visitors, play_seconds, page_loads, humans, bots, boots) VALUES ('2026-10-16', 3, 3, 90, 10, 12, 1, 4)").run();
+    const t = await j(get("/api/traffic?days=7"));
+    expect(t.days.find((d: { date: string }) => d.date === "2026-10-15")).toMatchObject({ pageLoads: 40, boots: null });
+    expect(t.days.find((d: { date: string }) => d.date === "2026-10-16")).toMatchObject({ pageLoads: 10, boots: 4 });
+    expect(t.bouncedBeforeBoot).toBe(6);
+  });
+
+  it("does not count boots for a day the hits prune has already cut into", async () => {
+    const s = await setup();
+    const PERSON = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+    // T0 is 12:00, so the prune cuts the day 90 days back at noon: its morning is gone.
+    const late = T0 - 90 * 86_400_000 + 3_600_000;
+    const at = (t: number) => new Date(t).toUTCString().replace(/^\w+, (\d+) (\w+) (\d+) ([\d:]+) GMT$/, "$1/$2/$3:$4");
+    insertHits(s.app.db, [parseAccessLine(`203.0.113.7 - - [${at(late)} +0000] "GET /api/config HTTP/1.1" 200 10 "-" "${PERSON}"`)!]);
+    s.app.jobs.hourly();
+    const day = new Date(late).toISOString().slice(0, 10);
+    expect(s.app.db.prepare("SELECT boots FROM daily WHERE day = ?").get(day)).toEqual({ boots: null });
+    // A whole day keeps the count it was rolled up with, once its own hits are pruned.
+    expect(s.app.db.prepare("SELECT boots FROM daily WHERE day = '2026-10-18'").get()).toEqual({ boots: 0 });
+  });
+
   it("answers what players did at the device, in maps, at death and on leaving", async () => {
     const s = await setup();
     const { get } = await loggedIn(s);

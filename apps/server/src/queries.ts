@@ -354,7 +354,7 @@ export class Queries {
     const r = parseRange(q, this.now());
     const human = "bot = 0";
     const page = PAGE_LOAD;
-    type DayHits = { day: string; pageLoads: number; humans: number; bots: number; boots: number };
+    type DayHits = { day: string; pageLoads: number; humans: number; bots: number; boots: number | null };
     const hitDays = new Map(this.all<DayHits>(
       `SELECT date(t / 1000, 'unixepoch') AS day, SUM(${human} AND ${page}) AS pageLoads, SUM(${human}) AS humans, SUM(bot) AS bots,
          SUM(${human} AND ${BOOT}) AS boots
@@ -364,7 +364,7 @@ export class Queries {
     const sessions = new Map(this.all<{ day: string; n: number }>("SELECT day, COUNT(*) AS n FROM sessions WHERE started_at >= ? AND started_at <= ? GROUP BY day", r.from, r.to).map((x) => [x.day, x.n]));
     const days = daysIn(r).map((date) => {
       const h = hitDays.get(date) ?? rolled.get(date);
-      return { date, pageLoads: h?.pageLoads ?? 0, humans: h?.humans ?? 0, bots: h?.bots ?? 0, boots: h?.boots ?? 0, sessions: sessions.get(date) ?? 0 };
+      return { date, pageLoads: h?.pageLoads ?? 0, humans: h?.humans ?? 0, bots: h?.bots ?? 0, boots: h ? h.boots : 0, sessions: sessions.get(date) ?? 0 };
     });
     const referrers = this.all<{ referrer: string; visits: number }>(
       `SELECT referrer, COUNT(*) AS visits FROM hits WHERE t >= ? AND t <= ? AND ${human} AND ${page} AND referrer != '' GROUP BY referrer ORDER BY visits DESC LIMIT 30`, r.from, r.to);
@@ -378,7 +378,8 @@ export class Queries {
       agents.set(a, (agents.get(a) ?? 0) + b.n);
     }
     const bots = [...agents].map(([agent, hits]) => ({ agent, hits })).sort((a, b) => b.hits - a.hits).slice(0, 30);
-    const bouncedBeforeBoot = days.reduce((s, d) => s + Math.max(0, d.pageLoads - d.boots), 0);
+    // Only days whose boots were counted: a day rolled up before that would read as all bounced.
+    const bouncedBeforeBoot = days.reduce((s, d) => s + (d.boots === null ? 0 : Math.max(0, d.pageLoads - d.boots)), 0);
     return { days, referrers, paths, statuses, bots, bouncedBeforeBoot };
   }
 

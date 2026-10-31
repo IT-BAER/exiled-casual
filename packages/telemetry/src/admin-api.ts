@@ -265,13 +265,16 @@ export interface LogLine {
 }
 
 export interface Traffic {
-  /** `boots` are human fetches of /api/config: clients that ran the game's code, which a crawler reading the page does not. */
-  days: { date: string; pageLoads: number; humans: number; bots: number; boots: number; sessions: number }[];
+  /**
+   * `boots` are human fetches of /api/config: clients that ran the game's code, which a crawler reading the page
+   * does not. Null for a day rolled up before boots were counted, or cut into by the hits prune.
+   */
+  days: { date: string; pageLoads: number; humans: number; bots: number; boots: number | null; sessions: number }[];
   referrers: { referrer: string; visits: number }[];
   paths: { path: string; hits: number }[];
   statuses: { status: number; hits: number }[];
   bots: { agent: string; hits: number }[];
-  /** Human page loads of "/" in range that never booted the client (page loads minus boots, per day). */
+  /** Human page loads of "/" in range that never booted the client (page loads minus boots, per day whose boots are known). */
   bouncedBeforeBoot: number;
 }
 
