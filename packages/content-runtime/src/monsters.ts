@@ -459,14 +459,21 @@ const BIG_RARE_TEMPLATES: readonly RareModifier[] = RARE_TEMPLATES.map((t) => ({
 }));
 
 /**
+ * What a rare hits for on a level 1 character's first map (`pickPack`'s
+ * `firstClear`), where its first rare stands at the first pack: the novice bot
+ * died to them more often than to the Behemoth they replaced (playtest.ts).
+ */
+const FIRST_CLEAR_RARE_DAMAGE_PCT = 150;
+
+/**
  * Pick a rare's elemental theme from any integer (a seed, a hash). Deterministic
  * and total, so a replay picks the same rare twice; hashing is the caller's job
  * because content must not depend on the sim's rng.
  */
-export function rareTemplate(n: number, archetype?: MonsterArchetype): RareModifier {
+export function rareTemplate(n: number, archetype?: MonsterArchetype, firstClear = false): RareModifier {
   const set = archetype === "brute" || archetype === "heavy" ? BIG_RARE_TEMPLATES : RARE_TEMPLATES;
   const i = Math.abs(Math.trunc(n)) % set.length;
-  return set[i]!;
+  return firstClear ? { ...set[i]!, damageMulPct: FIRST_CLEAR_RARE_DAMAGE_PCT } : set[i]!;
 }
 
 /**
@@ -583,9 +590,14 @@ for (const [biome, defId] of Object.entries(BOSSES)) {
  * supplies the randomness, exactly as `rareTemplate` takes an integer, so
  * content never depends on the sim's rng. `roll` is clamped, so an out-of-range
  * value picks an end of the pool rather than throwing mid-run.
+ *
+ * `firstClear` is a level 1 character's first map: no heavy, whose slam and
+ * poison killed a new player there before he had a flask habit (retention report).
  */
-export function pickPack(biomeId: BiomeId, roll: number): MonsterDef {
-  const pool = MONSTER_POOLS[biomeId];
+export function pickPack(biomeId: BiomeId, roll: number, firstClear = false): MonsterDef {
+  const pool = firstClear
+    ? MONSTER_POOLS[biomeId].filter((e) => MONSTERS.get(e.defId)!.archetype !== "heavy")
+    : MONSTER_POOLS[biomeId];
   const total = pool.reduce((sum, e) => sum + e.weight, 0);
   const clamped = roll < 0 ? 0 : roll >= 1 ? 0.999999 : roll;
   let n = clamped * total;

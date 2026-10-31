@@ -54,6 +54,19 @@ function tip(recap: Recap, stats: PlayerStats): string {
     : `${label} did the most, and your ${label.toLowerCase()} resistance is capped: more life or energy shield.${shield}`;
 }
 
+/**
+ * The one thing to do next, named as the death screen's enabled button says it:
+ * the checkpoint while a portal is spare (GameView's DeathScreen greys it at one).
+ */
+function wayOn(inMap: boolean, portalsLeft: number): string {
+  if (inMap && portalsLeft > 1) {
+    return "Resurrect at Checkpoint to go on: what you killed stays dead, and its loot stays where it fell.";
+  }
+  return inMap
+    ? "Resurrect in Hideout: this map closes, and the Map Device opens it again with a Waystone."
+    : "Resurrect in Hideout, then open a map at the Map Device.";
+}
+
 /** The monster's portrait, or for an ailment (no body to draw) its element's glyph. */
 function Portrait({ species, element }: { species: string; element: MonsterElement }) {
   const src = monsterPortrait(species);
@@ -73,7 +86,9 @@ function Portrait({ species, element }: { species: string; element: MonsterEleme
  * What killed him, on the death screen. Neither PoE has one; players of both ask for
  * the killing blow and what took the most over the last seconds, so that is what shows.
  */
-export function DeathRecap({ recap, stats }: { recap: Recap; stats: PlayerStats }) {
+export function DeathRecap({ recap, stats, inMap = false, portalsLeft = 0 }: {
+  recap: Recap; stats: PlayerStats; inMap?: boolean; portalsLeft?: number;
+}) {
   const kb = recap.killingBlow;
   const kbEl = ELEMENT[kb.element];
   return (
@@ -117,6 +132,9 @@ export function DeathRecap({ recap, stats }: { recap: Recap; stats: PlayerStats 
       )}
       <div data-testid="recap-tip" style={{ marginTop: 10, color: "#9a9187", maxWidth: 360 }}>
         {tip(recap, stats)}
+      </div>
+      <div data-testid="recap-way-on" style={{ marginTop: 10, color: "#e2c58a", maxWidth: 360 }}>
+        {wayOn(inMap, portalsLeft)}
       </div>
     </div>
   );

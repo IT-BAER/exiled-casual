@@ -1179,7 +1179,8 @@ export function GameView({
         <DeathScreen
           portalsLeft={snapshot.portalsLeft}
           inMap={snapshot.area === "map" && snapshot.mapOpen}
-          recap={snapshot.deathRecap && <DeathRecap recap={snapshot.deathRecap} stats={snapshot.player.stats} />}
+          recap={snapshot.deathRecap && <DeathRecap recap={snapshot.deathRecap} stats={snapshot.player.stats}
+            inMap={snapshot.area === "map" && snapshot.mapOpen} portalsLeft={snapshot.portalsLeft} />}
           onRevive={(where) => {
             sendIntent({ kind: "revive", where });
             // Every overlay goes with the body: coming back is a fresh screen.

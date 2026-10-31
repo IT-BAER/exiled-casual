@@ -118,6 +118,21 @@ describe("DeathRecap", () => {
     expect(tip).toMatch(/energy shield/i);
   });
 
+  // One way on, named by the button the death screen enables: a quit after the
+  // first death was half of all first-map deaths (retention report 3.1).
+  it("names one way on: the checkpoint while a portal is spare, else the hideout and the device", () => {
+    const way = () => screen.getByTestId("recap-way-on").textContent!;
+    const { rerender } = render(<DeathRecap recap={recap()} stats={stats()} inMap portalsLeft={4} />);
+    expect(way()).toContain("Resurrect at Checkpoint");
+    expect(way()).toMatch(/killed stays dead/);
+    rerender(<DeathRecap recap={recap()} stats={stats()} inMap portalsLeft={1} />);
+    expect(way()).toContain("Resurrect in Hideout");
+    expect(way()).toContain("Map Device");
+    rerender(<DeathRecap recap={recap()} stats={stats()} />);
+    expect(way()).toContain("Resurrect in Hideout");
+    expect(way()).not.toContain("Checkpoint");
+  });
+
   it("a killing blow over half his life is called out", () => {
     const { rerender } = render(<DeathRecap recap={recap()} stats={stats()} />);
     expect(screen.queryByTestId("recap-big-hit")).toBeNull();

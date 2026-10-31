@@ -1,7 +1,7 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { blockerCollision, gridCollision, hasLineOfSight } from "./collision";
 import {
-  makeMagic, makeRare, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
+  makeMagic, makeRare, atlasNodeIndex, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
   areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem, familyForClass,
   MONSTER_ILVL_OFFSET, DROP_POOL,
 } from "@exiled/rules";
@@ -319,6 +319,8 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     const rnd = mulberry32(session.mapSeed ^ 0x9e37);
     const frac = () => rnd() / 0x100000000;
     const spawns = layout.spawnSockets;
+    // Every character starts at Atlas node 0, so its first clear is a level 1 map.
+    const firstClear = atlasNodeIndex(session.activeNodeId) === 0 && !session.completedNodes.includes(session.activeNodeId);
     // The socket itself is a sanctioned distance from the entrance; the ring
     // offset is not. Mirroring an offset that would land closer to "start" onto
     // the far side keeps every member at least as far out as its socket, so a
@@ -369,7 +371,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     for (let i = 0; i < spawns.length; i++) {
       const s = spawns[i]!;
       const sx = fp(s.x), sy = fp(s.y);
-      const base = withMonsterRes(pickPack(biomeId, frac()), ws.monsterResAdd);
+      const base = withMonsterRes(pickPack(biomeId, frac(), firstClear), ws.monsterResAdd);
       if (!live[i]) continue;
       // Pack size adds to the pack the socket already has. The generator owns
       // where a fight can stand, so a modifier adds bodies to a sanctioned
@@ -385,7 +387,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         // The map's own seed picks the rare's element, so a given map always
         // demands the same resistance and a replay of it stays identical.
         const magic = !rare && i === magicSocket;
-        const def = rare ? makeRare(base, rareTemplate(session.mapSeed, base.archetype)) : magic ? makeMagic(base) : base;
+        const def = rare ? makeRare(base, rareTemplate(session.mapSeed, base.archetype, firstClear)) : magic ? makeMagic(base) : base;
         const ring = PACK_SPREAD[j % PACK_SPREAD.length]!;
         const nearX = sx + ring.dx, nearY = sy + ring.dy;
         const farX = sx - ring.dx, farY = sy - ring.dy;

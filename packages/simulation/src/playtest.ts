@@ -54,6 +54,8 @@ export interface MapRun {
   /** Rolled affixes on equipment drops by affix id, and uniques by name. */
   affixes: Record<string, number>;
   uniques: Record<string, number>;
+  /** Each death's killing blow, "Rare " marking a rare: what the death screen names. */
+  killers: string[];
 }
 
 export type { BotOptions };
@@ -94,7 +96,7 @@ export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
     seconds: 0, deaths: 0, kills: 0, combatSeconds: 0,
     drops: { normal: 0, magic: 0, rare: 0, unique: 0, currency: 0, waystone: 0 },
     magicPlusAt: [], levelStart: progress(g).level, levelEnd: 0, casts: {}, flasks: 0,
-    bossId: null, bossSeconds: null, gold: 0, affixes: {}, uniques: {},
+    bossId: null, bossSeconds: null, gold: 0, affixes: {}, uniques: {}, killers: [],
   };
   const goldStart = progress(g).gold;
   const seenItems = new Set<Entity>(g.world.query("item"));
@@ -118,7 +120,11 @@ export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
       if (until !== before.cds[id]) { run.casts[id] = (run.casts[id] ?? 0) + 1; lastCast = t; }
     }
     if (flaskCharges(g) < before.flasks) run.flasks++;
-    if (now.dead === 1 && !wasDead) run.deaths++;
+    if (now.dead === 1 && !wasDead) {
+      run.deaths++;
+      const kb = g.sim.recentHits[g.sim.recentHits.length - 1];
+      if (kb) run.killers.push(`${kb.rare ? "Rare " : ""}${kb.species}`);
+    }
     wasDead = now.dead === 1;
 
     const alive = new Set<Entity>(g.world.query("monster"));

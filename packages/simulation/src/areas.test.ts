@@ -103,6 +103,46 @@ describe("pool-driven spawning", () => {
     expect(seen.size).toBeGreaterThan(1);
   });
 
+  // Retention report 3.1: a level 1 player died to the Rotting Behemoth, the
+  // swamp's heavy the strand borrows, on his first map. Its first clear is his.
+  it("the first clear of the first Atlas node fields no heavy, and its next clear does", () => {
+    const heavies = (completedNodes: string[]) => {
+      let n = 0;
+      for (let seed = 1; seed <= 30; seed++) {
+        const world = new World();
+        const session = { ...mapSessionAtTier(1), mapSeed: seed, completedNodes };
+        buildArea(world, "map", session, generateArea(seed, CONTENT_VERSION, grammarForNode(session.activeNodeId)));
+        n += world.query("monster").filter((e) => !world.has(e, "boss")
+          && MONSTERS.get(world.get<MonsterC>(e, "monster")!.defId)!.archetype === "heavy").length;
+      }
+      return n;
+    };
+    expect(heavies([])).toBe(0);
+    expect(heavies(["node.the_wrackline"])).toBeGreaterThan(0);
+  }, 20_000);
+
+  // Its rares now stand at the first pack (H1): on a level 1 map they keep their
+  // life, element and name, and hit for half again a normal monster, not 2-3x.
+  it("the first clear's rares hit for 150% of their kind, a later clear's for more", () => {
+    const ratios = (completedNodes: string[]) => {
+      const out: number[] = [];
+      for (let seed = 1; seed <= 10; seed++) {
+        const world = new World();
+        const session = { ...mapSessionAtTier(0), mapSeed: seed, completedNodes };
+        buildArea(world, "map", session, generateArea(seed, CONTENT_VERSION, grammarForNode(session.activeNodeId)));
+        for (const e of world.query("monster")) {
+          const m = world.get<MonsterC>(e, "monster")!;
+          if (m.rare === 1) out.push(m.attackDamage / MONSTERS.get(m.defId)!.attackDamage.amountFixed);
+        }
+      }
+      return out;
+    };
+    const first = ratios([]);
+    expect(first.length).toBeGreaterThan(0);
+    for (const r of first) expect(r).toBeCloseTo(1.5, 2);
+    for (const r of ratios(["node.the_wrackline"])) expect(r).toBeGreaterThanOrEqual(2);
+  }, 20_000);
+
   it("a socket holds that archetype's pack count", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });
     buildArea(world, "map", session, layout);

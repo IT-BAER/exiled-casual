@@ -51,6 +51,8 @@ export interface BotOptions {
   /** Skills the bot may not use (ablation). */
   without?: readonly string[];
   trace?: (world: World, player: Entity, tick: number) => void;
+  /** A first-hour player: reads no tells, drinks no flasks, never blinks or backs off. */
+  novice?: boolean;
 }
 
 export interface BotGame { sim: Simulation; world: World; player: Entity; session: Entity; classId: string }
@@ -62,6 +64,7 @@ export class Bot {
   private readonly area: string;
   private readonly melee: boolean;
   private readonly without: ReadonlySet<string>;
+  private readonly novice: boolean;
   /** Entities the bot gave up on reaching, until the tick stored. */
   private readonly skip = new Map<Entity, number>();
   private goal: Entity | undefined;
@@ -83,6 +86,7 @@ export class Bot {
     this.area = AREA[g.classId]!;
     this.melee = isMelee(this.attack);
     this.without = new Set(opts.without ?? []);
+    this.novice = opts.novice ?? false;
   }
 
   hasLootLeft(): boolean {
@@ -128,7 +132,7 @@ export class Bot {
     const h = world.get<Health>(player, "health")!;
     const m = world.get<Mana>(player, "mana")!;
     const f = world.get<FlasksC>(player, "flasks");
-    if (f && tick - this.lastFlask > HZ) {
+    if (f && !this.novice && tick - this.lastFlask > HZ) {
       if (h.life * 2 < h.maxLife && f.lifeCharges > 0) { out.push(cmd({ type: "useFlask", flask: "life" })); this.lastFlask = tick; }
       else if (m.mana * 4 < m.maxMana && f.manaCharges > 0) { out.push(cmd({ type: "useFlask", flask: "mana" })); this.lastFlask = tick; }
     }
@@ -136,7 +140,7 @@ export class Bot {
     this.passives(out, cmd);
 
     // 1. Get out of anything about to land or already burning underfoot.
-    const threat = this.threat(p, tick);
+    const threat = this.novice ? undefined : this.threat(p, tick);
     if (threat) {
       const away = this.escape(p, threat.c, Math.max(fp(1), threat.out));
       if (h.life * 100 < h.maxLife * 35 && this.ready(BLINK)) out.push(cmd({ type: "useSkill", skillId: BLINK, data: away }));
@@ -148,7 +152,7 @@ export class Bot {
     const target = this.pickTarget(p, tick, bossDead);
     if (target) {
       const near = this.monsters().filter((x) => x.awake).sort((a, b) => dist(p, a.p) - dist(p, b.p))[0];
-      if (near && dist(p, near.p) < fp(1.5) && h.life * 100 < h.maxLife * 35 && this.ready(BLINK)) {
+      if (!this.novice && near && dist(p, near.p) < fp(1.5) && h.life * 100 < h.maxLife * 35 && this.ready(BLINK)) {
         out.push(cmd({ type: "useSkill", skillId: BLINK, data: this.escape(p, near.p, fp(5)) }));
         return out;
       }
@@ -161,7 +165,7 @@ export class Bot {
       if (!walks) { this.goalSince = tick; this.goalFrom = p; }
       this.checkHurting(skill ? target.e : undefined, tick);
       // Backing off is for when it hurts; at health a caster stands and casts.
-      if (!this.melee && near && dist(p, near.p) < fp(1.5) && h.life * 2 < h.maxLife && !world.has(near.e, "boss")) {
+      if (!this.novice && !this.melee && near && dist(p, near.p) < fp(1.5) && h.life * 2 < h.maxLife && !world.has(near.e, "boss")) {
         out.push(cmd({ type: "moveTo", data: this.escape(p, near.p, fp(2.5)) }));
       } else if (walks) {
         const to = this.route(p, target.p);
@@ -178,7 +182,7 @@ export class Bot {
     // Only a melee monster follows him out; a shooter holds wherever it can hit him,
     // and a brute too wide for the way in never arrives, so backing off either is
     // undone by the walk in (3.) forever.
-    if (!this.melee) {
+    if (!this.melee && !this.novice) {
       const near = this.monsters().find((x) => x.awake && dist(p, x.p) < fp(3)
         && !MONSTERS.get(world.get<MonsterC>(x.e, "monster")!.defId)?.ranged && this.reaches(x.e, x.p, p));
       // Kept for a second or until reached: re-aimed every tick off a monster that
