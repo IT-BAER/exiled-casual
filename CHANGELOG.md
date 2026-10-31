@@ -48,6 +48,12 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   offers its first rare fight in the opening minute and not beside the boss.
 - The Ironsworn's Strike hits harder (16 instead of 10), so the free swing
   still finishes a long fight against a rare when his mana runs dry.
+- Your first run of The Wrackline brings no Rotting Behemoth, the heavy the
+  strand borrows from the swamp, and its rare monsters hit softer than
+  elsewhere. Both return from the second run on.
+- The death screen ends with the one thing to do next: resurrect at the
+  checkpoint while the map has a portal to spare, or in the hideout, where the
+  Map Device opens the map again.
 
 ### Fixed
 
