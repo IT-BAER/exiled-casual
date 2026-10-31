@@ -13,11 +13,20 @@ const save = (level: number, xp: number, completedNodes: string[] = []) =>
   rec({ version: 2, progress: { level, xp, gold: 0 }, session: { atlasSeed: SEED, completedNodes } }, level);
 
 describe("nextGoal", () => {
-  it("has nothing to say for a character that never played or a save it cannot read", () => {
+  it("has nothing to say without a record, or for a save it cannot read", () => {
     expect(nextGoal(null)).toBeNull();
-    expect(nextGoal(rec(null))).toBeNull();
     expect(nextGoal(rec("garbage"))).toBeNull();
     expect(nextGoal(rec({ progress: { level: "x" } }))).toBeNull();
+    expect(nextGoal({ ...rec(null), level: "x" as unknown as number })).toBeNull();
+  });
+
+  it("names the first map for a new character that has no save yet", () => {
+    // The worker writes a save only once something durable changes, so a
+    // character that stood in the hideout and left still has state null.
+    const first = { kind: "node", name: graph[0]!.name, tier: 1, first: true };
+    expect(nextGoal(rec(null, 1))).toEqual(first);
+    // Node 0's name does not depend on the Atlas seed.
+    expect(atlasGraph(1)[0]!.name).toBe(graph[0]!.name);
   });
 
   it("names the first map before any map is cleared", () => {

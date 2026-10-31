@@ -20,6 +20,13 @@ export type NextGoal =
 const LEVEL_GOAL_AT = 0.75;
 
 export function nextGoal(record: CharacterRecord | null | undefined): NextGoal | null {
+  // No save yet: the worker writes one only once something durable changes, so
+  // a character that stood in the hideout and left is still this. Node 0 is the
+  // same place on every seed's Atlas.
+  if (record && record.state === null && typeof record.level === "number") {
+    const start = atlasGraph(0)[0];
+    return start ? { kind: "node", name: start.name, tier: 1, first: true } : null;
+  }
   const state = obj(record?.state);
   const progress = obj(state["progress"]);
   const session = obj(state["session"]);
