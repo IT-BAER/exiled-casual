@@ -40,6 +40,10 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - A new character is shown the way to its first map. Until it enters one, the
   hideout shows the objective "Open the Map Device" under the minimap, the Map
   Device glows and pulses, and the loading screen explains how to start a map.
+- The character list names your next goal for the selected character: the
+  next map to clear on the Atlas and its tier, or the next level once it is
+  close. In Chrome and Edge an Install button beside it adds the game to your
+  desktop or home screen.
 
 ### Changed
 
