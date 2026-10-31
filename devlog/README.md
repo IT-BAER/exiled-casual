@@ -635,13 +635,11 @@ radius, and her Bog Geyser shoots up as a jet of water that sprays back down.
 
 <table>
 <tr>
-<td width="100%"><img src="screenshots/2026-10-31-first-map-pointer.jpeg" alt="A new Stalker in the hideout; under the minimap a gold FIRST MAP heading over 'Open the Map Device', and the brass Map Device glowing at the top of the room" width="100%"><br><sub>A new character is pointed at the Map Device.</sub></td>
-</tr>
-<tr>
+<td width="50%"><img src="screenshots/2026-10-31-first-map-pointer.jpeg" alt="A new Stalker in the hideout; under the minimap a gold FIRST MAP heading over 'Open the Map Device', and the brass Map Device glowing at the top of the room" width="100%"><br><sub>A new character is pointed at the Map Device.</sub></td>
 <td width="50%"><img src="screenshots/2026-10-31-first-map-tip.jpeg" alt="The hideout loading plate with the tip: your first map starts at the Map Device in your hideout" width="100%"><br><sub>The first load names the Map Device.</sub></td>
-<td width="50%"><img src="screenshots/2026-10-31-roster-next-goal.jpeg" alt="The character screen with a level 1 Stalker named 李小龍, and under the list NEXT GOAL: Clear your first map: The Wrackline, its boss always pays out, beside an Install button" width="100%"><br><sub>Back on the roster: the next goal, and a name in any script.</sub></td>
 </tr>
 <tr>
+<td width="50%"><img src="screenshots/2026-10-31-roster-next-goal.jpeg" alt="The character screen with a level 1 Stalker named 李小龍, and under the list NEXT GOAL: Clear your first map: The Wrackline, its boss always pays out, beside an Install button" width="100%"><br><sub>Back on the roster: the next goal, and a name in any script.</sub></td>
 <td width="50%"><img src="screenshots/2026-10-31-dune-spitter-strafe.gif" alt="A Dune Spitter toad turned to face the camera while it steps sideways on its legs" width="100%"><br><sub>A spitter strafing on its legs.</sub></td>
 </tr>
 </table>
