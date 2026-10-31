@@ -2,7 +2,7 @@ import { Color3, Material, Matrix, Mesh, MeshBuilder, PBRMaterial, StandardMater
 import type { GlowLayer, Scene } from "@babylonjs/core";
 import type { SnapshotEntity } from "@exiled/protocol";
 import { BROOD_ABILITY } from "./boss-tells";
-import { fxPools } from "./fx-pool";
+import { FxPool, fxPools } from "./fx-pool";
 import { slamDebris } from "./slam-debris";
 import { dustPuff, emberBurst, FALLBACK_FX, flash, type FxProfile } from "./skill-fx";
 
@@ -33,7 +33,8 @@ const WAVE_SPEED = 14;
 const RIM_DUST = 10;
 /** What one landing throws of its element. */
 const ELEMENT_SPARKS = 28;
-const MUD_CLUMPS = 12;
+/** Drops of mud and bog water in the crown a bog slam throws. */
+const MUD_CROWN = 48;
 
 export const FISSURE_NAME = "fx-boss-fissure";
 /** Seconds a fissure glows, cooling from molten to nothing; the char under it lasts twice that. */
@@ -92,9 +93,23 @@ const METEOR_RUBBLE = 0.3;
 const GEYSER_BUBBLES_FAR = 4;
 const GEYSER_BUBBLES_NEAR = 16;
 const BROOD_BUBBLES = 5;
-/** Bog water: the column, the drops it throws, and the splash's drops. */
+/** Bog water: what a bubble cools to. */
 const BOG_WATER: Rgb = [0.24, 0.27, 0.16];
-const GEYSER_COLUMN = 14;
+const WATER_NAME = "fx-boss-water";
+const MUD_NAME = "fx-boss-mud";
+/** Drops at once: a geyser's jet, spray and drops (106) three times over (the volley's count), and a splash. */
+const WATER_CAPACITY = 330;
+/** Clumps at once: a last-phase burst's crown (48) and a slam's. */
+const MUD_CAPACITY = 84;
+/** Foam where water is thrown hardest, and the murky water it falls back as. Pale on purpose: the dark fen swallows anything darker. */
+const FOAM: Rgb = [0.88, 0.92, 0.84];
+const MURK: Rgb = [0.42, 0.47, 0.32];
+/** Wet mud, dark on purpose: on the Strand's sand the foam alone washes out. */
+const MUD: Rgb = [0.3, 0.22, 0.12];
+const MUD_DRY: Rgb = [0.22, 0.17, 0.1];
+/** Thin streaks shot up a geyser's middle, one after another so the first out is the top; the spray its crown throws. */
+const GEYSER_JET = 60;
+const GEYSER_SPRAY = 36;
 const GEYSER_DROPS = 10;
 const SPLASH_DROPS = 8;
 
@@ -407,10 +422,27 @@ export class BossFx {
   /** Each bog mark's share of a bubble not yet risen, so a slow rate still bubbles at 144 Hz. */
   private readonly bubbleDebt = new Map<number, number>();
   private readonly spikes: Thorns;
+  /**
+   * Mother Vhal's water and mud: crisp drops and round clumps, lit, so the sun
+   * puts a glint on them. The shared smoke pool feathers every ball to a soft
+   * puff, and her geyser built from it read as smoke.
+   */
+  readonly water: FxPool;
+  readonly mud: FxPool;
 
   constructor(private readonly scene: Scene) {
     const glow = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
     this.spikes = new Thorns(scene);
+    this.water = new FxPool(scene, WATER_NAME, "streak", "solid", WATER_CAPACITY);
+    this.mud = new FxPool(scene, MUD_NAME, "ball", "solid", MUD_CAPACITY);
+    for (const pool of [this.water, this.mud]) {
+      const wet = pool.mesh.material as StandardMaterial;
+      wet.disableLighting = false;
+      wet.diffuseColor = new Color3(0.55, 0.55, 0.55);
+      wet.emissiveColor = new Color3(0.45, 0.45, 0.45);
+      wet.specularColor = new Color3(1, 1, 1);
+      wet.specularPower = 40;
+    }
     // The char darkens the floor by blending; drawn over it, the molten strip adds light.
     const char = decalMaterial(scene, `${FISSURE_NAME}-char-mat`, new Color3(0.06, 0.03, 0.015));
     char.transparencyMode = Material.MATERIAL_ALPHABLEND;
@@ -516,6 +548,8 @@ export class BossFx {
   /** Wipe everything standing: a new area starts with an unbroken floor. */
   clear(): void {
     this.spikes.clear();
+    this.water.clear();
+    this.mud.clear();
     for (const f of this.fissures) {
       f.age = -1;
       f.molten.setEnabled(false);
@@ -685,14 +719,13 @@ export class BossFx {
 
   /** Drops of bog water thrown out of (x, z), arcing back down. */
   private drops(x: number, z: number, n: number, speed: number, delay: number): void {
-    const smoke = fxPools(this.scene).smoke;
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
-      const out = rand(0.6, 1.6);
-      smoke.emit({
+      const out = rand(0.8, 2.2);
+      this.water.emit({
         x, y: 0.2, z, vx: Math.cos(a) * out, vy: speed * rand(0.6, 1), vz: Math.sin(a) * out, gravity: -12,
-        life: rand(0.5, 0.8), delay: delay + rand(0, 0.08), size: 0.12, sizeEnd: 0.08,
-        r: BOG_WATER[0], g: BOG_WATER[1], b: BOG_WATER[2], a: 0.75,
+        life: rand(0.55, 0.85), delay: delay + rand(0, 0.08), size: 0.16, thick: 0.05, stretch: 0.035,
+        r: FOAM[0], g: FOAM[1], b: FOAM[2], a: 0.9, r1: MURK[0], g1: MURK[1], b1: MURK[2],
       });
     }
   }
@@ -705,15 +738,25 @@ export class BossFx {
     });
   }
 
-  /** Bog Geyser: a column of murky water bursts up out of the marker, rains back and rings out. */
+  /** Bog Geyser: a jet of water bursts straight up out of the marker, its crown sprays back down round it and rings out. */
   private geyser(e: SnapshotEntity): void {
-    const smoke = fxPools(this.scene).smoke;
-    for (let i = 0; i < GEYSER_COLUMN; i++) {
+    for (let i = 0; i < GEYSER_JET; i++) {
       // Stacked by launch time: the first out is the top of the column.
-      smoke.emit({
-        x: e.x + rand(-0.15, 0.15), y: 0.1, z: e.y + rand(-0.15, 0.15), vy: rand(7, 11), gravity: -12, drag: 0.3,
-        life: rand(0.7, 0.9), delay: (i / GEYSER_COLUMN) * 0.15, size: rand(0.45, 0.6), sizeEnd: rand(0.8, 1.1),
-        r: 0.32, g: 0.36, b: 0.22, a: 0.65, r1: BOG_WATER[0], g1: BOG_WATER[1], b1: BOG_WATER[2],
+      this.water.emit({
+        x: e.x + rand(-0.22, 0.22), y: 0.1, z: e.y + rand(-0.22, 0.22), vx: rand(-0.2, 0.2), vy: rand(11, 14), vz: rand(-0.2, 0.2),
+        gravity: -12, drag: 0.2, life: rand(0.75, 0.95), delay: (i / GEYSER_JET) * 0.22,
+        size: rand(0.5, 0.8), thick: rand(0.06, 0.11), stretch: 0.05,
+        r: FOAM[0], g: FOAM[1], b: FOAM[2], a: 0.8, r1: MURK[0], g1: MURK[1], b1: MURK[2],
+      });
+    }
+    for (let i = 0; i < GEYSER_SPRAY; i++) {
+      const a = ((i + Math.random()) / GEYSER_SPRAY) * Math.PI * 2;
+      const out = rand(1.5, 3.2);
+      // Out of the top as the jet gets there, then down round the marker.
+      this.water.emit({
+        x: e.x, y: rand(2.2, 3.2), z: e.y, vx: Math.cos(a) * out, vy: rand(1, 3), vz: Math.sin(a) * out,
+        gravity: -12, life: rand(0.7, 1), delay: rand(0.22, 0.35), size: 0.14, thick: 0.05, stretch: 0.04,
+        r: FOAM[0], g: FOAM[1], b: FOAM[2], a: 0.9, r1: MURK[0], g1: MURK[1], b1: MURK[2],
       });
     }
     this.drops(e.x, e.y, GEYSER_DROPS, 6, 0.1);
@@ -852,22 +895,26 @@ export class BossFx {
       const a = ((i + Math.random()) / RIM_DUST) * Math.PI * 2;
       dustPuff(this.scene, e.x + Math.cos(a) * r, e.y + Math.sin(a) * r, 0.9, r / WAVE_SPEED, 1);
     }
-    this.element(at, look, 1);
+    this.element(at, look, 1, r);
   }
 
-  /** What the boss's element throws out of a landing at `at`, scaled by `k`. */
-  private element(at: Vector3, look: Look, k: number): void {
+  /** What the boss's element throws out of a landing at `at`, scaled by `k`; a bog crown reaches toward `reach`. */
+  private element(at: Vector3, look: Look, k: number, reach = 3): void {
     const pools = fxPools(this.scene);
     const { hot, cool } = PALETTE[look];
     if (look === "bog") {
-      // Mud, not light: alpha clumps thrown up that fall back.
-      for (let i = 0; i < Math.round(MUD_CLUMPS * k); i++) {
-        const a = Math.random() * Math.PI * 2;
-        const out = rand(1, 3) * k;
-        pools.smoke.emit({
-          x: at.x, y: at.y, z: at.z, vx: Math.cos(a) * out, vy: rand(3, 5.5) * k, vz: Math.sin(a) * out,
-          gravity: -11, drag: 0.6, life: rand(0.55, 0.85), size: 0.22 * k, sizeEnd: 0.4 * k,
-          r: 0.2, g: 0.22, b: 0.13, a: 0.7, r1: 0.26, g1: 0.27, b1: 0.18,
+      // A crown of mud and bog water thrown up and out of the blow: the mud reads
+      // on sand, the pale water on the dark fen.
+      const n = Math.round(MUD_CROWN * k);
+      for (let i = 0; i < n; i++) {
+        const a = ((i + Math.random()) / n) * Math.PI * 2;
+        const out = rand(0.5, 1.1) * reach * k;
+        const mud = i % 3 !== 0;
+        const [c, c1] = mud ? [MUD, MUD_DRY] : [FOAM, MURK];
+        (mud ? this.mud : this.water).emit({
+          x: at.x + Math.cos(a) * 0.3, y: 0.15, z: at.z + Math.sin(a) * 0.3, vx: Math.cos(a) * out, vy: rand(4, 7) * k, vz: Math.sin(a) * out,
+          gravity: -13, drag: 0.4, life: rand(0.6, 0.9), size: mud ? rand(0.12, 0.24) : 0.14, sizeEnd: mud ? rand(0.09, 0.16) : 0.14,
+          thick: 0.05, stretch: 0.04, r: c[0], g: c[1], b: c[2], a: 0.95, r1: c1[0], g1: c1[1], b1: c1[2],
         });
       }
       return;

@@ -10,7 +10,8 @@ import type { GlowLayer, Material, Mesh, Scene, SolidParticle } from "@babylonjs
  * fight recycles the oldest slot and allocates nothing per hit.
  */
 export type FxShape = "streak" | "ball" | "ring";
-export type FxBlend = "add" | "alpha";
+/** `alpha` feathers each solid to its outline (smoke, dust); `solid` keeps it crisp (drops of water, mud). */
+export type FxBlend = "add" | "alpha" | "solid";
 
 export interface FxSpec {
   x: number; y: number; z: number;
@@ -111,7 +112,7 @@ export class FxPool {
     // Overlap is the look: a slot writing depth would reject the slots behind it.
     mat.disableDepthWrite = true;
     if (blend === "add") mat.alphaMode = 1; // ALPHA_ADD
-    else featherEdges(mat);
+    else if (blend === "alpha") featherEdges(mat);
     this.mesh.material = mat;
     // Transparent pass and `alpha *= vColor.a`; without it the pool draws opaque.
     this.mesh.hasVertexAlpha = true;

@@ -222,14 +222,21 @@ describe("the bog stirs before it erupts", () => {
     expect(smoke.emitted - early).toBeGreaterThan(early);
   });
 
-  it("throws a column of bog water up out of the marker", () => {
+  // Fourteen feathered smoke balls read as a smoke plume in the captures, not water.
+  it("throws a tall, narrow jet of water up out of the marker, and no smoke", () => {
     const { scene, renderer } = setup();
     land(renderer, geyser(1 / 30), vhal);
     expect(slamDebris(scene).live, "water, not rubble").toBe(0);
-    const smoke = fxPools(scene).smoke;
-    smoke.step(0.25);
-    const over = smoke.positions().filter((p) => Math.hypot(p.x + 2, p.z - 1) < 1.6);
-    expect(Math.max(...over.map((p) => p.y))).toBeGreaterThan(1.5);
+    expect(fxPools(scene).smoke.emitted, "water, not smoke").toBe(0);
+    const water = bossFx(scene).water;
+    for (let i = 0; i < 25; i++) water.step(0.01);
+    const jet = water.positions().filter((p) => p.y > 1.5);
+    expect(Math.max(...jet.map((p) => p.y))).toBeGreaterThan(2.5);
+    // A column, not a fountain fanning out: everything up high stands over the marker's middle.
+    expect(Math.max(...jet.map((p) => Math.hypot(p.x + 2, p.z - 1)))).toBeLessThan(0.8);
+    for (let i = 0; i < 50; i++) water.step(0.01);
+    const fallen = water.positions();
+    expect(fallen.some((p) => Math.hypot(p.x + 2, p.z - 1) > 1.2), "spray falling back round it").toBe(true);
   });
 
   it("splashes where the brood rises", () => {
@@ -237,7 +244,20 @@ describe("the bog stirs before it erupts", () => {
     land(renderer, brood(1 / 30), vhal);
     expect(slamDebris(scene).live, "water, not rubble").toBe(0);
     expect(fxPools(scene).ring.emitted).toBeGreaterThan(0);
-    expect(fxPools(scene).smoke.emitted).toBeGreaterThan(0);
+    expect(bossFx(scene).water.emitted).toBeGreaterThan(0);
+  });
+
+  // The slam's mud was twelve feathered dark balls, invisible in every capture.
+  it("throws a crown of mud and water out of her slam, up and outward", () => {
+    const { scene, renderer } = setup();
+    land(renderer, { id: 28, kind: "telegraph", x: 0, y: 1, radius: 5, progress: 1, ownerId: 9, impactIn: 1 / 30, heavy: true }, vhal);
+    const { water, mud } = bossFx(scene);
+    expect(mud.emitted, "mud").toBeGreaterThanOrEqual(20);
+    expect(water.emitted, "water").toBeGreaterThanOrEqual(10);
+    for (let i = 0; i < 20; i++) for (const pool of [water, mud]) pool.step(0.01);
+    const at = [...water.positions(), ...mud.positions()];
+    expect(Math.max(...at.map((p) => p.y))).toBeGreaterThan(1);
+    expect(at.filter((p) => Math.hypot(p.x, p.z - 1) > 1).length).toBeGreaterThan(at.length / 3);
   });
 });
 
