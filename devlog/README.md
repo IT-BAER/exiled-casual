@@ -630,3 +630,23 @@ Every hostile marking now lays a shade under its red fill that takes green and b
 so a disc, lane, ring or charge path turns red on bright sand instead of fading to pale pink, and only
 darkens a dark floor. Mother Vhal's slam throws a crown of mud clumps and water drops out to its own
 radius, and her Bog Geyser shoots up as a jet of water that sprays back down.
+
+## 2026-10-31 · A first map to aim for
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-31-first-map-pointer.jpeg" alt="A new Stalker in the hideout; under the minimap a gold FIRST MAP heading over 'Open the Map Device', and the brass Map Device glowing at the top of the room" width="100%"><br><sub>A new character is pointed at the Map Device.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/2026-10-31-first-map-tip.jpeg" alt="The hideout loading plate with the tip: your first map starts at the Map Device in your hideout" width="100%"><br><sub>The first load names the Map Device.</sub></td>
+<td width="50%"><img src="screenshots/2026-10-31-roster-next-goal.jpeg" alt="The character screen with a level 1 Stalker named 李小龍, and under the list NEXT GOAL: Clear your first map: The Wrackline, its boss always pays out, beside an Install button" width="100%"><br><sub>Back on the roster: the next goal, and a name in any script.</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screenshots/2026-10-31-dune-spitter-strafe.gif" alt="A Dune Spitter toad turned to face the camera while it steps sideways on its legs" width="100%"><br><sub>A spitter strafing on its legs.</sub></td>
+</tr>
+</table>
+
+A new character now finds its way: the hideout tracks FIRST MAP under the minimap and the Map Device
+glows until the first map, and the first loading plate says where to start. Leaving puts the next goal
+on the character screen, with an Install button where the browser offers one. Names take letters of
+any script, and spitters that circle the player step sideways or back on their legs.
