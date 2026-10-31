@@ -257,16 +257,52 @@ describe("pool-driven spawning", () => {
     expect(stacked).toEqual([]);
   }, 20_000);
 
-  it("exactly one rare, and it is still on the last layout socket", () => {
-    const { world, session, layout } = mapFixture({ mapSeed: 21 });
-    buildArea(world, "map", session, layout);
-    const rares = world.query("monster").filter((e) => world.get<MonsterC>(e, "monster")!.rare === 1);
-    expect(rares.length).toBe(1);
-    const last = layout.spawnSockets[layout.spawnSockets.length - 1]!;
-    const pos = world.get<Position>(rares[0]!, "position")!;
-    expect(pos.x).toBe(fp(last.x));
-    expect(pos.y).toBe(fp(last.y));
-  });
+  // PoE2's rare-monster density (docs/09 section 2): two or three rares a map,
+  // the first on the first pack the player meets, the rest spread down the route.
+  it("two or three rares in every grammar, the first on the first fielded pack outside the safe radius", () => {
+    const counts = new Set<number>();
+    const bad: string[] = [];
+    // coast, open-field (desert, forest), loop, sunken-ruins
+    for (const node of ["node.the_wrackline", "node.emberfall", "node.cinder_vault", "node.blackmire", "node.thornwake"]) {
+      for (let seed = 0; seed < 30; seed++) {
+        const world = new World();
+        const session = { ...mapSessionAtTier(1), mapSeed: seed, activeNodeId: node };
+        const layout = generateArea(seed, CONTENT_VERSION, grammarForNode(node));
+        buildArea(world, "map", session, layout);
+        const start = layout.objectiveAnchors.find((a) => a.id === "start")!;
+        // A monster's socket: the nearest one, since a pack stands round its own.
+        const socketOf = (e: Entity): number => {
+          const p = world.get<Position>(e, "position")!;
+          let best = -1, bestD = Infinity;
+          layout.spawnSockets.forEach((s, i) => {
+            const d = Math.hypot(p.x / fp(1) - s.x, p.y / fp(1) - s.y);
+            if (d < bestD) { bestD = d; best = i; }
+          });
+          return best;
+        };
+        const packs = world.query("monster").filter((e) => !world.has(e, "boss"));
+        const rares = packs.filter((e) => world.get<MonsterC>(e, "monster")!.rare === 1);
+        counts.add(rares.length);
+        const at = `${node} seed ${seed}`;
+        if (rares.length < 2 || rares.length > 3) { bad.push(`${at}: ${rares.length} rares`); continue; }
+        const fielded = [...new Set(packs.map(socketOf))].sort((a, b) => a - b);
+        const sockets = rares.map(socketOf).sort((a, b) => a - b);
+        if (sockets[0] !== fielded[0]) bad.push(`${at}: first rare on socket ${sockets[0]}, first pack on ${fielded[0]}`);
+        if (new Set(sockets).size !== sockets.length) bad.push(`${at}: two rares share a socket`);
+        // Spread: consecutive rares at least a quarter of the fielded packs apart.
+        const rank = sockets.map((s) => fielded.indexOf(s));
+        for (let k = 1; k < rank.length; k++) {
+          if (rank[k]! - rank[k - 1]! < Math.floor(fielded.length / 4)) bad.push(`${at}: rares bunched ${rank.join(",")} of ${fielded.length}`);
+        }
+        for (const e of rares) {
+          const p = world.get<Position>(e, "position")!;
+          if (Math.hypot(p.x / fp(1) - start.x, p.y / fp(1) - start.y) < SPAWN_SAFE_RADIUS) bad.push(`${at}: a rare inside the safe radius`);
+        }
+      }
+    }
+    expect(bad).toEqual([]);
+    expect([...counts].sort()).toEqual([2, 3]);
+  }, 30_000);
 
   it("one whole pack is magic: one species, never the rare's pack, the same pack for the same seed", () => {
     const magicOf = (mapSeed: number) => {

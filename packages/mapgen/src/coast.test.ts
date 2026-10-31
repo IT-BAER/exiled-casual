@@ -92,8 +92,8 @@ describe("generateCoast", () => {
   });
 
   it("keeps every pack out of the boss bay: the boss fight is the boss", () => {
-    // Half the bay's 34 cells: a socket inside it wakes with the boss, and the
-    // last socket also carries the map's rare.
+    // Half the bay's 34 cells: a socket inside it wakes with the boss, and any
+    // socket may carry one of the map's rares.
     for (const seed of SEEDS) {
       const l = generateCoast(seed, V, 16);
       const boss = l.objectiveAnchors.find((a) => a.id === "boss")!;

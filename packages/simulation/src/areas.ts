@@ -301,8 +301,8 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // Portals equal to the current portal budget (0 if map not open or exhausted).
     spawnPortalRing(world, session.portalsLeft);
   } else {
-    // Map: the active node's biome pool fills the spawn sockets (last one
-    // carries the rare), the warden holds the boss room, and the return portal
+    // Map: the active node's biome pool fills the spawn sockets (two or three
+    // carry a rare), the warden holds the boss room, and the return portal
     // sits in the exit room. Every position is a walkable socket from the
     // generated layout.
     const scale = mapDangerScale(session);
@@ -349,10 +349,15 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
       return false;
     };
     const live = spawns.map(routes);
-    const lastLive = live.lastIndexOf(true);
+    // Two or three rares (PoE2's rare density, docs/09 section 2): the first on the
+    // first pack down the route, the rest evenly behind it, so the first pull lands
+    // in the opening minute and not beside the boss. Sockets come in route order.
+    const liveAt = live.flatMap((ok, i) => (ok ? [i] : []));
+    const rareCount = Math.min(liveAt.length, 2 + (fnv1a32(`rares:${session.mapSeed}`) % 2));
+    const rareSockets = new Set(Array.from({ length: rareCount }, (_, k) => liveAt[Math.floor((k * liveAt.length) / rareCount)]!));
     // One whole pack is magic, PoE's blue pack. Its own hash, not the bestiary
     // stream, so which species stand where is the same with or without it.
-    const magicCandidates = live.flatMap((ok, i) => (ok && i !== lastLive ? [i] : []));
+    const magicCandidates = liveAt.filter((i) => !rareSockets.has(i));
     const magicSocket = magicCandidates.length > 0
       ? magicCandidates[fnv1a32(`magic:${session.mapSeed}`) % magicCandidates.length]!
       : -1;
@@ -372,10 +377,11 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
       const safe2 = Math.min(fpDist2(startX, startY, sx, sy), fp(SPAWN_SAFE_RADIUS) * fp(SPAWN_SAFE_RADIUS));
       const packed = PACK_COUNT[base.archetype];
       const count = packed + Math.trunc((packed * ws.packSizePct) / 100);
+      let rareHere = rareSockets.has(i);
       for (let j = 0; j < count; j++) {
-        // The first member of the last socket carries the rare, so a big pack-size
-        // roll means more to kill rather than more rares to answer.
-        const rare = i === lastLive && j === 0;
+        // The first member that stands carries a rare socket's rare, so a big
+        // pack-size roll means more to kill rather than more rares to answer.
+        const rare = rareHere;
         // The map's own seed picks the rare's element, so a given map always
         // demands the same resistance and a replay of it stays identical.
         const magic = !rare && i === magicSocket;
@@ -399,6 +405,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         const kept = () => { const k = fitBody(col, sx, sy, def.radiusFixed, outward); return fits(k) ? k : undefined; };
         const pos = fits(first) ? first : fits(other) ? other : kept();
         if (!pos) continue;
+        rareHere = false;
         placed.push(pos);
         spawnMonster(world, def, pos.x, pos.y, rare, scale, magic);
       }
