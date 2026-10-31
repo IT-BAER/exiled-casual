@@ -51,6 +51,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - A map boss now swings when it attacks; it used to hit without moving.
 - The creatures a map boss calls up now get the Waystone's monster resistance
   modifiers, like every other monster there.
+- The red markings that warn of a hit now stay red on bright floors. On desert
+  and beach sand they used to fade to a pale pink that was easy to miss; on
+  dark floors they darken the ground instead of washing it red.
 
 ## [0.5.1] - 2026-10-28
 
