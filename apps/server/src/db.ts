@@ -1,9 +1,13 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { isBot } from "./nginx";
 
-/** Numbered, append-only. A migration runs once, inside a transaction, and bumps schema_version. */
-const MIGRATIONS: string[] = [
+/**
+ * Numbered, append-only. A migration runs once, inside a transaction, and bumps schema_version.
+ * SQL where SQL can say it; a function where a row has to go through code.
+ */
+const MIGRATIONS: (string | ((db: DatabaseSync) => void))[] = [
   `
   CREATE TABLE sessions (
     sid TEXT PRIMARY KEY,
@@ -136,6 +140,19 @@ const MIGRATIONS: string[] = [
 
   CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
   `,
+  // 2: boots (GET /api/config) are the landing count, since only a client that ran the
+  // game's code fetches it. The bot filter grew too, so every stored hit is read again,
+  // and a day that still has its hits gets rolled up afresh: the rollup only ever raises
+  // a day's numbers (it must survive its own raw hits), so they are cleared for it here.
+  (db) => {
+    db.exec("ALTER TABLE daily ADD COLUMN boots INTEGER NOT NULL DEFAULT 0");
+    const flag = db.prepare("UPDATE hits SET bot = 1 WHERE id = ?");
+    for (const h of db.prepare("SELECT id, ua, path FROM hits WHERE bot = 0").all() as { id: number; ua: string; path: string }[]) {
+      if (isBot(h.ua, h.path)) flag.run(h.id);
+    }
+    db.exec(`UPDATE daily SET page_loads = 0, humans = 0, bots = 0
+      WHERE day IN (SELECT DISTINCT date(t / 1000, 'unixepoch') FROM hits)`);
+  },
 ];
 
 export function openDb(path: string): DatabaseSync {
@@ -146,13 +163,16 @@ export function openDb(path: string): DatabaseSync {
   return db;
 }
 
-export function migrate(db: DatabaseSync): void {
+/** `upTo` is for tests that need a database as an older version left it. */
+export function migrate(db: DatabaseSync, upTo = MIGRATIONS.length): void {
   db.exec("CREATE TABLE IF NOT EXISTS schema_version (v INTEGER NOT NULL)");
   const row = db.prepare("SELECT MAX(v) AS v FROM schema_version").get() as { v: number | null } | undefined;
   let v = row?.v ?? 0;
-  while (v < MIGRATIONS.length) {
+  while (v < upTo) {
     tx(db, () => {
-      db.exec(MIGRATIONS[v]!);
+      const m = MIGRATIONS[v]!;
+      if (typeof m === "string") db.exec(m);
+      else m(db);
       db.prepare("INSERT INTO schema_version (v) VALUES (?)").run(v + 1);
     });
     v++;

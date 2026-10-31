@@ -9,6 +9,7 @@ export function TrafficView({ t }: { t: TrafficData }) {
   const humans = sum(t.days.map((d) => d.humans));
   const bots = sum(t.days.map((d) => d.bots));
   const sessions = sum(t.days.map((d) => d.sessions));
+  const boots = sum(t.days.map((d) => d.boots));
   const statuses = [...t.statuses].sort((a, b) => a.status - b.status);
   return (
     <>
@@ -16,11 +17,14 @@ export function TrafficView({ t }: { t: TrafficData }) {
         <Reading icon="traffic" label="Human page loads" proofIcon="operations" proof={<><span className="mono">{formatNumber(bots)}</span> bot loads, <span className="mono">{formatNumber(loads)}</span> in all</>}>
           <Figure><N v={formatNumber(humans)} /></Figure>
         </Reading>
-        <Reading icon="sessions" label="Sessions" proofIcon="chart" proof={<><span className="mono">{formatPct(humans ? sessions / humans : null)}</span> of human loads</>}>
+        <Reading icon="live" label="Boots" proofIcon="chart" proof="clients that ran the game: the landing count, bots that only read the page excluded">
+          <Figure><N v={formatNumber(boots)} /></Figure>
+        </Reading>
+        <Reading icon="sessions" label="Sessions" proofIcon="chart" proof={<><span className="mono">{formatPct(boots ? sessions / boots : null)}</span> of boots sent telemetry</>}>
           <Figure><N v={formatNumber(sessions)} /></Figure>
         </Reading>
-        <Reading icon="errors" label="Bounced before boot" proofIcon="clock" proof="human loads of / that sent no telemetry (approximate)">
-          <Figure><N v={formatNumber(t.bouncedBeforeBoot)} /><small>{formatPct(humans ? t.bouncedBeforeBoot / humans : null)}</small></Figure>
+        <Reading icon="errors" label="Bounced before boot" proofIcon="clock" proof="human loads of / that never booted the client">
+          <Figure><N v={formatNumber(t.bouncedBeforeBoot)} /><small>{formatPct(loads ? t.bouncedBeforeBoot / loads : null)}</small></Figure>
         </Reading>
       </section>
       <Panel icon="chart" title="Per day" meta="UTC">
@@ -40,17 +44,19 @@ export function TrafficView({ t }: { t: TrafficData }) {
                 <th className="num">Page loads</th>
                 <th className="num">Humans</th>
                 <th className="num">Bots</th>
+                <th className="num">Boots</th>
                 <th className="num">Sessions</th>
               </tr>
             </thead>
             <tbody>
-              {t.days.length === 0 && <EmptyRow cols={5}>No traffic in this range.</EmptyRow>}
+              {t.days.length === 0 && <EmptyRow cols={6}>No traffic in this range.</EmptyRow>}
               {t.days.map((d) => (
                 <tr key={d.date}>
                   <td className="t" data-label="Day">{d.date}</td>
                   <td className="num" data-label="Page loads">{formatNumber(d.pageLoads)}</td>
                   <td className="num" data-label="Humans">{formatNumber(d.humans)}</td>
                   <td className="num" data-label="Bots">{formatNumber(d.bots)}</td>
+                  <td className="num" data-label="Boots">{formatNumber(d.boots)}</td>
                   <td className="num" data-label="Sessions">{formatNumber(d.sessions)}</td>
                 </tr>
               ))}

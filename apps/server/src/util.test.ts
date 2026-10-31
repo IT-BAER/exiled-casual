@@ -84,10 +84,10 @@ describe("totp", () => {
 
 describe("nginx logs", () => {
   it("parses a combined access line without keeping the full ip", () => {
-    const hit = parseAccessLine('203.0.113.7 - - [18/Oct/2026:13:55:36 +0200] "GET /play?x=1 HTTP/1.1" 200 5123 "https://www.reddit.com/r/x" "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0 Safari/537.36"');
+    const hit = parseAccessLine('203.0.113.7 - - [18/Oct/2026:13:55:36 +0200] "GET /play?x=1 HTTP/1.1" 200 5123 "https://www.reddit.com/r/x" "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0 Safari/537.36"');
     expect(hit).toEqual({
       t: Date.UTC(2026, 9, 18, 11, 55, 36), ipPrefix: "203.0.113.0/24", method: "GET", path: "/play", status: 200, bytes: 5123,
-      referrer: "www.reddit.com", ua: "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0 Safari/537.36", bot: false,
+      referrer: "www.reddit.com", ua: "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0 Safari/537.36", bot: false,
     });
     expect(JSON.stringify(hit)).not.toContain("203.0.113.7");
     expect(parseAccessLine("nonsense")).toBeNull();
@@ -98,10 +98,27 @@ describe("nginx logs", () => {
     expect(isBot("python-requests/2.31", "/")).toBe(true);
     expect(isBot("Mozilla/5.0 zgrab/0.x", "/")).toBe(true);
     expect(isBot("-", "/")).toBe(true);
-    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0", "/.env")).toBe(true);
-    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0", "/wp-login.php")).toBe(true);
-    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0", "/cgi-bin/x")).toBe(true);
-    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0", "/")).toBe(false);
+    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0", "/.env")).toBe(true);
+    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0", "/wp-login.php")).toBe(true);
+    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0", "/cgi-bin/x")).toBe(true);
+    expect(isBot("Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0", "/")).toBe(false);
+  });
+  it("flags the automation the access log counted as people (retention report, 4 to 30 October)", () => {
+    for (const ua of [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36/Nutch-1.23-SNAPSHOT",
+      "Mozilla/5.0 (Linux; Android 11; moto g power (2022)) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36 Chrome-Lighthouse",
+      "Mozilla/5.0 (compatible; VibeTopListLinkCheck/1.0; +https://vibetoplist.com)",
+      "Mozilla/5.0 (compatible; InternetMeasurement/1.0; +https://internet-measurement.com/)",
+      // 324 page loads on 27 days, never one boot.
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1",
+      // A two-part Chrome version: real Chrome has sent four parts since the UA reduction.
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+    ]) expect(isBot(ua, "/"), ua).toBe(true);
+    for (const ua of [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0",
+    ]) expect(isBot(ua, "/"), ua).toBe(false);
   });
   it("parses an error line and masks client addresses", () => {
     const l = parseErrorLine("2026/10/18 13:55:36 [error] 1234#1234: *5 open() failed, client: 203.0.113.7, server: x");

@@ -1,4 +1,4 @@
-import type { Perf, PerfRow } from "@exiled/telemetry";
+import type { LoadPhase, Perf, PerfRow } from "@exiled/telemetry";
 import { LineChart } from "../charts";
 import { formatDay, formatNumber } from "../format";
 import { useApi } from "../use-api";
@@ -14,6 +14,15 @@ function fpsTone(fps: number | null): "fail" | "warn" | null {
 
 const fps = (v: number | null) => (v === null ? <span className="faint">-</span> : <N v={Math.round(v)} tone={fpsTone(v)} />);
 const secs = (ms: number | null) => (ms === null ? "-" : (ms / 1000).toFixed(1));
+
+/** Name and span of each load phase (apps/web/src/load-phases.ts). Models and worker run side by side. */
+const PHASE: Record<LoadPhase, [string, string]> = {
+  chunk: ["Code", "Play pressed to the game's code running"],
+  models: ["Models", "characters, props and monsters downloaded and parsed"],
+  worker: ["Simulation", "the sim worker started and the save restored"],
+  shaders: ["Shaders", "everything in, until frames come at a playable pace"],
+  frame: ["Total", "Play pressed to the loading screen lifting"],
+};
 
 function PerfTable({ rows, keyLabel }: { rows: PerfRow[]; keyLabel: string }) {
   return (
@@ -57,6 +66,32 @@ export function PerformanceView({ p, days }: { p: Perf; days: number }) {
           {p.fpsSeries.length === 0 ? <span className="figure none">no frames</span> : <Figure>{fps(p.fpsSeries[p.fpsSeries.length - 1]!.v)}<small>fps</small></Figure>}
         </Reading>
       </section>
+      <Panel icon="clock" title="Game load by phase" meta="median and p90, seconds">
+        <div className="scroll">
+          <table className="stack">
+            <thead>
+              <tr>
+                <th>Phase</th>
+                <th>Spans</th>
+                <th className="num">Loads</th>
+                <th className="num">p50</th>
+                <th className="num">p90</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.loadPhases.map((l) => (
+                <tr key={l.phase}>
+                  <td className="key" data-label="Phase">{PHASE[l.phase][0]}</td>
+                  <td data-label="Spans">{PHASE[l.phase][1]}</td>
+                  <td className="num" data-label="Loads">{formatNumber(l.n)}</td>
+                  <td className="num" data-label="p50">{secs(l.p50)}</td>
+                  <td className="num" data-label="p90">{secs(l.p90)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
       <Panel icon="chart" title="Frame rate over time">
         <LineChart label="Median frame rate over time" series={[{ label: "FPS", points: p.fpsSeries, tone: "text" }]} format={(v) => String(Math.round(v))} timeFormat={days > 1 ? formatDay : undefined} />
       </Panel>

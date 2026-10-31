@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type {
   AuditRow, BuildRow, ErrorDetail, ErrorGroup, GeoRow, Gameplay as GameplayData, Health as HealthData, LiveConfig,
-  LiveSession, LogLine, Overview, Page, Perf, Retention as RetentionData, SessionDetail, SessionRow, Traffic as TrafficData,
+  LiveSession, LogLine, Overview, Page, Perf, Retention as RetentionData, Behaviour, SessionDetail, SessionRow, Traffic as TrafficData,
 } from "@exiled/telemetry";
 import { App } from "./App";
 import { Dashboard } from "./pages/Dashboard";
@@ -13,6 +13,7 @@ import { Retention } from "./pages/Retention";
 import { Atlas } from "./pages/Atlas";
 import { Gameplay } from "./pages/Gameplay";
 import { Performance } from "./pages/Performance";
+import { Behaviour as BehaviourPage } from "./pages/Behaviour";
 import { ErrorDetailPage, Errors } from "./pages/Errors";
 import { Health } from "./pages/Health";
 import { Logs } from "./pages/Logs";
@@ -79,6 +80,20 @@ const perf: Perf = {
   byGpu: [{ key: "Intel UHD 620", sessions: 4, fpsP50: 24, fpsP5: 9 }],
   byBrowser: [{ key: "Chrome", sessions: 10, fpsP50: 58, fpsP5: 40 }],
   menuLoadMs: { p50: 1800, p90: 4200 }, gameLoadMs: { p50: null, p90: null }, fpsSeries: pts([55, 60]),
+  loadPhases: [
+    { phase: "chunk", n: 4, p50: 340, p90: 1000 }, { phase: "models", n: 4, p50: 10820, p90: 13090 },
+    { phase: "worker", n: 4, p50: 330, p90: 3210 }, { phase: "shaders", n: 4, p50: 8960, p90: 10650 },
+    { phase: "frame", n: 0, p50: null, p90: null },
+  ],
+};
+const behaviour: Behaviour = {
+  actions: [
+    { kind: "device", key: "open", sessions: 9, count: 14 }, { kind: "atlas", key: "1", sessions: 5, count: 6 },
+    { kind: "createFail", key: "charset", sessions: 3, count: 3 }, { kind: "bossSeen", key: "", sessions: 2, count: 2 },
+  ],
+  caches: { opened: 17, sessions: 4 },
+  exits: [{ view: "game", area: "map", loading: false, sessions: 6 }, { view: "game", area: null, loading: true, sessions: 2 }],
+  rosters: { none: 20, "0": 3, "1": 2, "2-6": 0, "7-29": 1, "30+": 0 },
 };
 const group: ErrorGroup = {
   fingerprint: "fp1", src: "window", message: "TypeError: x is undefined", topFrame: "hud.ts:12", count: 80, sessions: 55,
@@ -89,7 +104,7 @@ const logs: LogLine[] = [
   { t: T, source: "access", ip: "203.0.113.4", method: "GET", path: "/api/config", status: 502, bytes: 200, ua: "curl", bot: false, text: "" },
 ];
 const traffic: TrafficData = {
-  days: [{ date: "2026-10-17", pageLoads: 100, humans: 80, bots: 20, sessions: 60 }],
+  days: [{ date: "2026-10-17", pageLoads: 100, humans: 80, bots: 20, boots: 70, sessions: 60 }],
   referrers: [{ referrer: "reddit.com", visits: 12 }], paths: [{ path: "/", hits: 90 }],
   statuses: [{ status: 200, hits: 90 }, { status: 404, hits: 3 }], bots: [{ agent: "Googlebot", hits: 20 }], bouncedBeforeBoot: 15,
 };
@@ -195,6 +210,21 @@ describe("pages render typed data", () => {
     expect(screen.getByText("9").className).toBe("n fail");
     expect(screen.getByText("24").className).toBe("n warn");
     expect(screen.getByText("no loads")).toBeTruthy();
+    // The load by phase: the slow one is named.
+    expect(screen.getByText("Models")).toBeTruthy();
+    expect(screen.getByText("10.8")).toBeTruthy();
+  });
+
+  it("behaviour: device steps, the create screen's refusals, where sessions ended, returning browsers", async () => {
+    stubApi({ "/api/behaviour": behaviour });
+    render(<BehaviourPage query={{}} />);
+    expect(await screen.findByText("Map device opened")).toBeTruthy();
+    expect(screen.getByText("Name refused: letters")).toBeTruthy();
+    expect(screen.getByText("Boss woke")).toBeTruthy();
+    expect(screen.getByText("17")).toBeTruthy();
+    expect(screen.getByText("on the loading screen")).toBeTruthy();
+    // 3 + 2 + 1 of 26 boots held a character already.
+    expect(screen.getByText("23 %")).toBeTruthy();
   });
 
   it("errors: impact tier badge and status filter", async () => {
@@ -240,6 +270,9 @@ describe("pages render typed data", () => {
     stubApi({ "/api/traffic": traffic });
     render(<Traffic query={{}} />);
     expect(await screen.findByText("Bounced before boot")).toBeTruthy();
+    // A reading and a column: boots are the landing count.
+    expect(screen.getAllByText("Boots")).toHaveLength(2);
+    expect(screen.getByText("86 %")).toBeTruthy();
     expect(screen.getByText("reddit.com")).toBeTruthy();
     expect(screen.getByText("404").className).toBe("n warn");
   });

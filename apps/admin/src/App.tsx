@@ -13,6 +13,7 @@ import { Retention } from "./pages/Retention";
 import { Atlas } from "./pages/Atlas";
 import { Gameplay } from "./pages/Gameplay";
 import { Performance } from "./pages/Performance";
+import { Behaviour } from "./pages/Behaviour";
 import { ErrorDetailPage, Errors } from "./pages/Errors";
 import { Health } from "./pages/Health";
 import { Logs } from "./pages/Logs";
@@ -31,6 +32,7 @@ function PageView({ route }: { route: Route }) {
     case "atlas": return <Atlas query={q} />;
     case "gameplay": return <Gameplay query={q} />;
     case "performance": return <Performance query={q} />;
+    case "behaviour": return <Behaviour query={q} />;
     case "errors": return route.id !== undefined ? <ErrorDetailPage fp={route.id} /> : <Errors query={q} />;
     case "health": return <Health />;
     case "logs": return <Logs query={q} />;

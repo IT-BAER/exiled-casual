@@ -20,10 +20,16 @@ const MONTHS: Record<string, number> = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4,
 const ACCESS = /^(\S+) \S+ \S+ \[(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+-])(\d{2})(\d{2})\] "((?:[^"\\]|\\.)*)" (\d{3}) (\d+|-) "((?:[^"\\]|\\.)*)" "((?:[^"\\]|\\.)*)"/;
 
 const BOT_UA = /bot|crawl|spider|slurp|scan|curl|wget|python|go-http|censys|zgrab|masscan|nmap|nuclei|httpclient|okhttp|java\/|libwww|perl|ruby|php\/|scrapy|axios|node-fetch|undici|headless|phantom|semrush|ahrefs|mj12|dataprovider|facebookexternalhit|preview|monitor|uptime|^-?$/i;
+/**
+ * Automation that sends a browser's user agent, read off the access log: crawlers and audits that
+ * name themselves somewhere in it, a frozen iOS 13.2.3 Safari string, and a two-part Chrome version,
+ * which no real Chrome has sent since the user-agent reduction (always four parts, "126.0.0.0").
+ */
+const BOT_BROWSER = /nutch|lighthouse|linkcheck|internetmeasurement|iPhone OS 13_2_3 like Mac OS X|Chrome\/\d+\.\d+(?![.\d])/i;
 const PROBE = /\.env|wp-|\.php|\/cgi-bin|\/\.git|phpmyadmin|\/actuator|\/\.aws|\/vendor\/|\/boaform|\/HNAP1|\/owa\//i;
 
 export function isBot(ua: string, path: string): boolean {
-  return BOT_UA.test(ua.trim()) || PROBE.test(path);
+  return BOT_UA.test(ua.trim()) || BOT_BROWSER.test(ua) || PROBE.test(path);
 }
 
 /** A short name for a bot agent: the token that matched, else the first product token. */

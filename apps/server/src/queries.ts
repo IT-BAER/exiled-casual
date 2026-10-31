@@ -1,7 +1,7 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import {
-  AGE_BUCKETS, RARITIES, VIEWS,
-  type AgeBucket, type AuditRow, type BuildRow, type ErrorDetail, type ErrorGroup, type ErrorStatus, type GeoRow,
+  AGE_BUCKETS, LOAD_PHASES, RARITIES, VIEWS,
+  type AgeBucket, type AuditRow, type Behaviour, type BuildRow, type ErrorDetail, type ErrorGroup, type ErrorStatus, type GeoRow,
   type Gameplay, type LiveSession, type Page, type Perf, type PerfRow, type Point, type Retention, type SessionDetail,
   type SessionRow, type Traffic, type View, type Area, type ErrorSource, type Rarity,
 } from "@exiled/telemetry";
@@ -15,6 +15,24 @@ export const MAX_DAYS = 90;
 const MAX_SPAN = 400 * DAY;
 
 export interface Range { from: number; to: number }
+
+/** A hit that is the game's page itself, and one that is the client asking for its live config: a boot. */
+export const PAGE_LOAD = "method = 'GET' AND path IN ('/', '/index.html') AND status = 200";
+export const BOOT = "method = 'GET' AND path = '/api/config' AND status = 200";
+
+/** The key an action is counted under, per event kind (see `Behaviour.actions`). */
+const ACTION_KEY: Record<string, string> = {
+  device: "json_extract(data, '$.action')",
+  atlas: "CAST(json_extract(data, '$.tier') AS TEXT)",
+  portal: "json_extract(data, '$.to')",
+  respawn: "json_extract(data, '$.where')",
+  createFail: "json_extract(data, '$.reason')",
+  reload: "json_extract(data, '$.reason')",
+  rareSeen: "''",
+  rareKill: "''",
+  bossSeen: "''",
+  bossFight: "''",
+};
 
 const intParam = (q: URLSearchParams, k: string, def: number, min: number, max: number): number => {
   const raw = q.get(k);
@@ -249,7 +267,38 @@ export class Queries {
       buckets.set(t, [...(buckets.get(t) ?? []), b.fps]);
     }
     const fpsSeries = [...buckets].sort((a, b) => a[0] - b[0]).map(([t, v]) => ({ t, v: percentile(v.sort((a, b) => a - b), 50)! }));
-    return { byGpu: rows("gpu"), byBrowser: rows("browser"), menuLoadMs: loads("menuMs"), gameLoadMs: loads("gameMs"), fpsSeries };
+    const phaseMs = new Map<string, number[]>();
+    for (const p of this.all<{ phase: string; ms: number }>(
+      `SELECT json_extract(data, '$.phase') AS phase, json_extract(data, '$.ms') AS ms FROM events
+       WHERE k = 'loadPhase' AND t >= ? AND t <= ? ORDER BY ms`, r.from, r.to)) phaseMs.set(p.phase, [...(phaseMs.get(p.phase) ?? []), p.ms]);
+    const loadPhases = LOAD_PHASES.map((phase) => {
+      const v = phaseMs.get(phase) ?? [];
+      return { phase, n: v.length, p50: percentile(v, 50), p90: percentile(v, 90) };
+    });
+    return { byGpu: rows("gpu"), byBrowser: rows("browser"), menuLoadMs: loads("menuMs"), gameLoadMs: loads("gameMs"), loadPhases, fpsSeries };
+  }
+
+  behaviour(q: URLSearchParams): Behaviour {
+    const r = parseRange(q, this.now());
+    const kinds = Object.keys(ACTION_KEY);
+    const actions = this.all<Behaviour["actions"][number]>(
+      `SELECT k AS kind, CASE k ${kinds.map((k) => `WHEN '${k}' THEN ${ACTION_KEY[k]}`).join(" ")} END AS key,
+         COUNT(DISTINCT sid) AS sessions, COUNT(*) AS count
+       FROM events WHERE t >= ? AND t <= ? AND k IN (${kinds.map(() => "?").join(",")})
+       GROUP BY 1, 2 ORDER BY 1, count DESC`, r.from, r.to, ...kinds);
+    const caches = this.get<{ opened: number | null; sessions: number }>(
+      `SELECT SUM(json_extract(data, '$.caches')) AS opened, COUNT(DISTINCT sid) AS sessions
+       FROM events WHERE k = 'beat' AND t >= ? AND t <= ? AND json_extract(data, '$.caches') > 0`, r.from, r.to);
+    const exits = this.all<{ view: View; area: Area | null; loading: number; sessions: number }>(
+      `SELECT json_extract(data, '$.view') AS view, json_extract(data, '$.area') AS area,
+         COALESCE(json_extract(data, '$.loading'), 0) AS loading, COUNT(DISTINCT sid) AS sessions
+       FROM events WHERE k = 'end' AND t >= ? AND t <= ? AND json_extract(data, '$.view') IS NOT NULL
+       GROUP BY 1, 2, 3 ORDER BY sessions DESC`, r.from, r.to).map((x) => ({ ...x, loading: !!x.loading }));
+    const rosters = { none: 0, ...emptyAges() } as Behaviour["rosters"];
+    for (const x of this.all<{ age: AgeBucket | null; n: number }>(
+      `SELECT json_extract(data, '$.oldestAge') AS age, COUNT(*) AS n FROM events
+       WHERE k = 'roster' AND t >= ? AND t <= ? GROUP BY 1`, r.from, r.to)) rosters[x.age ?? "none"] += x.n;
+    return { actions, caches: { opened: caches?.opened ?? 0, sessions: caches?.sessions ?? 0 }, exits, rosters };
   }
 
   private groups(rows: GroupDbRow[]): ErrorGroup[] {
@@ -304,16 +353,18 @@ export class Queries {
   traffic(q: URLSearchParams): Traffic {
     const r = parseRange(q, this.now());
     const human = "bot = 0";
-    const page = "method = 'GET' AND path IN ('/', '/index.html') AND status = 200";
-    const hitDays = new Map(this.all<{ day: string; pageLoads: number; humans: number; bots: number }>(
-      `SELECT date(t / 1000, 'unixepoch') AS day, SUM(${human} AND ${page}) AS pageLoads, SUM(${human}) AS humans, SUM(bot) AS bots
+    const page = PAGE_LOAD;
+    type DayHits = { day: string; pageLoads: number; humans: number; bots: number; boots: number };
+    const hitDays = new Map(this.all<DayHits>(
+      `SELECT date(t / 1000, 'unixepoch') AS day, SUM(${human} AND ${page}) AS pageLoads, SUM(${human}) AS humans, SUM(bot) AS bots,
+         SUM(${human} AND ${BOOT}) AS boots
        FROM hits WHERE t >= ? AND t <= ? GROUP BY day`, r.from, r.to).map((x) => [x.day, x]));
-    const rolled = new Map(this.all<{ day: string; pageLoads: number; humans: number; bots: number }>(
-      "SELECT day, page_loads AS pageLoads, humans, bots FROM daily WHERE day >= ? AND day <= ?", utcDay(r.from), utcDay(r.to)).map((x) => [x.day, x]));
+    const rolled = new Map(this.all<DayHits>(
+      "SELECT day, page_loads AS pageLoads, humans, bots, boots FROM daily WHERE day >= ? AND day <= ?", utcDay(r.from), utcDay(r.to)).map((x) => [x.day, x]));
     const sessions = new Map(this.all<{ day: string; n: number }>("SELECT day, COUNT(*) AS n FROM sessions WHERE started_at >= ? AND started_at <= ? GROUP BY day", r.from, r.to).map((x) => [x.day, x.n]));
     const days = daysIn(r).map((date) => {
       const h = hitDays.get(date) ?? rolled.get(date);
-      return { date, pageLoads: h?.pageLoads ?? 0, humans: h?.humans ?? 0, bots: h?.bots ?? 0, sessions: sessions.get(date) ?? 0 };
+      return { date, pageLoads: h?.pageLoads ?? 0, humans: h?.humans ?? 0, bots: h?.bots ?? 0, boots: h?.boots ?? 0, sessions: sessions.get(date) ?? 0 };
     });
     const referrers = this.all<{ referrer: string; visits: number }>(
       `SELECT referrer, COUNT(*) AS visits FROM hits WHERE t >= ? AND t <= ? AND ${human} AND ${page} AND referrer != '' GROUP BY referrer ORDER BY visits DESC LIMIT 30`, r.from, r.to);
@@ -327,7 +378,7 @@ export class Queries {
       agents.set(a, (agents.get(a) ?? 0) + b.n);
     }
     const bots = [...agents].map(([agent, hits]) => ({ agent, hits })).sort((a, b) => b.hits - a.hits).slice(0, 30);
-    const bouncedBeforeBoot = days.reduce((s, d) => s + Math.max(0, d.pageLoads - d.sessions), 0);
+    const bouncedBeforeBoot = days.reduce((s, d) => s + Math.max(0, d.pageLoads - d.boots), 0);
     return { days, referrers, paths, statuses, bots, bouncedBeforeBoot };
   }
 

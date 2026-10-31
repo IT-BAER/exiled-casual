@@ -173,6 +173,7 @@ export function createAdminHandler(d: AdminDeps) {
       case "GET /geo": return ok(d.queries.geo(q));
       case "GET /gameplay": return ok(d.queries.gameplay(q));
       case "GET /perf": return ok(d.queries.perf(q));
+      case "GET /behaviour": return ok(d.queries.behaviour(q));
       case "GET /errors": return ok(d.queries.errors(q));
       case "GET /errors/:id": return ok(d.queries.errorDetail(id));
       case "POST /errors/:id": {
@@ -194,7 +195,7 @@ export function createAdminHandler(d: AdminDeps) {
       case "GET /builds": return ok(d.queries.builds());
       case "GET /audit": return ok(d.queries.audit(q));
       default: {
-        const known = ["logout", "me", "overview", "live", "sessions", "retention", "geo", "gameplay", "perf", "errors", "health", "logs", "traffic", "liveops", "builds", "audit"];
+        const known = ["logout", "me", "overview", "live", "sessions", "retention", "geo", "gameplay", "perf", "behaviour", "errors", "health", "logs", "traffic", "liveops", "builds", "audit"];
         throw new HttpError(known.includes(seg[0] ?? "") ? 405 : 404, known.includes(seg[0] ?? "") ? "method not allowed" : "no such route");
       }
     }

@@ -8,6 +8,7 @@ export const PAGES = [
   "atlas",
   "gameplay",
   "performance",
+  "behaviour",
   "errors",
   "health",
   "logs",

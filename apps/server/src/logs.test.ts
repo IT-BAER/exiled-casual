@@ -16,7 +16,7 @@ afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-const line = (path: string, ua = "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0", status = 200, ip = "203.0.113.9") =>
+const line = (path: string, ua = "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0", status = 200, ip = "203.0.113.9") =>
   `${ip} - - [18/Oct/2026:11:00:00 +0000] "GET ${path} HTTP/1.1" ${status} 100 "-" "${ua}"\n`;
 
 function logDir(): string {

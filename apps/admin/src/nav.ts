@@ -40,6 +40,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { page: "gameplay", label: "Gameplay", icon: "gameplay" },
       { page: "performance", label: "Performance", icon: "performance" },
+      { page: "behaviour", label: "Behaviour", icon: "chart" },
     ],
   },
   {

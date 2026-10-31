@@ -10,7 +10,7 @@ import { clientIp } from "./ip";
 import { LiveOps } from "./liveops";
 import { createLogger, type Logger, type ServerLogLine } from "./log";
 import { parseAccessLine, tailAccessLog, type Hit, type TailState } from "./nginx";
-import { HOUR, MAX_DAYS, Queries } from "./queries";
+import { BOOT, HOUR, MAX_DAYS, PAGE_LOAD, Queries } from "./queries";
 import { FailureWindow, TokenBucket } from "./ratelimit";
 import { DAY, Store, dayStart, utcDay } from "./store";
 
@@ -140,13 +140,14 @@ export function createApp(opts: AppOptions): App {
     const to = from + DAY;
     const s = db.prepare("SELECT COUNT(*) AS n, COUNT(DISTINCT visitor) AS v, COALESCE(SUM(play_seconds), 0) AS p FROM sessions WHERE started_at >= ? AND started_at < ?").get(from, to) as { n: number; v: number; p: number };
     const h = db.prepare(
-      `SELECT COALESCE(SUM(bot = 0 AND method = 'GET' AND path IN ('/', '/index.html') AND status = 200), 0) AS pl,
-         COALESCE(SUM(bot = 0), 0) AS hu, COALESCE(SUM(bot), 0) AS bo FROM hits WHERE t >= ? AND t < ?`).get(from, to) as { pl: number; hu: number; bo: number };
+      `SELECT COALESCE(SUM(bot = 0 AND ${PAGE_LOAD}), 0) AS pl, COALESCE(SUM(bot = 0 AND ${BOOT}), 0) AS bt,
+         COALESCE(SUM(bot = 0), 0) AS hu, COALESCE(SUM(bot), 0) AS bo FROM hits WHERE t >= ? AND t < ?`).get(from, to) as { pl: number; bt: number; hu: number; bo: number };
     db.prepare(
-      `INSERT INTO daily (day, sessions, visitors, play_seconds, page_loads, humans, bots) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO daily (day, sessions, visitors, play_seconds, page_loads, humans, bots, boots) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(day) DO UPDATE SET sessions = excluded.sessions, visitors = excluded.visitors, play_seconds = excluded.play_seconds,
-         page_loads = MAX(page_loads, excluded.page_loads), humans = MAX(humans, excluded.humans), bots = MAX(bots, excluded.bots)`,
-    ).run(day, s.n, s.v, s.p, h.pl, h.hu, h.bo);
+         page_loads = MAX(page_loads, excluded.page_loads), humans = MAX(humans, excluded.humans), bots = MAX(bots, excluded.bots),
+         boots = MAX(boots, excluded.boots)`,
+    ).run(day, s.n, s.v, s.p, h.pl, h.hu, h.bo, h.bt);
   }
 
   let rolledAll = false;

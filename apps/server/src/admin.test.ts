@@ -4,8 +4,9 @@ import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import type { ErrorGroup, LiveSession, Overview, Retention } from "@exiled/telemetry";
-import { createApp, type App } from "./app";
+import type { Behaviour, ErrorGroup, LiveSession, Overview, Perf, Retention, TelemetryEvent } from "@exiled/telemetry";
+import { createApp, insertHits, type App } from "./app";
+import { parseAccessLine } from "./nginx";
 import { base32Decode, totpAt } from "./totp";
 import { evaluateMilestones, MILESTONES, type MilestoneStats } from "./milestones";
 import { batch, post, serve, startEvent, type Served } from "./test-helpers";
@@ -297,9 +298,75 @@ describe("admin routes", () => {
     expect(serverLogs[0]).toMatchObject({ source: "server", level: "info", text: expect.stringContaining("admin login") });
     expect((await get("/api/logs?source=nope")).status).toBe(400);
     const traffic = await j(get("/api/traffic"));
-    expect(traffic.days[0]).toEqual({ date: "2026-10-18", pageLoads: 0, humans: 0, bots: 0, sessions: 1 });
+    expect(traffic.days[0]).toEqual({ date: "2026-10-18", pageLoads: 0, humans: 0, bots: 0, boots: 0, sessions: 1 });
     expect(await j(get("/api/builds"))).toEqual([{ build: "0.3.1+abc1234", builtAt: 1000, firstSeen: T0, lastSeen: T0, sessions: 1, errors: 0 }]);
     expect((await get("/api/nope")).status).toBe(404);
+  });
+
+  it("counts landings as booted clients, and keeps the count once the raw hits are gone", async () => {
+    const s = await setup();
+    const { get } = await loggedIn(s);
+    const PERSON = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+    const OLD_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1";
+    const hit = (path: string, ua: string, t = T0 - 60_000) =>
+      parseAccessLine(`203.0.113.7 - - [${new Date(t).toUTCString().replace(/^\w+, (\d+) (\w+) (\d+) ([\d:]+) GMT$/, "$1/$2/$3:$4")} +0000] "GET ${path} HTTP/1.1" 200 10 "-" "${ua}"`)!;
+    insertHits(s.app.db, [
+      hit("/", PERSON), hit("/api/config", PERSON),
+      hit("/", PERSON), // read the page, never booted
+      hit("/", OLD_IOS), hit("/", OLD_IOS),
+    ]);
+    const t = await j(get("/api/traffic"));
+    expect(t.days[0]).toMatchObject({ date: "2026-10-18", pageLoads: 2, boots: 1, bots: 2 });
+    expect(t.bouncedBeforeBoot).toBe(1);
+    // The rollup carries boots past the hits' retention.
+    s.app.jobs.hourly();
+    s.app.db.exec("DELETE FROM hits");
+    expect((await j(get("/api/traffic"))).days[0]).toMatchObject({ pageLoads: 2, boots: 1 });
+  });
+
+  it("answers what players did at the device, in maps, at death and on leaving", async () => {
+    const s = await setup();
+    const { get } = await loggedIn(s);
+    const ev = (events: TelemetryEvent[]) => post(`${s.ingest}/api/t`, batch({ events: [startEvent(), ...events] }));
+    await ev([
+      { k: "roster", t: 1, characters: 1, oldestAge: "1", maxLevel: 4 },
+      { k: "device", t: 2, action: "open" }, { k: "device", t: 3, action: "open" }, { k: "device", t: 4, action: "activate" },
+      { k: "atlas", t: 5, node: "node.the_wrackline", tier: 1, stone: 1 },
+      { k: "portal", t: 6, to: "map" },
+      { k: "rareSeen", t: 7, tier: 1, biome: "strand" }, { k: "rareKill", t: 8, tier: 1 },
+      { k: "beat", t: 30_000, view: "game", active: 30, caches: 3 },
+      { k: "respawn", t: 31_000, where: "hideout" },
+      { k: "loadPhase", t: 9, phase: "models", ms: 4000 },
+      { k: "end", t: 40_000, view: "game", area: "map", loading: false },
+    ]);
+    await ev([
+      { k: "roster", t: 1, characters: 0 },
+      { k: "createFail", t: 2, reason: "charset" },
+      { k: "reload", t: 3, reason: "chunk" },
+      { k: "loadPhase", t: 9, phase: "models", ms: 9000 },
+      { k: "end", t: 10, view: "game", loading: true },
+    ]);
+    await ev([{ k: "end", t: 10 }]);
+    const b = (await j(get("/api/behaviour"))) as Behaviour;
+    const act = (kind: string, key: string) => b.actions.find((a) => a.kind === kind && a.key === key);
+    expect(act("device", "open")).toEqual({ kind: "device", key: "open", sessions: 1, count: 2 });
+    expect(act("atlas", "1")).toMatchObject({ sessions: 1, count: 1 });
+    expect(act("portal", "map")).toMatchObject({ count: 1 });
+    expect(act("rareSeen", "")).toMatchObject({ count: 1 });
+    expect(act("respawn", "hideout")).toMatchObject({ count: 1 });
+    expect(act("createFail", "charset")).toMatchObject({ count: 1 });
+    expect(act("reload", "chunk")).toMatchObject({ count: 1 });
+    expect(b.caches).toEqual({ opened: 3, sessions: 1 });
+    expect(b.exits).toEqual(expect.arrayContaining([
+      { view: "game", area: "map", loading: false, sessions: 1 },
+      { view: "game", area: null, loading: true, sessions: 1 },
+    ]));
+    // A bare end from an older client says nothing about where it was.
+    expect(b.exits).toHaveLength(2);
+    expect(b.rosters).toEqual({ none: 1, "0": 0, "1": 1, "2-6": 0, "7-29": 0, "30+": 0 });
+    const perf = (await j(get("/api/perf"))) as Perf;
+    expect(perf.loadPhases.find((p) => p.phase === "models")).toEqual({ phase: "models", n: 2, p50: 4000, p90: 9000 });
+    expect(perf.loadPhases.find((p) => p.phase === "shaders")).toEqual({ phase: "shaders", n: 0, p50: null, p90: null });
   });
 
   it("is not reachable on the ingest listener", async () => {
