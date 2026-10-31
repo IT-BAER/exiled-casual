@@ -58,6 +58,13 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   as strong as the rest of the map's monsters: they grow with the map's tier
   and its waystone instead of keeping their base life and damage.
 
+### Changed
+
+- The game loads faster. It starts downloading while you pick or create your
+  character, so on a slower connection the wait after pressing Play is about
+  a fifth shorter, and the line along the foot of the loading screen now fills
+  as the game really gets ready.
+
 ### Fixed
 
 - An orb that cannot change a waystone no longer plays the craft sound as if
