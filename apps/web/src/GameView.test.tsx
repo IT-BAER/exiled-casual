@@ -4,7 +4,7 @@ import { render, screen, fireEvent, act, cleanup } from "@testing-library/react"
 import { testPlayer } from "./test-fixtures";
 import { DEFAULT_SETTINGS, MOVE_SOCKET, type Settings } from "./settings";
 import { defaultAttackFor } from "@exiled/content-runtime";
-import { DEFAULT_CLASS_ID, atlasGraph } from "@exiled/rules";
+import { DEFAULT_CLASS_ID, atlasGraph, atlasNodeTier } from "@exiled/rules";
 import { fnv1a32 } from "@exiled/mapgen";
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
@@ -138,6 +138,7 @@ import { GameView } from "./GameView";
 import { FADE_MS } from "./LoadingScreen";
 import { SETTLE_FRAMES } from "./settle";
 import { playSfx } from "./audio/sfx";
+import { telemetry } from "./telemetry/client";
 
 const makeSnap = (): Snapshot => ({
   tick: 1, area: "hideout", portalsLeft: 0, mapOpen: false, areaTier: 0,
@@ -428,6 +429,26 @@ describe("GameView", () => {
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
 
+  it("reports each load phase once per entry, and the plate's state for the page's end", async () => {
+    const track = vi.spyOn(telemetry, "track");
+    const loading = vi.spyOn(telemetry, "setLoading");
+    await mountGame();
+    expect(loading).toHaveBeenLastCalledWith(true);
+    sendArea("map.swamp");
+    becomeReady();
+    paintSettled();
+    expect(loading).toHaveBeenLastCalledWith(false);
+    // The next area's plate is a load too, but not a game entry: no second set of phases.
+    sendArea("");
+    expect(loading).toHaveBeenLastCalledWith(true);
+    becomeReady();
+    paintSettled();
+    const phases = track.mock.calls.map(([e]) => e).filter((e) => e.k === "loadPhase").map((e) => (e as { phase: string }).phase);
+    expect(phases.sort()).toEqual(["chunk", "frame", "models", "shaders", "worker"]);
+    track.mockRestore();
+    loading.mockRestore();
+  });
+
   it("does not lower the plate on a frame painted before the scene was ready", async () => {
     // The bug this pins is the ordering: disarm, build, THEN arm on ready. Arm
     // first and a frame that was already in flight lowers the plate onto an area
@@ -506,6 +527,36 @@ describe("GameView", () => {
     expect(screen.queryByTestId("prep-socket-stone")).toBeNull();
   });
 
+  it("reports each step at the map device once, and the Atlas node it opened with the stone's tier", () => {
+    const track = vi.spyOn(telemetry, "track");
+    const stone = {
+      rarity: "normal" as const, name: "Waystone", baseId: "map.waystone", itemClass: "waystone", lines: [],
+      x: 0, y: 0, w: 1, h: 1, waystone: { seed: 1, tier: 1 },
+    };
+    mountWithSnapshot();
+    act(() => {
+      hoisted.worker?.onmessage?.({
+        data: { type: "snapshot", snapshot: { ...makeSnap(), tick: 2, inventory: { cols: 12, rows: 5, items: [stone] } } },
+      });
+    });
+    track.mockClear();
+    act(() => { hoisted.openPanel?.(true); });
+    act(() => { fireEvent.pointerDown(screen.getByTestId("inventory-item-0"), { ctrlKey: true, button: 0 }); });
+    const node = atlasGraph(0)[0]!;
+    fireEvent.click(screen.getByTestId(`prep-node-${node.id}`));
+    fireEvent.click(screen.getByTestId("prep-activate"));
+    const sent = track.mock.calls.map(([e]) => e);
+    expect(sent).toEqual([
+      { k: "device", action: "open" },
+      { k: "device", action: "socket" },
+      { k: "device", action: "select" },
+      { k: "device", action: "activate" },
+      { k: "atlas", node: node.id, tier: atlasNodeTier(atlasGraph(0), node.id), stone: 1 },
+      { k: "device", action: "close" },
+    ]);
+    track.mockRestore();
+  });
+
   it("opening a map puts the device and the bag away", () => {
     mountWithSnapshot();
     act(() => { hoisted.openPanel?.(true); });
@@ -564,6 +615,16 @@ describe("GameView", () => {
     expect(screen.getByTestId("death-screen")).toBeTruthy();
     expect(screen.getByText("Resurrect at Checkpoint")).toBeTruthy();
     expect(screen.getByText("Resurrect in Hideout")).toBeTruthy();
+  });
+
+  it("reports where the player chose to come back, once per click", () => {
+    const track = vi.spyOn(telemetry, "track");
+    mountWithSnapshot();
+    die(6);
+    track.mockClear();
+    act(() => { fireEvent.click(screen.getByText("Resurrect at Checkpoint")); });
+    expect(track.mock.calls.map(([e]) => e).filter((e) => e.k === "respawn")).toEqual([{ k: "respawn", where: "checkpoint" }]);
+    track.mockRestore();
   });
 
   it("sends the revive intent it was clicked for", () => {

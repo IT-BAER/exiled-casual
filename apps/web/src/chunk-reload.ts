@@ -4,6 +4,8 @@
  * its chunks. At most once a minute per tab, so a chunk that is really missing shows its
  * error instead of reloading forever; a tab that cannot remember the reload never reloads.
  */
+import { telemetry } from "./telemetry/client";
+
 const KEY = "exiled.chunkReloadAt";
 const WINDOW_MS = 60_000;
 
@@ -13,7 +15,21 @@ interface Deps {
   now: () => number;
 }
 
-const browser = (): Deps => ({ storage: sessionStorage, reload: () => location.reload(), now: Date.now });
+/**
+ * Every reload the page does to itself, said first and sent by beacon: once the page is
+ * gone the queue goes with it, and a silent reload reads as a player who left.
+ */
+export function reloadPage(
+  reason: "chunk" | "webgl",
+  t: Pick<typeof telemetry, "track" | "flush"> = telemetry,
+  reload: () => void = () => location.reload(),
+): void {
+  t.track({ k: "reload", reason });
+  t.flush(true);
+  reload();
+}
+
+const browser = (): Deps => ({ storage: sessionStorage, reload: () => reloadPage("chunk"), now: Date.now });
 
 export function reloadOnChunkError<T>(load: () => Promise<T>, deps?: Deps): () => Promise<T> {
   return () =>

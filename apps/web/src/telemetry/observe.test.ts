@@ -71,6 +71,78 @@ describe("game observer", () => {
     expect(o.takeLoot()).toBeNull();
   });
 
+  const mon = (id: number, x: number, extra: Partial<SnapshotEntity> = {}) =>
+    ({ id, kind: "monster", x, y: 0, life: 100, maxLife: 100, ...extra }) as SnapshotEntity;
+
+  it("sees a rare once it comes within about a screen, and counts its death once", () => {
+    const o = createGameObserver();
+    o.area("map", "strand");
+    o.observe(snap());
+    const far = mon(7, 30, { rare: true });
+    expect(o.observe(snap({ entities: [far, mon(8, 2)] }))).toEqual([]);
+    const near = mon(7, 6, { rare: true });
+    expect(o.observe(snap({ entities: [near] }))).toEqual([{ k: "rareSeen", tier: 2, biome: "strand" }]);
+    expect(o.observe(snap({ entities: [near] }))).toEqual([]);
+    // Monsters leave the snapshot only by dying.
+    expect(o.observe(snap({ entities: [mon(8, 2)] }))).toEqual([{ k: "rareKill", tier: 2, biome: "strand" }]);
+    expect(o.observe(snap({ entities: [] }))).toEqual([]);
+  });
+
+  it("does not take a new area's empty snapshot for a dead rare", () => {
+    const o = createGameObserver();
+    o.area("map", "strand");
+    o.observe(snap());
+    o.observe(snap({ entities: [mon(7, 3, { rare: true })] }));
+    o.area("hideout", null);
+    expect(o.observe(snap({ area: "hideout", areaTier: 0 })).map((e) => e.k)).toEqual(["area"]);
+  });
+
+  it("reports the boss waking and the first hit on it, once per area", () => {
+    const o = createGameObserver();
+    o.area("map", "desert");
+    o.observe(snap());
+    const boss = (extra: Partial<SnapshotEntity>) => mon(9, 20, { boss: true, ...extra });
+    expect(o.observe(snap({ entities: [boss({ bossAwake: false })] }))).toEqual([]);
+    expect(o.observe(snap({ entities: [boss({ bossAwake: true })] }))).toEqual([{ k: "bossSeen", tier: 2, biome: "desert" }]);
+    expect(o.observe(snap({ entities: [boss({ bossAwake: true, life: 90 })] }))).toEqual([{ k: "bossFight", tier: 2, biome: "desert" }]);
+    expect(o.observe(snap({ entities: [boss({ bossAwake: true, life: 50 })] }))).toEqual([]);
+    o.area("map", "desert");
+    o.observe(snap());
+    expect(o.observe(snap({ entities: [boss({ bossAwake: true, life: 40 })] })).map((e) => e.k)).toEqual(["bossSeen", "bossFight"]);
+  });
+
+  it("calls an area change a portal only when the player stood at one", () => {
+    const portal = (inRange: boolean) => ({ id: 3, kind: "portal", x: 1, y: 0, inRange }) as SnapshotEntity;
+    const o = createGameObserver();
+    o.area("hideout", null);
+    o.observe(snap({ area: "hideout", entities: [portal(true)] }));
+    o.area("map", "strand");
+    expect(o.observe(snap()).map((e) => e.k)).toEqual(["portal", "area"]);
+    // Dead, then back in the hideout through the death screen: no portal was walked.
+    o.observe(snap({ entities: [portal(false)], player: { alive: false } }));
+    o.area("hideout", null);
+    expect(o.observe(snap({ area: "hideout" })).map((e) => e.k)).toEqual(["area"]);
+  });
+
+  it("emits the portal before the area it leads to, with where it led", () => {
+    const o = createGameObserver();
+    o.area("hideout", null);
+    o.observe(snap({ area: "hideout", entities: [{ id: 3, kind: "portal", x: 0, y: 0, inRange: true } as SnapshotEntity] }));
+    o.area("map", "swamp");
+    expect(o.observe(snap())[0]).toEqual({ k: "portal", to: "map" });
+  });
+
+  it("counts containers opened since the last beat into the beat's context", () => {
+    const box = (id: number, opened: boolean) => ({ id, kind: "container", x: 0, y: 0, opened }) as SnapshotEntity;
+    const o = createGameObserver();
+    o.area("map", "forest");
+    o.observe(snap({ entities: [box(1, true), box(2, false), box(3, false)] }));
+    o.observe(snap({ entities: [box(1, true), box(2, true), box(3, false)] }));
+    o.observe(snap({ entities: [box(1, true), box(2, true), box(3, true)] }));
+    expect(o.takeCaches()).toBe(2);
+    expect(o.takeCaches()).toBe(0);
+  });
+
   it("reports the context a beat carries", () => {
     const o = createGameObserver();
     o.area("map", "forest");

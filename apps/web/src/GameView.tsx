@@ -60,6 +60,7 @@ import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/f
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { settleGate } from "./settle";
 import { createLoadClock } from "./load-phases";
+import { reloadPage } from "./chunk-reload";
 import { beginLoad, setLoadPart } from "./load-progress";
 import { pickTip } from "./tips";
 import { hasEnteredMap, useFirstMap } from "./hud/first-map";
@@ -210,15 +211,27 @@ export function GameView({
   const closePassives = useCallback(() => setPassivesOpen(false), []);
   // Stable, so the memo'd atlas and inventory panels skip the renders their data did not cause.
   const ejectStone = useCallback(() => setSocketedCell(null), []);
-  const openInventory = useCallback(() => setInventoryOpen(true), []);
+  // A node picked on the Atlas; the inventory comes up so a stone can be dragged in.
+  const selectNode = useCallback(() => {
+    telemetry.track({ k: "device", action: "select" });
+    setInventoryOpen(true);
+  }, []);
   const closeAtlas = useCallback(() => setPanelOpen(false), []);
+  /** The Atlas seed and the seated stone's tier, for telemetry, without unsettling the memo'd panel's callbacks. */
+  const atlasRef = useRef({ seed: 0, stone: 0 });
   const activateMap = useCallback((atlasNodeId: string, x: number, y: number) => {
     sendIntent({ kind: "activateMap", atlasNodeId, x, y });
+    const { seed, stone } = atlasRef.current;
+    telemetry.track({ k: "device", action: "activate" });
+    telemetry.track({ k: "atlas", node: atlasNodeId, tier: atlasNodeTier(atlasGraph(seed), atlasNodeId), stone });
     setPanelOpen(false);
   }, [sendIntent]);
   const closeStash = useCallback(() => setStashOpen(false), []);
   const closeVendor = useCallback(() => setVendorOpen(false), []);
-  const socketWaystone = useCallback((x: number, y: number) => setSocketedCell({ x, y }), []);
+  const socketWaystone = useCallback((x: number, y: number) => {
+    telemetry.track({ k: "device", action: "socket" });
+    setSocketedCell({ x, y });
+  }, []);
   const closeInventory = useCallback(() => { setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); }, []);
 
   /**
@@ -320,10 +333,17 @@ export function GameView({
     () => (waystone ? { ...socketedCell!, ...waystone } : null),
     [socketedCell, waystone],
   );
+  atlasRef.current = { seed: snapshot?.atlasSeed ?? 0, stone: socketedStone?.tier ?? 0 };
   // Every way the device closes (button, Escape, walking off, activation, area change,
   // revive) hands the stone back, or it sits seated in a node you cannot open.
   useEffect(() => {
     if (!panelOpen) setSocketedCell(null);
+  }, [panelOpen]);
+  // The device's panel state, not the ways it changes: there are six ways to close it.
+  const panelWas = useRef(false);
+  useEffect(() => {
+    if (panelOpen !== panelWas.current) telemetry.track({ k: "device", action: panelOpen ? "open" : "close" });
+    panelWas.current = panelOpen;
   }, [panelOpen]);
   // Clear the cell reference once the item moves away (consumed, moved, or picked up).
   useEffect(() => {
@@ -343,7 +363,8 @@ export function GameView({
     worker.onerror = (e) => reportError("worker", e.message || "worker error", undefined, e.filename);
     worker.onmessageerror = () => reportError("worker", "worker messageerror");
     const mountedAt = performance.now();
-    const clock = createLoadClock(mountedAt);
+    const clock = createLoadClock(mountedAt, (phase, ms) => telemetry.track({ k: "loadPhase", phase, ms }));
+    telemetry.setLoading(true);
     let gameMsSent = false;
     const query = new URLSearchParams(window.location.search);
     const bot = import.meta.env?.DEV === true && query.has("bot");
@@ -381,7 +402,11 @@ export function GameView({
     const debugLog = createDebugSnapshotLog();
     /** The same snapshots, counted for telemetry: read-only, never an intent. */
     const watch = createGameObserver();
-    telemetry.setContext(watch.context);
+    // Read once per beat, so the containers opened since the last one ride on it.
+    telemetry.setContext(() => {
+      const caches = watch.takeCaches();
+      return caches > 0 ? { ...watch.context(), caches } : watch.context();
+    });
     const dropBeatHook = telemetry.addBeatHook(() => {
       const l = watch.takeLoot();
       if (l) telemetry.track({ k: "loot", ...l });
@@ -409,7 +434,7 @@ export function GameView({
       reportError("webgl", "webglcontextlost");
       if (sessionStorage.getItem("gl-reloaded")) return;
       sessionStorage.setItem("gl-reloaded", "1");
-      location.reload();
+      reloadPage("webgl");
     };
     canvas.addEventListener("webglcontextlost", onContextLost);
     const glGuardTimer = window.setTimeout(() => sessionStorage.removeItem("gl-reloaded"), 8000);
@@ -665,6 +690,7 @@ export function GameView({
         }
         setLoadPart("worker", 1);
         plateUp = true;
+        telemetry.setLoading(true);
         stoodIn = msg.area;
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
@@ -786,6 +812,7 @@ export function GameView({
         settled = null;
         plateUp = false;
         setLoadPart("ready", 1);
+        telemetry.setLoading(false);
         releaseWarm?.();
         releaseWarm = null;
         // Dissolve rather than cut. The world under it is finished either way —
@@ -939,6 +966,7 @@ export function GameView({
       window.clearTimeout(glGuardTimer);
       dropBeatHook();
       telemetry.setContext(null);
+      telemetry.setLoading(false);
       resetPlayerRig(); // containers belong to the scene we are about to dispose
       resetProps();
       resetFireLights();
@@ -1128,7 +1156,7 @@ export function GameView({
           socketedStone={socketedStone}
           mapOpen={snapshot.mapOpen}
           onEject={ejectStone}
-          onNodeSelect={openInventory}
+          onNodeSelect={selectNode}
           onClose={closeAtlas}
           onActivate={activateMap}
         />
@@ -1215,6 +1243,7 @@ export function GameView({
             inMap={snapshot.area === "map" && snapshot.mapOpen} portalsLeft={snapshot.portalsLeft} />}
           onRevive={(where) => {
             sendIntent({ kind: "revive", where });
+            telemetry.track({ k: "respawn", where });
             // Every overlay goes with the body: coming back is a fresh screen.
             setPanelOpen(false);
             setInventoryOpen(false);

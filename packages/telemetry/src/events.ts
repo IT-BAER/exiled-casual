@@ -36,6 +36,22 @@ export type ErrorSource = (typeof ERROR_SOURCES)[number];
 export const RARITIES = ["normal", "magic", "rare", "unique"] as const;
 export type Rarity = (typeof RARITIES)[number];
 
+/** What the player did at the map device: walked up, picked a node, seated a stone, opened the map, walked off. */
+export const DEVICE_ACTIONS = ["open", "select", "socket", "activate", "close"] as const;
+export type DeviceAction = (typeof DEVICE_ACTIONS)[number];
+
+export const RESPAWNS = ["checkpoint", "hideout"] as const;
+
+/** Why a create screen was left with a name the rule refused. The name itself never leaves the device. */
+export const CREATE_FAILS = ["short", "long", "charset", "taken"] as const;
+
+/** Why the page reloaded itself: a stale deploy's missing chunk, or a lost WebGL context. */
+export const RELOADS = ["chunk", "webgl"] as const;
+
+/** One game entry's load, by phase (`apps/web/src/load-phases.ts` says what each one spans). */
+export const LOAD_PHASES = ["chunk", "models", "worker", "shaders", "frame"] as const;
+export type LoadPhase = (typeof LOAD_PHASES)[number];
+
 export function ageBucket(days: number): AgeBucket {
   if (days < 1) return "0";
   if (days < 2) return "1";
@@ -47,8 +63,11 @@ export function ageBucket(days: number): AgeBucket {
 /** Every event carries `t`: milliseconds since the session started. */
 export type TelemetryEvent =
   | { k: "start"; t: number; screen: string; dpr: number; gpu: string; lang: string; ref: string; pwa: boolean; cores: number; memGb: number; touch: boolean }
-  /** Every 30 s while the tab is visible. `active` is the visible seconds since the last beat: play time is their sum. */
-  | { k: "beat"; t: number; view: View; active: number; fps?: number; fpsLow?: number; area?: Area; biome?: string; tier?: number; level?: number; classId?: string }
+  /**
+   * Every 30 s while the tab is visible. `active` is the visible seconds since the last beat: play time is their sum.
+   * `caches` is how many containers were opened since the last beat.
+   */
+  | { k: "beat"; t: number; view: View; active: number; fps?: number; fpsLow?: number; area?: Area; biome?: string; tier?: number; level?: number; classId?: string; caches?: number }
   | { k: "view"; t: number; view: View }
   /** Time from navigation to the menu's first paint, and to the first game frame. */
   | { k: "load"; t: number; menuMs?: number; gameMs?: number }
@@ -61,7 +80,25 @@ export type TelemetryEvent =
   /** Ground drops that appeared since the last loot event, by rarity. */
   | { k: "loot"; t: number; normal: number; magic: number; rare: number; unique: number }
   | { k: "error"; t: number; src: ErrorSource; msg: string; stack?: string; url?: string }
-  | { k: "end"; t: number };
+  /** The page went away: where it was, and whether a loading plate was up. Older clients send it bare. */
+  | { k: "end"; t: number; view?: View; area?: Area; loading?: boolean }
+  | { k: "device"; t: number; action: DeviceAction }
+  /** A map opened from the Atlas: which node, its tier, and the tier of the stone spent on it. */
+  | { k: "atlas"; t: number; node: string; tier: number; stone: number }
+  /** Walked through a portal into an area. */
+  | { k: "portal"; t: number; to: Area }
+  /** Once per monster: a rare came within about a screen of the player, or died. Once per area: the boss woke, or took a hit. */
+  | { k: "rareSeen" | "rareKill" | "bossSeen" | "bossFight"; t: number; tier: number; biome?: string }
+  | { k: "respawn"; t: number; where: (typeof RESPAWNS)[number] }
+  | { k: "createFail"; t: number; reason: (typeof CREATE_FAILS)[number] }
+  /** Sent by beacon right before the page reloads itself. */
+  | { k: "reload"; t: number; reason: (typeof RELOADS)[number] }
+  | { k: "loadPhase"; t: number; phase: LoadPhase; ms: number }
+  /**
+   * Once at boot, from the local save: how many characters, the oldest one's age as a cohort bucket, the highest
+   * level. A return visit shows here even when the visitor never enters the game; no id links the two days.
+   */
+  | { k: "roster"; t: number; characters: number; oldestAge?: AgeBucket; maxLevel?: number };
 
 export type EventKind = TelemetryEvent["k"];
 
@@ -126,6 +163,7 @@ function parseEvent(e: unknown): TelemetryEvent | null {
       opt(out, "tier", int(e.tier, 0, 100));
       opt(out, "level", int(e.level, 0, 1000));
       opt(out, "classId", str(e.classId, 40));
+      opt(out, "caches", int(e.caches, 0, 1000));
       return out as TelemetryEvent;
     }
     case "view": {
@@ -185,8 +223,59 @@ function parseEvent(e: unknown): TelemetryEvent | null {
       opt(out, "url", str(e.url, MAX_STR));
       return out as TelemetryEvent;
     }
-    case "end":
-      return { k: "end", t };
+    case "end": {
+      const out: Obj = { k: "end", t };
+      opt(out, "view", oneOf(e.view, VIEWS));
+      opt(out, "area", oneOf(e.area, AREAS));
+      opt(out, "loading", bool(e.loading));
+      return out as TelemetryEvent;
+    }
+    case "device": {
+      const action = oneOf(e.action, DEVICE_ACTIONS);
+      return action ? { k: "device", t, action } : null;
+    }
+    case "atlas": {
+      const node = str(e.node, 60), tier = int(e.tier, 0, 100), stone = int(e.stone, 0, 100);
+      return node && tier !== undefined && stone !== undefined ? { k: "atlas", t, node, tier, stone } : null;
+    }
+    case "portal": {
+      const to = oneOf(e.to, AREAS);
+      return to ? { k: "portal", t, to } : null;
+    }
+    case "rareSeen":
+    case "rareKill":
+    case "bossSeen":
+    case "bossFight": {
+      const tier = int(e.tier, 0, 100);
+      if (tier === undefined) return null;
+      const out: Obj = { k: e.k, t, tier };
+      opt(out, "biome", str(e.biome, 40));
+      return out as TelemetryEvent;
+    }
+    case "respawn": {
+      const where = oneOf(e.where, RESPAWNS);
+      return where ? { k: "respawn", t, where } : null;
+    }
+    case "createFail": {
+      const reason = oneOf(e.reason, CREATE_FAILS);
+      return reason ? { k: "createFail", t, reason } : null;
+    }
+    case "reload": {
+      const reason = oneOf(e.reason, RELOADS);
+      return reason ? { k: "reload", t, reason } : null;
+    }
+    case "loadPhase": {
+      const phase = oneOf(e.phase, LOAD_PHASES), ms = int(e.ms, 0, 600_000);
+      return phase && ms !== undefined ? { k: "loadPhase", t, phase, ms } : null;
+    }
+    case "roster": {
+      const characters = int(e.characters, 0, 1000);
+      if (characters === undefined) return null;
+      const out: Obj = { k: "roster", t, characters };
+      opt(out, "oldestAge", oneOf(e.oldestAge, AGE_BUCKETS));
+      opt(out, "maxLevel", int(e.maxLevel, 0, 1000));
+      return out as TelemetryEvent;
+    }
     default:
       return null;
   }

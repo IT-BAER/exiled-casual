@@ -13,7 +13,7 @@
  */
 import React from "react";
 import { putSettings, type RosterBlob } from "@exiled/persistence";
-import { emptyRoster, headers } from "@exiled/persistence";
+import { emptyRoster, headers, isNameTaken, nameError, NAME_MAX, NAME_MIN } from "@exiled/persistence";
 import { DEFAULT_CLASS_ID } from "@exiled/rules";
 import { MainMenu } from "./menu/MainMenu";
 import { ModeDialog } from "./menu/ModeDialog";
@@ -78,6 +78,40 @@ type Screen =
   | { kind: "game"; characterId: string; fresh: boolean }
   | { kind: "viewer" };
 
+/**
+ * What this browser already holds, once per boot: a count, the oldest character's age
+ * as a cohort bucket, the highest level. A visitor who comes back and never enters the
+ * game still shows as a return here. Names and ids stay on the device.
+ */
+function trackRoster(r: RosterBlob): void {
+  const cs = r.characters;
+  if (cs.length === 0) { telemetry.track({ k: "roster", characters: 0 }); return; }
+  telemetry.track({
+    k: "roster",
+    characters: cs.length,
+    oldestAge: ageBucket((Date.now() - Math.min(...cs.map((c) => c.createdAt))) / 86_400_000),
+    maxLevel: Math.max(...cs.map((c) => c.level)),
+  });
+}
+
+/**
+ * Why the name on the create screen would be refused, by the same rule `nameError`
+ * applies, or null when it would be accepted or nothing was typed. Read from the field
+ * itself, so the screen does not have to report it; the name never leaves this function.
+ */
+function refusedName(roster: RosterBlob): "short" | "long" | "charset" | "taken" | null {
+  const typed = document.querySelector<HTMLInputElement>('[data-testid="name-input"]')?.value.trim() ?? "";
+  if (typed === "" || nameError(roster, typed) === null) return null;
+  if (typed.length < NAME_MIN) return "short";
+  if (typed.length > NAME_MAX) return "long";
+  return isNameTaken(roster, typed) ? "taken" : "charset";
+}
+
+function trackRefusedName(roster: RosterBlob): void {
+  const reason = refusedName(roster);
+  if (reason) telemetry.track({ k: "createFail", reason });
+}
+
 /** Never played: the save is written on first entry, so a null state is a new character. */
 function isFresh(roster: RosterBlob, id: string): boolean {
   return roster.characters.find((c) => c.id === id)?.state === null;
@@ -140,6 +174,7 @@ export function App(): React.ReactElement {
         if (!live) return;
       }
       setRoster(r);
+      trackRoster(r);
       const s = settingsOf(r, gpuRenderer());
       setSettings(
         harness && first !== null && CONTROL !== null
@@ -154,6 +189,7 @@ export function App(): React.ReactElement {
       if (harness && first) {
         markGameEntry();
         beginLoad("entry");
+        telemetry.setLoading(true);
         setScreen({ kind: "game", characterId: first, fresh: isFresh(r, first) });
       }
     });
@@ -216,6 +252,14 @@ export function App(): React.ReactElement {
     return () => {
       for (const e of WARM_ON) window.removeEventListener(e, warm);
     };
+  }, [screen.kind]);
+
+  // A tab closed on the create screen with a refused name: the case the name rule costs most.
+  const rosterRef = React.useRef(roster);
+  rosterRef.current = roster;
+  React.useEffect(() => {
+    if (screen.kind !== "create") return;
+    return telemetry.addEndHook(() => trackRefusedName(rosterRef.current));
   }, [screen.kind]);
 
   // The game's own downloads, from the roster on: the seconds spent picking or
@@ -354,6 +398,7 @@ export function App(): React.ReactElement {
             onPlay={(id) => {
               markGameEntry();
               beginLoad("entry");
+              telemetry.setLoading(true);
               setScreen({ kind: "game", characterId: id, fresh: isFresh(roster, id) });
             }}
             onCreate={() => setScreen({ kind: "create" })}
@@ -390,7 +435,10 @@ export function App(): React.ReactElement {
             roster={roster}
             classId={newClassId}
             onClassChange={setNewClassId}
-            onCancel={() => setScreen({ kind: "select" })}
+            onCancel={() => {
+              trackRefusedName(roster);
+              setScreen({ kind: "select" });
+            }}
             onCreate={(name, classId) => {
               void createCharacter(roster, { name, classId }, mode)
                 .then(({ roster: next, record }) => {

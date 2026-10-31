@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { reloadOnChunkError } from "./chunk-reload";
+import { reloadOnChunkError, reloadPage } from "./chunk-reload";
 
 function env() {
   const store = new Map<string, string>();
@@ -40,6 +40,17 @@ describe("reloadOnChunkError", () => {
     e.deps.now = () => 61_000;
     expect(await settles(reloadOnChunkError(fail, e.deps)())).toBe("pending");
     expect(e.deps.reload).toHaveBeenCalledTimes(2);
+  });
+
+  it("says why by beacon before the page goes", () => {
+    const order: string[] = [];
+    const t = {
+      track: vi.fn((e: { k: string }) => order.push(`track ${e.k}`)),
+      flush: vi.fn((beacon?: boolean) => order.push(`flush ${beacon}`)),
+    };
+    reloadPage("webgl", t, () => order.push("reload"));
+    expect(t.track).toHaveBeenCalledWith({ k: "reload", reason: "webgl" });
+    expect(order).toEqual(["track reload", "flush true", "reload"]);
   });
 
   it("shows the error when the tab cannot remember a reload", async () => {

@@ -4,7 +4,7 @@
  * are seconds unless a name says otherwise, and every list is newest first
  * unless it says otherwise.
  */
-import type { AgeBucket, Area, ErrorSource, Rarity, View } from "./events";
+import type { AgeBucket, Area, ErrorSource, LoadPhase, Rarity, View } from "./events";
 
 /** Live-ops state the game reads from `GET /api/config`. Absent fields mean "off". */
 export interface LiveConfig {
@@ -177,7 +177,28 @@ export interface Perf {
   byBrowser: PerfRow[];
   menuLoadMs: { p50: number | null; p90: number | null };
   gameLoadMs: { p50: number | null; p90: number | null };
+  /** Each game entry's load by phase (`loadPhase` events), so the slow part is named. */
+  loadPhases: { phase: LoadPhase; n: number; p50: number | null; p90: number | null }[];
   fpsSeries: Point[];
+}
+
+/**
+ * What players did that the funnel cannot show: the gaps the retention report of 30 October
+ * 2026 named. Counts and enums only, like everything else here.
+ */
+export interface Behaviour {
+  /**
+   * Per event kind and its key: the device action, the Atlas node's tier, the portal's destination,
+   * the respawn place, the create-failure or reload reason; "" for the rare and boss events.
+   * `sessions` sent it at least once; `count` is how often it was sent.
+   */
+  actions: { kind: string; key: string; sessions: number; count: number }[];
+  /** Containers opened, summed over beats, and the sessions that opened any. */
+  caches: { opened: number; sessions: number };
+  /** How sessions ended: the view and area on `end`, and whether a loading plate was up. */
+  exits: { view: View; area: Area | null; loading: boolean; sessions: number }[];
+  /** Boots by the oldest character the browser already held; "none" is an empty roster. A return shows here. */
+  rosters: Record<AgeBucket | "none", number>;
 }
 
 export type ErrorStatus = "open" | "resolved" | "ignored";
@@ -244,12 +265,13 @@ export interface LogLine {
 }
 
 export interface Traffic {
-  days: { date: string; pageLoads: number; humans: number; bots: number; sessions: number }[];
+  /** `boots` are human fetches of /api/config: clients that ran the game's code, which a crawler reading the page does not. */
+  days: { date: string; pageLoads: number; humans: number; bots: number; boots: number; sessions: number }[];
   referrers: { referrer: string; visits: number }[];
   paths: { path: string; hits: number }[];
   statuses: { status: number; hits: number }[];
   bots: { agent: string; hits: number }[];
-  /** Human page loads of "/" in range that never produced a telemetry session (approximate). */
+  /** Human page loads of "/" in range that never booted the client (page loads minus boots, per day). */
   bouncedBeforeBoot: number;
 }
 
@@ -270,6 +292,7 @@ export interface AdminRoutes {
   "GET /api/geo": GeoRow[];
   "GET /api/gameplay": Gameplay;
   "GET /api/perf": Perf;
+  "GET /api/behaviour": Behaviour;
   "GET /api/errors": ErrorGroup[];
   "GET /api/errors/:fp": ErrorDetail;
   "POST /api/errors/:fp": ErrorGroup;

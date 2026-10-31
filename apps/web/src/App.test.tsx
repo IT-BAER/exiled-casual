@@ -23,6 +23,7 @@ const warmGame = vi.hoisted(() => vi.fn((_w: { chunk: () => Promise<unknown>; wo
 vi.mock("./menu/warm-stage", () => ({ warmMenuStage: warm, warmGame }));
 
 import { App } from "./App";
+import { telemetry } from "./telemetry/client";
 
 let kv: MemoryKv;
 
@@ -148,6 +149,50 @@ describe("App routing", () => {
     const saved = await loadRoster(kv);
     expect(saved?.characters.map((c) => c.name)).toEqual(["Toren"]);
     expect(saved?.characters[0]?.classId).toBe("class.emberbound");
+  });
+
+  it("reports the roster at boot as counts and an age bucket, never a name", async () => {
+    await withCharacter();
+    const track = vi.spyOn(telemetry, "track");
+    render(<App />);
+    await screen.findByTestId("main-menu");
+    await waitFor(() => expect(track.mock.calls.some(([e]) => e.k === "roster")).toBe(true));
+    // createdAt 1 is 1970: the oldest bucket.
+    expect(track.mock.calls.map(([e]) => e).filter((e) => e.k === "roster")).toEqual([
+      { k: "roster", characters: 1, oldestAge: "30+", maxLevel: 7 },
+    ]);
+    track.mockRestore();
+  });
+
+  it("reports an empty roster as no characters at all", async () => {
+    const track = vi.spyOn(telemetry, "track");
+    render(<App />);
+    await waitFor(() => expect(track.mock.calls.some(([e]) => e.k === "roster")).toBe(true));
+    expect(track.mock.calls.map(([e]) => e).find((e) => e.k === "roster")).toEqual({ k: "roster", characters: 0 });
+    track.mockRestore();
+  });
+
+  it("says why a refused name was given up on, when the player cancels or closes the page, and never the name", async () => {
+    const track = vi.spyOn(telemetry, "track");
+    const fails = () => track.mock.calls.map(([e]) => e).filter((e) => e.k === "createFail");
+    await toSelect();
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await screen.findByTestId("create-character");
+    fireEvent.change(screen.getByTestId("name-input"), { target: { value: "Al" } });
+    fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+    expect(fails()).toEqual([{ k: "createFail", reason: "short" }]);
+
+    fireEvent.click(await screen.findByRole("button", { name: /create/i }));
+    await screen.findByTestId("create-character");
+    fireEvent.change(screen.getByTestId("name-input"), { target: { value: "9lives" } });
+    telemetry._onPageHide();
+    expect(fails()).toEqual([{ k: "createFail", reason: "short" }, { k: "createFail", reason: "charset" }]);
+
+    // A name that would have been accepted, or none typed at all, is not a failure.
+    fireEvent.change(screen.getByTestId("name-input"), { target: { value: "" } });
+    telemetry._onPageHide();
+    expect(fails()).toHaveLength(2);
+    track.mockRestore();
   });
 
   it("deleting takes the character off the roster and out of the save", async () => {

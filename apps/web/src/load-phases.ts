@@ -14,9 +14,11 @@
  * - `frame`: the click -> the plate lifts. The whole wait the player sees.
  *
  * `models` and `worker` run side by side, so the phases do not add up to `frame`.
+ * The names are telemetry's (`loadPhase` events), so the two cannot drift.
  */
-export const LOAD_PHASES = ["chunk", "models", "worker", "shaders", "frame"] as const;
-export type LoadPhase = (typeof LOAD_PHASES)[number];
+import type { LoadPhase } from "@exiled/telemetry";
+
+export type { LoadPhase };
 
 let enteredAt: number | null = null;
 

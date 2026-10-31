@@ -23,6 +23,7 @@ export interface BeatContext {
   tier?: number;
   level?: number;
   classId?: string;
+  caches?: number;
 }
 
 export interface TelemetryOptions {
@@ -84,7 +85,9 @@ export function createTelemetry(opts: TelemetryOptions) {
   let activeMs = 0;
   let visibleSince: number | null = visible() ? now() : null;
   let context: () => BeatContext = () => ({});
+  let loading = false;
   const beatHooks = new Set<() => void>();
+  const endHooks = new Set<() => void>();
   let timer: ReturnType<typeof setInterval> | undefined;
 
   const stamp = (e: EventDraft): TelemetryEvent => ({ ...e, t: Math.max(0, Math.round(now())) }) as TelemetryEvent;
@@ -149,7 +152,12 @@ export function createTelemetry(opts: TelemetryOptions) {
   function onPageHide(): void {
     if (visibleSince !== null) { activeMs += now() - visibleSince; visibleSince = null; }
     beat();
-    track({ k: "end" });
+    for (const hook of endHooks) {
+      try { hook(); } catch { /* a hook must not stop the end */ }
+    }
+    let area: BeatContext["area"];
+    try { area = context().area; } catch { /* context is best effort */ }
+    track({ k: "end", view, loading, ...(area ? { area } : {}) });
     flush(true);
   }
 
@@ -170,6 +178,13 @@ export function createTelemetry(opts: TelemetryOptions) {
       beatHooks.add(fn);
       return () => { beatHooks.delete(fn); };
     },
+    /** Runs once as the page goes away, before `end`, so a last word rides the final beacon. */
+    addEndHook(fn: () => void): () => void {
+      endHooks.add(fn);
+      return () => { endHooks.delete(fn); };
+    },
+    /** A loading plate is up; `end` reports it, so a player who left mid-load is told apart. */
+    setLoading(on: boolean): void { loading = on; },
     /** The server's kill switch; false also discards what is queued. */
     setEnabled(on: boolean): void {
       enabled = on && !privacySignal() && (opts.enabled ?? true);

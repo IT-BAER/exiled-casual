@@ -76,6 +76,29 @@ describe("telemetry client", () => {
     expect(last[last.length - 1]!.k).toBe("end");
   });
 
+  it("end says which view and area the page left from, and whether a loading plate was up", () => {
+    const { t, sent } = rig();
+    t.setView("game");
+    t.setContext(() => ({ area: "map", tier: 2 }));
+    t.setLoading(true);
+    t._onPageHide();
+    const end = sent.flatMap((s) => s.batch.events).find((e) => e.k === "end");
+    expect(end).toEqual({ k: "end", t: 0, view: "game", area: "map", loading: true });
+    expect(parseBatch(JSON.parse(JSON.stringify(sent[0]!.batch))).ok).toBe(true);
+  });
+
+  it("end hooks run on page hide only, after the last beat and before end", () => {
+    const { t, sent, hide, show } = rig();
+    const hook = vi.fn(() => t.track({ k: "createFail", reason: "charset" }));
+    t.addEndHook(hook);
+    hide();
+    show();
+    expect(hook).not.toHaveBeenCalled();
+    t._onPageHide();
+    expect(hook).toHaveBeenCalledTimes(1);
+    expect(sent.flatMap((s) => s.batch.events).map((e) => e.k).slice(-3)).toEqual(["beat", "createFail", "end"]);
+  });
+
   it("beat hooks run before the beat so loot lands in the same batch", () => {
     const { t, sent } = rig();
     t.addBeatHook(() => t.track({ k: "loot", normal: 1, magic: 0, rare: 0, unique: 0 }));
