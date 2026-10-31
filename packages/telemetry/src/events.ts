@@ -36,6 +36,17 @@ export type ErrorSource = (typeof ERROR_SOURCES)[number];
 export const RARITIES = ["normal", "magic", "rare", "unique"] as const;
 export type Rarity = (typeof RARITIES)[number];
 
+/**
+ * The Atlas nodes and biomes there are, so a client can only report a real one. Copies, because this
+ * package is a leaf: `apps/web/src/telemetry/ids.test.ts` fails when they drift from the game's own.
+ */
+export const ATLAS_NODE_IDS = [
+  "node.the_wrackline", "node.emberfall", "node.cinder_vault", "node.blackmire", "node.sunken_chapel",
+  "node.ossuary_steps", "node.rustwater", "node.the_pale_reach", "node.kiln_of_ash", "node.thornwake",
+  "node.gallowsmoor", "node.vault_of_cinders", "node.hollowbriar", "node.gullscour", "node.bonestrand",
+] as const;
+export const BIOME_IDS = ["vaal_stone", "desert", "swamp", "forest", "coast"] as const;
+
 /** What the player did at the map device: walked up, picked a node, seated a stone, opened the map, walked off. */
 export const DEVICE_ACTIONS = ["open", "select", "socket", "activate", "close"] as const;
 export type DeviceAction = (typeof DEVICE_ACTIONS)[number];
@@ -235,7 +246,7 @@ function parseEvent(e: unknown): TelemetryEvent | null {
       return action ? { k: "device", t, action } : null;
     }
     case "atlas": {
-      const node = str(e.node, 60), tier = int(e.tier, 0, 100), stone = int(e.stone, 0, 100);
+      const node = oneOf(e.node, ATLAS_NODE_IDS), tier = int(e.tier, 0, 100), stone = int(e.stone, 0, 100);
       return node && tier !== undefined && stone !== undefined ? { k: "atlas", t, node, tier, stone } : null;
     }
     case "portal": {
@@ -249,7 +260,7 @@ function parseEvent(e: unknown): TelemetryEvent | null {
       const tier = int(e.tier, 0, 100);
       if (tier === undefined) return null;
       const out: Obj = { k: e.k, t, tier };
-      opt(out, "biome", str(e.biome, 40));
+      opt(out, "biome", oneOf(e.biome, BIOME_IDS));
       return out as TelemetryEvent;
     }
     case "respawn": {

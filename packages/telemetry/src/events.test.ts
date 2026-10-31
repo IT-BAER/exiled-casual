@@ -68,7 +68,7 @@ describe("parseBatch", () => {
       { k: "device", t: 1, action: "open" },
       { k: "atlas", t: 2, node: "node.the_wrackline", tier: 1, stone: 1 },
       { k: "portal", t: 3, to: "map" },
-      { k: "rareSeen", t: 4, tier: 1, biome: "strand" },
+      { k: "rareSeen", t: 4, tier: 1, biome: "coast" },
       { k: "rareKill", t: 5, tier: 1 },
       { k: "bossSeen", t: 6, tier: 2, biome: "desert" },
       { k: "bossFight", t: 7, tier: 2 },
@@ -105,6 +105,21 @@ describe("parseBatch", () => {
       { k: "createFail", t: 4, reason: "short" },
       { k: "roster", t: 8, characters: 2 },
       { k: "end", t: 9 },
+    ]);
+  });
+
+  it("takes an Atlas node and a biome only from the ids the game has", () => {
+    const r = parseBatch(batch([
+      { k: "atlas", t: 1, node: "node.anything_i_like", tier: 1, stone: 1 },
+      { k: "atlas", t: 2, node: "node.the_wrackline", tier: 1, stone: 1 },
+      { k: "rareSeen", t: 3, tier: 1, biome: "my house" },
+      { k: "bossFight", t: 4, tier: 2, biome: "swamp" },
+    ]));
+    expect((r as { ok: true; batch: Batch }).batch.events).toEqual([
+      { k: "atlas", t: 2, node: "node.the_wrackline", tier: 1, stone: 1 },
+      // A bad optional is dropped, not fatal.
+      { k: "rareSeen", t: 3, tier: 1 },
+      { k: "bossFight", t: 4, tier: 2, biome: "swamp" },
     ]);
   });
 
