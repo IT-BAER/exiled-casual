@@ -344,6 +344,29 @@ describe("pool-driven spawning", () => {
     expect([...counts].sort()).toEqual([2, 3]);
   }, 30_000);
 
+  // docs/09: variance is the mechanism. Each rare rolls its own theme, so two
+  // rares of one size in one map can ask for different resistances.
+  it("each rare rolls its own element, the same seed the same ones", () => {
+    const rares = (seed: number, node: string) => {
+      const world = new World();
+      const session = { ...mapSessionAtTier(1), mapSeed: seed, activeNodeId: node, completedNodes: [node] };
+      buildArea(world, "map", session, generateArea(seed, CONTENT_VERSION, grammarForNode(node)));
+      return world.query("monster").map((e) => world.get<MonsterC>(e, "monster")!).filter((m) => m.rare === 1)
+        .map((m) => ({ big: ["brute", "heavy"].includes(MONSTERS.get(m.defId)!.archetype), type: m.attackType }));
+    };
+    let mixed = 0;
+    for (const node of ["node.the_wrackline", "node.emberfall", "node.cinder_vault"]) {
+      for (let seed = 0; seed < 30; seed++) {
+        const r = rares(seed, node);
+        expect(rares(seed, node)).toEqual(r);
+        for (const big of [true, false]) {
+          if (new Set(r.filter((x) => x.big === big).map((x) => x.type)).size > 1) mixed++;
+        }
+      }
+    }
+    expect(mixed).toBeGreaterThan(0);
+  }, 30_000);
+
   it("one whole pack is magic: one species, never the rare's pack, the same pack for the same seed", () => {
     const magicOf = (mapSeed: number) => {
       const { world, session, layout } = mapFixture({ mapSeed });

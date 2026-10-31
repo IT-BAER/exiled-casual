@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateArea } from "@exiled/mapgen";
-import { CONTENT_VERSION, MONSTERS, rareTemplate, waystoneItem } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, waystoneItem } from "@exiled/content-runtime";
 import { ELEMENTS } from "@exiled/content-schema";
 import {
   waystoneMods, monsterTierScale, waystoneScaleFor, waystoneDrops, atlasGraph,
@@ -10,6 +10,7 @@ import type { InventoryC } from "./components";
 import { World } from "./ecs";
 import { createCombatSim } from "./combat-sim";
 import { buildArea, mapDangerScale } from "./areas";
+import { damageTypeOf } from "./damage-types";
 import type { SessionC, DefensesC, Health, MonsterC } from "./components";
 
 /** The first seed whose stone rolls `id`, so a test can name a modifier it wants. */
@@ -71,15 +72,14 @@ describe("map modifiers reach the monsters", () => {
     const session = mapSession(seedRolling("monsterElementalRes"));
     const add = waystoneScaleFor(session.waystoneSeed).monsterResAdd;
     const world = buildMap(session);
-    const rareEl = rareTemplate(session.mapSeed).element;
     for (const e of world.query("monster", "defenses")) {
       const d = world.get<DefensesC>(e, "defenses")!;
       const m = world.get<MonsterC>(e, "monster")!;
       const base = MONSTERS.get(m.defId)!.defenses.resPct;
       for (const el of ELEMENTS) {
         // A rare adds its own +30 on top, but only on the element its attack
-        // converted to.
-        const rareBump = m.rare === 1 && el === rareEl ? 30 : 0;
+        // converted to, which each rare rolls for itself.
+        const rareBump = m.rare === 1 && el === damageTypeOf(m.attackType) ? 30 : 0;
         expect(d.res[el], `${m.defId} ${el}`).toBe(base[el] + add + rareBump);
       }
     }

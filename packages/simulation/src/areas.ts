@@ -356,7 +356,8 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     // in the opening minute and not beside the boss. Sockets come in route order.
     const liveAt = live.flatMap((ok, i) => (ok ? [i] : []));
     const rareCount = Math.min(liveAt.length, 2 + (fnv1a32(`rares:${session.mapSeed}`) % 2));
-    const rareSockets = new Set(Array.from({ length: rareCount }, (_, k) => liveAt[Math.floor((k * liveAt.length) / rareCount)]!));
+    // Socket -> the rare's place in route order, which seeds its own theme.
+    const rareSockets = new Map(Array.from({ length: rareCount }, (_, k) => [liveAt[Math.floor((k * liveAt.length) / rareCount)]!, k]));
     // One whole pack is magic, PoE's blue pack. Its own hash, not the bestiary
     // stream, so which species stand where is the same with or without it.
     const magicCandidates = liveAt.filter((i) => !rareSockets.has(i));
@@ -384,10 +385,10 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         // The first member that stands carries a rare socket's rare, so a big
         // pack-size roll means more to kill rather than more rares to answer.
         const rare = rareHere;
-        // The map's own seed picks the rare's element, so a given map always
-        // demands the same resistance and a replay of it stays identical.
+        // The map's seed and the rare's place on the route pick its element: a
+        // given map always demands the same resistances, and a replay stays identical.
         const magic = !rare && i === magicSocket;
-        const def = rare ? makeRare(base, rareTemplate(session.mapSeed, base.archetype, firstClear)) : magic ? makeMagic(base) : base;
+        const def = rare ? makeRare(base, rareTemplate(session.mapSeed ^ fnv1a32(`rare:${rareSockets.get(i)}`), base.archetype, firstClear)) : magic ? makeMagic(base) : base;
         const ring = PACK_SPREAD[j % PACK_SPREAD.length]!;
         const nearX = sx + ring.dx, nearY = sy + ring.dy;
         const farX = sx - ring.dx, farY = sy - ring.dy;
@@ -649,8 +650,9 @@ function anchor(layout: AreaLayout, id: string): { x: number; y: number } {
 
 /**
  * A monster a boss raises mid-fight, scaled like the map's packs: the tier and
- * the Waystone's life, damage and resistances. Without a session (the golden
- * replays) it rises unscaled.
+ * the Waystone's life, damage and resistances. Without a session it rises
+ * unscaled. The golden replays' area runs do have one (combat-sim.ts), at tier
+ * 0 with waystone seed 0, which scales to exactly the base numbers.
  */
 export function spawnAdd(world: World, def: MonsterDef, x: number, y: number): Entity {
   const sessionE = world.query("session")[0];
