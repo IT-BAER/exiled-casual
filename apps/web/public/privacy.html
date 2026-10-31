@@ -35,9 +35,10 @@
   <li>That a session started, with your screen size, pixel density, graphics card name, browser language, whether it runs as an installed app, the number of processor cores, the approximate memory of the device and whether it has a touch screen.</li>
   <li>Which website sent you here (the host name only, for example the search engine) and which version of the game you run.</li>
   <li>Which screen you are on (menu, character select, game and so on) and how long the game stayed visible, reported every 30 seconds while the tab is in front.</li>
-  <li>How smoothly the game runs: the typical and the slowest frame rate, and how long the menu and the world took to appear.</li>
-  <li>For the character you play: its class, its level and how old it is, grouped as 0, 1, 2 to 6, 7 to 29 or 30 and more days. This is how we tell whether people come back.</li>
-  <li>Game events: entering the hideout or a map, finishing a map, gaining a level, dying (and which monster and element did it), and how many items of each rarity dropped.</li>
+  <li>How smoothly the game runs: the typical and the slowest frame rate, and how long the menu and the world took to appear, step by step (the game code, the models, the simulation, the graphics).</li>
+  <li>For the character you play: its class, its level and how old it is, grouped as 0, 1, 2 to 6, 7 to 29 or 30 and more days. When the game starts it also counts the characters this browser already holds: how many, the age of the oldest in the same groups, and the highest level. This is how we tell whether people come back.</li>
+  <li>Game events: entering the hideout or a map, finishing a map, gaining a level, dying (and which monster and element did it), how many items of each rarity dropped, and how many caches were opened. Also: using the map device and the Atlas (the tier of the map and of the waystone), walking through a portal, seeing or killing a rare monster, waking or hitting a boss, where you chose to come back after dying, which screen you were on when you left, and whether a loading screen was up then.</li>
+  <li>When the create screen refuses a name: only the reason (too short, too long, characters not allowed, or taken), never the name. When the game reloads itself: only the reason (an update or a graphics reset).</li>
   <li>Errors: the error message and where in the code it happened, so it can be fixed.</li>
 </ul>
 <p>When the report arrives, Cloudflare tells the server which country, region and city the request came from and approximate coordinates of that place. Your IP address is shortened (the last part is cut off: to a /24 for IPv4, to a /48 for IPv6) before it is kept. The server also records your browser, operating system and graphics card.</p>
