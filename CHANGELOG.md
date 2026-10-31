@@ -50,6 +50,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Every map holds two or three rare monsters instead of one. The first waits
   with the first pack you meet, the others further along the way, so a map
   offers its first rare fight in the opening minute and not beside the boss.
+- The rare monsters of one map no longer all share one element. Each rolls
+  its own, so one map can ask for more than one resistance.
 - The Ironsworn's Strike hits harder (16 instead of 10), so the free swing
   still finishes a long fight against a rare when his mana runs dry.
 - Your first run of The Wrackline brings no Rotting Behemoth, the heavy the
