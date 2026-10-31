@@ -17,14 +17,20 @@ import { playSfx } from "../audio/sfx";
 
 export const MENU_ART = "/textures/ui/menu";
 
+/**
+ * Marcellus and Georgia carry no CJK. Without these a Han, kana or Hangul name
+ * falls to the system's sans (YaHei on Windows); a Song/Mincho face keeps it serif.
+ */
+const CJK_SERIF = '"Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", SimSun, "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif KR", Batang';
+
 /** Matches the HUD, so a menu button and an inventory header are the same voice. */
 /**
  * The reading face: everything that is a word rather than a title. A
  * capitals-only face set a sentence shouting; Marcellus has a lower case.
  */
-export const SERIF = '"Marcellus", Georgia, "Times New Roman", serif';
+export const SERIF = `"Marcellus", Georgia, "Times New Roman", ${CJK_SERIF}, serif`;
 /** The carved face, for titles, labels and anything already uppercase. */
-export const DISPLAY = '"Marcellus SC", Georgia, "Times New Roman", serif';
+export const DISPLAY = `"Marcellus SC", Georgia, "Times New Roman", ${CJK_SERIF}, serif`;
 export const GOLD = "#c8a44d";
 export const GOLD_DIM = "#7a5c22";
 export const PARCHMENT = "#e8dcc0";

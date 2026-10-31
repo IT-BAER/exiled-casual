@@ -9,7 +9,7 @@
  */
 import React from "react";
 import { CLASS_LIST } from "@exiled/content-runtime";
-import { NAME_MAX, nameError, type RosterBlob } from "@exiled/persistence";
+import { NAME_MAX, nameError, normalizeName, type RosterBlob } from "@exiled/persistence";
 import { Atmosphere, type BrazierSpot } from "./atmos";
 import { INPUT_STYLE } from "./CharacterSelect";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
@@ -52,7 +52,7 @@ export function CreateCharacter({
 
   const submit = () => {
     setTouched(true);
-    if (error === null) onCreate(name.trim(), chosen.id);
+    if (error === null) onCreate(normalizeName(name), chosen.id);
   };
 
   return (
@@ -131,7 +131,8 @@ export function CreateCharacter({
             data-testid="name-input"
             value={name}
             autoFocus
-            maxLength={NAME_MAX}
+            // maxLength counts UTF-16 units; the rule counts letters, and a Devanagari one is several units.
+            maxLength={NAME_MAX * 4}
             onChange={(e) => setName(e.target.value)}
             // The field is autofocused, so picking a class blurs it before anything was typed.
             onBlur={() => { if (name !== "") setTouched(true); }}

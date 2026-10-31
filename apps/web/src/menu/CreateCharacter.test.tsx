@@ -106,6 +106,15 @@ describe("CreateCharacter", () => {
       fireEvent.keyDown(screen.getByTestId("name-input"), { key: "Enter" });
       expect(onCreate).toHaveBeenCalledWith("Toren", "class.ironsworn");
     });
+
+    it("takes a name in any script, and hands it on as NFC", () => {
+      const { onCreate } = view();
+      fireEvent.change(screen.getByTestId("name-input"), { target: { value: "李小龍" } });
+      expect((screen.getByRole("button", { name: /^create$/i }) as HTMLButtonElement).disabled).toBe(false);
+      fireEvent.change(screen.getByTestId("name-input"), { target: { value: `Jose${String.fromCodePoint(0x301)}` } });
+      fireEvent.keyDown(screen.getByTestId("name-input"), { key: "Enter" });
+      expect(onCreate).toHaveBeenCalledWith("José", "class.stalker");
+    });
   });
 
   it("escape cancels", () => {

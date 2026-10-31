@@ -70,8 +70,46 @@ export const ROSTER_VERSION = 3;
  */
 export const LOCAL_CHARACTER_CAP = 1;
 
+/** Bounds on `nameWidth`: letters as drawn, a CJK letter counting two. */
 export const NAME_MIN = 3;
 export const NAME_MAX = 20;
+
+/**
+ * A letter of any script, then letters, their marks, decimal digits or `_`.
+ * Everything else is out, which covers controls (Cc), bidi overrides and
+ * zero-width joiners (Cf), and every kind of space (Z*).
+ */
+const NAME_CHARS = /^\p{L}[\p{L}\p{M}\p{Nd}_]*$/u;
+/** Han, kana and Hangul are drawn about twice as wide as a Latin letter. */
+const WIDE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+/** Devanagari stacks reach 3 marks on one letter; zalgo uses many more. */
+const MARKS_PER_LETTER = 4;
+const MARK = /\p{M}/gu;
+
+// Intl.Segmenter is missing before Firefox 125; code points are then the letters.
+const segmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
+function letters(name: string): string[] {
+  return segmenter ? Array.from(segmenter.segment(name), (s) => s.segment) : Array.from(name);
+}
+
+/** The form a name is stored in: NFC, trimmed. */
+export function normalizeName(raw: string): string {
+  return raw.normalize("NFC").trim();
+}
+
+/**
+ * The form two names are compared in. NFKC folds full-width and compatibility
+ * letters onto their plain ones; upper then lower folds "ß" with "ss" and a
+ * final sigma with a medial one.
+ */
+export function nameKey(name: string): string {
+  return normalizeName(name).normalize("NFKC").toUpperCase().toLowerCase();
+}
+
+/** Length as drawn: grapheme clusters, a wide (CJK) one counting two. */
+export function nameWidth(name: string): number {
+  return letters(normalizeName(name)).reduce((n, l) => n + (WIDE.test(l) ? 2 : 1), 0);
+}
 
 export function emptyRoster(): RosterBlob {
   return { version: ROSTER_VERSION, characters: [] };
@@ -86,10 +124,10 @@ export function findCharacter(roster: RosterBlob, id: string): CharacterRecord |
   return roster.characters.find((c) => c.id === id) ?? null;
 }
 
-/** Case-insensitive: two characters called "Vess" and "vess" are one name twice. */
+/** Case-insensitive in every script: "Vess", "vess" and "Ｖｅｓｓ" are one name. */
 export function isNameTaken(roster: RosterBlob, name: string, exceptId?: string): boolean {
-  const want = name.trim().toLowerCase();
-  return roster.characters.some((c) => c.id !== exceptId && c.name.toLowerCase() === want);
+  const want = nameKey(name);
+  return roster.characters.some((c) => c.id !== exceptId && nameKey(c.name) === want);
 }
 
 /**
@@ -97,13 +135,14 @@ export function isNameTaken(roster: RosterBlob, name: string, exceptId?: string)
  * so there is one place that decides and one wording to keep right.
  */
 export function nameError(roster: RosterBlob, name: string): string | null {
-  const trimmed = name.trim();
-  if (trimmed.length < NAME_MIN) return `At least ${NAME_MIN} characters.`;
-  if (trimmed.length > NAME_MAX) return `At most ${NAME_MAX} characters.`;
-  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(trimmed)) {
+  const normal = normalizeName(name);
+  const width = nameWidth(normal);
+  if (width < NAME_MIN) return `At least ${NAME_MIN} characters.`;
+  if (width > NAME_MAX) return `At most ${NAME_MAX} characters.`;
+  if (!NAME_CHARS.test(normal) || letters(normal).some((l) => (l.match(MARK)?.length ?? 0) > MARKS_PER_LETTER)) {
     return "Letters, digits and underscores, starting with a letter.";
   }
-  if (isNameTaken(roster, trimmed)) return "That name is taken.";
+  if (isNameTaken(roster, normal)) return "That name is taken.";
   return null;
 }
 

@@ -17,7 +17,7 @@
  * written, the character is gone with it.
  */
 import React from "react";
-import type { CharacterHeader } from "@exiled/persistence";
+import { nameKey, type CharacterHeader } from "@exiled/persistence";
 import { characterClass } from "@exiled/content-runtime";
 import { Atmosphere, type BrazierSpot } from "./atmos";
 import { Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
@@ -305,7 +305,7 @@ function ConfirmDelete({
   onConfirm: () => void;
 }): React.ReactElement {
   const [typed, setTyped] = React.useState("");
-  const matches = typed.trim().toLowerCase() === character.name.toLowerCase();
+  const matches = nameKey(typed) === nameKey(character.name);
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
     window.addEventListener("keydown", onKey);

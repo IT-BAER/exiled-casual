@@ -8,6 +8,9 @@ import {
   findCharacter,
   isNameTaken,
   nameError,
+  nameKey,
+  nameWidth,
+  normalizeName,
   addCharacter,
   removeCharacter,
   putCharacterState,
@@ -109,6 +112,60 @@ describe("roster", () => {
     });
     it("accepts a plain name", () => {
       expect(nameError(r, "Toren_2")).toBeNull();
+    });
+
+    it("accepts letters of any script, with their marks", () => {
+      for (const name of ["José", "Jürgen", "Łukasz", "李小龍", "Δημήτρης", "Ольга", "さくら", "민준", "देवेन्द्र", "สมชาย", " Ærin "]) {
+        expect(nameError(r, name), name).toBeNull();
+      }
+    });
+
+    it("normalises to NFC, so a decomposed accent is the same name as a composed one", () => {
+      expect(normalizeName("Jose\u0301")).toBe("José");
+      expect(normalizeName("  Jose\u0301 ")).toBe(normalizeName("José"));
+      expect(nameError(r, "Jose\u0301")).toBeNull();
+    });
+
+    it("rejects control, bidi-override, zero-width and space characters, and a leading mark", () => {
+      for (const name of ["Ves\u202Es", "Vess\u202E", "Ve\u2066ss", "Ve\u200Bss", "Ve\u200Dss", "Ve\u200Css",
+        "Ve\uFEFFss", "Vess\u0007", "Ve\u00ADss", "Jo\u00A0se", "\u0301abc", "Kell\u3000Ward"]) {
+        expect(nameError(r, name), JSON.stringify(name)).toMatch(/Letters/);
+      }
+    });
+
+    it("rejects a letter stacked with marks (zalgo)", () => {
+      expect(nameError(r, "Za\u0300\u0301\u0302\u0303\u0304\u0305\u0306lgo")).toMatch(/Letters/);
+    });
+
+    it("measures length in letters as drawn, a CJK letter counting double", () => {
+      expect(nameWidth("José")).toBe(4);
+      expect(nameWidth("Jose\u0301")).toBe(4);
+      expect(nameWidth("李明")).toBe(4);
+      expect(nameWidth("देवी")).toBe(2);
+      // Two-letter Chinese names are common; one letter is not a name.
+      expect(nameError(r, "李明")).toBeNull();
+      expect(nameError(r, "李")).toMatch(/At least/);
+      expect(nameError(r, "李".repeat(10))).toBeNull();
+      expect(nameError(r, "李".repeat(11))).toMatch(/At most/);
+      // Twenty letters stay twenty whatever their encoding.
+      expect(nameError(r, "e\u0301".repeat(20))).toBeNull();
+      expect(nameError(r, "कि".repeat(20))).toBeNull();
+      expect(nameError(r, "é".repeat(21))).toMatch(/At most/);
+    });
+
+    it("treats case, width and compatibility forms as the same name, across scripts", () => {
+      const many = [rec("Straße", "a"), rec("Ольга", "b"), rec("Οδυσσευς", "c"), rec("José", "d")]
+        .reduce((acc, c) => addCharacter(acc, c, 8), r);
+      for (const name of ["VESS", "Ｖｅｓｓ", "STRASSE", "ОЛЬГА", "ΟΔΥΣΣΕΥΣ", "Jose\u0301", "JOSÉ"]) {
+        expect(nameError(many, name), name).toMatch(/taken/);
+      }
+      expect(nameKey("Vess")).toBe(nameKey("vess"));
+    });
+
+    it("still reads names saved under the old ASCII rule", () => {
+      const old = asRoster(JSON.parse(JSON.stringify(addCharacter(emptyRoster(), rec("Toren_2"), 8))));
+      expect(old?.characters[0]?.name).toBe("Toren_2");
+      expect(isNameTaken(old!, "toren_2")).toBe(true);
     });
   });
 
