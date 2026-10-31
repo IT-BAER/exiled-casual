@@ -57,6 +57,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Mother Vhal's slam now throws mud and bog water out around it, where only a
   thin ring showed before, and her Bog Geyser shoots up as a jet of water that
   sprays back down instead of a cloud of dark smoke.
+- Spitters that circle you between shots or back away from you now step
+  sideways or backwards on their legs, instead of walking forward while they
+  slide.
 
 ## [0.5.1] - 2026-10-28
 
