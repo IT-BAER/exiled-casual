@@ -166,6 +166,8 @@ const IDLE_RATIO = 0.4;
 const MOVING = 0.05;
 /** Time constant the move's yaw off the facing eases over: the sim turns it on a 30 Hz tick. */
 const MOVE_EASE_SEC = 0.08;
+/** Below this yaw off the facing (radians) the forward walk stands: it never reads as a sidestep, and the solve is not free. */
+const SIDESTEP_MIN = 0.2;
 /** A leg's hip, knee and foot as either builder names them: the generated bodies' `leg<i>_<0-2>`, the humanoid's. */
 const LEG_JOINT = /^leg(\d+|[LR])_(0|1|2|hip|knee|ankle)$/;
 const LEG_PART: Readonly<Record<string, 0 | 1 | 2>> = { 0: 0, 1: 1, 2: 2, hip: 0, knee: 1, ankle: 2 };
@@ -191,16 +193,26 @@ function refresh(node: TransformNode): void {
 const axis = new Vector3();
 const local = new Quaternion();
 const inverse = new Matrix();
+const composed = new Matrix();
+/** A leg's world matrices this frame, hip to foot, composed here: Babylon's own refresh per joint was most of the solve. */
+const hipWorld = new Matrix();
+const kneeWorld = new Matrix();
+const footWorld = new Matrix();
+
+/** `node`'s world matrix under `parent`'s, as Babylon composes it for a node with no pivot. */
+function chainTo(node: TransformNode, parent: Matrix, out: Matrix): void {
+  Matrix.ComposeToRef(node.scaling, node.rotationQuaternion!, node.position, composed);
+  composed.multiplyToRef(parent, out);
+}
 
 /**
- * Turn `node` by `angle` about the world `dir`, on top of its pose. Set through
- * its parent's frame: glTF's handedness flip mirrors that frame, and a mirror
- * turns every rotation the other way.
+ * Turn `node` by `angle` about the world `dir`, on top of its pose, given its
+ * parent's world matrix. Set through that frame: glTF's handedness flip mirrors
+ * it, and a mirror turns every rotation the other way.
  */
-function turnInWorld(node: TransformNode, dir: Vector3, angle: number): void {
+function turnInWorld(node: TransformNode, parent: Matrix, dir: Vector3, angle: number): void {
   const q = node.rotationQuaternion;
-  if (!q || !(node.parent instanceof TransformNode)) return;
-  const parent = node.parent.getWorldMatrix();
+  if (!q) return;
   parent.invertToRef(inverse);
   Vector3.TransformNormalToRef(dir, inverse, axis);
   axis.normalize();
@@ -251,6 +263,8 @@ export class CreatureRig {
   private moveRel = 0;
   private moveTo = 0;
   private readonly legs: Leg[] = [];
+  /** The nodes the hips hang from, refreshed once a frame for every leg. */
+  private readonly trunks: TransformNode[] = [];
   private readonly observers: Observer<Scene>[] = [];
   /** The legs were turned this frame and hold that, not the clip's pose. */
   private turned = false;
@@ -296,12 +310,16 @@ export class CreatureRig {
       found.set(m[1]!, leg);
     }
     for (const [hip, knee, foot] of found.values()) {
-      if (!hip || !knee || !foot) continue;
+      if (!hip || !knee || !foot || !(hip.parent instanceof TransformNode)) continue;
       refresh(foot);
       const rest = Vector3.TransformCoordinates(foot.getAbsolutePosition(), host.getWorldMatrix().clone().invert());
       this.legs.push({ joints: [hip, knee, foot], rest, clip: [new Quaternion(), new Quaternion(), new Quaternion()] });
     }
     if (this.legs.length === 0) return;
+    for (const leg of this.legs) {
+      const trunk = leg.joints[0].parent;
+      if (trunk instanceof TransformNode && !this.trunks.includes(trunk)) this.trunks.push(trunk);
+    }
     const scene = this.scene;
     this.observers.push(scene.onBeforeAnimationsObservable.add(() => {
       if (!this.turned) return;
@@ -312,7 +330,7 @@ export class CreatureRig {
       // A loop-less engine (headless) reports 0; a frame is the step it takes.
       const dt = (scene.getEngine?.()?.getDeltaTime?.() || 16) / 1000;
       this.moveRel = wrapPi(this.moveRel + wrapPi(this.moveTo - this.moveRel) * (1 - Math.exp(-dt / MOVE_EASE_SEC)));
-      if (this.playing !== "walk" || !this.awake || Math.abs(this.moveRel) < 1e-3) return;
+      if (this.playing !== "walk" || !this.awake || Math.abs(this.moveRel) < SIDESTEP_MIN) return;
       this.turnLegs(host, this.moveRel);
     }));
   }
@@ -328,14 +346,21 @@ export class CreatureRig {
   private turnLegs(host: TransformNode, rel: number): void {
     const cos = Math.cos(rel);
     const sin = Math.sin(rel);
+    for (const trunk of this.trunks) refresh(trunk);
     const hostWorld = host.getWorldMatrix();
     for (const leg of this.legs) {
       const [hip, knee, foot] = leg.joints;
+      const trunk = (hip.parent as TransformNode).getWorldMatrix();
       leg.joints.forEach((j, i) => leg.clip[i]!.copyFrom(j.rotationQuaternion!));
-      refresh(foot);
-      const h = hip.getAbsolutePosition().clone();
-      const k = knee.getAbsolutePosition().clone();
-      const f = foot.getAbsolutePosition().clone();
+      const pose = () => {
+        chainTo(hip, trunk, hipWorld);
+        chainTo(knee, hipWorld, kneeWorld);
+        chainTo(foot, kneeWorld, footWorld);
+      };
+      pose();
+      const h = hipWorld.getTranslation();
+      const k = kneeWorld.getTranslation();
+      const f = footWorld.getTranslation();
       const home = Vector3.TransformCoordinates(leg.rest, hostWorld);
       // Babylon's yaw by rel: +z (ahead) onto (sin, 0, cos), the move.
       const dx = f.x - home.x;
@@ -357,14 +382,17 @@ export class CreatureRig {
       const kneeTo = h.add(u.scale(a * cosA)).addInPlace(bend.scale(a * Math.sqrt(1 - cosA * cosA)));
       const footTo = h.add(u.scale(d));
       const atHip = turnBetween(k.subtract(h), kneeTo.subtract(h));
-      if (atHip) turnInWorld(hip, atHip.dir, atHip.angle);
-      refresh(foot);
-      const atKnee = turnBetween(foot.getAbsolutePosition().subtract(knee.getAbsolutePosition()), footTo.subtract(knee.getAbsolutePosition()));
-      if (atKnee) turnInWorld(knee, atKnee.dir, atKnee.angle);
-      refresh(foot);
+      if (atHip) turnInWorld(hip, trunk, atHip.dir, atHip.angle);
+      pose();
+      const kneeAt = kneeWorld.getTranslation();
+      const atKnee = turnBetween(footWorld.getTranslation().subtractInPlace(kneeAt), footTo.subtract(kneeAt));
+      if (atKnee) {
+        turnInWorld(knee, hipWorld, atKnee.dir, atKnee.angle);
+        chainTo(knee, hipWorld, kneeWorld);
+      }
       // The foot undoes both turns above it, so it meets the floor as the clip set it down.
-      if (atKnee) turnInWorld(foot, atKnee.dir, -atKnee.angle);
-      if (atHip) turnInWorld(foot, atHip.dir, -atHip.angle);
+      if (atKnee) turnInWorld(foot, kneeWorld, atKnee.dir, -atKnee.angle);
+      if (atHip) turnInWorld(foot, kneeWorld, atHip.dir, -atHip.angle);
     }
     this.turned = true;
   }

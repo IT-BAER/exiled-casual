@@ -1039,6 +1039,32 @@ describe("creature instances", () => {
     }
   });
 
+  // 24 strafing shooters cost 3.4-4.8 ms a frame in the leg solve; a few degrees off the facing never shows.
+  it("solves the legs only for a move that reads as a sidestep", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    new FreeCamera("cam", new Vector3(0, 10, -10), scene);
+    const solved = vi.spyOn(CreatureRig.prototype as unknown as { turnLegs(): void }, "turnLegs");
+    try {
+      await loadMonsters(scene);
+      const rig = attachCreature(scene, new Mesh("spitter", scene), "monster.dune_spitter.v1")!;
+      const walk = (rel: number) => {
+        solved.mockClear();
+        for (let i = 0; i < 30; i++) { rig.setLocomotion(2); rig.setMoveAngle(rel); scene.render(); }
+        return solved.mock.calls.length;
+      };
+      expect(walk(0.1), "a lean into a turn").toBe(0);
+      expect(walk(Math.PI / 2), "a strafe").toBeGreaterThan(0);
+    } finally {
+      solved.mockRestore();
+      resetMonsters();
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  });
+
   it("tells a shooter's legs how far off its facing it moves, and nothing while it walks where it faces", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
