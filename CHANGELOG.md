@@ -41,6 +41,14 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   hideout shows the objective "Open the Map Device" under the minimap, the Map
   Device glows and pulses, and the loading screen explains how to start a map.
 
+### Changed
+
+- Every map holds two or three rare monsters instead of one. The first waits
+  with the first pack you meet, the others further along the way, so a map
+  offers its first rare fight in the opening minute and not beside the boss.
+- The Ironsworn's Strike hits harder (16 instead of 10), so the free swing
+  still finishes a long fight against a rare when his mana runs dry.
+
 ### Fixed
 
 - An orb that cannot change a waystone no longer plays the craft sound as if
