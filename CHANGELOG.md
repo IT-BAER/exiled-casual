@@ -54,6 +54,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The red markings that warn of a hit now stay red on bright floors. On desert
   and beach sand they used to fade to a pale pink that was easy to miss; on
   dark floors they darken the ground instead of washing it red.
+- Mother Vhal's slam now throws mud and bog water out around it, where only a
+  thin ring showed before, and her Bog Geyser shoots up as a jet of water that
+  sprays back down instead of a cloud of dark smoke.
 
 ## [0.5.1] - 2026-10-28
 
