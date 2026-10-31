@@ -26,6 +26,8 @@ import { BRAZIERS } from "./braziers";
 import { Divider, EMBER, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
 import { BUILT_AT } from "../telemetry/client";
 import { useLiveConfig } from "../telemetry/liveops";
+import { gpuRenderer } from "../gpu";
+import { deviceNotices, probeDevice } from "./device-notice";
 
 export interface MainMenuProps {
   /** How many characters the save holds. Shown in the boot log, like PoE's login log. */
@@ -205,14 +207,16 @@ function dismissedId(): string | null {
 /**
  * What the operator can say from the admin console: a message of the day, a
  * maintenance notice (PLAY is disabled beside it) and a reload nudge for a build
- * older than the one the server wants. Stacked under the logo, in the panel's voice.
+ * older than the one the server wants. Below them, why this device cannot play
+ * well. Stacked under the logo, in the panel's voice.
  */
 function LiveNotices(): React.ReactElement | null {
   const live = useLiveConfig();
   const [dismissed, setDismissed] = React.useState<string | null>(dismissedId);
+  const [device] = React.useState(() => deviceNotices(probeDevice(gpuRenderer())));
   const outdated = live.minBuiltAt !== undefined && live.minBuiltAt > BUILT_AT;
   const motd = live.motd && live.motd.id !== dismissed ? live.motd : null;
-  if (!motd && !live.maintenance && !outdated) return null;
+  if (!motd && !live.maintenance && !outdated && device.length === 0) return null;
   return (
     <div
       style={{
@@ -256,6 +260,11 @@ function LiveNotices(): React.ReactElement | null {
           </button>
         </Notice>
       )}
+      {device.map((n) => (
+        <Notice key={n.id} testId={`device-${n.id}`} color={EMBER}>
+          <span style={{ flex: 1 }}>{n.text}</span>
+        </Notice>
+      ))}
     </div>
   );
 }

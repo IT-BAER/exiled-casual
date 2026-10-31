@@ -6,6 +6,9 @@ import { ModeDialog } from "./ModeDialog";
 import { _setLiveConfig } from "../telemetry/liveops";
 import { DEFAULT_LIVE_CONFIG } from "@exiled/telemetry";
 
+const gpu = vi.hoisted(() => ({ renderer: "" }));
+vi.mock("../gpu", async (actual) => ({ ...(await actual<typeof import("../gpu")>()), gpuRenderer: () => gpu.renderer }));
+
 afterEach(() => {
   cleanup();
   _setLiveConfig(DEFAULT_LIVE_CONFIG);
@@ -96,6 +99,35 @@ describe("MainMenu live ops", () => {
     const link = screen.getByRole("link", { name: /privacy/i }) as HTMLAnchorElement;
     expect(link.getAttribute("href")).toBe("/privacy.html");
     expect(link.target).toBe("_blank");
+  });
+});
+
+describe("MainMenu device notices", () => {
+  const props = { characterCount: 0, onPlay: vi.fn(), onOptions: vi.fn(), onAbout: vi.fn() };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    gpu.renderer = "";
+  });
+
+  it("tells a touch-only device it needs a keyboard and mouse, and leaves PLAY enabled", () => {
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: q !== "(any-pointer: fine)" }));
+    render(<MainMenu {...props} />);
+    expect(screen.getByTestId("device-touch").textContent).toMatch(/keyboard and mouse/i);
+    expect((screen.getByRole("button", { name: /play/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("says hardware acceleration is off on a software renderer", () => {
+    gpu.renderer = "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)";
+    render(<MainMenu {...props} />);
+    expect(screen.getByTestId("device-software").textContent).toMatch(/hardware acceleration is off/i);
+    expect(screen.queryByTestId("device-touch")).toBeNull();
+  });
+
+  it("says nothing on a desktop with a GPU", () => {
+    gpu.renderer = "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11 vs_5_0 ps_5_0, D3D11)";
+    render(<MainMenu {...props} />);
+    expect(screen.queryByTestId("device-software")).toBeNull();
+    expect(screen.queryByTestId("device-touch")).toBeNull();
   });
 });
 

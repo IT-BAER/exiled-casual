@@ -1,3 +1,6 @@
+/** Renderers that draw on the CPU: Chrome's SwiftShader, Mesa's llvmpipe, Windows' Basic Render Driver. */
+export const SOFTWARE_RENDERER = /swiftshader|llvmpipe|software|basic render/i;
+
 let cached: string | undefined;
 
 /**

@@ -13,6 +13,7 @@
  */
 
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
+import { SOFTWARE_RENDERER } from "./gpu";
 export { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET };
 
 export type ShadowQuality = "off" | "low" | "medium" | "high";
@@ -289,7 +290,7 @@ export function stepDown(g: GraphicsSettings): GraphicsSettings | null {
  * Medium (an Arc 140T ran the all-on frame at 22-37 fps); unknown starts at High.
  */
 export function presetForRenderer(renderer: string): GraphicsPreset {
-  if (/swiftshader|llvmpipe|software|basic render/i.test(renderer)) return "low";
+  if (SOFTWARE_RENDERER.test(renderer)) return "low";
   if (/nvidia|geforce|quadro/i.test(renderer)) return "ultra";
   if (/intel/i.test(renderer)) return /arc\(tm\)? [ab]\d{3}/i.test(renderer) ? "ultra" : "medium";
   if (/amd|radeon/i.test(renderer)) return /\brx\b|radeon pro/i.test(renderer) ? "ultra" : "medium";
