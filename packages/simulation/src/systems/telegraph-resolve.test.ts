@@ -125,7 +125,7 @@ describe("registerTelegraphResolve", () => {
     expect(adds[0]!.team).toBe(1);
   });
 
-  it("a brood add on a tier-7 map takes the stone's resistances but keeps its base life and damage", () => {
+  it("a brood add on a tier-7 map scales like the map's packs: tier and stone life, damage, resistances", () => {
     // A stone that adds monster resistances and monster life.
     const seed = Array.from({ length: 5000 }, (_, i) => i + 1).find((s) => {
       const ws = waystoneScaleFor(s);
@@ -145,9 +145,10 @@ describe("registerTelegraphResolve", () => {
     sim.step();
     const add = sim.world.query("monster")[0]!;
     const def = MONSTERS.get("monster.cinder_imp.v1")!;
-    expect(monsterTierScale(7).lifeMilli).toBeGreaterThan(1000);
-    expect(sim.world.get<Health>(add, "health")!.maxLife).toBe(def.maxLifeFixed);
-    expect(sim.world.get<MonsterC>(add, "monster")!.attackDamage).toBe(def.attackDamage.amountFixed);
+    const tier = monsterTierScale(7), ws = waystoneScaleFor(seed);
+    expect(tier.lifeMilli).toBeGreaterThan(1000);
+    expect(sim.world.get<Health>(add, "health")!.maxLife).toBe(fpMul(def.maxLifeFixed, Math.trunc((tier.lifeMilli * ws.lifeMilli) / 1000)));
+    expect(sim.world.get<MonsterC>(add, "monster")!.attackDamage).toBe(fpMul(def.attackDamage.amountFixed, Math.trunc((tier.dmgMilli * ws.dmgMilli) / 1000)));
     expect(sim.world.get<DefensesC>(add, "defenses")!.res.fire).toBe(def.defenses.resPct.fire + waystoneScaleFor(seed).monsterResAdd);
   });
 

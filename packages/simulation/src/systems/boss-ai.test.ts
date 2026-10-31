@@ -797,7 +797,8 @@ describe("boss abilities scale with the map's tier", () => {
     expect(tele.ground!.dps).toBe(fp(40.5)); // fp(9) at 4.5x
   });
 
-  it("its phase-2 adds take the stone's resistances but keep their base life", () => {
+  // Adds scale like the map's packs (mapDangerScale): a tier-10 brood is a tier-10 fight.
+  it("its phase-2 adds take the map's tier and the stone's life, damage and resistances", () => {
     // A stone that adds monster resistances and monster life.
     const seed = Array.from({ length: 5000 }, (_, i) => i + 1).find((s) => {
       const ws = waystoneScaleFor(s);
@@ -817,8 +818,13 @@ describe("boss abilities scale with the map's tier", () => {
 
     const add = summonedAdds(world)[0]!;
     const imp = MONSTERS.get("monster.cinder_imp.v1")!;
-    expect(world.get<Health>(add, "health")!.maxLife).toBe(imp.maxLifeFixed);
-    expect(world.get<DefensesC>(add, "defenses")!.res.fire).toBe(imp.defenses.resPct.fire + waystoneScaleFor(seed).monsterResAdd);
+    const tier = monsterTierScale(10), ws = waystoneScaleFor(seed);
+    const lifeMilli = Math.trunc((tier.lifeMilli * ws.lifeMilli) / 1000);
+    const dmgMilli = Math.trunc((tier.dmgMilli * ws.dmgMilli) / 1000);
+    expect(lifeMilli).toBeGreaterThan(1000);
+    expect(world.get<Health>(add, "health")!.maxLife).toBe(fpMul(imp.maxLifeFixed, lifeMilli));
+    expect(world.get<MonsterC>(add, "monster")!.attackDamage).toBe(fpMul(imp.attackDamage.amountFixed, dmgMilli));
+    expect(world.get<DefensesC>(add, "defenses")!.res.fire).toBe(imp.defenses.resPct.fire + ws.monsterResAdd);
   });
 
   it("a boss with no session (the legacy replay path) is unscaled", () => {
