@@ -37,6 +37,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The main menu tells you when your device cannot play well: on a touch-only
   phone or tablet that the game needs a keyboard and mouse, and when the
   browser has hardware acceleration turned off. Play stays open either way.
+- A new character is shown the way to its first map. Until it enters one, the
+  hideout shows the objective "Open the Map Device" under the minimap, the Map
+  Device glows and pulses, and the loading screen explains how to start a map.
 
 ### Fixed
 
