@@ -60,6 +60,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Spitters that circle you between shots or back away from you now step
   sideways or backwards on their legs, instead of walking forward while they
   slide.
+- A character name can use the letters of any language, such as José, Jürgen
+  or 李小龍. Only English letters were accepted before, so Create stayed
+  greyed out for everyone else.
 
 ## [0.5.1] - 2026-10-28
 
