@@ -1,8 +1,11 @@
 import {
   Color3,
+  Constants,
   DynamicTexture,
   Effect,
   type GlowLayer,
+  ImageProcessingConfiguration,
+  Material,
   Mesh,
   MeshBuilder,
   ShaderMaterial,
@@ -410,6 +413,7 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
   fill.parent = root;
   fill.material = fillMat;
   fill.receiveShadows = false;
+  const shade = shadeOf(scene, root, fill, "telegraph-shade");
 
   // The tube scales with the radius, so a 3.5-unit slam at 0.06 drew a 0.2-unit band.
   const rim = MeshBuilder.CreateTorus("telegraph-rim", { diameter: 2, thickness: 0.012, tessellation: 48 }, scene);
@@ -424,7 +428,7 @@ function buildTelegraph(scene: Scene, root: Mesh): void {
   front.material = dangerFront(scene, root);
   front.receiveShadows = false;
 
-  root.metadata = { fill: fillMat, rim: rimMat, front };
+  root.metadata = { fill: fillMat, rim: rimMat, shade, front };
 }
 
 // The danger palette, shared by every hostile decal so red always means "get out".
@@ -453,6 +457,54 @@ function dangerRim(scene: Scene, root: Mesh): StandardMaterial {
   return m;
 }
 
+/** Share of the floor's green and blue a decal's shade takes out at full strength. */
+const SHADE_GB: readonly [number, number] = [0.62, 0.7];
+/** The shade's strength at the start of a wind-up and on its impact tick. */
+const SHADE_FROM = 0.6;
+const SHADE_TO = 0.95;
+
+/**
+ * Subtractive (floor x (1 - colour)) and only in green and blue: emissive red
+ * added over bright sand read pale pink, while this reddens a floor in
+ * proportion to its own light, so a dark floor only darkens and never turns
+ * into a red wash. Unlit and outside fog, image processing and the bloom: it
+ * is a filter, and any of those would tint it.
+ */
+function dangerShade(scene: Scene, root: Mesh): StandardMaterial {
+  const m = new StandardMaterial(`${root.name}-tel-shade`, scene);
+  m.disableLighting = true;
+  m.diffuseColor = new Color3(0, 0, 0);
+  m.specularColor = new Color3(0, 0, 0);
+  m.emissiveColor = new Color3(0, 0, 0);
+  m.alphaMode = Constants.ALPHA_SUBTRACT;
+  m.transparencyMode = Material.MATERIAL_ALPHABLEND;
+  m.disableDepthWrite = true;
+  m.fogEnabled = false;
+  const ip = new ImageProcessingConfiguration();
+  ip.isEnabled = false;
+  m.imageProcessingConfiguration = ip;
+  paintShade(m, 0);
+  return m;
+}
+
+function paintShade(shade: StandardMaterial, progress: number): void {
+  const s = SHADE_FROM + (SHADE_TO - SHADE_FROM) * progress;
+  shade.emissiveColor.set(0, SHADE_GB[0] * s, SHADE_GB[1] * s);
+}
+
+/** A decal's fill again, sharing its geometry, as the shade under it; drawn first because it sits lower. */
+function shadeOf(scene: Scene, root: Mesh, fill: Mesh, name: string): StandardMaterial {
+  const mat = dangerShade(scene, root);
+  const shade = fill.clone(name);
+  shade.parent = fill.parent;
+  shade.position.y = fill.position.y - 0.003;
+  shade.material = mat;
+  shade.isPickable = false;
+  shade.receiveShadows = false;
+  (scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined)?.addExcludedMesh(shade);
+  return mat;
+}
+
 /** The closing front's additive line, brighter than the rim so it reads against it. */
 function dangerFront(scene: Scene, root: Mesh): StandardMaterial {
   const m = new StandardMaterial(`${root.name}-tel-front`, scene);
@@ -471,15 +523,16 @@ function dangerFront(scene: Scene, root: Mesh): StandardMaterial {
  */
 export function updateTelegraph(root: Mesh, progress: number): void {
   const parts = root.metadata as
-    | { fill: StandardMaterial; rim: StandardMaterial; front: Mesh }
+    | { fill: StandardMaterial; rim: StandardMaterial; shade: StandardMaterial; front: Mesh }
     | null;
   if (!parts?.fill) return;
   const at = Math.max(0.02, progress);
   parts.front.scaling.set(at, 1, at);
-  paintDanger(parts.fill, parts.rim, progress);
+  paintDanger(parts.fill, parts.rim, parts.shade, progress);
 }
 
-function paintDanger(fill: StandardMaterial, rim: StandardMaterial, progress: number): void {
+function paintDanger(fill: StandardMaterial, rim: StandardMaterial, shade: StandardMaterial, progress: number): void {
+  paintShade(shade, progress);
   // The fill only ever deepens — it marks the ground, it must not light it.
   fill.alpha = 0.12 + progress * 0.18;
   fill.emissiveColor.set(0.55 + progress * 0.35, 0.1 + progress * 0.12, 0.02);
@@ -524,6 +577,7 @@ interface LaneParts {
   lane: TransformNode;
   fill: StandardMaterial;
   rim: StandardMaterial;
+  shade: StandardMaterial;
   fillMesh: Mesh;
   rimMesh: Mesh;
   front: Mesh;
@@ -548,6 +602,7 @@ function buildTelegraphLane(scene: Scene, root: Mesh): void {
   const fill = dangerFill(scene, root);
   const rim = dangerRim(scene, root);
   const fillMesh = floorMesh(scene, "lane-fill", lane, n + 1, fan, fill);
+  const shade = shadeOf(scene, root, fillMesh, "lane-shade");
   const rimMesh = floorMesh(scene, "lane-rim", lane, n * 4, ribbon, rim);
   rimMesh.position.y = 0.004;
   const front = MeshBuilder.CreateGround("lane-front", { width: 2, height: 1 }, scene);
@@ -556,7 +611,7 @@ function buildTelegraphLane(scene: Scene, root: Mesh): void {
   front.isPickable = false;
   front.receiveShadows = false;
   front.position.y = 0.008;
-  root.metadata = { lane, fill, rim, fillMesh, rimMesh, front, length: -1, half: -1 } satisfies LaneParts;
+  root.metadata = { lane, fill, rim, shade, fillMesh, rimMesh, front, length: -1, half: -1 } satisfies LaneParts;
   updateTelegraphLane(root, 0, 0, 1, 4, 1);
 }
 
@@ -592,7 +647,7 @@ export function updateTelegraphLane(root: Mesh, progress: number, dirX: number, 
   const across = at <= length ? half : Math.sqrt(Math.max(0, half * half - (at - length) ** 2));
   parts.front.position.z = at;
   parts.front.scaling.set(Math.max(0.02, across), 1, LANE_FRONT_DEPTH);
-  paintDanger(parts.fill, parts.rim, progress);
+  paintDanger(parts.fill, parts.rim, parts.shade, progress);
 }
 
 /** Segments round a ring telegraph. */
@@ -601,6 +656,7 @@ const RING_SEGMENTS = 64;
 interface RingParts {
   fill: StandardMaterial;
   rim: StandardMaterial;
+  shade: StandardMaterial;
   fillMesh: Mesh;
   innerRim: Mesh;
   front: Mesh;
@@ -624,6 +680,7 @@ function buildTelegraphRing(scene: Scene, root: Mesh): void {
     band.push(o, o2, o2 + 1, o, o2 + 1, o + 1);
   }
   const fillMesh = floorMesh(scene, "ring-fill", root, RING_SEGMENTS * 2, band, fill);
+  const shade = shadeOf(scene, root, fillMesh, "ring-shade");
   const torus = (name: string, material: StandardMaterial): Mesh => {
     const t = MeshBuilder.CreateTorus(name, { diameter: 2, thickness: 0.012, tessellation: RING_SEGMENTS }, scene);
     t.parent = root;
@@ -635,7 +692,7 @@ function buildTelegraphRing(scene: Scene, root: Mesh): void {
   torus("ring-rim-outer", rim);
   const innerRim = torus("ring-rim-inner", rim);
   const front = torus("ring-front", dangerFront(scene, root));
-  root.metadata = { fill, rim, fillMesh, innerRim, front, hole: -1 } satisfies RingParts;
+  root.metadata = { fill, rim, shade, fillMesh, innerRim, front, hole: -1 } satisfies RingParts;
   updateTelegraphRing(root, 0, 0.5);
 }
 
@@ -656,7 +713,7 @@ export function updateTelegraphRing(root: Mesh, progress: number, hole: number):
   }
   const edge = Math.max(0.02, 1 - progress * (1 - hole));
   parts.front.scaling.set(edge, 1, edge);
-  paintDanger(parts.fill, parts.rim, progress);
+  paintDanger(parts.fill, parts.rim, parts.shade, progress);
 }
 
 /** Ripples a brood mark sends out per second. */
@@ -740,11 +797,14 @@ function buildChargePath(scene: Scene, root: Mesh): void {
   const across = [[-0.5, 0], [-0.2, 0.7], [0, 1], [0.2, 0.7], [0.5, 0]];
   const positions: number[] = [];
   const colors: number[] = [];
+  const feather: number[] = [];
   const indices: number[] = [];
   for (const [z, a] of along) {
     for (const [x, b] of across) {
       positions.push(x!, 0, z!);
       colors.push(1, 1, 1, a! * b!);
+      // The shade's blend ignores alpha, so it feathers through its colour.
+      feather.push(a! * b!, a! * b!, a! * b!, 1);
     }
   }
   const cols = across.length;
@@ -770,7 +830,17 @@ function buildChargePath(scene: Scene, root: Mesh): void {
   mat.disableDepthWrite = true;
   mat.alphaMode = 1; // ALPHA_ADD
   path.material = mat;
-  root.metadata = { path: mat };
+  const shadeMesh = new Mesh("path-shade", scene);
+  Object.assign(new VertexData(), { positions, colors: feather, indices }).applyToMesh(shadeMesh);
+  shadeMesh.parent = path;
+  shadeMesh.position.y = -0.003;
+  shadeMesh.isPickable = false;
+  shadeMesh.receiveShadows = false;
+  const shade = dangerShade(scene, root);
+  shade.backFaceCulling = false;
+  shadeMesh.material = shade;
+  (scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined)?.addExcludedMesh(shadeMesh);
+  root.metadata = { path: mat, shade };
 }
 
 /**
@@ -780,7 +850,8 @@ function buildChargePath(scene: Scene, root: Mesh): void {
  * Mutates the existing mesh and material; no allocations per call.
  */
 export function updateChargePath(root: Mesh, progress: number, from: { x: number; y: number } | undefined): void {
-  const mat = (root.metadata as { path?: StandardMaterial } | null)?.path;
+  const parts = root.metadata as { path?: StandardMaterial; shade: StandardMaterial } | null;
+  const mat = parts?.path;
   const path = root.getChildMeshes(true)[0];
   if (!mat || !path) return;
   const dx = from ? from.x - root.position.x : 0;
@@ -792,6 +863,7 @@ export function updateChargePath(root: Mesh, progress: number, from: { x: number
   path.rotation.y = Math.atan2(dx, dz) - root.rotation.y;
   path.scaling.set(CHARGE_PATH_WIDTH, 1, length);
   mat.alpha = 0.35 + progress * 0.35;
+  paintShade(parts.shade, progress);
   const flash = Math.max(0, (progress - 0.85) / 0.15);
   mat.emissiveColor.set(0.55 + flash * 0.45, 0.16 + flash * 0.76, 0.03 + flash * 0.73);
 }

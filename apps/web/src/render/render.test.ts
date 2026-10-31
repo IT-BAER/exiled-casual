@@ -1163,6 +1163,41 @@ describe("makeMesh kinds", () => {
     const { minimum, maximum } = rim.getBoundingInfo().boundingBox;
     expect(maximum.y - minimum.y).toBeLessThanOrEqual(0.015);
   });
+
+  // Emissive red over bright sand read pale pink (Kiln Ring band R224 G181 B148 on
+  // sand R218 G164 B83): nothing added can redden a floor that is already bright.
+  it("takes green and blue out of the floor under every hostile decal, deeper as it winds up", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const marks = (progress: number) => makeSnapshot({
+      entities: [
+        { id: 1, kind: "telegraph", x: 0, y: 0, radius: 3, progress },
+        { id: 2, kind: "telegraph", x: 9, y: 0, radius: 2, progress, shape: "line", dirX: 1, dirY: 0, length: 6 },
+        { id: 3, kind: "telegraph", x: 0, y: 9, radius: 3, inner: 1, progress, shape: "ring" },
+        { id: 4, kind: "telegraph", x: 9, y: 9, radius: 1.1, progress, fromX: 5, fromY: 9 },
+      ],
+    });
+    const shades = () => [1, 2, 3, 4].map((id) => {
+      const shade = scene.getMeshByName(`entity-${id}`)!.getChildMeshes().find((m) => m.name.endsWith("-shade"));
+      expect(shade, `entity-${id}`).toBeDefined();
+      const mat = shade!.material as StandardMaterial;
+      expect(mat.alphaMode).toBe(Constants.ALPHA_SUBTRACT);
+      expect(mat.fogEnabled).toBe(false);
+      expect(mat.imageProcessingConfiguration.isEnabled).toBe(false);
+      return mat.emissiveColor.clone();
+    });
+    renderer.apply(null, marks(0), 1);
+    const early = shades();
+    renderer.apply(null, marks(1), 1);
+    const late = shades();
+    early.forEach((c, i) => {
+      expect(c.r).toBe(0);
+      expect(c.g).toBeGreaterThan(0.25);
+      expect(c.b).toBeGreaterThan(0.25);
+      expect(late[i]!.g).toBeGreaterThan(c.g);
+    });
+  });
 });
 
 describe("an entity's own materials go with it", () => {
@@ -1265,7 +1300,7 @@ describe("SnapshotRenderer — new kinds", () => {
     let prev = tel(1, { x: 0, y: 1 });
     renderer.apply(null, prev, 1);
     const root = scene.getMeshByName("entity-7")!;
-    expect(root.getChildMeshes().map((m) => m.name)).toEqual(["telegraph-path"]);
+    expect(root.getChildMeshes().map((m) => m.name)).toEqual(["telegraph-path", "path-shade"]);
     let s = span();
     expect(s.x[0]).toBeCloseTo(0, 1);
     expect(s.x[1]).toBeCloseTo(4, 1);
