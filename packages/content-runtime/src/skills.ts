@@ -241,8 +241,10 @@ const SKILL_DEFS: SkillDef[] = [
    * 0.5s repeat gate (15 ticks) on top of the 7-tick cast means ~1.4 attacks/sec.
    * The ranged two hit for under half of Ember Bolt's 36, so a default attack is a
    * floor to fall back to and never the better choice. Strike swings slower (21
-   * ticks) and lighter (10) because a swing hits the whole wedge: the playtest bot
-   * has the three classes clearing a first map within 12% of each other at these numbers.
+   * ticks) because a swing hits the whole wedge. It hits for 16, not 10: it is what
+   * the Ironsworn fights a long single target with once mana is dry, and at 10 he
+   * cleared a first map 1.41x slower than the Stalker once rares stood along the
+   * route and boss adds scaled with the map (playtest.ts).
    */
   {
     id: "skill.strike.v1",
@@ -271,7 +273,7 @@ const SKILL_DEFS: SkillDef[] = [
         // Wide enough that two bodies in a doorway both take it, narrow enough
         // that turning around is a real cost.
         arcDegrees: 120,
-        damage: { type: "physical", amountFixed: fp(10) },
+        damage: { type: "physical", amountFixed: fp(16) },
       },
     ],
   },
