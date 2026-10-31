@@ -611,3 +611,22 @@ The inventory's second page now follows PoE1's Cosmetics page. Its two tabs sit 
 and the whole pane below becomes one carved gold plate of slot frames that mirror the paper-doll:
 weapons, helmet, body, gloves, boots, belt, amulet, five flask skins, portrait, pet and effects. Owned
 cosmetics line the foot; a click puts the Celestial Cat into its Pet slot, and another takes it out.
+
+## 2026-10-31 · Warnings that read on sand, and Mother Vhal's mud
+
+<table>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-31-danger-decals-strand.jpeg" alt="The same strand beach twice: above, pale pink danger discs and a lane that blend into the bright sand; below, the same markings in solid red" width="100%"><br><sub>Hit markings on the Strand, before and after.</sub></td>
+</tr>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-31-vhal-slam-mud.jpeg" alt="Mother Vhal's slam on the beach in four moments, a crown of dark mud clumps and pale water drops thrown out around the impact" width="100%"><br><sub>Mother Vhal's slam throws mud and bog water.</sub></td>
+</tr>
+<tr>
+<td width="100%"><img src="screenshots/2026-10-31-vhal-geyser-water.jpeg" alt="The Bog Geyser in four moments: a jet of pale water streaks rises from its marker and sprays back down" width="100%"><br><sub>The Bog Geyser is a jet of water, not smoke.</sub></td>
+</tr>
+</table>
+
+Every hostile marking now lays a shade under its red fill that takes green and blue out of the floor,
+so a disc, lane, ring or charge path turns red on bright sand instead of fading to pale pink, and only
+darkens a dark floor. Mother Vhal's slam throws a crown of mud clumps and water drops out to its own
+radius, and her Bog Geyser shoots up as a jet of water that sprays back down.
