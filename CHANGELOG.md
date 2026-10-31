@@ -64,6 +64,12 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   character, so on a slower connection the wait after pressing Play is about
   a fifth shorter, and the line along the foot of the loading screen now fills
   as the game really gets ready.
+- The game reports a few more anonymous counts, so we can see where new
+  players get stuck: whether the map device was used, rare monsters and
+  bosses met, caches opened, how you came back after dying, why a name was
+  refused (never the name itself), and how long each step of loading took.
+  The privacy page lists them all. Do Not Track and Global Privacy Control
+  still turn every report off.
 
 ### Fixed
 
