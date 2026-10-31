@@ -59,6 +59,8 @@ import { DeathRecap } from "./hud/DeathRecap";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
 import { settleGate } from "./settle";
+import { createLoadClock } from "./load-phases";
+import { beginLoad, setLoadPart } from "./load-progress";
 import { pickTip } from "./tips";
 import { hasEnteredMap, useFirstMap } from "./hud/first-map";
 import { OptionsPanel } from "./menu/OptionsPanel";
@@ -341,6 +343,7 @@ export function GameView({
     worker.onerror = (e) => reportError("worker", e.message || "worker error", undefined, e.filename);
     worker.onmessageerror = () => reportError("worker", "worker messageerror");
     const mountedAt = performance.now();
+    const clock = createLoadClock(mountedAt);
     let gameMsSent = false;
     const query = new URLSearchParams(window.location.search);
     const bot = import.meta.env?.DEV === true && query.has("bot");
@@ -365,6 +368,8 @@ export function GameView({
     let releaseWarm: (() => void) | null = null;
     /** Pending unmount of the plate, one fade after ready. Cancelled by a new area. */
     let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+    /** The plate is up and its bar is following the scene's materials. */
+    let plateUp = true;
     /**
      * The fight, heard. Fed every snapshot and reset on every area, since it
      * works by diffing consecutive ones and a rebuilt area shares no entity ids
@@ -381,17 +386,10 @@ export function GameView({
       const l = watch.takeLoot();
       if (l) telemetry.track({ k: "loot", ...l });
     });
-    // Core first, then the whole library behind it: what a cue costs is one
-    // fetch, and the only cue that can ever be heard late is the one that is
-    // still on the wire when it fires. Both are running under the loading plate.
+    // Core first; the whole library follows once the plate lifts (below). What a
+    // cue costs is one fetch, and the only cue that can ever be heard late is the
+    // one that is still on the wire when it fires.
     void preloadSfx(CORE_SFX);
-    void preloadSfx(ALL_SFX);
-    // Textures the world only asks for once the plate is already down: the fire
-    // sheet on the first cast, an icon on the first drop, a gear texture on the
-    // first piece equipped (render/world-art.ts). Started here and never awaited:
-    // it runs alongside the models the first frame really is waiting for, and a
-    // texture that 404s or stalls must not be able to hold the door shut.
-    void preloadWorldArt();
 
     // Babylon engine + render loop
     // Ask for the discrete GPU on dual-GPU laptops; context-loss recovery is a
@@ -638,6 +636,7 @@ export function GameView({
         dlog("worker", "ready");
       } else if (msg.type === "area") {
         dlog("worker", "area", { area: msg.area, mapBaseId: msg.mapBaseId });
+        clock.worker(performance.now());
         // The ?map harness's destination: once a map area arrives, its job is done.
         if (msg.area === "map") harness = "done";
         // Dungeon walls belong to the "map". The hideout is an open lab: pass an
@@ -660,7 +659,12 @@ export function GameView({
         // there — and in dev that message arrives on every HMR save, which is
         // where this was finally heard: a whoosh, and the portal sweep behind it,
         // in a quiet map nobody had walked into.
-        if (stoodIn !== null) playSfx("portal-enter");
+        if (stoodIn !== null) {
+          playSfx("portal-enter");
+          beginLoad("area");
+        }
+        setLoadPart("worker", 1);
+        plateUp = true;
         stoodIn = msg.area;
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
@@ -727,6 +731,7 @@ export function GameView({
     getAimRef.current = getAim;
     const wading: WakeBody[] = [];
     let lastFrameMs = 0;
+    let readyPolls = 0;
     const renderFrame = () => {
       if (!curSnap) return;
       // ponytail: float alpha for lerp — never fed into sim
@@ -754,6 +759,19 @@ export function GameView({
         true,
       );
       scene.render();
+      // The plate's bar while materials compile: the share of meshes Babylon calls
+      // ready, by the same test `scene.isReady` applies. Every 8th frame, plate up only.
+      if (plateUp && ++readyPolls % 8 === 0) {
+        let all = 0;
+        let ready = 0;
+        // `?? []`: a test's stub scene has no mesh list.
+        for (const m of scene.meshes ?? []) {
+          if (!m.subMeshes?.length) continue;
+          all++;
+          if (m.isReady(true)) ready++;
+        }
+        if (all > 0) setLoadPart("ready", ready / all);
+      }
       // The one place the loading plate is allowed to come down: frames for
       // this area are on the glass at a playable pace. Guarded by a local rather
       // than by state, so this costs one call per frame and sets React state once.
@@ -766,15 +784,27 @@ export function GameView({
       // rather than hanging on a black plate.
       if (settled?.(performance.now()) && harness === "done") {
         settled = null;
+        plateUp = false;
+        setLoadPart("ready", 1);
         releaseWarm?.();
         releaseWarm = null;
         // Dissolve rather than cut. The world under it is finished either way —
         // this fade costs the player nothing, because the frame behind it is
         // already the one they were waiting for.
         setLeaving(true);
+        clock.settled(performance.now());
         if (!gameMsSent) {
           gameMsSent = true;
           telemetry.track({ k: "load", gameMs: Math.round(performance.now() - mountedAt) });
+          // Only now, never under the plate: on a slow link the library's 7 MB of
+          // sound and the world's textures share the line with the models the first
+          // frame waits on, and on a fast one their decoding shares the main thread
+          // with the shader compiles. CORE_SFX already holds every cue the first
+          // minutes can play. The world art is what the world asks for later (the
+          // fire sheet on the first cast, an icon on the first drop; render/world-art.ts),
+          // never awaited: a texture that 404s or stalls must not hold anything up.
+          void preloadSfx(ALL_SFX);
+          void preloadWorldArt();
         }
         fadeTimer = setTimeout(() => setLoading(false), FADE_MS);
       }
@@ -788,6 +818,8 @@ export function GameView({
     // The vendor is male, so his body always loads; the player's own beside it.
     const bodies = [...new Set<Body>(["male", characterClass(playedClassId).body])];
     void Promise.all([loadPlayerRig(scene, bodies), loadProps(scene), loadRocks(scene), loadMonsters(scene)]).then(() => {
+      clock.models(performance.now());
+      setLoadPart("models", 1);
       if (!unmounted) engine.runRenderLoop(renderFrame);
       // The worker's hideout area message usually beats props.glb here, and its
       // dressing pass aborted on the missing container with no retry — a bare

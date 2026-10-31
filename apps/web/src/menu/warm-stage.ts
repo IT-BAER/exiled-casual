@@ -12,6 +12,7 @@
  * own load runs exactly as before, taking the models from the HTTP cache when
  * this got there first. Warms once per page life.
  */
+import { setDownloaded } from "../load-progress";
 
 /** The models `loadPlayerRig` will ask for, by the same URLs, or the cache misses. */
 export const MENU_STAGE_MODELS = ["/models/wardrobe.glb", "/models/wardrobe-female.glb", "/models/anim-library.glb"] as const;
@@ -41,7 +42,61 @@ export function warmMenuStage(warmers: Partial<Warmers> = {}): Promise<void> {
   ]).then(() => undefined);
 }
 
+/**
+ * The same head start for the game itself, from the roster and create screens.
+ *
+ * At 20 Mbit/s the models the first frame waits on (props, rocks, monsters:
+ * 14.5 MB) are about 13 s of download, and none of them depend on the character
+ * either, so the roster spends that time instead. The chunk is GameView's, handed in by
+ * App so no menu module imports it; importing runs it, which mounts nothing.
+ * Each model's bytes feed the loading plate's bar (`load-progress`).
+ */
+export const GAME_MODELS = ["/models/props.glb", "/models/rocks.glb", "/models/monsters.glb"] as const;
+
+interface GameWarmers {
+  chunk: () => Promise<unknown>;
+  /** The sim worker's built script, which GameView spawns on mount. */
+  worker: string;
+  fetch: (url: string, onBytes: (received: number, total: number) => void) => Promise<unknown>;
+}
+
+/** Drains the body (or the cache never finishes storing it), counting as it goes. */
+async function fetchCounting(url: string, onBytes: (received: number, total: number) => void): Promise<void> {
+  // Low priority: the roster's own figure is still downloading beside it.
+  const r = await fetch(url, { priority: "low" });
+  const total = Number(r.headers.get("content-length")) || 0;
+  const reader = r.body?.getReader();
+  if (!reader) { await r.blob(); onBytes(total, total); return; }
+  let got = 0;
+  for (let c = await reader.read(); !c.done; c = await reader.read()) onBytes((got += c.value.byteLength), total);
+  // No content-length: the size is known only now.
+  if (total === 0) onBytes(got, got);
+}
+
+let gameWarmed = false;
+
+export function warmGame(warmers: Pick<GameWarmers, "chunk" | "worker"> & Partial<GameWarmers>): Promise<void> {
+  if (gameWarmed) return Promise.resolve();
+  gameWarmed = true;
+  const fetchOne = warmers.fetch ?? fetchCounting;
+  const quiet = (p: Promise<unknown>) => p.then(() => undefined, () => undefined);
+  const got = GAME_MODELS.map(() => 0);
+  const total = GAME_MODELS.map(() => 0);
+  // Only once every size is known: one small file done before the others have
+  // answered would otherwise read as everything done.
+  const report = () => {
+    if (total.some((t) => t === 0)) return;
+    setDownloaded(got.reduce((a, b) => a + b, 0) / total.reduce((a, b) => a + b, 0));
+  };
+  return Promise.all([
+    quiet(warmers.chunk()),
+    quiet(fetchOne(warmers.worker, () => {})),
+    ...GAME_MODELS.map((url, i) => quiet(fetchOne(url, (n, t) => { got[i] = n; total[i] = t; report(); }))),
+  ]).then(() => undefined);
+}
+
 /** Tests only: forget that the page was already warmed. */
 export function resetMenuStageWarm(): void {
   warmed = false;
+  gameWarmed = false;
 }

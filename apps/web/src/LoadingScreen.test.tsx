@@ -7,6 +7,7 @@ import { TIPS, pickTip } from "./tips";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { BIOMES } from "@exiled/content-runtime";
+import { beginLoad, resetLoadProgress, setLoadPart } from "./load-progress";
 
 afterEach(cleanup);
 
@@ -45,6 +46,17 @@ describe("LoadingScreen", () => {
   it("draws no wallpaper at all when none was given", () => {
     render(<LoadingScreen areaName="Hideout" tip="t" />);
     expect(screen.queryByTestId("loading-wallpaper")).not.toBeInTheDocument();
+  });
+
+  it("fills the rule with the load's real progress, live", () => {
+    resetLoadProgress();
+    beginLoad("area");
+    render(<LoadingScreen areaName="Desert" tip="t" />);
+    const bar = screen.getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "0");
+    act(() => setLoadPart("ready", 0.42));
+    expect(bar).toHaveAttribute("aria-valuenow", "42");
+    expect(screen.getByTestId("loading-progress-fill").style.width).toBe("42%");
   });
 });
 

@@ -19,7 +19,8 @@ vi.mock("./menu/MenuStage", () => ({
   MenuStage: ({ classId }: { classId: string }) => <div data-testid="menu-stage">{classId}</div>,
 }));
 const warm = vi.hoisted(() => vi.fn(() => Promise.resolve()));
-vi.mock("./menu/warm-stage", () => ({ warmMenuStage: warm }));
+const warmGame = vi.hoisted(() => vi.fn((_w: { chunk: () => Promise<unknown>; worker: string }) => Promise.resolve()));
+vi.mock("./menu/warm-stage", () => ({ warmMenuStage: warm, warmGame }));
 
 import { App } from "./App";
 
@@ -82,6 +83,22 @@ describe("App routing", () => {
 
   it("local mode leads to the roster", async () => {
     expect(await toSelect()).toBeTruthy();
+  });
+
+  it("starts the game's downloads on the roster, before anyone presses play", async () => {
+    warmGame.mockClear();
+    render(<App />);
+    await screen.findByTestId("main-menu");
+    fireEvent.pointerMove(window);
+    expect(warmGame).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /^play$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /play local/i }));
+    await screen.findByTestId("character-select");
+    expect(warmGame).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("game-view")).toBeNull();
+    // The chunk it is handed is the game's own, which mounts nothing by loading.
+    const mod = (await warmGame.mock.calls[0]![0].chunk()) as { GameView?: unknown };
+    expect(mod.GameView).toBeTypeOf("function");
   });
 
   it("lists a saved character and enters the game with its id", async () => {

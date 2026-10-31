@@ -36,7 +36,8 @@ import { reloadOnChunkError } from "./chunk-reload";
  *
  * `lazy` wants a default export and both of these are named, hence the unwrap.
  */
-const GameView = React.lazy(reloadOnChunkError(() => import("./GameView").then((m) => ({ default: m.GameView }))));
+const loadGameView = () => import("./GameView");
+const GameView = React.lazy(reloadOnChunkError(() => loadGameView().then((m) => ({ default: m.GameView }))));
 const MenuStage = React.lazy(reloadOnChunkError(() => import("./menu/MenuStage").then((m) => ({ default: m.MenuStage }))));
 /** The dev asset viewer. Lazy for the same reason: it owns an engine too. Null in a
  *  production build, so the chunk (and its `__wear` hook) is never emitted. */
@@ -49,7 +50,10 @@ import { setDebugLogging } from "./debug";
 import { setSoundMix } from "./audio/drop-sound";
 import { preloadSfx } from "./audio/sfx";
 import { MENU_MUSIC, setMusic } from "./audio/music";
-import { warmMenuStage } from "./menu/warm-stage";
+import { warmGame, warmMenuStage } from "./menu/warm-stage";
+import SIM_WORKER_URL from "./worker/sim-worker.ts?worker&url";
+import { markGameEntry } from "./load-phases";
+import { beginLoad } from "./load-progress";
 import { gpuRenderer } from "./gpu";
 import { telemetry } from "./telemetry/client";
 import { ageBucket } from "@exiled/telemetry";
@@ -147,7 +151,11 @@ export function App(): React.ReactElement {
       // driven browser can reach the game without three clicks it cannot see
       // (the menus are canvas-adjacent and the mode dialog remounts under a
       // snapshot). DEV only: this is a test hook, not a shortcut we ship.
-      if (harness && first) setScreen({ kind: "game", characterId: first, fresh: isFresh(r, first) });
+      if (harness && first) {
+        markGameEntry();
+        beginLoad("entry");
+        setScreen({ kind: "game", characterId: first, fresh: isFresh(r, first) });
+      }
     });
     return () => { live = false; };
   }, []);
@@ -208,6 +216,12 @@ export function App(): React.ReactElement {
     return () => {
       for (const e of WARM_ON) window.removeEventListener(e, warm);
     };
+  }, [screen.kind]);
+
+  // The game's own downloads, from the roster on: the seconds spent picking or
+  // naming a character were the seconds the loading plate later cost. See warmGame.
+  React.useEffect(() => {
+    if (screen.kind === "select" || screen.kind === "create") void warmGame({ chunk: loadGameView, worker: SIM_WORKER_URL });
   }, [screen.kind]);
 
   // Each screen is a view; entering the game also reports which character and how old,
@@ -337,7 +351,11 @@ export function App(): React.ReactElement {
             selectedId={selectedId}
             cap={cap}
             onSelect={setSelectedId}
-            onPlay={(id) => setScreen({ kind: "game", characterId: id, fresh: isFresh(roster, id) })}
+            onPlay={(id) => {
+              markGameEntry();
+              beginLoad("entry");
+              setScreen({ kind: "game", characterId: id, fresh: isFresh(roster, id) });
+            }}
             onCreate={() => setScreen({ kind: "create" })}
             onDelete={(id) => {
               void deleteCharacter(roster, id).then((next) => {

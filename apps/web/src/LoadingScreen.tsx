@@ -17,6 +17,7 @@
 import React from "react";
 import { DISPLAY, SERIF } from "./hud/ItemTooltip";
 import { GOLD, PARCHMENT } from "./menu/frames";
+import { useLoadProgress } from "./load-progress";
 
 /** Where a biome's plate lives. Built by `tools/build_loading_textures.py`. */
 export const LOADING_ART = "/textures/loading";
@@ -58,6 +59,7 @@ export interface LoadingScreenProps {
 
 export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScreenProps): React.ReactElement {
   const [artFailed, setArtFailed] = React.useState(false);
+  const progress = useLoadProgress();
   return (
     <div
       data-testid="loading-screen"
@@ -119,11 +121,31 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
       </div>
 
       {/* The rule, in the bottom bar's own pairing: a warm hairline closed
-          underneath by a dark one, which is what reads as carved rather than drawn. */}
+          underneath by a dark one, which is what reads as carved rather than drawn.
+          It doubles as the progress bar: a brighter gold runs along it as the load
+          really advances (`load-progress`), never on a clock. */}
       <div
-        aria-hidden
-        style={{ height: 2, background: "linear-gradient(180deg, #9b7751 0 1px, #0a0b0d 1px 2px)" }}
-      />
+        role="progressbar"
+        aria-label="Loading progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={progress}
+        style={{ position: "relative", height: 2, background: "linear-gradient(180deg, #9b7751 0 1px, #0a0b0d 1px 2px)" }}
+      >
+        <div
+          data-testid="loading-progress-fill"
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            height: 2,
+            width: `${progress}%`,
+            background: "linear-gradient(90deg, #9b7751, #f0cd88)",
+            boxShadow: "0 0 6px rgba(240,205,136,0.7)",
+            transition: "width 180ms linear",
+          }}
+        />
+      </div>
 
       <div
         data-testid="loading-band"
