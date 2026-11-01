@@ -8,6 +8,7 @@ import { chaseStep, hasLineOfSight, slide, type Collision, type CollisionRef } f
 import { spawnAdd, mapDangerScale } from "../areas";
 import { damageCode } from "../damage-types";
 import type { Position, MonsterC, Faction, BossC, TelegraphC, Health, SessionC } from "../components";
+import { monsterSpeed } from "../status";
 
 type BossStrike = Exclude<BossAbility, BossBroodAbility>;
 
@@ -237,7 +238,7 @@ export function registerBossAI(
       if (mon.state !== "idle"
         && fpDist2(boss.spawnX, boss.spawnY, ppos.x, ppos.y) > BOSS_LEASH_RADIUS * BOSS_LEASH_RADIUS) {
         const home = chaseStep(
-          collision, bpos.x, bpos.y, boss.spawnX, boss.spawnY, mon.moveSpeed, mon.bodyRadius,
+          collision, bpos.x, bpos.y, boss.spawnX, boss.spawnY, monsterSpeed(world, e, mon.moveSpeed, tick), mon.bodyRadius,
         );
         const arrived = home.x === boss.spawnX && home.y === boss.spawnY;
         world.set<Position>(e, "position", home);
@@ -390,7 +391,7 @@ export function registerBossAI(
         });
       } else {
         const moved = chaseStep(
-          collision, bpos.x, bpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,
+          collision, bpos.x, bpos.y, ppos.x, ppos.y, monsterSpeed(world, e, mon.moveSpeed, tick), mon.bodyRadius,
         );
         world.set<Position>(e, "position", moved);
         world.set<MonsterC>(e, "monster", { ...mon, state: "chase" });

@@ -27,14 +27,15 @@ function buildId(): string {
   }
 }
 
-/** DEV: `__dev.capture()` writes the canvas under docs/todo/playtest/. `vite serve` only. */
+/** DEV: `__dev.capture()` writes the canvas under docs/todo/playtest/, `__dev.record()` under review/skills/. `vite serve` only. */
 function playtestCapture(): Plugin {
   const root = fileURLToPath(new URL("../../docs/todo/playtest/", import.meta.url));
+  const review = fileURLToPath(new URL("../../review/", import.meta.url));
   return {
     name: "playtest-capture",
     apply: "serve",
     configureServer(server) {
-      server.middlewares.use("/__capture", captureHandler(root));
+      server.middlewares.use("/__capture", captureHandler(root, review));
     },
   };
 }

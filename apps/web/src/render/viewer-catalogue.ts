@@ -10,10 +10,10 @@ import { characterClass, MONSTERS, SKILLS } from "@exiled/content-runtime";
 import { FP_SCALE } from "@exiled/fixed-point";
 import { BROOD_MARK_RADIUS, SUMMON_RING, VOLLEY_RING } from "@exiled/simulation";
 import { PROP_KINDS } from "./props";
-import { fxProfile } from "./skill-fx";
+import { skillFx } from "./skills";
 import { SPAWNABLE, type Spawnable } from "./gallery";
 import { looksForEquipment } from "./gear-looks";
-import { SLOTS, type Looks, type RigClip, type Slot } from "./rig";
+import { SKILL_CLIP_IDS, SKILL_CLIPS, SLOTS, type Looks, type RigClip, type Slot } from "./rig";
 
 /** What can stand on the turntable. */
 export interface ViewerSubject {
@@ -86,6 +86,8 @@ export const ONE_SHOTS: readonly OneShot[] = [
   { id: "hit", label: "Hit", clips: ["hit"] },
   { id: "drink", label: "Drink", clips: ["drink"] },
   { id: "open", label: "Open", clips: ["open"] },
+  // The class skills' takes, each played as `playSkill` plays it in a cast.
+  ...SKILL_CLIP_IDS.map((c): OneShot => ({ id: `skill:${c}`, label: rawClipLabel(SKILL_CLIPS[c].name).replace(/ Loop$/, ""), clips: [c] })),
 ];
 
 /**
@@ -296,7 +298,7 @@ const FX_BY_EFFECT: Record<string, FxKind> = {
 export const FX_PREVIEWS: readonly FxPreview[] = [...SKILLS.values()].flatMap((skill) => {
   const kind = FX_BY_EFFECT[skill.effects[0]?.type ?? ""];
   if (kind === undefined) return [];
-  return [{ skillId: skill.id, label: skill.name, kind: kind === "bolt" && fxProfile(skill.id).arrow ? "arrow" : kind }];
+  return [{ skillId: skill.id, label: skill.name, kind: kind === "bolt" && skillFx(skill.id).arrow ? "arrow" : kind }];
 });
 
 /** A class head to foot, through the same base -> look table play dresses from. */

@@ -81,22 +81,36 @@ function compound(value: number, pct: number, times: number): number {
 
 /** Fields on an effect node that carry a damage number the gem level scales. */
 function scaleDamage(effect: EffectNode, pct: number, times: number): EffectNode {
-  if (effect.type === "spawnProjectile" || effect.type === "meleeStrike") {
-    return {
-      ...effect,
-      damage: { ...effect.damage, amountFixed: compound(effect.damage.amountFixed, pct, times) },
-    };
+  const hit = <T extends { amountFixed: number }>(d: T): T => ({ ...d, amountFixed: compound(d.amountFixed, pct, times) });
+  // An ailment IS the skill's damage where it carries one, so a level has to reach
+  // it. Deliberately unlike gear's spellDamagePct, which PoE keeps off ailments
+  // (see skillCast): a gem level is the gem's own power, not an external mod.
+  const dot = <T extends { dpsFixed: number }>(a: T): T => ({ ...a, dpsFixed: compound(a.dpsFixed, pct, times) });
+  switch (effect.type) {
+    case "spawnProjectile":
+    case "meleeStrike":
+      return { ...effect, damage: hit(effect.damage) };
+    case "spawnGroundArea":
+      return {
+        ...effect,
+        ...(effect.ailment ? { ailment: dot(effect.ailment) } : {}),
+        ...(effect.pulse ? { pulse: { ...effect.pulse, damage: hit(effect.pulse.damage) } } : {}),
+      };
+    case "areaHit":
+      return effect.damage ? { ...effect, damage: hit(effect.damage) } : effect;
+    case "travel":
+      return {
+        ...effect,
+        ...(effect.arrival?.damage ? { arrival: { ...effect.arrival, damage: hit(effect.arrival.damage) } } : {}),
+        ...(effect.trail ? { trail: { ...effect.trail, ailment: dot(effect.trail.ailment) } } : {}),
+      };
+    case "applyBuff":
+      return effect.onKillGround
+        ? { ...effect, onKillGround: { ...effect.onKillGround, ailment: dot(effect.onKillGround.ailment) } }
+        : effect;
+    default:
+      return effect;
   }
-  if (effect.type === "spawnGroundArea") {
-    // The ailment IS the skill's damage here, so a level has to reach it. This is
-    // deliberately unlike gear's spellDamagePct, which PoE keeps off ailments
-    // (see skillCast): a gem level is the gem's own power, not an external mod.
-    return {
-      ...effect,
-      ailment: { ...effect.ailment, dpsFixed: compound(effect.ailment.dpsFixed, pct, times) },
-    };
-  }
-  return effect;
 }
 
 /**

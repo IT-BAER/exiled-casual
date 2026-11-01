@@ -37,6 +37,9 @@ export function serializeWorld(world: World): string {
   parts.push(`!next=${world.nextId}`);
   parts.push(`!alive=${[...world.alive].sort((a, b) => a - b).join(",")}`);
   for (const comp of world.componentNames()) {
+    // CastReleaseC is the renderer's release edge: it follows from the cast
+    // command and names a skill, so it stays out of the hash like StrikeC.skill.
+    if (comp === "castRelease") continue;
     parts.push(`#${comp}`);
     for (const e of world.entitiesWith(comp)) {
       const data = world.get<Record<string, unknown>>(e, comp);

@@ -15,10 +15,12 @@ import {
   placeFirstFit,
   applyDevOp,
   devDump,
+  equipStartingGear,
 } from "@exiled/simulation";
 import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, ProgressC, ShardsC, EquipmentC, KvStore } from "@exiled/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind, DevOp } from "@exiled/protocol";
-import { CONTENT_VERSION, waystoneItem } from "@exiled/content-runtime";
+import { CONTENT_VERSION, defaultAttackFor, waystoneItem } from "@exiled/content-runtime";
+import { MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT } from "@exiled/protocol";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import { mapBaseIdForNode, classIdOr, atlasGraph, WAYSTONE_MAX_TIER } from "@exiled/rules";
 
@@ -68,10 +70,15 @@ export class WorkerCore {
   private readonly botMode: boolean;
   /** False under ?tour: the Atlas opens as for ?bot, never saves, and the player drives. */
   private readonly autopilot: boolean;
+  /**
+   * `?play&lab&class=<id>` (DEV): a fresh character of this class, never loaded
+   * from and never written to any save; null in every other session.
+   */
+  private readonly lab: string | null;
   /** Rebuilt on every map entry; its bosses decide when the map counts as cleared. */
   private bot: { bot: Bot; bosses: Entity[] } | null = null;
 
-  constructor(seed: number, kv?: KvStore, characterId = "", bot = false, autopilot = bot) {
+  constructor(seed: number, kv?: KvStore, characterId = "", bot = false, autopilot = bot, lab?: string) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
     this.seed = seed;
@@ -80,6 +87,7 @@ export class WorkerCore {
     this.characterId = characterId;
     this.botMode = bot;
     this.autopilot = autopilot;
+    this.lab = lab ? classIdOr(lab) : null;
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
@@ -99,6 +107,11 @@ export class WorkerCore {
    * world must never run: its first autosave would replace the real character.
    */
   async hydrate(): Promise<boolean> {
+    if (this.lab !== null) {
+      this.standLab(this.lab);
+      this.lastSig = this.durableSig();
+      return true;
+    }
     if (this.characterId === "") await loadInto(this.kv, this.world);
     else if (!(await loadCharacterInto(this.kv, this.world, this.characterId).catch((e: unknown) => {
       console.error("character save could not be restored", e);
@@ -133,6 +146,25 @@ export class WorkerCore {
     this.world.set<InventoryC>(e, "inventory", inv);
   }
 
+  /**
+   * The skill lab: a fresh character of `classId` at level 30 in the hideout, every
+   * skill of his granted and the first five slotted, full, with dummies standing in
+   * front of him. Nothing here reads or writes a save.
+   */
+  private standLab(classId: string): void {
+    const e = this.world.query("session")[0];
+    if (e === undefined) return;
+    this.world.set<SessionC>(e, "session", { ...this.world.get<SessionC>(e, "session")!, classId });
+    equipStartingGear(this.world, classId);
+    const bar: (string | null)[] = new Array(SKILL_SLOT_COUNT).fill(null);
+    bar[MOUSE_SLOT_BASE] = MOVE_SOCKET;
+    bar[MOUSE_SLOT_BASE + 2] = defaultAttackFor(classId);
+    this.world.set<SkillsC>(e, "skills", { gems: {}, bar, attackReseeded: true });
+    applyDevOp(this.world, { op: "setLevel", level: 30 });
+    applyDevOp(this.world, { op: "refill" });
+    this.spawn("dummy");
+  }
+
   /** The current area kind — the renderer draws dungeon walls only for "map". */
   getArea(): AreaKind {
     return this.area;
@@ -164,9 +196,9 @@ export class WorkerCore {
   }
 
   /** Debug spawn, placed relative to wherever the player is standing. */
-  spawn(what: SpawnKind): void {
+  spawn(what: SpawnKind, count?: number): void {
     const p = this.world.get<Position>(this.playerEntity, "position");
-    spawnLabActors(this.world, what, p?.x ?? 0, p?.y ?? 0);
+    spawnLabActors(this.world, what, p?.x ?? 0, p?.y ?? 0, count);
   }
 
   /** DEV: a cheat or inspection op. Returns the dump for `dump`, else undefined. */
@@ -245,7 +277,7 @@ export class WorkerCore {
    * A refused write is retried with the next durable change, which writes the whole state.
    */
   private maybePersist(): void {
-    if (this.botMode) return;
+    if (this.botMode || this.lab !== null) return;
     const sig = this.durableSig();
     if (sig === this.lastSig) return;
     this.lastSig = sig;

@@ -1,8 +1,46 @@
-import { isqrt, fpDist2 } from "@exiled/fixed-point";
+import { isqrt, fpDist2, fpStepToward } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
+import type { World, Entity } from "../ecs";
 import { bodyRadiusOf } from "../body";
 import type { CollisionRef } from "../collision";
-import type { Position, ProjectileC, Faction } from "../components";
+import type { Position, ProjectileC, Faction, Health } from "../components";
+import { applyStatus } from "../status";
+
+/**
+ * A chaining bolt struck `struck`: a new one leaves that body toward the nearest
+ * living enemy within chainRange that this chain has not hit yet, at the same
+ * speed, carrying the hit list. Nobody in range ends the chain.
+ */
+function chain(world: World, proj: ProjectileC, struck: Entity, at: Position, speed: number): void {
+  const hitIds = [...(proj.hitIds ?? []), struck];
+  const range = proj.chainRange ?? 0;
+  let next = -1;
+  let best = Infinity;
+  for (const o of world.query("position", "health", "faction")) {
+    if (hitIds.includes(o) || world.get<Faction>(o, "faction")!.team === proj.team) continue;
+    if ((world.get<Health>(o, "health")?.life ?? 1) <= 0) continue;
+    const op = world.get<Position>(o, "position")!;
+    const d2 = fpDist2(at.x, at.y, op.x, op.y);
+    if (d2 <= range * range && d2 < best) { best = d2; next = o; }
+  }
+  if (next === -1 || speed <= 0) return;
+  const np = world.get<Position>(next, "position")!;
+  const step = fpStepToward(at.x, at.y, np.x, np.y, speed);
+  if (step.dx === 0 && step.dy === 0) return;
+  const bolt = world.create();
+  world.set<Position>(bolt, "position", { x: at.x, y: at.y });
+  const { pierceLeft: _p, volley: _v, spentTick: _s, ...rest } = proj;
+  world.set<ProjectileC>(bolt, "projectile", {
+    ...rest,
+    dirx: step.dx,
+    diry: step.dy,
+    // Enough to reach the far edge of the chain's reach and the body standing on it.
+    remainingRange: range + bodyRadiusOf(world, next) + proj.radius,
+    hitIds,
+    chainLeft: (proj.chainLeft ?? 1) - 1,
+    chainFrom: struck,
+  });
+}
 
 export function registerProjectileMove(sim: Simulation, collisionRef?: CollisionRef): void {
   sim.register("projectileMove", (world, tick) => {
@@ -46,16 +84,31 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
         const dist2 = fpDist2(nx, ny, mPos.x, mPos.y);
         if (dist2 <= combinedR2Fn(bodyRadiusOf(world, m))) {
           if (hitIds && hitIds.includes(m)) continue;
-          sim.enqueueDamage({
-            target: m,
-            source: proj.ownerId,
-            amountFixed: proj.damageAmount,
-            type: proj.damageType,
-            via: "projectile",
-          });
-          for (const x of proj.extraDamage ?? []) {
-            sim.enqueueDamage({ target: m, source: proj.ownerId, amountFixed: x.amount, type: x.type, via: "projectile" });
+          const strike = (t: number): void => {
+            sim.enqueueDamage({
+              target: t,
+              source: proj.ownerId,
+              amountFixed: proj.damageAmount,
+              type: proj.damageType,
+              via: "projectile",
+            });
+            for (const x of proj.extraDamage ?? []) {
+              sim.enqueueDamage({ target: t, source: proj.ownerId, amountFixed: x.amount, type: x.type, via: "projectile" });
+            }
+            if (proj.onHit) applyStatus(world, t, proj.onHit, tick);
+          };
+          strike(m);
+          // The same hit bursts onto every other enemy round the struck body.
+          if (proj.explodeRadius) {
+            for (const o of world.query("position", "health", "faction")) {
+              if (o === m || world.get<Faction>(o, "faction")!.team === proj.team) continue;
+              if ((world.get<Health>(o, "health")?.life ?? 1) <= 0) continue;
+              const op = world.get<Position>(o, "position")!;
+              const r = proj.explodeRadius + bodyRadiusOf(world, o);
+              if (fpDist2(mPos.x, mPos.y, op.x, op.y) <= r * r) strike(o);
+            }
           }
+          if (proj.chainLeft) chain(world, proj, m, mPos, traveled);
           if (proj.volley !== undefined) {
             for (const s of world.query("projectile")) {
               const sp = world.get<ProjectileC>(s, "projectile")!;

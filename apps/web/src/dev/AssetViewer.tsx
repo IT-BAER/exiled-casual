@@ -114,6 +114,8 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     } else if (verb === "fx") {
       const fx = FX_PREVIEWS.find((f) => f.skillId === arg);
       if (fx) v.fireFx(fx);
+    } else if (verb === "kit") {
+      v.fireKit(arg);
     } else if (verb === "attack" || verb === "charge" || verb === "slam" || verb === "slam2" || verb === "summon" || verb === "phase3") {
       void v.creatureAction(verb);
     } else if (verb === "ability") {

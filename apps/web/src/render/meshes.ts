@@ -19,7 +19,8 @@ import {
 } from "@babylonjs/core";
 import { attachProp, type PropKind } from "./props";
 import { attachCreature, creatureSpecies, type CreatureRig } from "./monsters";
-import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, CINDER_DISC_ALPHA, cinderGlow, fxProfile, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
+import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, CINDER_DISC_ALPHA, cinderGlow, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
+import { projectileProfiles, skillFx, skillLook } from "./skills";
 import { attachRig, isBody, rigOf, type Looks, type RigParts } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
@@ -2215,14 +2216,23 @@ function buildMesh(
     return m;
   }
 
-  if (kind === "projectile" && fxProfile(skillId).arrow) {
+  // A class skill with a whole projectile look of its own: an empty root the
+  // renderer flies, and `render/skills` hangs the look on (`SkillLookDispatcher`).
+  // An arrow skill keeps the shipped arrow (every bow skill flies one) and hands it to its look.
+  if (kind === "projectile" && skillLook(skillId)?.projectile && !skillFx(skillId).arrow) {
+    const root = new Mesh(name, scene);
+    if (at) root.position.copyFrom(at);
+    return root;
+  }
+
+  if (kind === "projectile" && skillFx(skillId).arrow) {
     const arrow = buildArrow(scene, name);
     arrow.scaling.setAll(PROJECTILE_ARROW_SCALE);
     if (at) {
       arrow.position.copyFrom(at);
       arrow.computeWorldMatrix(true);
     }
-    attachArrowStreak(scene, arrow, fxProfile(skillId));
+    attachArrowStreak(scene, arrow, skillFx(skillId));
     return arrow;
   }
 
@@ -2238,7 +2248,7 @@ function buildMesh(
     m.disableLighting = true;
     if (kind === "projectile") {
       // Full emissive so the GlowLayer blooms the head instead of tinting it.
-      m.emissiveColor = fxProfile(skillId).core.clone();
+      m.emissiveColor = skillFx(skillId).core.clone();
     } else {
       // Additive, radially masked, and crawling: the patch reads as ground
       // burning rather than as a translucent decal ending on a hard rim. The
@@ -2264,7 +2274,7 @@ function buildMesh(
   }
   if (kind === "projectile") {
     mesh.material = m;
-    attachBoltTrail(scene, mesh, fxProfile(skillId));
+    attachBoltTrail(scene, mesh, skillFx(skillId));
     return mesh;
   }
   // The shared material is the template; each patch wears its own copy so it can
@@ -2289,9 +2299,9 @@ function buildMesh(
  * arrow's one-axis wake and the bolt's trail were each a first-cast stall.
  */
 export function warmProjectiles(scene: Scene): void {
-  for (const skillId of Object.keys(SKILL_FX)) {
+  for (const skillId of [...Object.keys(SKILL_FX), ...projectileProfiles().map(([id]) => id)]) {
     const mesh = makeMesh(scene, "projectile", `warm-projectile-${skillId}`, Vector3.Zero(), undefined, skillId);
-    if (fxProfile(skillId).arrow) setStreakLength(mesh, 0.5);
+    if (skillFx(skillId).arrow) setStreakLength(mesh, 0.5);
     for (const part of [mesh, ...mesh.getChildMeshes()]) {
       part.alwaysSelectAsActiveMesh = true;
       part.computeWorldMatrix(true);

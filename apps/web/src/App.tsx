@@ -76,7 +76,7 @@ type Screen =
   | { kind: "select" }
   | { kind: "create" }
   | { kind: "info"; which: "about" }
-  | { kind: "game"; characterId: string; fresh: boolean }
+  | { kind: "game"; characterId: string; fresh: boolean; lab?: string }
   | { kind: "viewer" };
 
 /**
@@ -134,6 +134,16 @@ const VIEWER =
 const DEV = import.meta.env?.DEV === true;
 
 /**
+ * `?play&lab&class=<classId>`: the skill lab, DEV only. A never-saved session with
+ * no roster entry at all (`GameView` `lab`), so nothing stored is read or written.
+ */
+const LAB_CLASS: string | null = (() => {
+  if (!DEV || typeof window === "undefined") return null;
+  const q = new URLSearchParams(window.location.search);
+  return q.has("play") && q.has("lab") ? q.get("class") || DEFAULT_CLASS_ID : null;
+})();
+
+/**
  * `?play&control=mouse|wasd`: the answer the controls dialog would ask for, so a
  * driven browser never meets a modal it cannot click through. DEV only, with ?play.
  */
@@ -166,6 +176,15 @@ export function App(): React.ReactElement {
     let live = true;
     void readRoster().then(async (r) => {
       if (!live) return;
+      // The lab plays nobody from the roster and creates nobody in it.
+      if (DEV && LAB_CLASS !== null && !VIEWER) {
+        setRoster(r);
+        setSettings(settingsOf(r, gpuRenderer()));
+        markGameEntry();
+        beginLoad("entry");
+        setScreen({ kind: "game", characterId: "", fresh: false, lab: LAB_CLASS });
+        return;
+      }
       const harness = DEV && AUTOPLAY && !VIEWER;
       let first = r.lastPlayedId ?? r.characters[0]?.id ?? null;
       // A fresh browser (a CI runner) has nobody to play: the harness makes one.
@@ -334,7 +353,8 @@ export function App(): React.ReactElement {
         >
           <GameView
             characterId={screen.characterId}
-            classId={roster.characters.find((c) => c.id === screen.characterId)?.classId}
+            classId={screen.lab ?? roster.characters.find((c) => c.id === screen.characterId)?.classId}
+            {...(screen.lab ? { lab: screen.lab } : {})}
             fresh={screen.fresh}
             settings={settings}
             onSettingsChange={changeSettings}

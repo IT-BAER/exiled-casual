@@ -21,4 +21,12 @@ describe("capture endpoint paths", () => {
   it("names an unnamed capture by time", () => {
     expect(capturePath(ROOT, "")).toMatch(/shots[\\/]capture-\d+\.png$/);
   });
+
+  it("writes a skill frame under review/skills/<label>/ as a jpg, and keeps the label inside it", () => {
+    const REVIEW = join("/tmp", "review");
+    expect(capturePath(ROOT, "dir=skills&label=ice%20shot&name=007", REVIEW)).toBe(join(REVIEW, "skills", "ice_shot", "007.jpg"));
+    expect(capturePath(ROOT, "dir=skills&label=..%2F..%2Fetc&name=../x", REVIEW)).toBe(join(REVIEW, "skills", "_.._etc", "_x.jpg"));
+    // No review root wired: the old two folders, never a skills dir.
+    expect(capturePath(ROOT, "dir=skills&label=a&name=1")).toBe(join(ROOT, "shots", "1.png"));
+  });
 });

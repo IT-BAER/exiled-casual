@@ -5,7 +5,9 @@ import {
 } from "./sfx";
 import { setRoom, type RoomProfile } from "./bus";
 import { playCoinPickup } from "./drop-sound";
-import { fxProfile, strikesTheFloor } from "../render/skill-fx";
+import { strikesTheFloor } from "../render/skill-fx";
+import { skillFx as fxProfile } from "../render/skills";
+import { AURA_OFF, SKILL_CUES, areaCue, buffCues, skillCues } from "./skill-cues";
 import { landed as markLanded } from "../render/boss-tells";
 
 /**
@@ -202,6 +204,13 @@ const CAST_SFX: Record<string, string> = {
 };
 
 /** The thud of a landed swing, per melee skill; an unnamed swing lands as Strike. */
+/** A class projectile born farther than this from him left a struck body: a chain. */
+const CHAIN_FROM = 1.5;
+/** One status cue per status id inside this many ticks (150 ms), however many bodies take it. */
+const STATUS_GAP_TICKS = 5;
+/** A class cast heard on its cooldown edge is not heard again off `castSkill` this soon after. */
+const CAST_ECHO_TICKS = 3;
+
 const STRIKE_IMPACT: Record<string, string> = {
   "skill.strike.v1": "skill-strike-impact",
   "skill.heavy_strike.v1": "skill-heavy-strike-impact",
@@ -266,8 +275,12 @@ function playAnywhere(name: string, volume = 1, at?: At): void {
  * which is over long before the thing it described is.
  */
 function sustainedCue(e: SnapshotEntity): string | null {
-  if (e.kind === "projectile") return (e.team ?? 0) === 0 ? fxProfile(e.skillId).flightCue : null;
-  if (e.kind === "groundArea") return "skill-cinder-ground-loop";
+  const cues = skillCues(e.skillId);
+  if (e.kind === "projectile") {
+    if ((e.team ?? 0) !== 0) return null;
+    return cues?.flight !== undefined ? cues.flight : fxProfile(e.skillId).flightCue;
+  }
+  if (e.kind === "groundArea") return cues?.groundLoop !== undefined ? cues.groundLoop : "skill-cinder-ground-loop";
   return null;
 }
 
@@ -292,6 +305,11 @@ export function createSoundscape(opts: Options = {}): Soundscape {
   let taken = hitGate();
   let lastStepTick = 0;
   let ground = DEFAULT_GROUND;
+  /** Tick each class skill's cast cue last played, and each status cue. */
+  const castAt = new Map<string, number>();
+  const statusAt = new Map<string, number>();
+  /** Buff id -> loop key, for the buffs that carry a bed. */
+  const buffLoops = new Map<string, string>();
 
   const reset = (biomeId?: string | null): void => {
     prev = null;
@@ -299,6 +317,9 @@ export function createSoundscape(opts: Options = {}): Soundscape {
     // would be stopped by whatever inherits its number, or by nothing at all.
     stopAllLoops();
     sustained.clear();
+    buffLoops.clear();
+    castAt.clear();
+    statusAt.clear();
     dealt = hitGate();
     taken = hitGate();
     lastStepTick = 0;
@@ -337,6 +358,12 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         play(name, 1, at(e));
       };
       const cuesOf = (e: SnapshotEntity) => (e.ability === undefined ? SLAM_CUES : ABILITY_CUES[e.ability] ?? SLAM_CUES);
+      const landArea = (e: SnapshotEntity): void => {
+        const name = areaCue(skillCues(e.skillId)?.areaImpact, {
+          index: e.index ?? 0, shape: e.shape === "cone" ? "cone" : "disc", radius: e.radius ?? 1,
+        });
+        if (name) markCue(name, e);
+      };
 
       // ── Gone ────────────────────────────────────────────────────────────────
       let deaths = 0;
@@ -352,8 +379,13 @@ export function createSoundscape(opts: Options = {}): Soundscape {
           // His own bolt, spent: it either hit something or ran out of range, and
           // both are the same burst as far as the ear is concerned.
           const fx = fxProfile(e.skillId);
+          const own = skillCues(e.skillId)?.impact;
+          const impact = own !== undefined ? own : fx.impactCue;
           // An arrow that ran out of range falls silent; only a hit thuds.
-          if (fx.impactCue && (!fx.arrow || e.spent)) play(fx.impactCue, 1, at(e));
+          if (impact && (!fx.arrow || e.spent)) play(impact, 1, at(e));
+        } else if (e.kind === "skillArea" && !e.spent) {
+          // Landed in a snapshot never seen: a player's area always lands.
+          landArea(e);
         } else if (e.kind === "gold") {
           // A pile only leaves the floor it lies on by being walked over.
           coins(at(e));
@@ -373,17 +405,49 @@ export function createSoundscape(opts: Options = {}): Soundscape {
           if (windup) markCue(windup, e);
         } else if (e.kind === "projectile" && (e.team ?? 0) !== 0) play("monster-spit", 1, at(e));
         else if (e.kind === "projectile") {
-          const launch = fxProfile(e.skillId).launchCue;
+          const own = skillCues(e.skillId);
+          const far = Math.hypot(e.x - snap.player.x, e.y - snap.player.y) > CHAIN_FROM;
+          const launch = own?.chain && far ? own.chain : own?.launch ?? fxProfile(e.skillId).launchCue;
           if (launch && !loosed.has(launch)) {
             loosed.add(launch);
             play(launch, 1, at(e));
           }
+        }
+        if (e.kind === "groundArea") {
+          const on = skillCues(e.skillId)?.groundOn;
+          if (on) markCue(on, e);
         }
         const cue = sustainedCue(e);
         if (cue) {
           const key = `${cue}#${id}`;
           sustained.set(id, key);
           loop(cue, key, e.x, e.y);
+        }
+      }
+
+      // A class skill's area: warned as it appears, heard as it lands.
+      for (const [id, e] of now) {
+        if (e.kind !== "skillArea") continue;
+        const old = was.get(id);
+        if (!old && !e.spent && (e.impactIn ?? 0) > 0) {
+          const warn = skillCues(e.skillId)?.areaWarn;
+          if (warn) markCue(warn, e);
+        }
+        if (e.spent && !old?.spent) landArea(e);
+      }
+
+      // A status landing on a monster, one cue per status id however many it took.
+      for (const [id, e] of now) {
+        if (e.kind !== "monster") continue;
+        const old = was.get(id);
+        if (!old) continue;
+        const fresh = (e.statuses ?? []).filter((s) => !(old.statuses ?? []).includes(s));
+        if (e.stunned && !old.stunned) fresh.push("stunned");
+        for (const status of fresh) {
+          const name = SKILL_CUES.statuses[status];
+          if (!name || snap.tick - (statusAt.get(status) ?? -Infinity) < STATUS_GAP_TICKS) continue;
+          statusAt.set(status, snap.tick);
+          play(name, 1, at(e));
         }
       }
 
@@ -440,8 +504,58 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       // the ear is never told about a spell that did not happen.
       for (const [skillId, remaining] of Object.entries(snap.player.cooldowns)) {
         if (remaining <= (before.player.cooldowns[skillId] ?? 0)) continue;
-        const cue = CAST_SFX[skillId];
+        const cue = CAST_SFX[skillId] ?? skillCues(skillId)?.cast;
         if (cue) play(cue);
+        castAt.set(skillId, snap.tick);
+      }
+      // A class skill with no cooldown (an aura's toggle) is heard off the cast itself.
+      const casting = snap.player.castSkill;
+      if (casting !== undefined && casting !== before.player.castSkill
+        && snap.tick - (castAt.get(casting) ?? -Infinity) >= CAST_ECHO_TICKS) {
+        const cue = skillCues(casting)?.cast;
+        if (cue) play(cue);
+        castAt.set(casting, snap.tick);
+      }
+
+      // A cast resolving: the release edge, once per resolve.
+      const released = snap.player.castRelease;
+      if (released && released.tick !== before.player.castRelease?.tick) {
+        const cue = skillCues(released.skillId)?.release;
+        if (cue) play(cue);
+      }
+
+      // A travel taking off, and landing where he stands now.
+      const flying = snap.player.travel;
+      const flew = before.player.travel;
+      if (flying && flying.skillId !== flew?.skillId) {
+        const cue = skillCues(flying.skillId)?.travel;
+        if (cue) play(cue);
+      }
+      if (flew && flying?.skillId !== flew.skillId) {
+        const cue = skillCues(flew.skillId)?.land;
+        if (cue) play(cue);
+      }
+
+      // A buff coming up or going down, and the bed a buff carries while it lasts.
+      const buffsNow = (snap.player.alive ? snap.player.buffs ?? [] : []).filter((b) => b.kind === "buff");
+      const buffsWas = (before.player.buffs ?? []).filter((b) => b.kind === "buff");
+      for (const b of buffsNow) {
+        const cues = buffCues(b.id);
+        if (!buffsWas.some((w) => w.id === b.id) && cues?.on) play(cues.on);
+        if (cues?.loop && !buffLoops.has(b.id)) {
+          const key = `${cues.loop}#buff:${b.id}`;
+          buffLoops.set(b.id, key);
+          loop(cues.loop, key, snap.player.x, snap.player.y);
+        }
+      }
+      for (const w of buffsWas) {
+        if (buffsNow.some((b) => b.id === w.id)) continue;
+        const off = buffCues(w.id)?.off ?? (w.aura ? AURA_OFF : undefined);
+        if (off) play(off);
+      }
+      for (const [id, key] of buffLoops) {
+        if (buffsNow.some((b) => b.id === id)) moveLoop(key, snap.player.x, snap.player.y);
+        else { buffLoops.delete(id); stopLoop(key); }
       }
 
       // A melee swing landing is the one hit the player's own hands made: one thud

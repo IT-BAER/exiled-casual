@@ -198,9 +198,9 @@ export const PICKUP_RADIUS = fp(2.5);
 // ---------------------------------------------------------------------------
 
 /** Lab-only spawn control, so a test arena can start empty and be filled on demand. */
-export type SpawnKind = "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup";
+export type SpawnKind = "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup" | "dummy";
 
-export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "magic", "rare", "boss", "clear", "hurtboss", "item", "shields", "levelup"];
+export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "magic", "rare", "boss", "clear", "hurtboss", "item", "shields", "levelup", "dummy"];
 
 /**
  * `characterId` names the roster entry this session plays. Optional so the lab
@@ -210,7 +210,8 @@ export const SPAWN_KINDS: readonly SpawnKind[] = ["imp", "pack", "magic", "rare"
  */
 export interface ToWorker_Init   { type: "init"; seed: number; characterId?: string; bot?: boolean; tour?: boolean }
 export interface ToWorker_Intent { type: "intent"; intent: Intent }
-export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind }
+/** `count` is how many a `dummy` spawn stands (default 7); other kinds ignore it. */
+export interface ToWorker_Spawn  { type: "spawn"; what: SpawnKind; count?: number }
 /**
  * Stop and start the sim's clock.
  *
@@ -243,6 +244,10 @@ export type DevOp =
    * `phase`'s line, so it crosses into it on its next ticks; the player 7 units off it.
    */
   | { op: "boss"; phase: 1 | 2 | 3 }
+  /** Every cooldown ready, life full and mana full (up to what auras leave free). */
+  | { op: "refill" }
+  /** The lab's start: hideout spawn facing +y, travel and movement stopped, monsters cleared, seven dummies, refilled. */
+  | { op: "home" }
   /** Answered with a FromWorker_DevDump of the player's and session's components. */
   | { op: "dump" };
 export interface ToWorker_Dev    { type: "dev"; op: DevOp }
@@ -254,7 +259,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Spawn | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "skillArea" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -270,6 +275,10 @@ export interface SnapshotEntity {
   res?: Partial<Record<"fire" | "cold" | "lightning" | "chaos", number>>;
   /** monster only: the ailments on it; absent when clean. */
   debuffs?: ("burning" | "poison" | "bleeding")[];
+  /** monster only: skill statuses on it (chilled, scorched, marked, flammable, taunted...), sorted; absent when none. */
+  statuses?: string[];
+  /** monster only: stunned this tick. */
+  stunned?: true;
   /**
    * Which monster def this is, so the renderer can pick a mesh. A plain string:
    * the wire contract must not depend on content, the same reason `element` and
@@ -282,8 +291,10 @@ export interface SnapshotEntity {
    * contract must not depend on content.
    */
   skillId?: string;
-  /** projectile only: this is its last snapshot, standing where it struck or stopped. */
+  /** projectile/skillArea: this is its last snapshot, standing where it struck or landed. */
   spent?: boolean;
+  /** projectile: a chained bolt, and the entity id of the body it left. */
+  chainFrom?: number;
   remainingSeconds?: number;
   ailmentStacks?: number;
   /**
@@ -315,9 +326,13 @@ export interface SnapshotEntity {
   /** telegraph of a charge only: where the charging monster stands now; the renderer draws a path from here to x/y */
   fromX?: number;
   fromY?: number;
-  /** telegraph only: absent = a disc of `radius`. */
-  shape?: "line" | "ring";
-  /** telegraph line: runs from x/y along this unit direction; `radius` is half its width and its far end is round. */
+  /** telegraph: absent = a disc of `radius`. skillArea: "cone" opens `arc` degrees along dirX/dirY; absent = a disc. */
+  shape?: "line" | "ring" | "cone";
+  /** skillArea cone: full width in degrees. */
+  arc?: number;
+  /** skillArea: which impact of its cast this is (0-based), present when the cast has several. */
+  index?: number;
+  /** telegraph line: runs from x/y along this unit direction; `radius` is half its width and its far end is round. skillArea: the aim. */
   dirX?: number;
   dirY?: number;
   /** telegraph line: how far it runs. */
@@ -330,7 +345,7 @@ export interface SnapshotEntity {
   heavy?: boolean;
   /** telegraph: the monster winding it up. */
   ownerId?: number;
-  /** telegraph: seconds until it lands. */
+  /** telegraph/skillArea: seconds until it lands. */
   impactIn?: number;
   /** portal/mapDevice only: the player is close enough to activate it */
   inRange?: boolean;
@@ -493,7 +508,15 @@ export interface Snapshot {
      * `remainingSec` is whole seconds, already rounded up. Absent on a sim
      * built without a session. `stacks` only on an ailment that stacks (burning).
      */
-    buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number }[];
+    buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number; aura?: true }[];
+    /** Mana held by active auras; absent when none. The globe draws it as a dark cap. */
+    manaReserved?: number;
+    /** The skill being wound up this tick; absent outside a cast. */
+    castSkill?: string;
+    /** The last cast that RESOLVED (its effects applied) and on which tick: the client's release edge. */
+    castRelease?: { skillId: string; tick: number };
+    /** A travel skill in flight: its skill, total ticks, ticks done, and unit heading. */
+    travel?: { skillId: string; ticks: number; elapsed: number; dirX: number; dirY: number };
     /** Passive nodes taken. The tree itself is content the client already has,
      *  so only the allocation crosses the wire. Optional like every other field
      *  added to this shape: absent and empty are the same character. */
@@ -811,7 +834,8 @@ export function isToWorker(v: unknown): v is ToWorker {
       && (obj["bot"] === undefined || typeof obj["bot"] === "boolean")
       && (obj["tour"] === undefined || typeof obj["tour"] === "boolean");
     case "intent": return typeof obj["intent"] === "object" && obj["intent"] !== null;
-    case "spawn":  return SPAWN_KINDS.includes(obj["what"] as SpawnKind);
+    case "spawn":  return SPAWN_KINDS.includes(obj["what"] as SpawnKind)
+      && (obj["count"] === undefined || (Number.isInteger(obj["count"]) && (obj["count"] as number) > 0 && (obj["count"] as number) <= 40));
     case "pause":  return typeof obj["paused"] === "boolean";
     case "dev":    return typeof obj["op"] === "object" && obj["op"] !== null && typeof (obj["op"] as Record<string, unknown>)["op"] === "string";
     default:       return false;

@@ -4,6 +4,7 @@ import { MONSTERS, RARE_TEMPLATES } from "@exiled/content-runtime";
 import { areaLevel } from "@exiled/rules";
 import { DISPLAY } from "./ItemTooltip";
 import { ElementIcon } from "./ElementIcon";
+import { STATUS_ART } from "./BuffBar";
 
 /**
  * The hovered monster, top centre: PoE1's ornate magic/rare frame with modifier lines
@@ -73,6 +74,8 @@ export function TargetFrame({ snapshot, targetId, top = "0.6vw" }: {
   const prefix = e.rare ? RARE_TEMPLATES.find((r) => r.element === e.element)?.namePrefix : undefined;
   const lifePct = e.maxLife && e.maxLife > 0 ? Math.max(0, Math.min(100, ((e.life ?? 0) / e.maxLife) * 100)) : 0;
   const mods = modifierLines(e);
+  // The skill statuses on it (curses, marks, chill), stun last since it is the shortest.
+  const statuses = [...(e.statuses ?? []), ...(e.stunned ? ["stunned"] : [])];
   const res = Object.entries(e.res ?? {}) as [keyof NonNullable<SnapshotEntity["res"]>, number][];
   // vw per image px, chosen so this frame's window is exactly BAR_W x BAR_H.
   const k = BAR_H / (frame.h - frame.t - frame.b);
@@ -140,14 +143,25 @@ export function TargetFrame({ snapshot, targetId, top = "0.6vw" }: {
         />
       </div>
       <div style={{ position: "relative", display: "flex", justifyContent: "center", minHeight: ICON, marginTop: "0.15vw" }}>
-        {e.debuffs && (
-          <div data-testid="target-debuffs" style={{ position: "absolute", left: "4%", top: 0, display: "flex", gap: "0.25vw" }}>
-            {e.debuffs.map((d) => (
-              <span key={d} title={DEBUFF_ICON[d].name} style={{ display: "flex", alignItems: "center", gap: "0.1vw", ...SMALL }}>
-                <img src={DEBUFF_ICON[d].icon} alt="" style={{ width: ICON, height: ICON }} />
-                {d === "burning" && <span>{e.ailmentStacks ?? 1}</span>}
-              </span>
-            ))}
+        {(e.debuffs || statuses.length > 0) && (
+          <div style={{ position: "absolute", left: "4%", top: 0, display: "flex", gap: "0.25vw" }}>
+            {e.debuffs && (
+              <div data-testid="target-debuffs" style={{ display: "flex", gap: "0.25vw" }}>
+                {e.debuffs.map((d) => (
+                  <span key={d} title={DEBUFF_ICON[d].name} style={{ display: "flex", alignItems: "center", gap: "0.1vw", ...SMALL }}>
+                    <img src={DEBUFF_ICON[d].icon} alt="" style={{ width: ICON, height: ICON }} />
+                    {d === "burning" && <span>{e.ailmentStacks ?? 1}</span>}
+                  </span>
+                ))}
+              </div>
+            )}
+            {statuses.length > 0 && (
+              <div data-testid="target-statuses" style={{ display: "flex", gap: "0.25vw" }}>
+                {statuses.map((id) => (
+                  <img key={id} src={STATUS_ART[id]?.icon ?? `/textures/buffs/${id}.webp`} title={STATUS_ART[id]?.name ?? id} alt="" style={{ width: ICON, height: ICON }} />
+                ))}
+              </div>
+            )}
           </div>
         )}
         {snapshot.areaTier > 0 && (

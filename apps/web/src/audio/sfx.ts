@@ -7,7 +7,7 @@ import { bus, send, type Bus, type SoundCategory } from "./bus";
  * Every master is a commercial library recording, curated rather than generated:
  * `tools/import_sfx.py` names the source file per cue and runs it through
  * `tools/trim_sfx.py` to Opus in WebM; the reward cues are layered from several
- * library parts by `tools/build_reward_sfx.py` — 259 files in all. They share one
+ * library parts by `tools/build_reward_sfx.py` — 412 files in all. They share one
  * bus, so the Options volume covers everything and nothing fights it for a context.
  *
  * The monster cues and Varkis's voice are ElevenLabs-generated masters, a take pool per
@@ -100,6 +100,59 @@ const VOICES: Record<string, Voice> = {
   // The free attack: smaller than the bolt in level as in looks, and no flight bed.
   "skill-ember-spark-cast":   { gain: 0.171, wet: 0.10, vary: 0.08, takes: 3 },
   "skill-ember-spark-impact": { gain: 0.288, wet: 0.14, vary: 0.10, takes: 3 },
+  // Class skill expansion. Gains set each pool's loudest 400 ms (the louder of its takes'
+  // channel power) to a level: casts -30..-33 dB, bow looses -36/-37 like the shipped
+  // ones, hits -27..-30, the big hit of each class loudest (aftershock -21.5 over Ground
+  // Slam's -21.6, Leap Slam -22.5, a Firestorm meteor -24 over Ember Bolt's -26), auras
+  // -35 and statuses -38/-39, under every damaging hit.
+  "skill-infernal-cry-cast":     { gain: 0.161, wet: 0.16, vary: 0.04, takes: 4 },
+  "skill-infernal-cry-impact":   { gain: 0.202, wet: 0.16, vary: 0.08, takes: 3 },
+  "skill-leap-slam-cast":        { gain: 0.141, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-leap-slam-whoosh":      { gain: 0.120, wet: 0.10, vary: 0.05, takes: 3 },
+  "skill-leap-slam-impact":      { gain: 0.553, wet: 0.24, vary: 0.05, takes: 3 },
+  "skill-earthquake-cast":       { gain: 0.203, wet: 0.10, vary: 0.06, takes: 3 },
+  "skill-earthquake-impact":     { gain: 0.246, wet: 0.20, vary: 0.06, takes: 3 },
+  "skill-earthquake-aftershock": { gain: 0.472, wet: 0.28, vary: 0.04, takes: 3 },
+  "skill-determination-cast":    { gain: 0.087, wet: 0.22, vary: 0, takes: 3 },
+  "skill-sunder-cast":           { gain: 0.172, wet: 0.10, vary: 0.06, takes: 3 },
+  "skill-sunder-impact":         { gain: 0.370, wet: 0.14, vary: 0.08, takes: 3 },
+  "skill-sunder-burst":          { gain: 0.363, wet: 0.18, vary: 0.10, takes: 4 },
+  "skill-blood-rage-cast":       { gain: 0.133, wet: 0.14, vary: 0.03, takes: 3 },
+  "skill-escape-shot-cast":      { gain: 0.249, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-escape-shot-impact":    { gain: 0.356, wet: 0.12, vary: 0.08, takes: 3 },
+  "skill-ice-shot-cast":         { gain: 0.182, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-ice-shot-impact":       { gain: 0.199, wet: 0.18, vary: 0.06, takes: 3 },
+  "skill-snipers-mark-cast":     { gain: 0.111, wet: 0.14, vary: 0.03, takes: 3 },
+  "skill-lightning-arrow-cast":  { gain: 0.164, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-lightning-arrow-impact": { gain: 0.334, wet: 0.16, vary: 0.06, takes: 3 },
+  "skill-lightning-arrow-chain": { gain: 0.186, wet: 0.10, vary: 0.10, takes: 3 },
+  "skill-rain-of-arrows-cast":   { gain: 0.172, wet: 0.10, vary: 0.05, takes: 3 },
+  "skill-rain-of-arrows-impact": { gain: 0.329, wet: 0.12, vary: 0.10, takes: 3 },
+  "skill-rain-of-arrows-arrow":  { gain: 0.251, wet: 0.10, vary: 0.12, takes: 4 },
+  "skill-haste-cast":            { gain: 0.123, wet: 0.20, vary: 0, takes: 3 },
+  "skill-flame-dash-cast":       { gain: 0.208, wet: 0.10, vary: 0.06, takes: 3 },
+  "skill-flame-dash-trail":      { gain: 0.123, wet: 0.08, vary: 0.08, takes: 3 },
+  "skill-flame-dash-impact":     { gain: 0.302, wet: 0.16, vary: 0.08, takes: 3 },
+  "skill-ember-nova-cast":       { gain: 0.164, wet: 0.18, vary: 0.05, takes: 3 },
+  "skill-ember-nova-impact":     { gain: 0.219, wet: 0.14, vary: 0.08, takes: 3 },
+  "skill-flammability-cast":     { gain: 0.108, wet: 0.18, vary: 0.04, takes: 3 },
+  "skill-solar-orb-cast":        { gain: 0.196, wet: 0.12, vary: 0.05, takes: 3 },
+  "skill-solar-orb-impact":      { gain: 0.224, wet: 0.14, vary: 0.08, takes: 3 },
+  "skill-firestorm-cast":        { gain: 0.188, wet: 0.20, vary: 0.04, takes: 3 },
+  "skill-firestorm-impact":      { gain: 0.215, wet: 0.24, vary: 0.04, takes: 3 },
+  "skill-firestorm-meteor":      { gain: 0.310, wet: 0.22, vary: 0.08, takes: 4 },
+  "skill-herald-of-ash-cast":    { gain: 0.083, wet: 0.22, vary: 0, takes: 3 },
+  "skill-herald-of-ash-burst":   { gain: 0.220, wet: 0.14, vary: 0.08, takes: 3 },
+  "skill-aura-off":              { gain: 0.054, wet: 0.16, vary: 0, takes: 3 },
+  "skill-status-chilled":        { gain: 0.192, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-status-stunned":        { gain: 0.120, wet: 0.10, vary: 0.04, takes: 3 },
+  "skill-status-marked":         { gain: 0.103, wet: 0.08, vary: 0.04, takes: 3 },
+  "skill-status-flammable":      { gain: 0.159, wet: 0.08, vary: 0.06, takes: 3 },
+  "skill-status-scorched":       { gain: 0.064, wet: 0.08, vary: 0.06, takes: 3 },
+  // Sustained (`startSfxLoop`), levelled like the two above: the orb's roar at the Ember
+  // Bolt flight's -33 dB, the heartbeat at -41, felt under a fight rather than heard.
+  "skill-solar-orb-loop":        { gain: 0.293, wet: 0.14, vary: 0.03, takes: 3 },
+  "skill-blood-rage-heartbeat":  { gain: 0.095, wet: 0.04, vary: 0, takes: 2 },
   "monster-melee-hit":        { gain: 0.113, wet: 0.16, vary: 0.10, takes: 3 },
   // The generic pair is the fallback for a species with no material (soundscape.ts),
   // never the cue a known monster gets. The six below are the ones actually heard.
@@ -302,6 +355,22 @@ export const CORE_SFX: readonly string[] = [
   // a loop that never plays, because `startSfxLoop` will not start what it cannot
   // hear now — there is no queue, the flight is over.
   "skill-ember-bolt-flight", "skill-cinder-ground-loop",
+  // The class skill expansion, for the same reason as every skill above it.
+  "skill-infernal-cry-cast", "skill-infernal-cry-impact", "skill-leap-slam-cast",
+  "skill-leap-slam-whoosh", "skill-leap-slam-impact", "skill-earthquake-cast",
+  "skill-earthquake-impact", "skill-earthquake-aftershock", "skill-determination-cast",
+  "skill-sunder-cast", "skill-sunder-impact", "skill-sunder-burst", "skill-blood-rage-cast",
+  "skill-blood-rage-heartbeat", "skill-escape-shot-cast", "skill-escape-shot-impact",
+  "skill-ice-shot-cast", "skill-ice-shot-impact", "skill-snipers-mark-cast",
+  "skill-lightning-arrow-cast", "skill-lightning-arrow-impact", "skill-lightning-arrow-chain",
+  "skill-rain-of-arrows-cast", "skill-rain-of-arrows-impact", "skill-rain-of-arrows-arrow",
+  "skill-haste-cast", "skill-flame-dash-cast", "skill-flame-dash-trail", "skill-flame-dash-impact",
+  "skill-ember-nova-cast", "skill-ember-nova-impact", "skill-flammability-cast",
+  "skill-solar-orb-cast", "skill-solar-orb-impact", "skill-solar-orb-loop",
+  "skill-firestorm-cast", "skill-firestorm-impact", "skill-firestorm-meteor",
+  "skill-herald-of-ash-cast", "skill-herald-of-ash-burst", "skill-aura-off",
+  "skill-status-chilled", "skill-status-stunned", "skill-status-marked",
+  "skill-status-flammable", "skill-status-scorched",
   "monster-melee-hit", "monster-hurt", "monster-death", "player-hurt",
   "footstep-stone", "flask-drink",
   // A drop must never be a silent first play.
@@ -312,7 +381,7 @@ export const CORE_SFX: readonly string[] = [
 /**
  * Every voice there is, for the loading screen to swallow whole.
  *
- * The whole library is 7.1 MB of Opus across 259 files: less than one of
+ * The whole library is 10.1 MB of Opus across 412 files: less than one of
  * the character's textures, and cheaper to fetch all of than to reason about
  * which biome needs which. `CORE_SFX` still exists and still goes first, because
  * ordering is the only thing that matters once cost stops mattering — the first

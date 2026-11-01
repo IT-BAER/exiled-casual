@@ -96,6 +96,26 @@ describe("TargetFrame", () => {
   });
 });
 
+describe("target statuses", () => {
+  it("lists the skill statuses on it, stun included, beside its ailments", () => {
+    render(<TargetFrame snapshot={snap([{ id: 1, species: IMP, life: 1, maxLife: 1, statuses: ["chilled", "marked"], stunned: true }])} targetId={1} />);
+    const row = screen.getByTestId("target-statuses");
+    expect([...row.querySelectorAll("img")].map((i) => i.getAttribute("src")))
+      .toEqual(["/textures/buffs/chilled.webp", "/textures/buffs/marked.webp", "/textures/buffs/stunned.webp"]);
+  });
+});
+
+describe("reserved mana", () => {
+  it("caps the mana globe from the top by the share auras hold", () => {
+    const base = snap([]);
+    render(<Hud snapshot={{ ...base, player: testPlayer({ mana: 50, maxMana: 200, manaReserved: 50 }) }} />);
+    expect(screen.getByTestId("mana-orb-reserved")).toHaveStyle({ height: "25%" });
+    cleanup();
+    render(<Hud snapshot={{ ...base, player: testPlayer({ mana: 50, maxMana: 200 }) }} />);
+    expect(screen.queryByTestId("mana-orb-reserved")).toBeNull();
+  });
+});
+
 describe("Hud target frame", () => {
   it("is narrower than the boss bar and sits under it while the boss bar is up", () => {
     const s = snap([

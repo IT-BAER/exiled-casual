@@ -111,6 +111,8 @@ vi.mock("./audio/sfx", async (importOriginal) => ({
 // container. Same reason the level and the rig are mocked: none of it is what this
 // file is about, and render/hideout.test.ts owns the placements.
 vi.mock("./render/skill-fx", () => ({ warmSkillFx: vi.fn() }));
+// The class looks build their tables off skill-fx at import; the soundscape only reads profiles.
+vi.mock("./render/skills", () => ({ skillFx: () => ({ flightCue: null, impactCue: null }), skillLook: () => undefined }));
 vi.mock("./render/boss-fx", () => ({ warmBossFx: vi.fn() }));
 vi.mock("./render/meshes", () => ({ warmProjectiles: vi.fn(), warmEntityLooks: vi.fn() }));
 vi.mock("./render/hideout", () => ({

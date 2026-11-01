@@ -143,6 +143,25 @@ export const SKILL_ART: Record<string, { icon: string; glow: string }> = {
   "skill.ground_slam.v1": { icon: "/textures/skills/ground_slam.webp", glow: "#d9a14a" },
   "skill.split_arrow.v1": { icon: "/textures/skills/split_arrow.webp", glow: "#b6d4a8" },
   "skill.town_portal.v1": { icon: "/textures/skills/town_portal.webp", glow: "#4fb8ff" },
+  // The class skill expansion (spec 2026-11-01).
+  "skill.infernal_cry.v1": { icon: "/textures/skills/infernal_cry.webp", glow: "#ff6a2a" },
+  "skill.leap_slam.v1": { icon: "/textures/skills/leap_slam.webp", glow: "#d9a14a" },
+  "skill.earthquake.v1": { icon: "/textures/skills/earthquake.webp", glow: "#c48a4a" },
+  "skill.determination.v1": { icon: "/textures/skills/determination.webp", glow: "#e2c070" },
+  "skill.sunder.v1": { icon: "/textures/skills/sunder.webp", glow: "#d98a3a" },
+  "skill.blood_rage.v1": { icon: "/textures/skills/blood_rage.webp", glow: "#c42a20" },
+  "skill.escape_shot.v1": { icon: "/textures/skills/escape_shot.webp", glow: "#8fd0f0" },
+  "skill.ice_shot.v1": { icon: "/textures/skills/ice_shot.webp", glow: "#7fd8ff" },
+  "skill.snipers_mark.v1": { icon: "/textures/skills/snipers_mark.webp", glow: "#f0c850" },
+  "skill.lightning_arrow.v1": { icon: "/textures/skills/lightning_arrow.webp", glow: "#a8c0ff" },
+  "skill.rain_of_arrows.v1": { icon: "/textures/skills/rain_of_arrows.webp", glow: "#c4c0a8" },
+  "skill.haste.v1": { icon: "/textures/skills/haste.webp", glow: "#7fc8ff" },
+  "skill.flame_dash.v1": { icon: "/textures/skills/flame_dash.webp", glow: "#ff8a3a" },
+  "skill.ember_nova.v1": { icon: "/textures/skills/ember_nova.webp", glow: "#ff7a2f" },
+  "skill.flammability.v1": { icon: "/textures/skills/flammability.webp", glow: "#e0602a" },
+  "skill.solar_orb.v1": { icon: "/textures/skills/solar_orb.webp", glow: "#ffc850" },
+  "skill.firestorm.v1": { icon: "/textures/skills/firestorm.webp", glow: "#ff5a20" },
+  "skill.herald_of_ash.v1": { icon: "/textures/skills/herald_of_ash.webp", glow: "#d0501e" },
   // Not a skill: the built-in walk action a mouse socket can hold. It lives here
   // so the bar draws it exactly like everything else instead of special-casing it.
   [MOVE_SOCKET]: { icon: "/textures/skills/move.webp", glow: "#9c8a6a" },
@@ -679,6 +698,8 @@ function Orb(props: {
   pct: number;
   /** Energy shield, drawn as the segment ring and a second readout row. Absent = none. */
   shield?: { value: number; max: number };
+  /** Share of the globe (0..100) auras hold back, drawn as a dark cap from the top. */
+  reservedPct?: number;
   fillTestId: string;
   readoutTestId: string;
   art: string;
@@ -690,7 +711,7 @@ function Orb(props: {
    *  second opinion, and PoE lets you turn them off. */
   numbers?: boolean;
 }) {
-  const { pct, shield, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true } = props;
+  const { pct, shield, reservedPct = 0, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true } = props;
   // Segments' worth of shield, filling the edge segment partway. Any shield left shows at
   // least a sliver: an empty ring has to mean the next hit is on life.
   const filled = shield && shield.max > 0 ? Math.max(0, Math.min(1, shield.value / shield.max)) * ES_SEGMENTS : 0;
@@ -748,6 +769,22 @@ function Orb(props: {
             transition: "height 120ms linear",
           }}
         />
+        {/* Reserved by auras (PoE1): a dark cap down from the top that the liquid can never reach. */}
+        {reservedPct > 0 && (
+          <div
+            data-testid={`${fillTestId.replace(/-fill$/, "")}-reserved`}
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: 0,
+              height: `${Math.min(100, reservedPct)}%`,
+              background: "linear-gradient(to bottom, rgba(6,8,14,0.92), rgba(14,18,30,0.88))",
+              borderBottom: "1px solid rgba(120,140,190,0.45)",
+              transition: "height 120ms linear",
+            }}
+          />
+        )}
         {/* glass volume: edges fall to near-black so the disc reads as a sphere */}
         <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "radial-gradient(circle at 50% 50%, transparent 58%, rgba(0,0,0,0.30) 100%)" }} />
         {/* specular bloom, upper left — the liquid's brightest point in the PoE1 shot */}
@@ -1407,6 +1444,7 @@ export function Hud({
       <Orb
         pct={manaPct}
         fillTestId="mana-orb-fill"
+        reservedPct={maxMana > 0 ? Math.max(0, Math.min(100, ((snapshot.player.manaReserved ?? 0) / maxMana) * 100)) : 0}
         readoutTestId="mana-readout"
         art="/hud/orb-mana-v2.webp"
         figure="/hud/orb-figure-mana-v5.webp"

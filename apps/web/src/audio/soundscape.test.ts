@@ -847,3 +847,103 @@ describe("item and trade cues", () => {
     ])).toEqual([]);
   });
 });
+
+describe("class skill cues", () => {
+  const area = (id: number, over: Partial<SnapshotEntity> = {}): SnapshotEntity =>
+    ({ id, kind: "skillArea", x: 2, y: 0, radius: 2, skillId: "skill.sunder.v1", team: 0, impactIn: 0.3, ...over });
+
+  /** Drive a sequence and collect every cue, loop starts as `loop:<name>` and stops as `stop:<key>`. */
+  function hear(seq: Snapshot[]): string[] {
+    const heard: string[] = [];
+    const s = createSoundscape({
+      play: (n) => heard.push(n),
+      loop: (n) => heard.push(`loop:${n}`),
+      moveLoop: () => {},
+      stopLoop: (k) => heard.push(`stop:${k.split("#")[0]}`),
+      stopAllLoops: () => {},
+      listener: () => {},
+      room: () => {},
+    });
+    s.reset(null);
+    for (const it of seq) s.observe(it);
+    return heard;
+  }
+
+  it("casts a class skill once when the sim accepts it", () => {
+    expect(hear([
+      snap({ tick: 1 }),
+      snap({ tick: 2, player: testPlayer({ casting: true, castSkill: "skill.earthquake.v1", cooldowns: { "skill.earthquake.v1": 2 } }) }),
+      snap({ tick: 3, player: testPlayer({ casting: true, castSkill: "skill.earthquake.v1", cooldowns: { "skill.earthquake.v1": 1.9 } }) }),
+    ])).toEqual(["skill-earthquake-cast"]);
+  });
+
+  it("lands each impact of an area with its own cue, per index and by shape", () => {
+    expect(hear([
+      snap({ tick: 1 }),
+      snap({ tick: 2, entities: [area(5), area(6, { index: 1 })] }),
+      snap({ tick: 3, entities: [area(5, { spent: true, impactIn: 0 }), area(6, { index: 1 })] }),
+      snap({ tick: 4, entities: [area(6, { index: 1, spent: true, impactIn: 0 })] }),
+      snap({ tick: 5, entities: [area(7, { skillId: "skill.earthquake.v1", shape: "cone", spent: true, impactIn: 0 })] }),
+      snap({ tick: 6, entities: [area(8, { skillId: "skill.earthquake.v1", spent: true, impactIn: 0 })] }),
+    ])).toEqual(["skill-sunder-impact", "skill-sunder-burst", "skill-earthquake-impact", "skill-earthquake-aftershock"]);
+  });
+
+  it("hears an aura come up and go down, and a timed buff's heartbeat while it lasts", () => {
+    const buffs = (...ids: [string, boolean][]) => ids.map(([id, aura]) => ({ id, kind: "buff" as const, remainingSec: aura ? 0 : 5, ...(aura ? { aura: true as const } : {}) }));
+    expect(hear([
+      snap({ tick: 1 }),
+      snap({ tick: 2, player: testPlayer({ buffs: buffs(["haste", true], ["blood_rage", false]) }) }),
+      snap({ tick: 3, player: testPlayer({ buffs: buffs(["haste", true], ["blood_rage", false]) }) }),
+      snap({ tick: 4, player: testPlayer({ buffs: [] }) }),
+    ])).toEqual(["skill-haste-cast", "loop:skill-blood-rage-heartbeat", "skill-aura-off", "stop:skill-blood-rage-heartbeat"]);
+  });
+
+  it("rings a status as it lands, once per status inside 150 ms however many bodies take it", () => {
+    const m = (id: number, statuses?: string[], stunned?: true): SnapshotEntity =>
+      ({ ...monster(id, 3), ...(statuses ? { statuses } : {}), ...(stunned ? { stunned } : {}) });
+    expect(hear([
+      snap({ tick: 1, entities: [m(1), m(2)] }),
+      snap({ tick: 2, entities: [m(1, ["chilled"]), m(2, ["chilled"], true)] }),
+      snap({ tick: 3, entities: [m(1), m(2, ["chilled"], true)] }),
+      snap({ tick: 4, entities: [m(1, ["chilled"]), m(2, ["chilled"], true)] }),
+      snap({ tick: 9, entities: [m(1), m(2)] }),
+      snap({ tick: 10, entities: [m(1, ["chilled"]), m(2)] }),
+    ])).toEqual(["skill-status-chilled", "skill-status-stunned", "skill-status-chilled"]);
+  });
+
+  it("whooshes a travel off and lands it, and looses a class arrow and its chain", () => {
+    const arrow = (id: number, x: number): SnapshotEntity => ({ id, kind: "projectile", x, y: 0, skillId: "skill.lightning_arrow.v1", team: 0 });
+    expect(hear([
+      snap({ tick: 1 }),
+      snap({ tick: 2, player: testPlayer({ travel: { skillId: "skill.flame_dash.v1", ticks: 6, elapsed: 1, dirX: 1, dirY: 0 } }) }),
+      snap({ tick: 3, player: testPlayer({ travel: { skillId: "skill.flame_dash.v1", ticks: 6, elapsed: 2, dirX: 1, dirY: 0 } }) }),
+      snap({ tick: 4 }),
+      snap({ tick: 5, entities: [arrow(20, 0.5)] }),
+      snap({ tick: 6, entities: [arrow(20, 6), arrow(21, 6)] }),
+    ])).toEqual([
+      "skill-flame-dash-trail", "skill-flame-dash-impact", "skill-lightning-arrow-cast", "skill-lightning-arrow-chain",
+    ]);
+  });
+
+  it("burns a class skill's ground with its own bed and opening cue", () => {
+    const orb: SnapshotEntity = { id: 30, kind: "groundArea", x: 4, y: 0, radius: 2, skillId: "skill.solar_orb.v1", team: 0 };
+    expect(hear([snap({ tick: 1 }), snap({ tick: 2, entities: [orb] }), snap({ tick: 3 })]))
+      .toEqual(["skill-solar-orb-impact", "loop:skill-solar-orb-loop", "stop:skill-solar-orb-loop"]);
+  });
+
+  it("rings a cast's release on every resolve, a recast included, and never twice for one", () => {
+    const rel = (tick: number) => testPlayer({ castRelease: { skillId: "skill.infernal_cry.v1", tick } });
+    expect(hear([
+      snap({ tick: 1 }),
+      snap({ tick: 2, player: rel(2) }),
+      snap({ tick: 3, player: rel(2) }),
+      snap({ tick: 40, player: rel(40) }),
+    ]).filter((n) => n === "skill-infernal-cry-impact")).toHaveLength(2);
+  });
+
+  it("names only cues the mixer has", async () => {
+    const { ALL_SFX } = await import("./sfx");
+    const { allSkillCueNames } = await import("./skill-cues");
+    for (const name of allSkillCueNames()) expect(ALL_SFX, name).toContain(name);
+  });
+});

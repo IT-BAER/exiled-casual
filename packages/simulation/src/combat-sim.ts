@@ -16,15 +16,17 @@ import type { Entity } from "./ecs";
 import type {
   Position, Health, Mana, Faction, PlayerC, Cooldowns, DefensesC,
   MoveTarget, MoveDir, SessionC, AreaKind, InventoryC, StashC, VendorC, ItemC, EquipmentC, FlasksC, ProgressC, ShardsC,
+  MonsterC,
 } from "./components";
 import { grantSkills } from "./persist";
 import { recomputePlayerStats } from "./derived";
 import { registerResourceRegen } from "./systems/resource";
-import { registerSkillCast } from "./systems/skill-cast";
+import { registerSkillCast, rotate } from "./systems/skill-cast";
 import { registerPlayerMovement } from "./systems/player-movement";
 import { registerMonsterAI } from "./systems/monster-ai";
 import { registerBossAI } from "./systems/boss-ai";
 import { registerProjectileMove } from "./systems/projectile";
+import { registerSkillArea } from "./systems/skill-area";
 import { registerGroundAreaTick } from "./systems/ground-area";
 import { registerTelegraphResolve } from "./systems/telegraph-resolve";
 import { registerAilmentTick } from "./systems/ailment";
@@ -74,6 +76,7 @@ export function createCombatSim(
   registerMonsterAI(sim, collisionRef);
   registerBossAI(sim, MONSTERS, collisionRef);
   registerProjectileMove(sim, collisionRef);
+  registerSkillArea(sim, collisionRef);
   registerGroundAreaTick(sim);
   // Impacts land before damageResolve so a telegraph hits on its own impact tick.
   registerTelegraphResolve(sim, MONSTERS);
@@ -227,11 +230,34 @@ const LAB_ITEM_TIERS = ["normal", "magic", "rare", "unique"] as const;
 let labItemDrops = 0;
 let labRareSpawns = 0;
 
+/** Life multiple of a lab dummy, so a skill can be watched landing again and again. */
+export const DUMMY_LIFE_MUL = 10;
+
+/**
+ * Where `count` dummies stand: two rows, 5 and 7 units out along `facing` (a
+ * unit vector, Fixed), fanned across 80 (back row 60) degrees on the 5 degree table.
+ */
+export function dummySpots(cx: number, cy: number, facing: { x: number; y: number }, count: number): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  const front = Math.ceil(count / 2);
+  for (const [row, n] of [[fp(5), front], [fp(7), count - front]] as const) {
+    for (let k = 0; k < n; k++) {
+      // Snapped to 5 degrees; the back row fans narrower, so its bodies stand between the front's.
+      const half = row === fp(5) ? 40 : 30;
+      const deg = n > 1 ? Math.round((-half + (2 * half * k) / (n - 1)) / 5) * 5 : 0;
+      const [ux, uy] = rotate(facing.x, facing.y, deg);
+      out.push({ x: cx + Math.trunc((ux * row) / 1000), y: cy + Math.trunc((uy * row) / 1000) });
+    }
+  }
+  return out;
+}
+
 export function spawnLabActors(
   world: World,
-  kind: "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup",
+  kind: "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup" | "dummy",
   cx: number,
   cy: number,
+  count = 7,
 ): void {
   if (kind === "clear") {
     for (const e of [...world.query("monster")]) world.destroy(e);
@@ -301,6 +327,19 @@ export function spawnLabActors(
   }
 
   const impDef = MONSTERS.get("monster.cinder_imp.v1")!;
+  if (kind === "dummy") {
+    // Inert imps at ten times the life, in front of the way he faces (down +y
+    // before he has faced anywhere): something to cast at that never answers.
+    const player = world.query("player")[0];
+    const md = player !== undefined ? world.get<MoveDir>(player, "moveDir") : undefined;
+    const facing = md && (md.hx !== 0 || md.hy !== 0) ? { x: md.hx, y: md.hy } : { x: 0, y: fp(1) };
+    const def = { ...impDef, maxLifeFixed: impDef.maxLifeFixed * DUMMY_LIFE_MUL };
+    for (const s of dummySpots(cx, cy, facing, Math.max(1, Math.min(40, Math.trunc(count))))) {
+      const e = spawnMonster(world, def, s.x, s.y, false);
+      world.set<MonsterC>(e, "monster", { ...world.get<MonsterC>(e, "monster")!, inert: 1 });
+    }
+    return;
+  }
   switch (kind) {
     case "imp":
       spawnMonster(world, impDef, cx, cy + fp(6), false);

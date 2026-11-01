@@ -15,28 +15,50 @@ const INSET_VW = 0.6;
 
 /** The face each effect id wears. An id with no art still gets a tile: an
  *  effect the player cannot see is worse than an ugly square. */
-const BUFF_ART: Record<string, { icon: string; name: string }> = {
+export const BUFF_ART: Record<string, { icon: string; name: string }> = {
   grace: { icon: "/textures/buffs/grace.webp", name: "Spawn Grace" },
   burning: { icon: "/textures/buffs/burning.webp", name: "Burning" },
   poison: { icon: "/textures/buffs/poison.webp", name: "Poisoned" },
   bleeding: { icon: "/textures/buffs/bleeding.webp", name: "Bleeding" },
+  // The class skills' buffs (spec 2026-11-01): three auras, two timed.
+  infernal_cry: { icon: "/textures/buffs/infernal_cry.webp", name: "Infernal Cry" },
+  blood_rage: { icon: "/textures/buffs/blood_rage.webp", name: "Blood Rage" },
+  determination: { icon: "/textures/buffs/determination.webp", name: "Determination" },
+  haste: { icon: "/textures/buffs/haste.webp", name: "Haste" },
+  herald_of_ash: { icon: "/textures/buffs/herald_of_ash.webp", name: "Herald of Ash" },
+};
+
+/** The statuses a class skill puts on a monster (TargetFrame), in the same frames. */
+export const STATUS_ART: Record<string, { icon: string; name: string }> = {
+  scorched: { icon: "/textures/buffs/scorched.webp", name: "Scorched" },
+  chilled: { icon: "/textures/buffs/chilled.webp", name: "Chilled" },
+  stunned: { icon: "/textures/buffs/stunned.webp", name: "Stunned" },
+  marked: { icon: "/textures/buffs/marked.webp", name: "Marked" },
+  flammable: { icon: "/textures/buffs/flammable.webp", name: "Flammable" },
+  taunted: { icon: "/textures/buffs/taunted.webp", name: "Taunted" },
 };
 
 type Buff = NonNullable<Snapshot["player"]["buffs"]>[number];
 
 function Tile({ b }: { b: Buff }): React.JSX.Element {
   const art = BUFF_ART[b.id];
+  const aura = b.aura === true;
   return (
     <div
+      data-testid="buff-tile"
+      data-aura={aura ? "true" : "false"}
       title={art?.name ?? b.id}
       style={{
         position: "relative",
         width: `${TILE_VW}vw`,
         height: `${TILE_VW}vw`,
         background: "rgba(8,8,10,0.9)",
-        // The reference frame is a thin worn-metal bevel, not a glowing line.
-        border: "1px solid #5a5548",
-        boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,0.7)",
+        // The reference frame is a thin worn-metal bevel, not a glowing line. An aura's
+        // is lit instead (PoE1 frames a reserved aura in gold and runs no clock on it).
+        border: aura ? "1px solid #c8aa6e" : "1px solid #5a5548",
+        boxShadow: aura
+          ? "inset 0 0 0 1px rgba(0,0,0,0.85), 0 0 6px rgba(232,190,110,0.75)"
+          : "inset 0 0 0 1px rgba(0,0,0,0.85), 0 1px 4px rgba(0,0,0,0.7)",
       }}
     >
       {art && (
@@ -47,7 +69,8 @@ function Tile({ b }: { b: Buff }): React.JSX.Element {
           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
         />
       )}
-      <div
+      {!aura && <div
+        data-testid="buff-seconds"
         style={{
           position: "absolute",
           left: "-0.15vw",
@@ -64,7 +87,7 @@ function Tile({ b }: { b: Buff }): React.JSX.Element {
         }}
       >
         {b.remainingSec}
-      </div>
+      </div>}
       {(b.stacks ?? 1) > 1 && (
         // PoE's stack count sits in the upper right, clear of the seconds plate.
         <div

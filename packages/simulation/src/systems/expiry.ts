@@ -1,5 +1,5 @@
 import { Simulation } from "../loop";
-import type { ProjectileC, GroundAreaC } from "../components";
+import type { ProjectileC, GroundAreaC, SkillAreaC } from "../components";
 
 export function registerExpiry(sim: Simulation): void {
   sim.register("expiry", (world, tick) => {
@@ -13,6 +13,11 @@ export function registerExpiry(sim: Simulation): void {
       if (tick >= (world.get<GroundAreaC>(e, "groundArea")?.expiryTick ?? Infinity)) {
         world.destroy(e);
       }
+    }
+    // A landed impact lives one snapshot past its landing, as a spent bolt does.
+    for (const e of world.query("skillArea")) {
+      const spent = world.get<SkillAreaC>(e, "skillArea")?.spentTick;
+      if (spent !== undefined && spent < tick) world.destroy(e);
     }
   });
 }

@@ -49,4 +49,17 @@ describe("BuffBar", () => {
     // One stack is no count at all: only burning stacks.
     expect(screen.getAllByTestId("buff-stacks")).toHaveLength(1);
   });
+
+  it("lights an aura's frame and gives it no timer, and paints the class buffs", () => {
+    render(<BuffBar snapshot={snap([
+      { id: "haste", kind: "buff", remainingSec: 0, aura: true },
+      { id: "blood_rage", kind: "buff", remainingSec: 6 },
+    ])} />);
+    const tiles = screen.getAllByTestId("buff-tile");
+    expect(tiles.map((t) => t.getAttribute("data-aura"))).toEqual(["true", "false"]);
+    expect(tiles[0]!.querySelector("[data-testid='buff-seconds']")).toBeNull();
+    expect(tiles[1]!).toHaveTextContent("6");
+    expect(tiles.map((t) => t.querySelector("img")!.getAttribute("src")))
+      .toEqual(["/textures/buffs/haste.webp", "/textures/buffs/blood_rage.webp"]);
+  });
 });

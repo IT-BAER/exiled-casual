@@ -231,7 +231,7 @@ describe("createCombatSim", () => {
     const { sim } = createCombatSim(42);
     expect(sim.systemOrder()).toEqual([
       "resourceRegen", "skillCast", "playerMovement", "monsterAI", "bossAI",
-      "projectileMove", "groundAreaTick", "telegraphResolve", "ailmentTick",
+      "projectileMove", "skillArea", "groundAreaTick", "telegraphResolve", "ailmentTick",
       "damageResolve", "death", "expiry",
     ]);
   });

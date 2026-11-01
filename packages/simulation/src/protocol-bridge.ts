@@ -11,11 +11,13 @@ import { attackAddedDamage, describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAtta
 import type { Command, Simulation } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
-  Health, Mana, Position, Cooldowns, CastingC, StrikeC, MonsterC,
+  Health, Mana, Position, Cooldowns, CastingC, StrikeC, CastReleaseC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
-  EnergyShieldC, ShardsC, BuybackC, MoveDir, SkillsC, SkillHoldC, RollC,
+  EnergyShieldC, ShardsC, BuybackC, MoveDir, SkillsC, SkillHoldC, RollC, SkillAreaC, TravelC, BuffsC,
 } from "./components";
+import { activeStatuses, isStunned, reservedMana } from "./status";
+import type { EffectNode, StatusSpec } from "@exiled/content-schema";
 
 /**
  * Armour stops a different share of every hit size, so the character sheet's
@@ -148,6 +150,92 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
 
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+const metres = (f: number): string => `${round1(toNumber(f))} metres`;
+const secs = (ticks: number): string => `${round1(ticks / 30)} seconds`;
+const words = (id: string): string => id.split("_").map(titleCase).join(" ");
+const signed = (n: number): string => (n >= 0 ? `${n}% increased` : `${-n}% reduced`);
+
+type StatusLike = Pick<StatusSpec, "statusId" | "durationTicks" | "damageTakenPct" | "damageTakenType" | "slowPct" | "stunTicks">;
+
+/** What a status does, one clause per number it carries. */
+function statusLines(s: StatusLike): string[] {
+  const name = words(s.statusId);
+  const out = [`Inflicts ${name} for ${secs(s.durationTicks)}`];
+  if (s.damageTakenPct) {
+    const type = s.damageTakenType ? `${titleCase(s.damageTakenType)} ` : "";
+    out.push(`${name} enemies take ${signed(s.damageTakenPct)} ${type}Damage`);
+  }
+  if (s.slowPct) out.push(`${name} enemies are ${s.slowPct}% slower`);
+  if (s.stunTicks) out.push(`Stuns for ${secs(s.stunTicks)}`);
+  return out;
+}
+
+/** The blue lines of the expansion's effect fields; hit damage and the older lines stay in describeSkills. */
+export function effectLines(effect: EffectNode): string[] {
+  const out: string[] = [];
+  switch (effect.type) {
+    case "spawnProjectile":
+      if (effect.explodeRadiusFixed) out.push(`Explodes on hit in a ${metres(effect.explodeRadiusFixed)} radius`);
+      if (effect.chainCount) out.push(`Chains ${effect.chainCount} times within ${metres(effect.chainRangeFixed ?? 0)}`);
+      if (effect.onHit) out.push(...statusLines(effect.onHit));
+      break;
+    case "spawnGroundArea":
+      if (effect.pulse) out.push(`Pulses every ${secs(effect.pulse.everyTicks)}`);
+      if (effect.slowPct) out.push(`Enemies inside are ${effect.slowPct}% slower`);
+      break;
+    case "areaHit": {
+      const n = effect.count ?? 1;
+      const shape = effect.shape === "cone" ? `${effect.arcDegrees ?? 360} degree cone` : "Area";
+      out.push(`${shape} radius is ${metres(effect.radiusFixed)}`);
+      if (effect.delayTicks) out.push(`Lands after ${secs(effect.delayTicks)}`);
+      if (n > 1) out.push(`${n} impacts${effect.intervalTicks ? `, one every ${secs(effect.intervalTicks)}` : ""}`);
+      if (effect.stepFixed) out.push(`Each impact lands ${metres(effect.stepFixed)} further along`);
+      if (effect.scatterFixed) out.push(`Impacts scatter within ${metres(effect.scatterFixed)}`);
+      if (effect.knockbackFixed) out.push(`Knocks enemies back ${metres(effect.knockbackFixed)}`);
+      if (effect.stunTicks) out.push(`Stuns for ${secs(effect.stunTicks)}`);
+      if (effect.onHit) out.push(...statusLines(effect.onHit));
+      break;
+    }
+    case "applyBuff":
+      if (effect.durationTicks === 0) out.push(`Aura: reserves ${effect.reserveManaPct ?? 0}% of maximum Mana`);
+      else out.push(`Lasts ${secs(effect.durationTicks)}`);
+      if (effect.damagePct) out.push(`${signed(effect.damagePct)} Damage`);
+      if (effect.speedPct) out.push(`${signed(effect.speedPct)} Attack and Cast Speed`);
+      if (effect.moveSpeedPct) out.push(`${signed(effect.moveSpeedPct)} Movement Speed`);
+      if (effect.damageTakenPct) out.push(`${signed(effect.damageTakenPct)} Damage taken`);
+      if (effect.critChancePct) out.push(`${signed(effect.critChancePct)} Critical Strike Chance`);
+      if (effect.lifeRegenPerSecFixed) out.push(`Regenerates ${round1(toNumber(effect.lifeRegenPerSecFixed))} Life per second`);
+      if (effect.lifeDrainPerSecFixed) {
+        out.push(`Loses ${round1(toNumber(effect.lifeDrainPerSecFixed))} Life per second, never below 1`);
+      }
+      if (effect.onKillGround) {
+        const a = effect.onKillGround.ailment;
+        out.push(`Kills leave ${titleCase(a.kind)} ground dealing ${round1(toNumber(a.dpsFixed))} per second`);
+      }
+      break;
+    case "applyStatus":
+      out.push(effect.single ? "Targets the enemy nearest the aim" : `Area radius is ${metres(effect.radiusFixed)}`);
+      out.push(...statusLines(effect));
+      if (effect.taunt) out.push("Taunts enemies");
+      break;
+    case "travel":
+      out.push(`${effect.direction === "away" ? "Leaps back" : "Travels up to"} ${metres(effect.distanceFixed)}`);
+      if (effect.arrival) {
+        out.push(`Landing radius is ${metres(effect.arrival.radiusFixed)}`);
+        if (effect.arrival.knockbackFixed) out.push(`Knocks enemies back ${metres(effect.arrival.knockbackFixed)}`);
+        if (effect.arrival.stunTicks) out.push(`Stuns for ${secs(effect.arrival.stunTicks)}`);
+        if (effect.arrival.onHit) out.push(...statusLines(effect.arrival.onHit));
+      }
+      if (effect.trail) {
+        const a = effect.trail.ailment;
+        out.push(`Leaves ${titleCase(a.kind)} ground dealing ${round1(toNumber(a.dpsFixed))} per second`);
+      }
+      break;
+    default:
+      break;
+  }
+  return out;
+}
 
 /**
  * Every skill as its tooltip reads it. The numbers are recomputed here with the
@@ -182,13 +270,18 @@ function describeSkills(
     // The same reading of the weapon the cast takes, so the tooltip is the hit.
     const weapon = weaponHit(world, def);
     for (const effect of def.effects) {
-      if ((effect.type === "spawnProjectile" || effect.type === "meleeStrike") && effect.damage) {
-        for (const p of hitParts(effect.damage.amountFixed, damageCode(effect.damage.type), weapon.mod)) {
+      const hitSpec = effect.type === "spawnProjectile" || effect.type === "meleeStrike" || effect.type === "areaHit"
+        ? effect.damage
+        : effect.type === "travel" ? effect.arrival?.damage
+        : effect.type === "spawnGroundArea" ? effect.pulse?.damage : undefined;
+      if (hitSpec) {
+        for (const p of hitParts(hitSpec.amountFixed, damageCode(hitSpec.type), weapon.mod)) {
           const dmg = toNumber(scalePct(p.amount, spellDamagePct));
           hitDamage += dmg;
           lines.push(`Deals ${round1(dmg)} ${titleCase(damageTypeOf(p.type))} Damage`);
         }
-      } else if (effect.type === "spawnGroundArea") {
+      }
+      if (effect.type === "spawnGroundArea") {
         if (effect.ailment) {
           lines.push(
             `Deals ${round1(toNumber(effect.ailment.dpsFixed))} ${titleCase(effect.ailment.kind)} Damage per Second`,
@@ -198,6 +291,7 @@ function describeSkills(
       } else if (effect.type === "teleport") {
         lines.push(`Teleports ${round1(toNumber(effect.distanceFixed))} metres`);
       }
+      lines.push(...effectLines(effect));
     }
     const nb = nextBreakpoint(authored, gem.level);
     const skill: DisplaySkill = {
@@ -322,6 +416,9 @@ export function buildSnapshot(
     if (world.has(e, "poison")) debuffs.push("poison");
     if (world.has(e, "bleeding")) debuffs.push("bleeding");
     if (debuffs.length > 0) entry.debuffs = debuffs;
+    const statuses = [...new Set(activeStatuses(world, e, tick).map((s) => s.id))].sort();
+    if (statuses.length > 0) entry.statuses = statuses;
+    if (isStunned(mon, tick)) entry.stunned = true;
     if (mon.magic === 1) entry.magic = true;
     if (mon.lastAttackTick !== undefined) entry.attackTick = mon.lastAttackTick;
     if (mon.state === "attack") {
@@ -352,6 +449,7 @@ export function buildSnapshot(
       team: pr.team,
       ...(pr.skillId ? { skillId: pr.skillId } : {}),
       ...(pr.remainingRange <= 0 ? { spent: true } : {}),
+      ...(pr.chainFrom !== undefined ? { chainFrom: pr.chainFrom } : {}),
     });
   }
 
@@ -390,6 +488,23 @@ export function buildSnapshot(
       ...(tg.shape === "ring" ? { inner: toNumber(tg.inner!) } : {}),
       ...(tg.ability ? { ability: tg.ability } : {}),
       ...(tg.heavy ? { heavy: true } : {}),
+    });
+  }
+
+  for (const e of world.query("skillArea", "position")) {
+    const ap = world.get<Position>(e, "position")!;
+    const sa = world.get<SkillAreaC>(e, "skillArea")!;
+    entities.push({
+      id: e, kind: "skillArea",
+      x: toNumber(ap.x), y: toNumber(ap.y),
+      radius: toNumber(sa.radius),
+      skillId: sa.skillId,
+      team: sa.team,
+      impactIn: Math.max(0, sa.impactTick - tick) / 30,
+      dirX: sa.dirX / 1000, dirY: sa.dirY / 1000,
+      ...(sa.spentTick !== undefined ? { spent: true } : {}),
+      ...(sa.shape ? { shape: sa.shape, arc: sa.arc } : {}),
+      ...(sa.index !== undefined ? { index: sa.index } : {}),
     });
   }
 
@@ -544,9 +659,29 @@ export function buildSnapshot(
         const r = world.get<RollC>(playerEntity, "roll");
         return r !== undefined && tick < r.untilTick ? r.untilTick - tick : undefined;
       })(),
+      castSkill: (() => {
+        const c = world.get<CastingC>(playerEntity, "casting");
+        return c !== undefined && c.untilTick > tick ? c.skillId : undefined;
+      })(),
+      ...(() => {
+        const t = world.get<TravelC>(playerEntity, "travel");
+        if (!t || tick >= t.untilTick) return {};
+        return { travel: {
+          skillId: t.skillId, ticks: t.untilTick - t.startTick, elapsed: tick - t.startTick,
+          dirX: toNumber(t.dirX), dirY: toNumber(t.dirY),
+        } };
+      })(),
+      ...(() => {
+        const r = reservedMana(world, playerEntity, pm.maxMana);
+        return r > 0 ? { manaReserved: toNumber(r) } : {};
+      })(),
       strikeTick: world.get<StrikeC>(playerEntity, "strike")?.tick,
       strikeHits: world.get<StrikeC>(playerEntity, "strike")?.hits,
       strikeSkill: world.get<StrikeC>(playerEntity, "strike")?.skill,
+      ...(() => {
+        const r = world.get<CastReleaseC>(playerEntity, "castRelease");
+        return r ? { castRelease: { skillId: r.skill, tick: r.tick } } : {};
+      })(),
       pickupRefusedTick: sim.pickupRefusedTick,
       flasks: (() => {
         const f = world.get<FlasksC>(playerEntity, "flasks");
@@ -574,11 +709,16 @@ export function buildSnapshot(
         return len > 1e-6 ? { x: dx / len, y: dy / len } : undefined;
       })(),
       buffs: (() => {
-        const out: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number }[] = [];
+        const out: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number; aura?: true }[] = [];
         // Spawn grace (damage-resolve). 30 Hz; rounded up so it never shows 0
         // while still active.
         if (session?.graceUntilTick !== undefined && session.graceUntilTick > tick) {
           out.push({ id: "grace", kind: "buff", remainingSec: Math.ceil((session.graceUntilTick - tick) / 30) });
+        }
+        // Skill buffs in the order they were cast; an aura has no clock.
+        for (const b of world.get<BuffsC>(playerEntity, "buffs")?.list ?? []) {
+          if (b.untilTick === 0) out.push({ id: b.id, kind: "buff", remainingSec: 0, aura: true });
+          else if (b.untilTick > tick) out.push({ id: b.id, kind: "buff", remainingSec: Math.ceil((b.untilTick - tick) / 30) });
         }
         // Ailments in a fixed order; only burning stacks. Live until its expiry
         // tick, the same test the ailment system removes it on.

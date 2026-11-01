@@ -21,6 +21,21 @@ describe("suspendArea", () => {
     expect(back.has(e!, "bleeding")).toBe(false);
   });
 
+  it("drops a pending skill impact and peels statuses, so nothing lands all at once on return", () => {
+    const world = new World();
+    const area = world.create();
+    world.set(area, "position", { x: 0, y: 0 });
+    world.set(area, "skillArea", { skillId: "skill.firestorm.v1", ownerId: 1, team: 0, radius: fp(1), startTick: 10, impactTick: 40, dirX: 1000, dirY: 0, parts: [] });
+    const m = world.create();
+    world.set(m, "health", { life: fp(10), maxLife: fp(10) });
+    world.set(m, "statuses", { list: [{ id: "flammable", untilTick: 200, damageTakenPct: 25 }] });
+    const held = suspendArea(world, new Set(), { mapSeed: 1, activeNodeId: "n" }, 20);
+    const back = new World();
+    restoreArea(back, held, 1000);
+    expect(back.query("skillArea")).toHaveLength(0);
+    expect(back.has(back.query("health")[0]!, "statuses")).toBe(false);
+  });
+
   it("rebases a boss's cast, volley and brood ticks, each ability's cooldown included", () => {
     const world = new World();
     const b = world.create();

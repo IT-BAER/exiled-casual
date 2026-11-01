@@ -117,6 +117,8 @@ export function registerAreaTransition(sim: Simulation, collisionRef?: Collision
     }
     for (const p of world.query("player")) {
       world.set<Position>(p, "position", { x: spawnPt.x, y: spawnPt.y });
+      // A leap through the doorway ends there; it must not land on the far side.
+      world.remove(p, "travel");
       const mt = world.get<MoveTarget>(p, "moveTarget");
       if (mt) world.set<MoveTarget>(p, "moveTarget", { ...mt, active: 0 });
       const md = world.get<MoveDir>(p, "moveDir");

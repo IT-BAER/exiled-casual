@@ -30,6 +30,93 @@ import subprocess
 import sys
 import tempfile
 
+# Library files the class-skill cues (the 18 skills of the 1 Nov 2026 expansion) share,
+# named once because most of them are cut into several takes and layers below.
+_BATTLE_CRY = "Pole Position Production - The Grunts Library/Male 2 - Grunt - Battle Cry - Long - Ehrlund M1.wav"
+_FIRE_GROWL = "Epic Stock Media - Elemental Mutation Whooshes and Impacts/FIREWhsh_Whoosh Fire Deep Growl Monster Saturated Crisp 03_ESM_EMWI.wav"
+_FIRE_BED = "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav"
+_SEAR = "Orbital Emitter - Cinematic Transitions for Editors Volume 2/27,Searing.wav"
+_FLARE = "BluezoneCorp - Steampunk Weapon And Textures/Bluezone_BC0296_steampunk_weapon_flare_shot_explosion_003.wav"
+_URBAN_BLAST = "BluezoneCorp - Detonation - Explosion/Bluezone_BC0277_explosion_urban_004_02.wav"
+_FIREWORKS = "Ivo Vicic - Fireworks FX/13 Fireworks_powerful explosions_multiples in a row_near.wav"
+_LAUNCH = "InspectorJ - Essentials 03 Fireworks/FRWKComr_InsJ_Fireworks_Launch_Close_01-03.wav"
+_WOODSTOVE = "UberDuo - The Wood Stove Audio Prop Set/FIREMisc_Fire Crackling In A Woodstove_UberDuo_WOOD.wav"
+_BOILER = "Ivo Vicic - Industrial gas boiler room/23 Industrial Gas  Boiler room_room tone_boiler near_PAN C.wav"
+_METEORS = "David Dumais Audio - Magic Sound FX Pack 2/MagicPack2_Earth_MeteorShower003.wav"
+_CANNONBALL = "Gladestock Studios - Naval Warfare/GS cannonball impact 005.wav"
+_NUKE = "DavidDumais - Explosion SFX Pack/EXPLDsgn_Nuclear Explosion 07_DDUMAIS_NONE.wav"
+_WHOOSH_SHORT = "Justsoundeffects - Transition Whooshes Vol. 1/WHSH_Whoosh Short 06_JSE_TW1.wav"
+_HEAVY_WHOOSH = "Mechanical Wave - Cinematic Feel/WHSH_Sci-Fi Heavy Whoosh_MWSFX_CF 29.wav"
+_JET_WHOOSH = "Pole Position Production - The Cinematic Transformation Library/CINEMATIC - WHOOSH - Upfront Short - 2 Jet Sharp Ricochet Metallic Sliding Whipping.wav"
+_GEO_WHOOSH = "344 Audio - Geophonic Design Vol. 2/WHSH_Whoosh 1_344 Audio_Geophonic Design Vol 2.wav"
+_SWING_THUD = "David Dumais Audio - Melee Weapons Sound Effects Pack 2/SWSH_SWING IMPACTS Quick Heavy Weapon Swing To Thud Impact Var 01_DDUMAIS_MWP2.wav"
+_IMPACT_045 = "344 Audio - Epic Impacts Vol. 1/Impact 045.wav"
+_IMPACT_059 = "344 Audio - Epic Impacts Vol. 1/Impact 059.wav"
+_PERC_IMPACT = "BluezoneCorp - Modern Cinematic Impact/Bluezone_BC0294_modern_cinematic_impact_percussion_009.wav"
+_BOOM_HIT = "Marek Klemczak - ARTA Cinematic Sound FX Pack/DSGNBoom_Impact Hit_Chef Audio_Cinematic Sound FX_10.wav"
+_SUB_BOOM = "344 Audio - Geophonic Design Vol. 2/DSGNBoom_Cinematic Hit 2_344 Audio_Geophonic Design Vol 2.wav"
+_RUMBLE_BOOM = "Shapeforms Audio - Sci-Fi Weapons Cyberpunk Arsenal/EXPLDsgn_Explosion Rumble Distorted_07_SFRMS_SCIWPNS.wav"
+_TRAILER_BOOM_075 = "Federico Soler - Effective Trailer Booms Vol. 2/EffectiveTrailer_Booms_Vol2_075.wav"
+_TRAILER_BOOM_214 = "Federico Soler - Effective Trailer Booms Vol. 2/EffectiveTrailer_Booms_Vol2_214.wav"
+_STONE_015 = "BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_015.wav"
+_STONE_041 = "BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_041.wav"
+_STONE_HAMMER = "BluezoneCorp - Stone Impact/Bluezone_BC0297_stone_impact_hammer_015.wav"
+_ROCK_FALL = "BluezoneCorp - Annihilation - Mech/Bluezone_BC0287_annihilation_debris_falling_rock_001.wav"
+_RUBBLE = "BluezoneCorp - Demolisher - Robot/Bluezone_BC0290_demolisher_debris_rubble_texture_004.wav"
+_DEBRIS_HIT = "BluezoneCorp - Invader - Alien Creature/Bluezone_BC0286_invader_debris_impact_011.wav"
+_COLLAPSE_ROCK = "BluezoneCorp - Building Collapse/Bluezone_BC0275_building_collapse_debris_falling_rock_008.wav"
+_COLLAPSE_RUBBLE = "BluezoneCorp - Building Collapse/Bluezone_BC0275_building_collapse_debris_falling_rock_rubble_008.wav"
+_QUAKE = "BluezoneCorp - Alien Tripod/Bluezone_BC0292_alien_tripod_debris_rock_collapse_earthquake_rumble_large_005.wav"
+_BODY_CRUNCH = "344 Audio - Flesh, Bones & Gore/Heavy Body Crunch 02.wav"
+_PUNCH = "344 Audio - Cinematic Fight Vol. 1/FGHTImpt_4 x Punch, Body 02_344 Audio_Cinematic Fight Vol 1.wav"
+_ORC_RAGE = "Epic Stock Media - Humanoid Creatures Vol 4 - Monstrous and Undead Creature Vocalization Sound Sets/CREAHmn_Designed Orc Male Attack Long Heavy Hit Charged Up 03_ESM_HC4.wav"
+_GROWL = "Chupapsound - Essential Scifi/GRWL ROAR ANGRY.wav"
+_BOX_THUMP = "Mechanical Wave - Cardboard and Paper/OBJPack_Big Cardboard Box Impact_ 02_MWSFX_CDAP.wav"
+_METAL_RISER = "Jake Fielding - Haunted Metal Vol.2 - Cinematic Creaks & Risers/DSGNRise_Cinematic Metallic Riser, Trailer, Designed,_JF_Haunted Metal Vol 2_39.wav"
+_GONG_RISER = "344 Audio - Cymbals From Hell Vol. 2/DSGNStngr_Gong, Distorted, Riser, Stinger 06_344 Audio_Cymbals From Hell Vol 2.wav"
+_AIR_RISER = "344 Audio - Cymbals From Hell/Time Bending Risers 21.wav"
+_DARK_RISER = "344 Audio - Cymbals From Hell/Disturbing Risers 06.wav"
+_STRING_RISER = "Justsoundeffects - Horror Jumpscares/DSGNRise_String Riser 13_JSE_HJS.wav"
+_ENERGY_SWELL = "Alexander Kopeikin - Emotion and Magic/magic, energy flow, astonishment-001.wav"
+_SHIMMER = "Epic Stock Media - Anime Game/DSGNStngr_Power Up Bright Positive Successful Light Saturation Crash Shimmer 05_ESM_AG.wav"
+_CHARGE_DOWN = "Rogue Waves - Anime Studio/DSGNMisc_Charge Down Classic 1_RogueWaves_AnimeStudio.wav"
+_GUST = "Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav"
+_DARK_SPELL = "Rogue Waves - Druid Magic/MAGEvil_Dark Spell Dark Energy Attack_RogueWaves_DruidMagic.wav"
+_DARK_TONE = "Mechanical Wave - Glass/GLASTonl_Dark Tone Thrill_07_MWSFX_GL.wav"
+_NOISEBOX_10 = "InMotionAudio - Sinister Textures 4/DSGNErie_NoiseBoxHit_10_InMotionAudio_SinisterTextures4.wav"
+_NOISEBOX_36 = "InMotionAudio - Sinister Textures 4/DSGNErie_NoiseBoxHit_36_InMotionAudio_SinisterTextures4.wav"
+_BELL = "Mechanical Wave - Sound Effects Collection/BELLHand_Metallic Bell_ 22_MWSFX_SEC.wav"
+_IRON_HIT = "Pole Position - The Metal Hit Sweeteners Library/Iron - Thick - HIT - Hammer.wav"
+_PINAKA = "Eiravaein Works - Nocked/Nocked,archery,firing,loose,Pinakabow,mythic,midflight,wide,hum,sizzle,energy,alt8.wav"
+_VAEYAN = "Eiravaein Works - Nocked/Nocked,archery,firing,loose,Vaeyanbow,midflight,wide,mythic,sleek,swirl,rattle,alt14.wav"
+_CROSSBOW = "Eiravaein Works - Nocked/Nocked,archery,firing,loose,crossbow1,carbonbolt,atbow,snap,buzz,airy,bright,alt.wav"
+_HAWK = "2496SoundEffects - Super Heroes Sound Design/Hawk's Arrow Flies Bow and Arrow shoot 2.wav"
+_BAMBOO = "Rogue Waves - Druid Magic/SWSH_Dry Bamboo Leaf Swishes 1_RogueWaves_DruidMagic.wav"
+_WOOD_DROP = "InMotionAudio - Wood/WOODImpt_Drops20_InMotionAudio_Wood.wav"
+_SAIL_HIT = "Gladestock Studios - Naval Warfare/GS sail impact 004.wav"
+_FLESH_DROP = "Justsoundeffects - Gore Mini Pack/GOREFlsh_Flesh Drops on Floor 03_JSE_GMP.wav"
+_FREEZE = "Epic Stock Media - Tower Defense Game/ICEBrk_Skill Freeze Whoosh Break Impact Layered Movement Shatter 03_ESM_TDG.wav"
+_ICE_SNAP = "Alexander Kopeikin - 100 kHz Designed Ice/ice, crack, ice block snapping-001.wav"
+_ICE_FISSURE = "Alexander Kopeikin - 100 kHz Designed Ice/ice, surface cracking, fissure, fast, hard-003.wav"
+_ICE_078 = "BluezoneCorp - Ice Cracking/Bluezone_BC0278_ice_crack_break_078.wav"
+_ICE_189 = "BluezoneCorp - Ice Cracking/Bluezone_BC0278_ice_crack_break_189.wav"
+_ICE_SIZZLE = "Mechanical Wave - Sound Effects Collection/ICEMisc_Ice Sizzle_05_MWSFX_SEC.wav"
+_ICE_HAMMER = "Eneas Mentzel - Frozen Farmlands/ICEBrk_FROZEN FARMLAND Ice Crack hammer pull short_Eneas Mentzel_ _13.wav"
+_SHARDS = "Epic Stock Media - Elemental Mutation Whooshes and Impacts/GLASMvmt_Whoosh Glass Crystal Fragments Sharp Shards Dry 05_ESM_EMWI.wav"
+_ARC = "BluezoneCorp - High Voltage/Bluezone_BC0299_electricity_surge_discharge_electrical_arc_crackling_002_01.wav"
+_ELEC_WHOOSH = "Justsoundeffects - VOLT - Electromagnetic Fields/ELECEmf_Electric Whooshes_JSE_VEMF.wav"
+_ELEC_IMPACT = "Epic Stock Media - Elemental Mutation Whooshes and Impacts/ELECMisc_Impact Electric Tonal Deep Movement Motion Hiss Glitch 01_ESM_EMWI.wav"
+_ELEC_SPELL = "David Dumais Audio - Magic Sound FX Pack 2/MagicPack2_ElectricitySpells_Spell2-002.wav"
+_THUNDER = "InspectorJ - Essentials 01 Thunder/THUN_InsJ_Thunder_Extremely-Close_03.wav"
+_ZAP = "Rescopic Sound - Parallax/SCIMisc_Zap Short 14_RSCPC_PX.wav"
+_BUG_ZAP = "Rogue Waves - Druid Magic/ELECZap_Bug zapper zapping, electricity, crackle,_RogueWaves_DruidMagic_37.wav"
+
+
+def _beats(spec: str, semis: float, period_ms: int, count: int) -> list[tuple[str, float, float, int]]:
+    """One thump repeated `count` times `period_ms` apart: a pulse to cut a loop from."""
+    return [(spec, semis, 0, k * period_ms) for k in range(count)]
+
+
 # cue name -> path under the library root, optionally `@start:duration` to pick a
 # region out of a long recording. A name absent here keeps whatever is already
 # shipped, so this can be filled a few at a time. A LIST is a pool of takes of the
@@ -394,6 +481,278 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         "../elevenlabs/ambient/gull-3.mp3",
         "../elevenlabs/ambient/gull-4.mp3",
     ],
+
+    # ── Class skill expansion: Ironsworn ──────────────────────────────────────────
+    # Infernal Cry: a man's battle cry with fire growling up under it. Four cries of one
+    # voice, the fastest-attacking of the fifteen in the recording (120-680 ms to the top).
+    "skill-infernal-cry-cast": [
+        {"layers": [(f"{_BATTLE_CRY}@12.97:1.70", 0, 0, 0), (_FIRE_GROWL, 0, -10, 150)]},
+        {"layers": [(f"{_BATTLE_CRY}@16.69:1.70", 0, 0, 0), (_FIRE_GROWL, -2, -10, 120)]},
+        {"layers": [(f"{_BATTLE_CRY}@57.83:1.70", 0, 0, 0), (_FIRE_GROWL, 1, -10, 150)]},
+        {"layers": [(f"{_BATTLE_CRY}@5.39:1.70", 0, 0, 0), (_FIRE_GROWL, -1, -10, 200)]},
+    ],
+    # The cry landing on each enemy: a short fiery blast; the built takes lay crackle or the
+    # fire growl under a blast or a designed impact.
+    "skill-infernal-cry-impact": [
+        _FLARE,
+        {"layers": [(f"{_URBAN_BLAST}@0:1.00", 0, -3, 0), (f"{_FIRE_BED}@1.30:0.80", 0, -6, 20)]},
+        {"layers": [(_IMPACT_045, 2, -3, 0), (f"{_FIRE_GROWL}@0.30:0.60", 0, -6, 0)]},
+    ],
+    # Leap Slam: the push-off is a short low whoosh, the flight a heavy pass-by, the
+    # landing the loudest Ironsworn hit (a designed impact with rock under it).
+    "skill-leap-slam-cast": [
+        {"layers": [(f"{_WHOOSH_SHORT}@0.08:0.50", -3, 0, 0)]},
+        {"layers": [(f"{_WHOOSH_SHORT}@8.14:0.45", -3, 0, 0)]},
+        {"layers": [(f"{_WHOOSH_SHORT}@10.90:0.70", -2, 0, 0)]},
+    ],
+    "skill-leap-slam-whoosh": [
+        f"{_HEAVY_WHOOSH}@2.00:1.30",
+        f"{_JET_WHOOSH}@0.30:1.30",
+        {"layers": [(f"{_GEO_WHOOSH}@1.10:1.50", -2, 0, 0)]},
+    ],
+    "skill-leap-slam-impact": [
+        {"layers": [(_IMPACT_045, 0, -3, 0), (_DEBRIS_HIT, 0, -9, 30)]},
+        {"layers": [(_PERC_IMPACT, 0, -3, 0), (f"{_STONE_015}@0:0.60", 0, -9, 0)], "gain": -3.5},
+        {"layers": [(f"{_BOOM_HIT}@0.28:1.50", 0, -3, 0), (_ROCK_FALL, 0, -9, 20)], "gain": -3.5},
+    ],
+    # Earthquake: the two-hander slammed down (swing into a thud), the ground cracking
+    # under the cone, and the aftershock a second later as rumble, boom and falling rock.
+    "skill-earthquake-cast": [
+        f"{_SWING_THUD}@15.08:0.45",
+        f"{_SWING_THUD}@33.06:0.40",
+        f"{_SWING_THUD}@42.08:0.40",
+    ],
+    "skill-earthquake-impact": [
+        {"layers": [(f"{_RUBBLE}@0.08:0.95", 0, -3, 0), (f"{_STONE_041}@0:0.70", 0, -9, 0)]},
+        {"layers": [(_DEBRIS_HIT, 0, -3, 0), (_STONE_HAMMER, -3, -8, 0)]},
+        {"layers": [(f"{_RUBBLE}@0.08:0.95", -3, -3, 0), (_IMPACT_059, 0, -6, 0)]},
+    ],
+    "skill-earthquake-aftershock": [
+        {"layers": [(f"{_QUAKE}@2.80:1.80", 0, -4, 0), (f"{_SUB_BOOM}@0.36:1.80", 0, -4, 0)]},
+        {"layers": [(_RUMBLE_BOOM, 0, -3, 0), (f"{_COLLAPSE_ROCK}@0.80:1.80", 0, -6, 60)]},
+        {"layers": [(f"{_TRAILER_BOOM_075}@0.24:1.80", 0, -3, 0), (f"{_COLLAPSE_RUBBLE}@0:1.80", 0, -7, 40)]},
+    ],
+    # Determination: plate and iron swelling up. A metallic riser and two rises of a gong.
+    "skill-determination-cast": [
+        f"{_METAL_RISER}@2.70:2.40",
+        f"{_GONG_RISER}@0.36:2.40",
+        f"{_GONG_RISER}@7.10:2.20",
+    ],
+    # Sunder: the same two-hander as Earthquake a tone down, a stone cracking into a body
+    # for the hit, and one rock burst per step of the line.
+    "skill-sunder-cast": [
+        {"layers": [(f"{_SWING_THUD}@3.06:0.55", -2, 0, 0)]},
+        {"layers": [(f"{_SWING_THUD}@30.02:0.70", -2, 0, 0)]},
+        {"layers": [(f"{_SWING_THUD}@45.04:0.45", -2, 0, 0)]},
+    ],
+    "skill-sunder-impact": [
+        {"layers": [(_STONE_HAMMER, 0, -3, 0), (f"{_BODY_CRUNCH}@0.40:0.40", 0, -6, 0)]},
+        {"layers": [(f"{_STONE_015}@0:0.60", -2, -3, 0), (f"{_BODY_CRUNCH}@2.80:0.40", 0, -6, 0)], "gain": -2},
+        {"layers": [(f"{_STONE_041}@0:0.70", 0, -3, 0), (f"{_PUNCH}@1.12:0.35", 0, -7, 0)]},
+    ],
+    "skill-sunder-burst": [
+        {"layers": [(f"{_COLLAPSE_ROCK}@2.92:0.75", 0, -3, 0), (_IMPACT_059, -3, -8, 0)]},
+        {"layers": [(f"{_COLLAPSE_ROCK}@3.82:0.80", 0, -3, 0), (_IMPACT_059, -5, -8, 0)]},
+        {"layers": [(f"{_COLLAPSE_RUBBLE}@3.92:0.45", 0, -3, 0), (_IMPACT_059, -2, -8, 0)], "gain": -3},
+        {"layers": [(f"{_COLLAPSE_RUBBLE}@4.52:0.40", 0, -3, 0), (_IMPACT_059, -4, -8, 0)]},
+    ],
+    # Blood Rage: a charged-up roar with a heart thump under it (the box below, an octave
+    # of tape down). Take 3 is an angrier growl over the same thump.
+    "skill-blood-rage-cast": [
+        {"layers": [(_ORC_RAGE, 0, -3, 0), (f"{_BOX_THUMP}@0:0.62", -5, -8, 0)]},
+        {"layers": [(_ORC_RAGE, -2, -3, 0), (f"{_BOX_THUMP}@0:0.62", -7, -8, 0)]},
+        {"layers": [(f"{_GROWL}@0:2.00", 0, -3, 0), (f"{_BOX_THUMP}@0:0.62", -5, -8, 0)]},
+    ],
+
+    # ── Class skill expansion: Stalker ────────────────────────────────────────────
+    # Four real looses exist (two Nocked bows, a crossbow, the Super Heroes shot), so a
+    # Stalker skill is a loose with its element laid under it. The bows peak 20 dB under
+    # the crossbow, hence the +16/+18 on them: the element sits ~6 dB under the loose.
+    # Escape Shot: the loose plus the dry swish of the hop back; the hit chills.
+    "skill-escape-shot-cast": [
+        {"layers": [(_CROSSBOW, 0, -3, 0), (f"{_BAMBOO}@0.02:0.40", 0, -3, 20)], "gain": -3},
+        {"layers": [(_PINAKA, 1, 16, 0), (f"{_BAMBOO}@2.04:0.45", 0, -6, 20)]},
+        {"layers": [(_VAEYAN, -1, 18, 0), (f"{_BAMBOO}@0.96:0.40", 0, -2, 20)]},
+    ],
+    "skill-escape-shot-impact": [
+        {"layers": [(_WOOD_DROP, 0, -3, 0), (_ICE_078, 0, -8, 20)]},
+        {"layers": [(_SAIL_HIT, 0, -3, 0), (f"{_ICE_189}@0:0.90", 0, -9, 20)], "gain": -4},
+        {"layers": [(f"{_FLESH_DROP}@4.58:0.30", 0, -3, 0), (f"{_ICE_SNAP}@1.70:0.50", 0, -4, 10)]},
+    ],
+    # Ice Shot: the loose with crystal shards or frost hiss; the burst a freezing shatter.
+    "skill-ice-shot-cast": [
+        {"layers": [(_VAEYAN, 0, 18, 0), (f"{_SHARDS}@1.10:0.70", 0, -10, 40)]},
+        {"layers": [(_PINAKA, 0, 16, 0), (f"{_ICE_SIZZLE}@0.28:0.70", 0, -14, 30)]},
+        {"layers": [(_CROSSBOW, -1, -3, 0), (f"{_SHARDS}@1.30:0.60", 0, -10, 30)], "gain": -4},
+    ],
+    "skill-ice-shot-impact": [
+        _FREEZE,
+        f"{_ICE_SNAP}@0.48:1.20",
+        f"{_ICE_FISSURE}@0.28:1.40",
+    ],
+    # Sniper's Mark: a dark spell with a small bell struck as the mark lands.
+    "skill-snipers-mark-cast": [
+        {"layers": [(f"{_DARK_SPELL}@0.02:0.80", 0, -3, 0), (_BELL, 0, -12, 60)]},
+        {"layers": [(f"{_DARK_SPELL}@0.86:0.95", 0, -3, 0), (_BELL, 2, -12, 60)]},
+        {"layers": [(_DARK_TONE, 0, -3, 0), (_BELL, -2, -10, 40)]},
+    ],
+    # Lightning Arrow: the loose wrapped in an electric whoosh or arc; the hit a thunder
+    # crack or a designed electric impact; each chain jump a short zap.
+    "skill-lightning-arrow-cast": [
+        {"layers": [(_CROSSBOW, 0, -3, 0), (f"{_ELEC_WHOOSH}@6.72:0.90", 0, -6, 0)]},
+        {"layers": [(_PINAKA, 0, 16, 0), (f"{_ELEC_WHOOSH}@12.28:0.90", 0, -9, 0)], "gain": -5},
+        {"layers": [(_VAEYAN, 1, 18, 0), (f"{_ARC}@0:0.70", 0, -15, 0)]},
+    ],
+    "skill-lightning-arrow-impact": [
+        {"layers": [(f"{_THUNDER}@1.16:1.20", 0, -3, 0), (f"{_ARC}@0.40:0.70", 0, -12, 0)]},
+        f"{_ELEC_IMPACT}@0:1.30:-3",
+        f"{_ELEC_SPELL}@1.00:1.20:-3",
+    ],
+    "skill-lightning-arrow-chain": [
+        f"{_ZAP}@0:0.45",
+        f"{_ARC}@1.20:0.40",
+        {"layers": [(f"{_BUG_ZAP}@0:0.25", 0, 0, 0), (f"{_ARC}@2.20:0.35", 0, -12, 0)]},
+    ],
+    # Rain of Arrows: a volley, three looses staggered 50-140 ms; each arrow coming down a
+    # dry wooden thunk; a hit a thud into flesh with the shaft's knock on top.
+    "skill-rain-of-arrows-cast": [
+        {"layers": [(f"{_HAWK}@0.30:1.00", 0, 5, 0), (_PINAKA, 0, 16, 70), (_VAEYAN, 0, 18, 140)]},
+        {"layers": [(_CROSSBOW, 0, -3, 0), (f"{_HAWK}@0.30:1.00", 1, 5, 50), (_PINAKA, -1, 16, 110)]},
+        {"layers": [(_VAEYAN, 0, 18, 0), (_CROSSBOW, 2, -4, 60), (f"{_HAWK}@0.30:1.00", -1, 5, 120)]},
+    ],
+    "skill-rain-of-arrows-impact": [
+        {"layers": [(f"{_FLESH_DROP}@13.70:0.30", 0, -3, 0), (_WOOD_DROP, 0, -7, 0)]},
+        {"layers": [(f"{_FLESH_DROP}@2.22:0.30", 0, -3, 0), (_WOOD_DROP, 2, -7, 0)]},
+        {"layers": [(f"{_FLESH_DROP}@22.20:0.25", 0, -3, 0), (_WOOD_DROP, -2, -7, 0)]},
+    ],
+    # One recording, four falls: the wood drop at three tape speeds and a sail thump.
+    "skill-rain-of-arrows-arrow": [
+        _WOOD_DROP,
+        {"layers": [(_WOOD_DROP, -3, 0, 0)]},
+        {"layers": [(_WOOD_DROP, 3, 0, 0)]},
+        {"layers": [(f"{_SAIL_HIT}@0:0.40", 3, 0, 0)], "gain": -4},
+    ],
+    # Haste: an airy riser climbing to 13 kHz with a bright shimmer struck at its top.
+    "skill-haste-cast": [
+        {"layers": [(f"{_AIR_RISER}@4.90:1.60", 0, 0, 0), (_SHIMMER, 0, -8, 1150)]},
+        {"layers": [(f"{_ENERGY_SWELL}@1.00:1.50", 0, 6, 0), (_SHIMMER, 2, -8, 750)]},
+        {"layers": [(f"{_AIR_RISER}@4.90:1.60", 2, 0, 0), (_SHIMMER, -2, -8, 960)]},
+    ],
+
+    # ── Class skill expansion: Emberbound ─────────────────────────────────────────
+    # The bundle still holds no designed fire impact, so the fire cues are built: a fire
+    # growl, a searing burst, a fireworks launch or blast, each with crackle under it.
+    "skill-flame-dash-cast": [
+        {"layers": [(_FIRE_GROWL, 3, 0, 0)], "gain": -3},
+        {"layers": [(f"{_SEAR}@0:1.00", 0, -3, 0), (f"{_WHOOSH_SHORT}@8.14:0.45", 0, -9, 0)], "gain": -3},
+        {"layers": [(f"{_LAUNCH}@0:1.00", 2, -3, 0), (f"{_FIRE_BED}@6.00:0.80", 0, -8, 0)]},
+    ],
+    "skill-flame-dash-trail": [
+        {"layers": [(f"{_SEAR}@0:0.80", 2, 0, 0)]},
+        {"layers": [(f"{_FIRE_BED}@1.40:0.60", 0, -3, 0), (f"{_WHOOSH_SHORT}@0.08:0.50", 0, -9, 0)]},
+        {"layers": [(f"{_FIRE_BED}@3.00:0.60", 0, -3, 0), (f"{_WHOOSH_SHORT}@10.90:0.60", 2, -9, 0)]},
+    ],
+    "skill-flame-dash-impact": [
+        {"layers": [(f"{_FIRE_GROWL}@0.10:0.90", -3, -3, 0), (_IMPACT_059, 0, -6, 0)], "gain": -4},
+        {"layers": [(_FLARE, -3, 0, 0)], "gain": -2},
+        {"layers": [(f"{_FIREWORKS}@18.30:0.70", 0, 0, 0), (f"{_FIRE_BED}@8.00:0.80", 0, -10, 20)]},
+    ],
+    # Ember Nova: a deep whoomp round the caster (a designed blast's front), crackle on top.
+    "skill-ember-nova-cast": [
+        {"layers": [(f"{_NUKE}@0:1.40", 0, -3, 0), (f"{_FIRE_BED}@4.00:1.20", 0, -6, 0)]},
+        {"layers": [(_RUMBLE_BOOM, 2, -3, 0), (f"{_FIRE_BED}@9.00:1.20", 0, -6, 0)]},
+        {"layers": [(f"{_SEAR}@0:1.20", -3, -3, 0), (f"{_SUB_BOOM}@0.36:1.20", 0, -8, 0)]},
+    ],
+    "skill-ember-nova-impact": [
+        {"layers": [(f"{_FLARE}@0:0.60", 2, 0, 0)]},
+        {"layers": [(f"{_FLARE}@0:0.60", -2, 0, 0)]},
+        {"layers": [(f"{_URBAN_BLAST}@0:0.80", 3, -3, 0), (f"{_FIRE_BED}@7.00:0.60", 0, -8, 20)]},
+    ],
+    # Flammability: a dark designed hit with a long tail, fire catching under it.
+    "skill-flammability-cast": [
+        {"layers": [(f"{_NOISEBOX_36}@0:1.40", 0, -3, 0), (f"{_FIRE_BED}@2.00:1.20", 0, -8, 100)]},
+        {"layers": [(f"{_NOISEBOX_36}@0:1.40", 2, -3, 0), (f"{_FIRE_BED}@5.00:1.20", 0, -8, 100)]},
+        {"layers": [(f"{_NOISEBOX_36}@0:1.40", -3, -3, 0), (f"{_SEAR}@0:1.00", 0, -10, 150)]},
+    ],
+    # Solar Orb: something burning thrown, a gas burner's roar catching under it; each
+    # pulse a short sear or crackle with a small knock.
+    "skill-solar-orb-cast": [
+        {"layers": [(f"{_LAUNCH}@0:1.20", -3, -3, 0), (f"{_BOILER}@10.00:1.20", 0, -10, 0)]},
+        {"layers": [(_FIRE_GROWL, 1, -3, 0), (f"{_BOILER}@30.00:1.00", 0, -10, 0)], "gain": -3},
+        {"layers": [(f"{_SEAR}@0:1.00", 1, -3, 0), (f"{_BOILER}@50.00:1.00", 0, -8, 0)], "gain": -3},
+    ],
+    "skill-solar-orb-impact": [
+        {"layers": [(f"{_SEAR}@0:0.60", 3, -3, 0), (_IMPACT_059, 2, -10, 0)]},
+        {"layers": [(f"{_FIRE_BED}@1.50:0.50", 0, -3, 0), (_IMPACT_059, 0, -8, 0)]},
+        {"layers": [(f"{_SEAR}@0.10:0.50", 5, -3, 0), (_IMPACT_059, -2, -10, 0)]},
+    ],
+    # Firestorm: a designed meteor shower. Its first approach is the call, its densest
+    # stretches the storm landing; each meteor a cannonball or a boom with fire on it.
+    "skill-firestorm-cast": [
+        f"{_METEORS}@1.20:2.00",
+        {"layers": [(f"{_LAUNCH}@0:1.40", -5, -3, 0), (f"{_FIRE_BED}@3.00:1.40", 0, -6, 0)]},
+        {"layers": [(f"{_METEORS}@1.20:2.00", -2, 0, 0)]},
+    ],
+    "skill-firestorm-impact": [
+        f"{_METEORS}@5.30:1.70",
+        f"{_METEORS}@13.90:1.70",
+        f"{_METEORS}@18.10:1.70",
+    ],
+    "skill-firestorm-meteor": [
+        _CANNONBALL,
+        {"layers": [(_CANNONBALL, -2, -3, 0), (f"{_FIRE_BED}@4.20:0.90", 0, -10, 20)]},
+        {"layers": [(f"{_TRAILER_BOOM_214}@0.24:1.40", 0, -3, 0), (f"{_FIRE_BED}@6.50:0.90", 0, -10, 20)]},
+        {"layers": [(f"{_FIREWORKS}@12.40:0.60", -4, -3, 0), (f"{_SUB_BOOM}@0.36:1.20", 0, -6, 0)]},
+    ],
+    # Herald of Ash: a riser with fire crackling through it; a kill igniting is a pop of
+    # flame with crackle after.
+    "skill-herald-of-ash-cast": [
+        {"layers": [(f"{_DARK_RISER}@2.80:2.10", 0, -3, 0), (f"{_FIRE_BED}@0.50:2.10", 0, -8, 0)]},
+        {"layers": [(f"{_STRING_RISER}@3.40:1.80", 0, -3, 0), (f"{_FIRE_BED}@5.50:1.80", 0, -8, 0)]},
+        {"layers": [(_FIRE_GROWL, -5, 0, 0), (f"{_FIRE_BED}@8.50:1.60", 0, -10, 0)]},
+    ],
+    "skill-herald-of-ash-burst": [
+        {"layers": [(f"{_FIREWORKS}@15.12:0.50", -3, 0, 0), (f"{_FIRE_BED}@2.20:0.60", 0, -8, 20)], "gain": 2},
+        {"layers": [(f"{_LAUNCH}@0:0.70", 3, -3, 0), (f"{_FIRE_BED}@4.60:0.60", 0, -8, 0)]},
+        {"layers": [(f"{_FIRE_GROWL}@0.10:0.70", 2, 0, 0)], "gain": -4},
+    ],
+
+    # ── Class skill expansion: shared aura and status cues ────────────────────────
+    # Any aura switched off: a charge-down that falls in level and brightness together
+    # (6.5 kHz to 2 kHz over a second), and the falling half of a gust a third down.
+    "skill-aura-off": [
+        _CHARGE_DOWN,
+        {"layers": [(f"{_GUST}@1.40:1.80", -4, 0, 0)]},
+        {"layers": [(_CHARGE_DOWN, -3, 0, 0)]},
+    ],
+    "skill-status-chilled": [
+        f"{_ICE_SIZZLE}@0.26:0.70:-5",
+        f"{_ICE_SIZZLE}@6.30:0.60",
+        {"layers": [(f"{_ICE_HAMMER}@0.50:0.50", 0, -3, 0), (f"{_ICE_SIZZLE}@3.00:0.50", 0, -10, 0)]},
+    ],
+    # A clang that rings: a hand bell tape-slowed under a dead iron hit.
+    "skill-status-stunned": [
+        {"layers": [(f"{_BELL}@0:1.20", -7, -3, 0), (f"{_IRON_HIT}@1.78:0.30", -5, -8, 0)]},
+        {"layers": [(f"{_BELL}@0:1.20", -10, -3, 0), (f"{_IRON_HIT}@5.32:0.30", -5, -8, 0)]},
+        {"layers": [(f"{_BELL}@0:1.20", -4, -3, 0), (f"{_IRON_HIT}@10.30:0.30", -7, -8, 0)]},
+    ],
+    "skill-status-marked": [
+        f"{_BELL}@0:0.80",
+        {"layers": [(f"{_BELL}@0:0.80", 3, 0, 0)]},
+        {"layers": [(f"{_DARK_TONE}@0:0.70", 2, 0, 0)], "gain": -4},
+    ],
+    "skill-status-flammable": [
+        f"{_FIRE_BED}@4.10:0.60:-5",
+        {"layers": [(f"{_WOODSTOVE}@2.30:0.40", 0, -3, 0), (f"{_FIRE_BED}@7.40:0.50", 0, -6, 0)]},
+        {"layers": [(f"{_FIRE_BED}@11.00:0.60", 2, 0, 0)], "gain": -7},
+    ],
+    # A searing hiss at three tape speeds. Not the campfire's pine sizzles: crest 27-30 dB,
+    # they shaped to 0.1-0.36 s at -34 dB RMS, a tick rather than a burn.
+    "skill-status-scorched": [
+        {"layers": [(f"{_SEAR}@0:0.70", -2, 0, 0)]},
+        {"layers": [(f"{_SEAR}@0:0.70", 1, 0, 0)]},
+        {"layers": [(f"{_SEAR}@0.15:0.70", -4, 0, 0)]},
+    ],
 }
 
 
@@ -404,7 +763,7 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
 #
 # `duration` is the loop LENGTH; CROSSFADE seconds beyond it are consumed making the
 # seam, so the source has to hold that much more material after the region.
-LOOP_SOURCES: dict[str, str | list[str]] = {
+LOOP_SOURCES: dict[str, str | list[str | dict]] = {
     # A fireball in flight is a rocket, the way it has always been done: the middle of
     # a blast-off, after the ignition transient and before it thins out. The bolt's own
     # cast whoosh still fires over the top of this.
@@ -424,6 +783,21 @@ LOOP_SOURCES: dict[str, str | list[str]] = {
         "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@0.50:2.40",
         "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@136.50:2.40",
         "344 Audio - Haunting Ambiences Vol. 5/FIRECrkl_Fire Crackling, Popping, Witch's Cauldron_344 Audio_Haunting Ambiences Vol 5.wav@100.50:2.40:-7.1",
+    ],
+    # A take may be a layered dict here too, with `loop` its length: the mix is cut as
+    # one source from 0. Solar Orb hovers as a gas burner's steady roar (1 dB of level
+    # drift over its first 30 s) with fire crackle 8 dB under it.
+    "skill-solar-orb-loop": [
+        {"layers": [(f"{_BOILER}@5.00:3.50", 0, 0, 0), (f"{_FIRE_BED}@1.00:3.50", 0, -8, 0)], "loop": 2.40},
+        {"layers": [(f"{_BOILER}@20.00:3.50", 0, 0, 0), (f"{_FIRE_BED}@5.00:3.50", 0, -8, 0)], "loop": 2.40},
+        {"layers": [(f"{_BOILER}@60.00:3.50", 0, 0, 0), (f"{_FIRE_BED}@8.00:3.50", 0, -8, 0)], "loop": 2.40},
+    ],
+    # The library holds no heartbeat. Its box impact is two thumps 280 ms apart, the
+    # second the stronger: a lub-dub. Tape-slowed and repeated at 80 bpm, four beats to a
+    # loop; the period divides the loop, so the crossfaded seam lands on the same beat.
+    "skill-blood-rage-heartbeat": [
+        {"layers": _beats(f"{_BOX_THUMP}@0:0.66", -5, 750, 6), "loop": 3.00},
+        {"layers": _beats(f"{_BOX_THUMP}@0:0.66", -7, 750, 6), "loop": 3.00},
     ],
 }
 
@@ -445,7 +819,7 @@ def layout(channels: int) -> str:
     return "mono" if channels == 1 else "stereo"
 
 
-def to_loop(src: str, dst: str, start: float, duration: float) -> None:
+def to_loop(src: str, dst: str, start: float, duration: float, dynamic: bool = True) -> None:
     """Cut a seamless loop of exactly `duration` seconds.
 
     The tail is crossfaded over the head rather than butt-joined: two points of one
@@ -453,20 +827,31 @@ def to_loop(src: str, dst: str, start: float, duration: float) -> None:
     the loop rate. Taking the body from `start + CROSSFADE` and fading the material
     at `start` back in under it means the end of the output runs into what its own
     beginning already is.
+
+    `dynamic=False` levels with one static gain instead of loudnorm: on a pulse,
+    loudnorm's gain at the file edges ran 6-8 dB over the middle, a louder beat per cycle.
     """
     body_from = start + CROSSFADE
+    # One-pass loudnorm: a bed is held for seconds under one-shots, so it is
+    # levelled well below the trimmer's target for events and trimmed of peaks.
+    norm = "loudnorm=I=-23:TP=-3.0," if dynamic else ""
     cmd = [
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", src,
         "-filter_complex",
         f"[0:a]atrim={body_from:.3f}:{body_from + duration:.3f},asetpts=PTS-STARTPTS[a];"
         f"[0:a]atrim={start:.3f}:{start + CROSSFADE:.3f},asetpts=PTS-STARTPTS[b];"
         f"[a][b]acrossfade=d={CROSSFADE}:c1=tri:c2=tri,"
-        # One-pass loudnorm: a bed is held for seconds under one-shots, so it is
-        # levelled well below the trimmer's target for events and trimmed of peaks.
-        f"loudnorm=I=-23:TP=-3.0,aformat=sample_fmts=s16:sample_rates=48000:channel_layouts={layout(channels_of(src))}",
+        f"{norm}aformat=sample_fmts=s16:sample_rates=48000:channel_layouts={layout(channels_of(src))}",
         "-c:a", "pcm_s16le", dst,
     ]
     subprocess.run(cmd, check=True)
+    if not dynamic:
+        out = subprocess.run(
+            ["ffmpeg", "-hide_banner", "-nostats", "-i", dst, "-af", "volumedetect", "-f", "null", "-"],
+            capture_output=True, text=True, errors="ignore",
+        ).stderr
+        mean = float(out.split("mean_volume:")[1].split("dB")[0])
+        regain(dst, -23.0 - mean)
 
 
 def to_48k(src: str, dst: str, start: float, duration: float) -> None:
@@ -509,7 +894,7 @@ def to_layered(lib: str, layers: list, dst: str) -> None:
         cmd += ["-ss", start or "0", "-t", dur or "30", "-i", os.path.join(lib, rel)]
         rate = 48000 * 2 ** (semis / 12)
         chains.append(f"[{i}:a]aformat=channel_layouts={layout(channels)},aresample=48000,asetrate={rate:.1f},"
-                      f"aresample=48000,volume={gain}dB,adelay={at_ms}[l{i}]")
+                      f"aresample=48000,volume={gain}dB,adelay={at_ms}:all=1[l{i}]")
     mix = "".join(f"[l{i}]" for i in range(len(layers)))
     cmd += ["-filter_complex", ";".join(chains) + f";{mix}amix=inputs={len(layers)}:normalize=0",
             "-ac", str(channels), "-ar", "48000", "-c:a", "pcm_s16le", dst]
@@ -565,7 +950,12 @@ def main() -> None:
             continue
         src = os.path.join(args.lib, rels[0])
         with tempfile.TemporaryDirectory() as tmp:
-            if isinstance(spec, dict):
+            if isinstance(spec, dict) and cue in LOOP_SOURCES:
+                staged = os.path.join(tmp, cue + ".mix.wav")
+                to_layered(args.lib, layers, staged)
+                done = os.path.join(tmp, cue + ".wav")
+                to_loop(staged, done, 0.0, float(spec["loop"]), dynamic=False)
+            elif isinstance(spec, dict):
                 staged = os.path.join(tmp, cue + ".wav")
                 to_layered(args.lib, layers, staged)
                 shaped = os.path.join(tmp, "out")

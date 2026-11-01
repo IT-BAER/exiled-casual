@@ -16,7 +16,10 @@ self.onmessage = (e: MessageEvent) => {
   if (!isToWorker(raw)) return;
   const msg = raw;
   if (msg.type === "init") {
-    const c = new WorkerCore(msg.seed, undefined, msg.characterId, msg.bot === true || msg.tour === true, msg.tour !== true);
+    // `lab` (DEV, `?play&lab`) rides outside the protocol type: the guard ignores keys it does not know.
+    const lab = import.meta.env.DEV ? (raw as { lab?: unknown }).lab : undefined;
+    const c = new WorkerCore(msg.seed, undefined, msg.characterId, msg.bot === true || msg.tour === true, msg.tour !== true,
+      typeof lab === "string" ? lab : undefined);
     // `core` is assigned only once the saved run is in: the interval's `!core`
     // guard is what keeps a pre-hydration world (no skills, empty bar, a dead
     // left click) from ever reaching the renderer as snapshot 1.
@@ -35,7 +38,7 @@ self.onmessage = (e: MessageEvent) => {
     // isToWorker only checks intent is a non-null object — deep-validate its fields.
     core.pushIntent(validateIntent(msg.intent));
   } else if (msg.type === "spawn" && core && import.meta.env.DEV) {
-    core.spawn(msg.what);
+    core.spawn(msg.what, msg.count);
   } else if (msg.type === "dev" && core && import.meta.env.DEV) {
     const dump = core.dev(msg.op);
     if (dump !== undefined) self.postMessage({ type: "devDump", dump } satisfies FromWorker);

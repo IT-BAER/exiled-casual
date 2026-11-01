@@ -140,6 +140,65 @@ describe("WorkerCore", () => {
     expect(core.getAreaLayout().hash).not.toBe(generateArea(mapSeed, CONTENT_VERSION, "loop").hash);
   });
 
+  it("the skill lab stands a fresh level-30 class with its kit slotted before dummies, and never reads or writes a save", async () => {
+    class CountingKv extends MemoryKv {
+      reads = 0;
+      override load(): Promise<string | null> { this.reads++; return super.load(); }
+    }
+    const kv = new CountingKv();
+    await saveRoster(kv, emptyRoster());
+    const reads = kv.reads;
+    const writesBefore = kv.writes;
+    const core = new WorkerCore(42, kv, "", false, false, "class.stalker");
+    expect(await core.hydrate()).toBe(true);
+    expect(kv.reads).toBe(reads);
+    core.advance(34);
+    const s = core.snapshot()!;
+    expect(s.player.classId).toBe("class.stalker");
+    expect(s.player.level).toBe(30);
+    expect(s.player.life).toBe(s.player.maxLife);
+    const ids = (s.skills ?? []).map((k) => k.id);
+    for (const id of ["skill.escape_shot.v1", "skill.rain_of_arrows.v1", "skill.haste.v1"]) expect(ids).toContain(id);
+    expect(s.skillBar?.slice(0, 5).every((id) => id !== null)).toBe(true);
+    // Every class skill tells the tooltip what it does.
+    for (const k of s.skills ?? []) expect(k.lines.length, k.id).toBeGreaterThan(0);
+    expect(s.entities.filter((e) => e.kind === "monster")).toHaveLength(7);
+    for (let i = 0; i < 90; i++) core.advance(34);
+    core.pushIntent({ kind: "moveTo", x: fp(3), y: fp(3) });
+    for (let i = 0; i < 30; i++) core.advance(34);
+    expect(kv.writes).toBe(writesBefore);
+  });
+
+  it("home puts him back on his start facing the arc, travel dropped, a fresh seven dummies, refilled", () => {
+    const core = new WorkerCore(42);
+    core.advance(34);
+    const start = core.snapshot()!.player;
+    core.spawn("pack");
+    core.spawn("dummy", 2);
+    core.pushIntent({ kind: "moveTo", x: fp(start.x + 4), y: fp(start.y - 3) });
+    for (let i = 0; i < 30; i++) core.advance(34);
+    expect(core.snapshot()!.player.x).not.toBeCloseTo(start.x, 1);
+    core.dev({ op: "home" });
+    core.advance(34);
+    const s = core.snapshot()!;
+    expect(s.player.x).toBeCloseTo(start.x, 3);
+    expect(s.player.y).toBeCloseTo(start.y, 3);
+    expect(s.player.travel).toBeUndefined();
+    expect(s.player.life).toBe(s.player.maxLife);
+    const dummies = s.entities.filter((e) => e.kind === "monster");
+    expect(dummies).toHaveLength(7);
+    // In front of him: down +y.
+    expect(dummies.every((e) => e.y > s.player.y)).toBe(true);
+  });
+
+  it("stands as many dummies as asked", () => {
+    const core = new WorkerCore(42);
+    core.advance(34);
+    core.spawn("dummy", 3);
+    core.advance(34);
+    expect(monsters(core)).toHaveLength(3);
+  });
+
   it("bot mode plays the map on its own and never writes the save", () => {
     const kv = new MemoryKv();
     const core = new WorkerCore(42, kv, "", true);

@@ -770,7 +770,7 @@ describe("buildSnapshot - skills", () => {
       .filter((d) => !UTILITY_SKILLS.has(d.id) && (!d.classId || d.classId === "class.emberbound"))
       .map((d) => d.id);
     expect(ids).toEqual(new Set(own));
-    expect(ids.size).toBe(4);
+    expect(ids.size).toBe(10);
   });
 
   it("never lists a utility skill, even at the level that used to open it", () => {

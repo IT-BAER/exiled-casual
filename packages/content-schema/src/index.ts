@@ -44,6 +44,39 @@ export interface AilmentSpec {
   maxStacks: number;
 }
 
+/**
+ * A timed monster-side debuff a hit or a curse leaves (`chilled`, `scorched`,
+ * `marked`...). The same id refreshes, never stacks. Bosses take `stunTicks` as 0
+ * and `slowPct` at half (PoE: rarity reduces slows, bosses resist stun).
+ */
+export interface StatusSpec {
+  statusId: string;
+  durationTicks: number;
+  /** Increased damage taken while it lasts; negative reduces. */
+  damageTakenPct?: number;
+  /** Only hits of this type are increased. Absent = every type. */
+  damageTakenType?: DamageType;
+  slowPct?: number;
+  stunTicks?: number;
+}
+
+/** What lands where an area hit or a travel's arrival lands. */
+export interface AreaHitBody {
+  radiusFixed: Fixed;
+  damage?: DamageSpec;
+  /** Pushes enemies away from the centre, swept against walls. */
+  knockbackFixed?: Fixed;
+  stunTicks?: number;
+  onHit?: StatusSpec;
+}
+
+/** Ground a skill leaves behind it: a burning trail, a herald's corpse fire. */
+export interface GroundSpawnSpec {
+  radiusFixed: Fixed;
+  durationTicks: number;
+  ailment: AilmentSpec;
+}
+
 export type EffectNode =
   | {
       type: "spawnProjectile";
@@ -62,12 +95,103 @@ export type EffectNode =
       count?: number;
       /** Full width of the fan. Every projectile's offset must land on a 5 degree step. */
       spreadDegrees?: number;
+      /** On a hit, the same hit lands on every other enemy within this of the struck body. */
+      explodeRadiusFixed?: Fixed;
+      /** On a hit, a new bolt leaves the struck body toward the nearest enemy not yet hit. */
+      chainCount?: number;
+      /** How far a chain looks for its next body. Required with chainCount. */
+      chainRangeFixed?: Fixed;
+      onHit?: StatusSpec;
     }
   | {
       type: "spawnGroundArea";
       radiusFixed: Fixed;
       durationTicks: number;
-      ailment: AilmentSpec;
+      /** At least one of ailment and pulse. */
+      ailment?: AilmentSpec;
+      /** A hit on everything inside, at once and then every `everyTicks`. */
+      pulse?: { damage: DamageSpec; everyTicks: number };
+      /** Slows enemies standing in it (they read as `chilled`). */
+      slowPct?: number;
+    }
+  /**
+   * One or more impacts, each its own entity so the client always sees it.
+   * Impact i lands at delayTicks + i * intervalTicks, i * stepFixed further along
+   * the aim, offset inside a scatterFixed disc drawn from the `skillScatter` stream.
+   */
+  | {
+      type: "areaHit";
+      at: "self" | "target";
+      radiusFixed: Fixed;
+      damage?: DamageSpec;
+      /** Target clamp, swept against walls like a ground area. */
+      maxRangeFixed?: Fixed;
+      delayTicks?: number;
+      /** Impacts, default 1. */
+      count?: number;
+      intervalTicks?: number;
+      stepFixed?: Fixed;
+      scatterFixed?: Fixed;
+      /** A cone opens along the aim from the centre; needs arcDegrees. */
+      shape?: "disc" | "cone";
+      arcDegrees?: number;
+      knockbackFixed?: Fixed;
+      stunTicks?: number;
+      onHit?: StatusSpec;
+    }
+  /**
+   * A buff on the caster. durationTicks 0 is a toggled aura: casting it again
+   * turns it off and frees its reservation. A timed buff refreshes, never stacks.
+   */
+  | {
+      type: "applyBuff";
+      buffId: string;
+      durationTicks: number;
+      /** Aura only: percent of maximum mana held while it is on. */
+      reserveManaPct?: number;
+      /** Increased damage. */
+      damagePct?: number;
+      /** Increased attack and cast speed. */
+      speedPct?: number;
+      moveSpeedPct?: number;
+      /** Increased damage taken; negative reduces. */
+      damageTakenPct?: number;
+      lifeRegenPerSecFixed?: Fixed;
+      /** Life lost per second; never takes life below 1. */
+      lifeDrainPerSecFixed?: Fixed;
+      /** Increased critical strike chance. */
+      critChancePct?: number;
+      /** Kills while it is on leave this ground on the corpse. */
+      onKillGround?: GroundSpawnSpec;
+    }
+  /** A curse, mark or warcry: a status on enemies in a disc (or the one nearest its centre). */
+  | {
+      type: "applyStatus";
+      at: "self" | "target";
+      radiusFixed: Fixed;
+      maxRangeFixed?: Fixed;
+      /** Only the enemy nearest the centre. */
+      single?: 1;
+      statusId: string;
+      durationTicks: number;
+      damageTakenPct?: number;
+      damageTakenType?: DamageType;
+      slowPct?: number;
+      stunTicks?: number;
+      /** Wakes the struck monsters and alerts their packs. */
+      taunt?: 1;
+    }
+  /**
+   * The caster moves on a fixed heading for `ticks`, swept against walls; moves
+   * and casts wait as a roll makes them wait. "toward" stops at the aim if nearer.
+   */
+  | {
+      type: "travel";
+      distanceFixed: Fixed;
+      ticks: number;
+      direction?: "toward" | "away";
+      arrival?: AreaHitBody;
+      trail?: { spacingFixed: Fixed; radiusFixed: Fixed; durationTicks: number; ailment: AilmentSpec };
     }
   /**
    * A swing that lands the moment it is cast: no entity, no travel, no tick of
@@ -396,6 +520,67 @@ function validateAilmentSpec(v: unknown, path: string, errors: string[]): boolea
   return ok;
 }
 
+function isPctRange(v: unknown, min: number, max: number): boolean {
+  return typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+}
+
+/** Buff and status ids name a look and an icon on the client: snake_case. */
+function isStatusId(v: unknown): boolean {
+  return typeof v === "string" && /^[a-z][a-z0-9_]*$/.test(v);
+}
+
+function optNonNegInts(v: Record<string, unknown>, path: string, fields: readonly string[], errors: string[]): void {
+  for (const f of fields) {
+    if (v[f] !== undefined && !isNonNegInt(v[f])) errors.push(`${path}.${f}: must be a non-negative integer when present`);
+  }
+}
+
+function validateAt(v: Record<string, unknown>, path: string, errors: string[]): void {
+  if (v["at"] !== "self" && v["at"] !== "target") errors.push(`${path}.at: must be "self" or "target"`);
+}
+
+/** A StatusSpec, standalone (`onHit`) or inlined into an applyStatus node. */
+function validateStatusSpec(v: unknown, path: string, standalone: boolean, errors: string[]): void {
+  if (!isObj(v)) {
+    errors.push(`${path}: must be an object`);
+    return;
+  }
+  if (!isStatusId(v["statusId"])) errors.push(`${path}.statusId: must be a snake_case id`);
+  if (!isNonNegInt(v["durationTicks"])) errors.push(`${path}.durationTicks: must be a non-negative integer`);
+  if (v["damageTakenPct"] !== undefined && !Number.isInteger(v["damageTakenPct"])) {
+    errors.push(`${path}.damageTakenPct: must be an integer`);
+  }
+  const t = v["damageTakenType"];
+  if (t !== undefined && t !== "physical" && !ELEMENTS.includes(t as Element)) {
+    errors.push(`${path}.damageTakenType: must be "physical" or one of ${ELEMENTS.join(", ")}`);
+  }
+  if (v["slowPct"] !== undefined && !isPctRange(v["slowPct"], 0, 100)) {
+    errors.push(`${path}.slowPct: must be an integer in 0..100`);
+  }
+  optNonNegInts(v, path, ["stunTicks"], errors);
+  if (standalone) {
+    const known = new Set(["statusId", "durationTicks", "damageTakenPct", "damageTakenType", "slowPct", "stunTicks"]);
+    for (const k of Object.keys(v)) if (!known.has(k)) errors.push(`${path}.${k}: not a status field`);
+  }
+}
+
+function validateAreaHitBody(v: Record<string, unknown>, path: string, errors: string[]): void {
+  if (!isNonNegInt(v["radiusFixed"])) errors.push(`${path}.radiusFixed: must be a non-negative integer`);
+  if (v["damage"] !== undefined) validateDamageSpec(v["damage"], `${path}.damage`, errors);
+  optNonNegInts(v, path, ["knockbackFixed", "stunTicks"], errors);
+  if (v["onHit"] !== undefined) validateStatusSpec(v["onHit"], `${path}.onHit`, true, errors);
+}
+
+function validateGroundSpawn(v: unknown, path: string, errors: string[]): void {
+  if (!isObj(v)) {
+    errors.push(`${path}: must be an object`);
+    return;
+  }
+  if (!isNonNegInt(v["radiusFixed"])) errors.push(`${path}.radiusFixed: must be a non-negative integer`);
+  if (!isNonNegInt(v["durationTicks"])) errors.push(`${path}.durationTicks: must be a non-negative integer`);
+  validateAilmentSpec(v["ailment"], `${path}.ailment`, errors);
+}
+
 function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean {
   const path = `effects[${idx}]`;
   if (!isObj(v)) {
@@ -441,6 +626,13 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
         }
       }
     }
+    const before = errors.length;
+    optNonNegInts(v, path, ["explodeRadiusFixed", "chainCount", "chainRangeFixed"], errors);
+    if ((v["chainCount"] ?? 0) !== 0 && v["chainRangeFixed"] === undefined) {
+      errors.push(`${path}.chainRangeFixed: required with chainCount`);
+    }
+    if (v["onHit"] !== undefined) validateStatusSpec(v["onHit"], `${path}.onHit`, true, errors);
+    if (errors.length > before) ok = false;
   } else if (type === "spawnGroundArea") {
     if (!isNonNegInt(v["radiusFixed"])) {
       errors.push(`${path}.radiusFixed: must be a non-negative integer`);
@@ -450,7 +642,92 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       errors.push(`${path}.durationTicks: must be a non-negative integer`);
       ok = false;
     }
-    if (!validateAilmentSpec(v["ailment"], `${path}.ailment`, errors)) ok = false;
+    if (v["ailment"] === undefined && v["pulse"] === undefined) {
+      errors.push(`${path}: needs an ailment, a pulse or both`);
+      ok = false;
+    }
+    if (v["ailment"] !== undefined && !validateAilmentSpec(v["ailment"], `${path}.ailment`, errors)) ok = false;
+    const pulse = v["pulse"];
+    if (pulse !== undefined) {
+      if (!isObj(pulse)) {
+        errors.push(`${path}.pulse: must be an object`);
+        ok = false;
+      } else {
+        if (!validateDamageSpec(pulse["damage"], `${path}.pulse.damage`, errors)) ok = false;
+        if (!isPosInt(pulse["everyTicks"])) {
+          errors.push(`${path}.pulse.everyTicks: must be a positive integer`);
+          ok = false;
+        }
+      }
+    }
+    if (v["slowPct"] !== undefined && !isPctRange(v["slowPct"], 0, 100)) {
+      errors.push(`${path}.slowPct: must be an integer in 0..100`);
+      ok = false;
+    }
+  } else if (type === "areaHit") {
+    const before = errors.length;
+    validateAt(v, path, errors);
+    validateAreaHitBody(v, path, errors);
+    optNonNegInts(v, path, ["maxRangeFixed", "delayTicks", "intervalTicks", "stepFixed", "scatterFixed"], errors);
+    if (v["count"] !== undefined && !isPosInt(v["count"])) errors.push(`${path}.count: must be a positive integer when present`);
+    const shape = v["shape"];
+    if (shape !== undefined && shape !== "disc" && shape !== "cone") {
+      errors.push(`${path}.shape: must be "disc" or "cone"`);
+    }
+    const arc = v["arcDegrees"];
+    if (shape === "cone") {
+      if (!isPctRange(arc, 1, 360)) errors.push(`${path}.arcDegrees: a cone needs an integer in 1..360`);
+    } else if (arc !== undefined) {
+      errors.push(`${path}.arcDegrees: only on a cone`);
+    }
+    if (errors.length > before) ok = false;
+  } else if (type === "applyBuff") {
+    const before = errors.length;
+    if (!isStatusId(v["buffId"])) errors.push(`${path}.buffId: must be a snake_case id`);
+    if (!isNonNegInt(v["durationTicks"])) errors.push(`${path}.durationTicks: must be a non-negative integer`);
+    const reserve = v["reserveManaPct"];
+    if (reserve !== undefined) {
+      if (!isPctRange(reserve, 1, 100)) errors.push(`${path}.reserveManaPct: must be an integer in 1..100`);
+      if (v["durationTicks"] !== 0) errors.push(`${path}.reserveManaPct: only on an aura (durationTicks 0)`);
+    }
+    for (const f of ["damagePct", "speedPct", "moveSpeedPct", "damageTakenPct", "critChancePct"]) {
+      if (v[f] !== undefined && !Number.isInteger(v[f])) errors.push(`${path}.${f}: must be an integer`);
+    }
+    optNonNegInts(v, path, ["lifeRegenPerSecFixed", "lifeDrainPerSecFixed"], errors);
+    const g = v["onKillGround"];
+    if (g !== undefined) validateGroundSpawn(g, `${path}.onKillGround`, errors);
+    if (errors.length > before) ok = false;
+  } else if (type === "applyStatus") {
+    const before = errors.length;
+    validateAt(v, path, errors);
+    if (!isNonNegInt(v["radiusFixed"])) errors.push(`${path}.radiusFixed: must be a non-negative integer`);
+    optNonNegInts(v, path, ["maxRangeFixed"], errors);
+    for (const f of ["single", "taunt"]) {
+      if (v[f] !== undefined && v[f] !== 1) errors.push(`${path}.${f}: must be 1 when present`);
+    }
+    validateStatusSpec(v, path, false, errors);
+    if (errors.length > before) ok = false;
+  } else if (type === "travel") {
+    const before = errors.length;
+    if (!isNonNegInt(v["distanceFixed"])) errors.push(`${path}.distanceFixed: must be a non-negative integer`);
+    if (!isPosInt(v["ticks"])) errors.push(`${path}.ticks: must be a positive integer`);
+    const dir = v["direction"];
+    if (dir !== undefined && dir !== "toward" && dir !== "away") {
+      errors.push(`${path}.direction: must be "toward" or "away"`);
+    }
+    const arrival = v["arrival"];
+    if (arrival !== undefined) {
+      if (!isObj(arrival)) errors.push(`${path}.arrival: must be an object`);
+      else validateAreaHitBody(arrival, `${path}.arrival`, errors);
+    }
+    const trail = v["trail"];
+    if (trail !== undefined) {
+      validateGroundSpawn(trail, `${path}.trail`, errors);
+      if (isObj(trail) && !isPosInt(trail["spacingFixed"])) {
+        errors.push(`${path}.trail.spacingFixed: must be a positive integer`);
+      }
+    }
+    if (errors.length > before) ok = false;
   } else if (type === "meleeStrike") {
     if (!isNonNegInt(v["reachFixed"])) {
       errors.push(`${path}.reachFixed: must be a non-negative integer`);

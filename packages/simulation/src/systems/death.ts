@@ -16,6 +16,8 @@ import { ITEM_POOLS, baseOf, currencyItem, currencyForRoll, waystoneItem, FREE_A
 import { grantSkills } from "../persist";
 import { dropGold } from "./gold";
 import type { CollisionRef } from "../collision";
+import { activeBuffs, reservedMana, spawnGroundPatch } from "../status";
+import type { Faction } from "../components";
 
 /**
  * Monster rarity as the loot math indexes it: 0..3 normal, magic, rare, unique.
@@ -215,6 +217,17 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
         }
       }
 
+      // A herald's kill burns where it fell: only the player's team kills monsters,
+      // so every monster death while such a buff is on is his.
+      const corpse = world.get<Position>(e, "position");
+      for (const pe of world.query("player", "buffs")) {
+        if (!corpse) break;
+        const team = world.get<Faction>(pe, "faction")?.team ?? 0;
+        for (const b of activeBuffs(world, pe, tick)) {
+          if (b.onKill) spawnGroundPatch(world, corpse.x, corpse.y, b.onKill, team, b.skillId, tick);
+        }
+      }
+
       // Every kill heals: the casual answer to a 100-life character with no
       // regeneration, paid by the same act that drops the loot. A corpse stays one.
       for (const pe of world.query("player", "health")) {
@@ -269,7 +282,7 @@ export function reviveVitals(world: World, e: number): void {
   const h = world.get<Health>(e, "health");
   if (h) world.set<Health>(e, "health", { ...h, life: h.maxLife });
   const mn = world.get<Mana>(e, "mana");
-  if (mn) world.set<Mana>(e, "mana", { ...mn, mana: mn.maxMana });
+  if (mn) world.set<Mana>(e, "mana", { ...mn, mana: mn.maxMana - reservedMana(world, e, mn.maxMana) });
   const es = world.get<EnergyShieldC>(e, "energyShield");
   if (es) world.set<EnergyShieldC>(e, "energyShield", { ...es, es: es.maxEs, rechargeAtTick: 0 });
   clearAilments(world, e);
@@ -289,4 +302,5 @@ function clearMovement(world: World, e: number): void {
   if (md) world.set<MoveDir>(e, "moveDir", { dx: 0, dy: 0, hx: 0, hy: 0 });
   // A roll is movement too, and the click it was holding for later dies with it.
   world.remove(e, "roll");
+  world.remove(e, "travel");
 }

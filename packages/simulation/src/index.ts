@@ -13,6 +13,7 @@ export type {
   Position, Health, Mana, Faction, PlayerC, MoveTarget, MoveDir,
   Cooldowns, MonsterC, DefensesC, OffenseC, ProjectileC, GroundAreaC, AilmentC,
   DamageEvent, BossC, TelegraphC, SessionC, InteractableC, AreaKind,
+  BuffsC, BuffEntry, StatusesC, StatusEntry, TravelC, SkillAreaC, HitPart, StatusOnHit, GroundProfile,
 } from "./components";
 export type { ItemC, PlacedItem, InventoryC, EquipmentC, FlasksC, SkillsC, ProgressC, ShardsC } from "./components";
 export { placeFirstFit } from "./inventory";
@@ -21,6 +22,7 @@ export { registerResourceRegen } from "./systems/resource";
 export { registerPlayerMovement } from "./systems/player-movement";
 export { registerSkillCast } from "./systems/skill-cast";
 export { registerProjectileMove } from "./systems/projectile";
+export { registerSkillArea } from "./systems/skill-area";
 export { registerGroundAreaTick } from "./systems/ground-area";
 export { registerTelegraphResolve } from "./systems/telegraph-resolve";
 export { registerAilmentTick } from "./systems/ailment";

@@ -39,8 +39,8 @@ type SuspendedEntity = readonly (readonly [string, unknown])[];
  * so an entity carrying one is dropped whole, and an ailment is peeled off the
  * monster that was carrying it. Burning does not politely wait in a hallway.
  */
-const TRANSIENT_ENTITY = ["projectile", "groundArea", "telegraph"];
-const TRANSIENT_COMPONENT = ["ailment", "poison", "bleeding"];
+const TRANSIENT_ENTITY = ["projectile", "groundArea", "telegraph", "skillArea"];
+const TRANSIENT_COMPONENT = ["ailment", "poison", "bleeding", "statuses"];
 
 /**
  * Absolute tick fields that have to be rebased on the way back, and what they

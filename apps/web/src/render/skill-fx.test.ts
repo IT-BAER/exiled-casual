@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { projectileProfiles, SKILL_LOOKS } from "./skills";
 import { describe, it, expect, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { Effect, Light, NullEngine, ParticleSystem, PointLight, Scene, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
@@ -471,7 +472,7 @@ describe("warmProjectiles", () => {
     const scene = newScene();
     warmProjectiles(scene);
     const warm = scene.meshes.filter((m) => m.name.startsWith("warm-projectile-"));
-    expect(warm).toHaveLength(Object.keys(SKILL_FX).length);
+    expect(warm).toHaveLength(Object.keys(SKILL_FX).length + projectileProfiles().length);
     // Culling must not skip them: an undrawn mesh compiles nothing.
     expect(warm.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
     // A flying arrow's wake is cut short on one axis, which is its own shader variant.
@@ -713,7 +714,8 @@ describe("blink", () => {
 
 describe("fx profiles", () => {
   it("gives every authored skill its own profile", () => {
-    const missing = [...SKILLS.keys()].filter((id) => SKILL_FX[id] === undefined);
+    // A class skill's look lives in render/skills (guarded by skills/registry.test.ts).
+    const missing = [...SKILLS.keys()].filter((id) => SKILL_FX[id] === undefined && SKILL_LOOKS.skills[id] === undefined);
     expect(missing, `skills with no FX profile: ${missing.join(", ")}`).toEqual([]);
   });
 

@@ -1,19 +1,26 @@
-import { fp, fpClamp, fpStepToward, isqrt } from "@exiled/fixed-point";
+import { fp, fpClamp, fpStepToward, isqrt, FP_SCALE, type Fixed } from "@exiled/fixed-point";
 import { createStream } from "../rng";
 import { scalePct, effectiveSkill } from "@exiled/rules";
-import type { SkillDef } from "@exiled/content-schema";
+import type { EffectNode, SkillDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
-import type { World } from "../ecs";
+import type { World, Entity } from "../ecs";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { sweep, type Collision, type CollisionRef } from "../collision";
-import type { Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC, SkillsC, StrikeC, RollC } from "../components";
+import type {
+  Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC,
+  SkillsC, StrikeC, RollC, BuffsC, BuffEntry, HitPart, MoveDir, MoveTarget, SkillAreaC, TravelC, MonsterC, CastReleaseC,
+} from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 import { canOpenPortal, openPortalAt } from "../areas";
 import { hitParts, weaponHit, type HitMod } from "../weapon";
+import { applyStatus, buffSum, groundProfile, reservedMana, spawnGroundPatch, statusOnHit } from "../status";
 
 /** How far in front of the caster the Portal skill opens its doorway, toward the aim. */
 const PORTAL_OFFSET = fp(1.6);
+
+/** A skill cooling down this long or less repeats on its cooldown, so attack/cast speed paces it. */
+const REPEAT_BEAT_MAX_TICKS = 45;
 
 /** sin(5k degrees) x 10000 for k = 0..18. Literal, not trig: the sim never depends on Math.sin rounding. */
 const SIN5 = [
@@ -22,11 +29,22 @@ const SIN5 = [
 ];
 
 /** (dx, dy) turned `deg` degrees, a multiple of 5 within [-90, 90] (the schema holds a fan to that). */
-function rotate(dx: number, dy: number, deg: number): [number, number] {
+export function rotate(dx: number, dy: number, deg: number): [number, number] {
   const k = Math.abs(deg) / 5;
   const sin = Math.sign(deg) * SIN5[k]!;
   const cos = SIN5[18 - k]!;
   return [Math.trunc((dx * cos - dy * sin) / 10000), Math.trunc((dx * sin + dy * cos) / 10000)];
+}
+
+/** A travel in flight. Expired ones linger until playerMovement hands control back. */
+export function activeTravel(travel: TravelC | undefined, tick: number): travel is TravelC {
+  return travel !== undefined && tick < travel.untilTick;
+}
+
+/** The aura an applyBuff skill toggles, if it is one. */
+function auraOf(skill: SkillDef): Extract<EffectNode, { type: "applyBuff" }> | undefined {
+  return skill.effects.find((e): e is Extract<EffectNode, { type: "applyBuff" }> =>
+    e.type === "applyBuff" && e.durationTicks === 0);
 }
 
 export function registerSkillCast(
@@ -39,6 +57,9 @@ export function registerSkillCast(
   // skill has a base crit chance at all, so a kit that cannot crit consumes no
   // randomness and replays from before crit existed still check out.
   const critRolls = createStream(seed, "crit");
+  // Where scattered impacts fall (Rain of Arrows, Firestorm). Drawn only by an
+  // areaHit with scatterFixed > 0, so every older replay draws nothing from it.
+  const scatterRolls = createStream(seed, "skillScatter");
 
   // How long one useSkill command counts as "still holding the button". The
   // client re-issues per 30 Hz snapshot while held, so three ticks bridges any
@@ -59,6 +80,16 @@ export function registerSkillCast(
   const actionFor = (skill: SkillDef): "spell" | "melee" | "bow" =>
     skill.effects.some((effect) => effect.type === "meleeStrike") ? "melee" : skill.bow ? "bow" : "spell";
 
+  /** A point inside a disc of radius r, uniform: rejection on the square, bounded. */
+  const scatter = (r: number): { x: number; y: number } => {
+    for (let i = 0; i < 16; i++) {
+      const x = scatterRolls.nextInt(-r, r);
+      const y = scatterRolls.nextInt(-r, r);
+      if (x * x + y * y <= r * r) return { x, y };
+    }
+    return { x: 0, y: 0 };
+  };
+
   function resolveSkill(
     world: World,
     tick: number,
@@ -77,9 +108,37 @@ export function registerSkillCast(
     if (!pos) return;
     // Every part of a hit takes the same increased damage and the same crit; each
     // keeps its own type, so resistance and armour read it apart (one event per part).
-    const partsOf = (damage: { type: Parameters<typeof damageCode>[0]; amountFixed: number }) =>
+    const partsOf = (damage: { type: Parameters<typeof damageCode>[0]; amountFixed: number }): HitPart[] =>
       hitParts(damage.amountFixed, damageCode(damage.type), hit)
         .map((p) => ({ type: p.type, amount: scalePct(p.amount, spellDamagePct) * (didCrit ? 2 : 1) }));
+
+    /** Aim as a unit vector x1000: toward (tx, ty), else the way he faces, else +x. */
+    const aim = (): { dirX: number; dirY: number } => {
+      const ax = tx - pos.x;
+      const ay = ty - pos.y;
+      const len = isqrt(ax * ax + ay * ay);
+      if (len > 0) return { dirX: Math.trunc((ax * 1000) / len), dirY: Math.trunc((ay * 1000) / len) };
+      const md = world.get<MoveDir>(caster, "moveDir");
+      if (md && (md.hx !== 0 || md.hy !== 0)) {
+        return { dirX: Math.trunc((md.hx * 1000) / FP_SCALE), dirY: Math.trunc((md.hy * 1000) / FP_SCALE) };
+      }
+      return { dirX: 1000, dirY: 0 };
+    };
+
+    /** A point placed from (fx, fy) by (dx, dy), stopped at the first wall, inside the world. */
+    const placed = (fx: Fixed, fy: Fixed, dx: Fixed, dy: Fixed): { x: Fixed; y: Fixed } => {
+      const reach = collision ? sweep(collision, fx, fy, dx, dy, 0) : { dx, dy };
+      return { x: fpClamp(fx + reach.dx, WORLD_MIN, WORLD_MAX), y: fpClamp(fy + reach.dy, WORLD_MIN, WORLD_MAX) };
+    };
+
+    /** Where an `at` effect centres: on him, or at the aim clamped to its range and stopped at a wall. */
+    const centreOf = (at: "self" | "target", maxRange: Fixed | undefined): { x: Fixed; y: Fixed } => {
+      if (at === "self") return { x: pos.x, y: pos.y };
+      const step = maxRange === undefined
+        ? { dx: tx - pos.x, dy: ty - pos.y }
+        : fpStepToward(pos.x, pos.y, tx, ty, maxRange);
+      return placed(pos.x, pos.y, step.dx, step.dy);
+    };
 
     for (const effect of skill.effects) {
       if (effect.type === "spawnProjectile") {
@@ -107,34 +166,34 @@ export function registerSkillCast(
             ...(n > 1 ? { volley: tick } : {}),
             skillId: skill.id,
             ...(extra.length > 0 ? { extraDamage: extra } : {}),
+            ...(effect.explodeRadiusFixed ? { explodeRadius: effect.explodeRadiusFixed } : {}),
+            ...(effect.chainCount ? { chainLeft: effect.chainCount, chainRange: effect.chainRangeFixed ?? 0 } : {}),
+            ...(effect.onHit ? { onHit: statusOnHit(effect.onHit) } : {}),
           });
         }
       } else if (effect.type === "spawnGroundArea") {
         // Aimed past a wall, the patch lands on the wall instead of in the room
         // behind it. The centre is swept as a point, so the circle may lick over
         // the rock but cannot be placed through it.
-        let ax = tx;
-        let ay = ty;
-        if (collision) {
-          const reach = sweep(collision, pos.x, pos.y, tx - pos.x, ty - pos.y, 0);
-          ax = pos.x + reach.dx;
-          ay = pos.y + reach.dy;
-        }
-        const gx = fpClamp(ax, WORLD_MIN, WORLD_MAX);
-        const gy = fpClamp(ay, WORLD_MIN, WORLD_MAX);
+        const at = placed(pos.x, pos.y, tx - pos.x, ty - pos.y);
         const area = world.create();
-        world.set<Position>(area, "position", { x: gx, y: gy });
+        world.set<Position>(area, "position", at);
+        const a = effect.ailment;
         world.set<GroundAreaC>(area, "groundArea", {
           radius: effect.radiusFixed,
           expiryTick: tick + effect.durationTicks,
           nextTick: tick,
-          ailmentKind: effect.ailment.kind,
-          stacksPerApply: effect.ailment.stacksPerApply,
-          dps: effect.ailment.dpsFixed,
-          ailmentDuration: effect.ailment.durationTicks,
-          maxStacks: effect.ailment.maxStacks,
+          ...(a ? {
+            ailmentKind: a.kind,
+            stacksPerApply: a.stacksPerApply,
+            dps: a.dpsFixed,
+            ailmentDuration: a.durationTicks,
+            maxStacks: a.maxStacks,
+          } : {}),
           team: casterTeam,
           skillId: skill.id,
+          ...(effect.pulse ? { pulse: { parts: partsOf(effect.pulse.damage), every: effect.pulse.everyTicks, nextPulse: tick } } : {}),
+          ...(effect.slowPct ? { slowPct: effect.slowPct } : {}),
         });
       } else if (effect.type === "meleeStrike") {
         // No entity and no flight: the swing resolves inside the cast, which is
@@ -203,8 +262,156 @@ export function registerSkillCast(
           const cds = world.get<Cooldowns>(caster, "cooldowns");
           if (cds) world.set<Cooldowns>(caster, "cooldowns", { ...cds, [skill.id]: 0 });
         }
+      } else if (effect.type === "areaHit") {
+        // Every impact is an entity, even an instant one, so the client always
+        // sees it land; the skillArea system resolves each on its impact tick.
+        const { dirX, dirY } = aim();
+        const centre = centreOf(effect.at, effect.maxRangeFixed);
+        const n = effect.count ?? 1;
+        const parts = effect.damage ? partsOf(effect.damage) : [];
+        for (let i = 0; i < n; i++) {
+          let at = centre;
+          if (effect.stepFixed && i > 0) {
+            const run = effect.stepFixed * i;
+            at = placed(centre.x, centre.y, Math.trunc((dirX * run) / 1000), Math.trunc((dirY * run) / 1000));
+          }
+          if (effect.scatterFixed) {
+            const o = scatter(effect.scatterFixed);
+            at = { x: fpClamp(at.x + o.x, WORLD_MIN, WORLD_MAX), y: fpClamp(at.y + o.y, WORLD_MIN, WORLD_MAX) };
+          }
+          const area = world.create();
+          world.set<Position>(area, "position", at);
+          world.set<SkillAreaC>(area, "skillArea", {
+            skillId: skill.id,
+            ownerId: caster,
+            team: casterTeam,
+            radius: effect.radiusFixed,
+            startTick: tick,
+            impactTick: tick + (effect.delayTicks ?? 0) + i * (effect.intervalTicks ?? 0),
+            ...(effect.shape === "cone" ? { shape: "cone" as const, arc: effect.arcDegrees ?? 360 } : {}),
+            dirX,
+            dirY,
+            parts,
+            ...(effect.knockbackFixed ? { knockback: effect.knockbackFixed } : {}),
+            ...(effect.stunTicks ? { stun: effect.stunTicks } : {}),
+            ...(effect.onHit ? { onHit: statusOnHit(effect.onHit) } : {}),
+            ...(n > 1 ? { index: i } : {}),
+          });
+        }
+      } else if (effect.type === "applyBuff") {
+        const prev = world.get<BuffsC>(caster, "buffs")?.list ?? [];
+        const entry: BuffEntry = {
+          id: effect.buffId,
+          skillId: skill.id,
+          untilTick: effect.durationTicks === 0 ? 0 : tick + effect.durationTicks,
+          ...(effect.reserveManaPct ? { reservePct: effect.reserveManaPct } : {}),
+          ...(effect.damagePct ? { damagePct: effect.damagePct } : {}),
+          ...(effect.speedPct ? { speedPct: effect.speedPct } : {}),
+          ...(effect.moveSpeedPct ? { moveSpeedPct: effect.moveSpeedPct } : {}),
+          ...(effect.damageTakenPct ? { damageTakenPct: effect.damageTakenPct } : {}),
+          ...(effect.lifeRegenPerSecFixed ? { regen: effect.lifeRegenPerSecFixed } : {}),
+          ...(effect.lifeDrainPerSecFixed ? { drain: effect.lifeDrainPerSecFixed } : {}),
+          ...(effect.critChancePct ? { critPct: effect.critChancePct } : {}),
+          ...(effect.onKillGround ? { onKill: groundProfile(effect.onKillGround) } : {}),
+        };
+        if (effect.durationTicks === 0) {
+          // An aura switched on: refused if it is already on or the pool cannot
+          // hold it now; otherwise its share leaves the pool and stays held.
+          if (prev.some((b) => b.id === entry.id)) continue;
+          const mana = world.get<Mana>(caster, "mana");
+          if (mana) {
+            const hold = Math.trunc((mana.maxMana * (entry.reservePct ?? 0)) / 100);
+            if (mana.mana < hold) continue;
+            world.set<BuffsC>(caster, "buffs", { list: [...prev, entry] });
+            const cap = mana.maxMana - reservedMana(world, caster, mana.maxMana);
+            world.set<Mana>(caster, "mana", { ...mana, mana: Math.min(mana.mana - hold, cap) });
+            continue;
+          }
+        }
+        // A timed buff refreshes its duration, never stacks.
+        world.set<BuffsC>(caster, "buffs", { list: [...prev.filter((b) => b.id !== entry.id), entry] });
+      } else if (effect.type === "applyStatus") {
+        const centre = centreOf(effect.at, effect.maxRangeFixed);
+        const spec = statusOnHit(effect);
+        const hit: Entity[] = [];
+        let best = -1;
+        let bestD2 = Infinity;
+        for (const target of world.query("monster", "position", "faction")) {
+          if (world.get<Faction>(target, "faction")!.team === casterTeam) continue;
+          if ((world.get<Health>(target, "health")?.life ?? 1) <= 0) continue;
+          const tpos = world.get<Position>(target, "position")!;
+          const dx = tpos.x - centre.x;
+          const dy = tpos.y - centre.y;
+          const d2 = dx * dx + dy * dy;
+          const reach = effect.radiusFixed + world.get<MonsterC>(target, "monster")!.bodyRadius;
+          if (d2 > reach * reach) continue;
+          hit.push(target);
+          if (d2 < bestD2) { best = target; bestD2 = d2; }
+        }
+        for (const target of effect.single ? (best === -1 ? [] : [best]) : hit) {
+          applyStatus(world, target, spec, tick, effect.taunt === 1);
+        }
+        // Where it landed, drawn even when nobody stood there: a parts-less area
+        // that resolves this tick and touches nobody (skill-area.ts skips markers).
+        const { dirX, dirY } = aim();
+        const marker = world.create();
+        world.set<Position>(marker, "position", centre);
+        world.set<SkillAreaC>(marker, "skillArea", {
+          skillId: skill.id, ownerId: caster, team: casterTeam, radius: effect.radiusFixed,
+          startTick: tick, impactTick: tick, dirX, dirY, parts: [], marker: 1,
+        });
+      } else if (effect.type === "travel") {
+        const ax = tx - pos.x;
+        const ay = ty - pos.y;
+        const len = isqrt(ax * ax + ay * ay);
+        const away = effect.direction === "away";
+        let dirX = 0;
+        let dirY = 0;
+        if (len > 0) {
+          dirX = Math.trunc((ax * FP_SCALE) / len) * (away ? -1 : 1);
+          dirY = Math.trunc((ay * FP_SCALE) / len) * (away ? -1 : 1);
+        } else {
+          // Aimed at his own feet: away from the way he faces, or along it.
+          const md = world.get<MoveDir>(caster, "moveDir");
+          dirX = (md?.hx ?? 0) * (away ? -1 : 1);
+          dirY = (md?.hy ?? 0) * (away ? -1 : 1);
+        }
+        if (dirX === 0 && dirY === 0) continue;
+        const distance = away || len === 0 ? effect.distanceFixed : Math.min(effect.distanceFixed, len);
+        const arrival = effect.arrival;
+        const trail = effect.trail;
+        world.set<TravelC>(caster, "travel", {
+          skillId: skill.id,
+          startTick: tick,
+          untilTick: tick + effect.ticks,
+          dirX,
+          dirY,
+          distance,
+          team: casterTeam,
+          ...(arrival ? {
+            arrival: {
+              radius: arrival.radiusFixed,
+              parts: arrival.damage ? partsOf(arrival.damage) : [],
+              ...(arrival.knockbackFixed ? { knockback: arrival.knockbackFixed } : {}),
+              ...(arrival.stunTicks ? { stun: arrival.stunTicks } : {}),
+              ...(arrival.onHit ? { onHit: statusOnHit(arrival.onHit) } : {}),
+            },
+          } : {}),
+          ...(trail ? {
+            trail: { spacing: trail.spacingFixed, ground: groundProfile(trail) },
+            lastTrailX: pos.x,
+            lastTrailY: pos.y,
+          } : {}),
+        });
+        // The trail starts under his feet: the first patch is where he took off.
+        if (trail) spawnGroundPatch(world, pos.x, pos.y, groundProfile(trail), casterTeam, skill.id, tick);
+        // A leap ends where it lands: the walk it interrupted is not resumed.
+        const mt = world.get<MoveTarget>(caster, "moveTarget");
+        if (mt?.active === 1) world.set<MoveTarget>(caster, "moveTarget", { x: mt.x, y: mt.y, active: 0 });
       }
     }
+    // The release edge the client draws a cast's resolve on (render-only, unhashed).
+    world.set<CastReleaseC>(caster, "castRelease", { tick, skill: skill.id });
   }
 
   sim.register("skillCast", (world, tick, commands) => {
@@ -251,8 +458,10 @@ export function registerSkillCast(
       if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;
       // Mid-roll the button does not exist, not even as a hold: a hold would turn
       // him toward the aim the tick the roll ends, which nobody asked for yet.
+      // A travel skill in flight holds it the same way.
       const roll = world.get<RollC>(caster, "roll");
       if (roll && tick < roll.untilTick) continue;
+      if (activeTravel(world.get<TravelC>(caster, "travel"), tick)) continue;
       // Every command, refused or not, marks the button as held: the client
       // re-issues per snapshot, so a short window bridges the gaps and movement
       // never bursts back to a run between casts (player-movement reads it).
@@ -271,6 +480,17 @@ export function registerSkillCast(
       const cds = world.get<Cooldowns>(caster, "cooldowns") ?? {};
       if ((cds[cmd.skillId] ?? 0) > tick) continue; // on cooldown
 
+      // An aura that is on goes off: free, no new cooldown, its mana let go. Only
+      // once the cooldown is up, or a held key re-sent per snapshot undoes its own cast.
+      const aura = auraOf(base);
+      const buffs = world.get<BuffsC>(caster, "buffs");
+      if (aura && buffs?.list.some((b) => b.id === aura.buffId)) {
+        const list = buffs.list.filter((b) => b.id !== aura.buffId);
+        if (list.length === 0) world.remove(caster, "buffs");
+        else world.set<BuffsC>(caster, "buffs", { list });
+        continue;
+      }
+
       // A Portal that could not open is refused before the wind-up: an animation
       // that ends in nothing reads as a broken key.
       const scroll = cmd.data?.["scroll"] === 1;
@@ -282,8 +502,21 @@ export function registerSkillCast(
       const offense = world.get<OffenseC>(caster, "offense");
       const manaComp = world.get<Mana>(caster, "mana");
       if (!manaComp || manaComp.mana < skill.manaCostFixed) continue; // insufficient mana
+      // An aura the pool cannot hold after paying for the cast is refused whole:
+      // no mana, no cooldown, as if the key had not been pressed.
+      if (aura) {
+        const hold = Math.trunc((manaComp.maxMana * (aura.reserveManaPct ?? 0)) / 100);
+        if (manaComp.mana - skill.manaCostFixed < hold) continue;
+      }
       // What the weapon in hand makes of this cast: its hit, crit and cooldown.
       const weapon = weaponHit(world, skill);
+      // A buff's speed also quickens a skill whose cooldown IS its repeat beat
+      // (Haste, Blood Rage); a long true cooldown stays as authored, as in PoE.
+      const buffSpeed = buffSum(world, caster, tick, "speedPct");
+      const cooldownTicks = base.cooldownTicks > 0 && base.cooldownTicks <= REPEAT_BEAT_MAX_TICKS
+        && buffSpeed !== 0 && 100 + buffSpeed > 0
+        ? Math.max(1, Math.trunc((weapon.cooldownTicks * 100) / (100 + buffSpeed)))
+        : weapon.cooldownTicks;
 
       // Spend mana and set cooldown.
       world.set<Mana>(caster, "mana", {
@@ -293,7 +526,7 @@ export function registerSkillCast(
       });
       world.set<Cooldowns>(caster, "cooldowns", {
         ...cds,
-        [cmd.skillId]: tick + weapon.cooldownTicks,
+        [cmd.skillId]: tick + cooldownTicks,
       });
 
       // The caster is slowed during the wind-up. Instant skills (castTicks
@@ -314,7 +547,9 @@ export function registerSkillCast(
       // "% increased Damage" (stat id spellDamagePct) scales every skill's hit, and
       // only the hit: in PoE a damaging ailment scales off its own mods, not the
       // damage that lit it, so Cinder Ground's burning dps is deliberately left alone.
-      const spellDamagePct = offense?.spellDamagePct ?? 0;
+      // Buffs add to it, to cast speed and to crit here, at cast start, and the
+      // wind-up keeps what they were.
+      const spellDamagePct = (offense?.spellDamagePct ?? 0) + buffSum(world, caster, tick, "damagePct");
 
       // PoE crit: the skill brings the base chance, gear's "% increased Critical
       // Strike Chance" multiplies it rather than adding to it, so 8% with +25%
@@ -325,9 +560,10 @@ export function registerSkillCast(
       // An attack's base is the skill's scaled by the weapon against the starter's.
       const baseCrit100 = weapon.critPct100;
       const didCrit = baseCrit100 > 0
-        && critRolls.nextInt(0, 9999) < scalePct(baseCrit100, offense?.critChancePct ?? 0);
+        && critRolls.nextInt(0, 9999)
+          < scalePct(baseCrit100, (offense?.critChancePct ?? 0) + buffSum(world, caster, tick, "critPct"));
 
-      const castSpeedPct = offense?.castSpeedPct ?? 0;
+      const castSpeedPct = (offense?.castSpeedPct ?? 0) + buffSum(world, caster, tick, "speedPct");
       const timingScale = 100 + castSpeedPct;
       const castTicks = skill.castTicks
         ? timingScale > 0
@@ -340,7 +576,7 @@ export function registerSkillCast(
       // through the swing at twice speed and then stood still for the other 8:
       // read as the cast being far too fast. Whichever of the two is longer is
       // the real gap between one release and the next.
-      const beatTicks = Math.max(castTicks, weapon.cooldownTicks);
+      const beatTicks = Math.max(castTicks, cooldownTicks);
       if (castTicks > 0) {
         world.set<CastingC>(caster, "casting", {
           untilTick: tick + castTicks,

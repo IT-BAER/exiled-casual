@@ -231,6 +231,12 @@ export interface StrikeC {
   /** The skill that swung. Render-only: kept out of the checksum. */
   skill?: string;
 }
+/**
+ * The last cast this caster RESOLVED (its effects applied), every skill: the
+ * client's release edge. Render-only and kept out of the checksum whole, since it
+ * follows from the cast command and carries a skill id.
+ */
+export interface CastReleaseC { tick: number; skill: string }
 export interface MonsterC {
   defId: string;
   moveSpeed: Fixed;
@@ -285,6 +291,115 @@ export interface MonsterC {
   magic?: 1;
   /** 1 = boss add, 0 = normal spawn */
   summoned: 0 | 1;
+  /** Stunned while tick < this: no move, no attack, no new wind-up. Written only by a stun; never on a boss. */
+  stunnedUntilTick?: number;
+  /** A lab dummy: monster-ai leaves it alone, so it never moves, attacks or winds up. */
+  inert?: 1;
+}
+
+/** Damage parts already scaled at cast time: one hit, one entry per type. */
+export interface HitPart { type: number; amount: Fixed }
+
+/** What a hit leaves on a monster. `damageTakenType` is a DAMAGE_TYPES code; absent = every type. */
+export interface StatusOnHit {
+  statusId: string;
+  durationTicks: number;
+  damageTakenPct?: number;
+  damageTakenType?: number;
+  slowPct?: number;
+  stunTicks?: number;
+}
+
+/** A burning patch to lay down later (trail, herald corpse fire), in GroundAreaC's own terms. */
+export interface GroundProfile {
+  radius: Fixed;
+  durationTicks: number;
+  ailmentKind: string;
+  stacksPerApply: number;
+  dps: Fixed;
+  ailmentDuration: number;
+  maxStacks: number;
+}
+
+/** One buff on the player. untilTick 0 = a toggled aura, on until cast again. */
+export interface BuffEntry {
+  id: string;
+  skillId: string;
+  untilTick: number;
+  reservePct?: number;
+  damagePct?: number;
+  speedPct?: number;
+  moveSpeedPct?: number;
+  damageTakenPct?: number;
+  /** Life per second, Fixed. */
+  regen?: Fixed;
+  drain?: Fixed;
+  critPct?: number;
+  onKill?: GroundProfile;
+}
+/** Buffs on the player. Absent until the first one; removed when the list empties. */
+export interface BuffsC { list: BuffEntry[] }
+
+/** One status on a monster. Same id refreshes, never stacks. */
+export interface StatusEntry {
+  id: string;
+  untilTick: number;
+  damageTakenPct?: number;
+  damageTakenType?: number;
+  slowPct?: number;
+}
+/** Statuses on a monster. Absent until the first; removed when the list empties. */
+export interface StatusesC { list: StatusEntry[] }
+
+/**
+ * A travel skill in flight (Leap Slam, Flame Dash). Moves dirX/dirY (unit, Fixed)
+ * on a fixed heading for untilTick - startTick ticks, `distance` in all, swept
+ * against walls. `pending` is the last move asked for mid-travel, as RollC keeps it.
+ */
+export interface TravelC {
+  skillId: string;
+  startTick: number;
+  untilTick: number;
+  dirX: Fixed;
+  dirY: Fixed;
+  distance: Fixed;
+  team: number;
+  pending?: { type: "moveTo" | "moveDir" | "stop"; data?: Record<string, number> };
+  /** Lands where the travel ends, as one skillArea. */
+  arrival?: { radius: Fixed; parts: HitPart[]; knockback?: Fixed; stun?: number; onHit?: StatusOnHit };
+  trail?: { spacing: Fixed; ground: GroundProfile };
+  lastTrailX?: Fixed;
+  lastTrailY?: Fixed;
+}
+
+/**
+ * One impact of an areaHit (or a travel's arrival). It lands on impactTick and
+ * lives one tick more with spentTick set, like a spent projectile. dirX/dirY is
+ * the aim, unit x1000; a cone opens `arc` degrees along it.
+ */
+export interface SkillAreaC {
+  skillId: string;
+  ownerId: Entity;
+  team: number;
+  radius: Fixed;
+  startTick: number;
+  impactTick: number;
+  shape?: "cone";
+  dirX: number;
+  dirY: number;
+  arc?: number;
+  parts: HitPart[];
+  knockback?: Fixed;
+  stun?: number;
+  onHit?: StatusOnHit;
+  /** Impact number within its cast, present when the cast has more than one. */
+  index?: number;
+  spentTick?: number;
+  /**
+   * A marker, not a hit: where a status cast (a curse, a mark, a warcry) landed,
+   * so the client can draw it even when nothing was in it. Touches nobody.
+   */
+  marker?: 1;
 }
 export interface DefensesC  { res: ResBlock; armour: Fixed }
 /**
@@ -325,16 +440,29 @@ export interface ProjectileC {
   spentTick?: number;
   /** Further parts of the same hit in other damage types (a weapon's fire). Absent = one part. */
   extraDamage?: { type: number; amount: Fixed }[];
+  /** On a hit the same hit lands on every other enemy this close to the struck body. */
+  explodeRadius?: Fixed;
+  /** Chains left, and how far each looks for its next body. */
+  chainLeft?: number;
+  /** A chained bolt: the entity it left (the body the previous link struck). */
+  chainFrom?: Entity;
+  chainRange?: Fixed;
+  onHit?: StatusOnHit;
 }
 export interface GroundAreaC {
   radius: Fixed;
   expiryTick: number;
   nextTick: number;
-  ailmentKind: string;
-  stacksPerApply: number;
-  dps: Fixed;
-  ailmentDuration: number;
-  maxStacks: number;
+  /** The ailment fields are absent on a pulse-only area (Solar Orb). */
+  ailmentKind?: string;
+  stacksPerApply?: number;
+  dps?: Fixed;
+  ailmentDuration?: number;
+  maxStacks?: number;
+  /** A hit on everything inside at nextPulse, then every `every` ticks. */
+  pulse?: { parts: HitPart[]; every: number; nextPulse: number };
+  /** Enemies inside read as `chilled` at this slow. */
+  slowPct?: number;
   /** team that OWNS this area; only entities on a different team are affected */
   team: number;
   /** Which skill spawned this, so the client can pick its look. Absent on a

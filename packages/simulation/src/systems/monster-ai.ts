@@ -6,6 +6,7 @@ import type { Position, MonsterC, Faction, Health, ProjectileC, TelegraphC, Sess
 import type { Entity, World } from "../ecs";
 import { mapDangerScale } from "../areas";
 import { MONSTERS } from "@exiled/content-runtime";
+import { isStunned, monsterSpeed } from "../status";
 
 /**
  * How close the player has to come before a sleeping monster notices. Just under
@@ -232,7 +233,7 @@ function shove(
  */
 function stroll(
   world: World, collision: Collision | undefined, herd: readonly PackBody[], pack: readonly PackBody[],
-  m: Entity, mpos: Position, mon: MonsterC, tick: number,
+  m: Entity, mpos: Position, mon: MonsterC, tick: number, walk: Fixed,
 ): void {
   const pause = (): number => tick + PAUSE_MIN + (strollHash(m, tick) % PAUSE_SPAN);
   if (mon.strollAtTick === undefined || mon.homeX === undefined || mon.homeY === undefined) {
@@ -254,7 +255,7 @@ function stroll(
       return;
     }
   }
-  const speed = Math.trunc((mon.moveSpeed * WANDER_PCT) / 100);
+  const speed = Math.trunc((walk * WANDER_PCT) / 100);
   const step = fpStepToward(mpos.x, mpos.y, tx, ty, speed);
   const moved = shove(collision, mpos.x, mpos.y, giveWay(herd, m, mpos.x, mpos.y, r, step.dx, step.dy), r);
   const out = shove(collision, moved.x, moved.y, packPush(pack, m, mpos.x, mpos.y, r, Math.trunc(speed / 2)), r);
@@ -311,6 +312,11 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
 
       const mpos = world.get<Position>(m, "position")!;
       const mon = world.get<MonsterC>(m, "monster")!;
+      // A lab dummy stands; a stunned monster neither moves, swings nor starts a
+      // wind-up (one already running still lands: its telegraph is its own).
+      if (mon.inert === 1 || isStunned(mon, tick)) continue;
+      // Every walk below reads this one number, so a chill slows all of them.
+      const walk = monsterSpeed(world, m, mon.moveSpeed, tick);
 
       if (players.length === 0) {
         // Its home and target date from before it woke; the next player sets both afresh.
@@ -347,7 +353,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       if (mon.state === "idle"
         && (nearestD2 > AGGRO_RADIUS * AGGRO_RADIUS
           || !hasLineOfSight(collision, mpos.x, mpos.y, ppos.x, ppos.y))) {
-        if (nearestD2 <= WANDER_NEAR * WANDER_NEAR) stroll(world, collision, herd, pack, m, mpos, mon, tick);
+        if (nearestD2 <= WANDER_NEAR * WANDER_NEAR) stroll(world, collision, herd, pack, m, mpos, mon, tick, walk);
         continue;
       }
       if (mon.state === "idle") alertPack(world, m);
@@ -452,7 +458,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       // bodies on one point take the same step, so measuring after it hides the
       // stack the tiebreak exists to break.
       const push = packPush(
-        pack, m, mpos.x, mpos.y, mon.bodyRadius, Math.trunc(mon.moveSpeed / 2),
+        pack, m, mpos.x, mpos.y, mon.bodyRadius, Math.trunc(walk / 2),
       );
 
       // A shooter stands only where its bolt reaches: the bolt dies on the first
@@ -463,7 +469,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
       const kite = Math.trunc((ar * KITE_PCT) / 100);
       let away: { dx: Fixed; dy: Fixed } | undefined;
       if (ranged && nearestD2 < kite * kite) {
-        const toward = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed);
+        const toward = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y, walk);
         const back = shove(collision, mpos.x, mpos.y, { dx: -toward.dx, dy: -toward.dy }, mon.bodyRadius);
         if (back.x !== mpos.x || back.y !== mpos.y) away = { dx: back.x - mpos.x, dy: back.y - mpos.y };
       }
@@ -515,7 +521,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           // Strafe square to the player between shots; slide keeps it off walls.
           const side = (Math.trunc(tick / STRAFE_FLIP_TICKS) + m) % 2 === 0 ? 1 : -1;
           const t = fpStepToward(mpos.x, mpos.y, ppos.x, ppos.y,
-            Math.trunc((mon.moveSpeed * STRAFE_PCT) / 100));
+            Math.trunc((walk * STRAFE_PCT) / 100));
           from = shove(collision, mpos.x, mpos.y, { dx: -t.dy * side, dy: t.dx * side }, mon.bodyRadius);
         }
         const out = shove(collision, from.x, from.y, push, mon.bodyRadius);
@@ -534,7 +540,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
         world.set<MonsterC>(m, "monster", { ...mon, state: "chase" });
       } else {
         let moved = chaseStep(
-          collision, mpos.x, mpos.y, ppos.x, ppos.y, mon.moveSpeed, mon.bodyRadius,
+          collision, mpos.x, mpos.y, ppos.x, ppos.y, walk, mon.bodyRadius,
         );
         // A body in the way of the step at HIM is what sends a chaser at a free spot
         // on his ring instead; judged off that step alone, so the choice cannot flip-flop.
@@ -545,7 +551,7 @@ export function registerMonsterAI(sim: Simulation, collisionRef?: CollisionRef):
           const spot = freeSpot(collision, herd, m, mpos.x, mpos.y, mon.bodyRadius, ppos.x, ppos.y,
             touch + Math.trunc((Math.max(ar, touch) - touch) / 2), m % 2 === 0 ? 1 : -1);
           if (spot) {
-            moved = chaseStep(collision, mpos.x, mpos.y, spot.x, spot.y, mon.moveSpeed, mon.bodyRadius);
+            moved = chaseStep(collision, mpos.x, mpos.y, spot.x, spot.y, walk, mon.bodyRadius);
             step = { dx: moved.x - mpos.x, dy: moved.y - mpos.y };
             eased = giveWay(herd, m, mpos.x, mpos.y, mon.bodyRadius, step.dx, step.dy);
           }

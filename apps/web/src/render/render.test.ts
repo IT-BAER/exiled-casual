@@ -110,6 +110,16 @@ describe("sustained casting animation", () => {
     expect(rig.playStrike).toHaveBeenCalledWith(0.5, 0.3, "skill.heavy_strike.v1");
   });
 
+  it("plays a class skill's own take, and falls back to the shared clip when the rig has none", () => {
+    const rig = { playCast: vi.fn(), playBow: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn(), playSkill: vi.fn(() => true) };
+    syncActionAnimation(rig, false, true, undefined, "melee", 0.8, 0.4, "skill.earthquake.v1", { clip: "heavyC", release: 0.42 });
+    expect(rig.playSkill).toHaveBeenCalledWith("heavyC", 0.8, 0.4, 0.42, undefined, "skill.earthquake.v1");
+    expect(rig.playStrike).not.toHaveBeenCalled();
+    rig.playSkill.mockReturnValueOnce(false);
+    syncActionAnimation(rig, false, true, undefined, "melee", 0.8, 0.4, "skill.earthquake.v1", { clip: "heavyC" });
+    expect(rig.playStrike).toHaveBeenCalledWith(0.8, 0.4, "skill.earthquake.v1");
+  });
+
   it("draws the bow for a bow cast, told both the beat and when the arrow leaves", () => {
     const rig = { playCast: vi.fn(), playBow: vi.fn(), playStrike: vi.fn(), stopStrike: vi.fn() };
 

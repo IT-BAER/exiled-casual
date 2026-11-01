@@ -42,6 +42,7 @@ import { attachCreature, loadMonsters, type CreatureRig } from "./monsters";
 import { loadPet, PetActor, type PetAction } from "./pet";
 import { disposeRagdoll, dropDead, enablePhysics } from "./ragdoll";
 import { blinkBurst, meleeImpact, setStreakLength } from "./skill-fx";
+import { startKitPreview } from "./skills/kit/preview";
 import {
   makeMesh, markKind, RADIUS_SCALED, setDangerGlow, setHitFlash, updateChargePath, updateMark, updateTelegraph, Y_LIFT,
 } from "./meshes";
@@ -228,6 +229,8 @@ export interface ViewerScene {
   playRaw(name: string | null): boolean;
   /** Fire a skill's effect from the subject, with the clip that casts it. */
   fireFx(fx: FxPreview): void;
+  /** Loop one VFX kit primitive (`skills/kit/preview.ts`) on the stage; false for an unknown name. */
+  fireKit(name: string): boolean;
   /** Replay the last action whenever it ends. */
   setRepeat(on: boolean): void;
   timeline(): TimelineState | null;
@@ -364,6 +367,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   window.addEventListener("resize", onResize);
 
   let host: Mesh | null = null;
+  let kitRun: { dispose(): void } | null = null;
   let rig: RigActor | null = null;
   let creature: CreatureRig | null = null;
   let pet: PetActor | null = null;
@@ -683,6 +687,8 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   };
 
   const takeDown = () => {
+    kitRun?.dispose();
+    kitRun = null;
     endTell();
     endStruck();
     clearAdds();
@@ -835,6 +841,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         else if (shot.id === "heavy") r.playStrike(undefined, undefined, "skill.heavy_strike.v1");
         else if (shot.id === "slam") r.playStrike(undefined, undefined, "skill.ground_slam.v1");
         else if (shot.id === "roll") r.playRoll();
+        else if (shot.id.startsWith("skill:")) r.playSkill(shot.clips[0]!, 1);
         else r.playReaction(shot.id as ReactionClip);
       };
       run();
@@ -935,6 +942,15 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       lastAction = rig
         ? { run, group: () => mainGroup(groupsNow().filter((g) => g.playOrder > 0)) }
         : null;
+    },
+    fireKit(name) {
+      kitRun?.dispose();
+      const at = host?.getAbsolutePosition() ?? Vector3.Zero();
+      kitRun = startKitPreview(scene, name, {
+        anchor: new Vector3(at.x, floorY, at.z), facing: FACING.clone(), subject: host,
+        radius: 0.6, height: Math.max(1.2, framedRadius * 1.5),
+      });
+      return kitRun !== null;
     },
     setRepeat(on) {
       repeat = on;

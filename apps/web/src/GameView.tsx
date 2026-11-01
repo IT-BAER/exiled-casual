@@ -70,6 +70,7 @@ import { enforceMode, socketForKey } from "./controls";
 import { ControlsDialog } from "./menu/ControlsDialog";
 import { FpsGuard } from "./fps-guard";
 import { createDevApi } from "./dev/dev-api";
+import { recordFrames } from "./dev/frame-recorder";
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import { brazierSpotsFor, fnv1a32, type AreaLayout } from "@exiled/mapgen";
 import { BIOMES, characterClass, defaultAttackFor, mapBase } from "@exiled/content-runtime";
@@ -100,6 +101,11 @@ export interface GameViewProps {
   onSettingsChange?: (next: Settings) => void;
   /** Never played before: a character with no control mode yet is asked for one. */
   fresh?: boolean;
+  /**
+   * DEV `?play&lab&class=<id>`: a never-saved session of a fresh level-30 character
+   * of this class, every skill granted, dummies standing. Touches no save.
+   */
+  lab?: string;
 }
 
 export function GameView({
@@ -110,6 +116,7 @@ export function GameView({
   settings = DEFAULT_SETTINGS,
   onSettingsChange,
   fresh = false,
+  lab,
 }: GameViewProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -370,7 +377,14 @@ export function GameView({
     const bot = import.meta.env?.DEV === true && query.has("bot");
     // ?tour: bot mode's open Atlas and no saving, with the player at the controls.
     const tour = import.meta.env?.DEV === true && query.has("tour");
-    worker.postMessage({ type: "init", seed: worldSeed(characterId), characterId, bot, tour });
+    // `lab` rides beside the protocol's init: sim-worker reads it in a dev build only.
+    const labClass = import.meta.env?.DEV === true ? lab : undefined;
+    worker.postMessage({
+      type: "init", seed: worldSeed(characterId), characterId, bot, tour, ...(labClass ? { lab: labClass } : {}),
+    } satisfies ToWorker & { lab?: string });
+    /** DEV: `window.__lab`, ready once the lab's scene is drawn and its dummies stand in it. */
+    const labState: { ready: boolean } | null = labClass ? { ready: false } : null;
+    if (import.meta.env?.DEV && labState) (window as unknown as { __lab?: unknown }).__lab = labState;
 
     let prevSnap: Snapshot | null = null;
     let curSnap: Snapshot | null = null;
@@ -785,6 +799,7 @@ export function GameView({
         true,
       );
       scene.render();
+      if (labState && !labState.ready && !plateUp && curSnap.entities.some((e) => e.kind === "monster")) labState.ready = true;
       // The plate's bar while materials compile: the share of meshes Babylon calls
       // ready, by the same test `scene.isReady` applies. Every 8th frame, plate up only.
       if (plateUp && ++readyPolls % 8 === 0) {
@@ -950,6 +965,15 @@ export function GameView({
           out.getContext("2d")!.drawImage(canvas, 0, 0);
           return new Promise<Blob>((ok, fail) => out.toBlob((b) => (b ? ok(b) : fail(new Error("toBlob"))), "image/png"));
         },
+        snapshot: () => curSnap,
+        frames: (n, width, quality, onFirst) => recordFrames({
+          win: window,
+          canvas,
+          onFrameEnd: (cb) => {
+            const o = engine.onEndFrameObservable.add(cb);
+            return () => { engine.onEndFrameObservable.remove(o); };
+          },
+        }, n, width, quality, onFirst),
       });
       devDumpSink = dev.onDump;
       (window as unknown as { __dev?: unknown }).__dev = dev.api;

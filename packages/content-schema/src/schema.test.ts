@@ -719,3 +719,97 @@ describe("validateMonsterDef — onHit", () => {
     expect(validateMonsterDef({ ...validMonster, onHit: "poison" }).ok).toBe(false);
   });
 });
+
+describe("validateSkillDef: class skill expansion effects", () => {
+  const withEffect = (effect: unknown): unknown => ({ ...validSkill, effects: [effect] });
+  const ok = (effect: unknown) => validateSkillDef(withEffect(effect));
+  const burning = { kind: "burning", stacksPerApply: 1, dpsFixed: fp(8), durationTicks: 60, maxStacks: 5 };
+  const bolt = validSkill.effects[0]!;
+
+  it("accepts a projectile that explodes, chains and chills", () => {
+    const r = ok({
+      ...bolt, explodeRadiusFixed: fp(1.5), chainCount: 3, chainRangeFixed: fp(6),
+      onHit: { statusId: "chilled", durationTicks: 60, slowPct: 30 },
+    });
+    expect(r.errors).toEqual([]);
+  });
+  it("rejects a chain with no range, and an onHit with a stray field", () => {
+    expect(ok({ ...bolt, chainCount: 2 }).errors.some((e) => e.includes("chainRangeFixed"))).toBe(true);
+    const r = ok({ ...bolt, onHit: { statusId: "chilled", durationTicks: 60, damage: 3 } });
+    expect(r.errors.some((e) => e.includes("onHit.damage"))).toBe(true);
+  });
+
+  it("accepts every areaHit field and rejects a cone without an arc", () => {
+    const area = {
+      type: "areaHit", at: "target", radiusFixed: fp(1.2), damage: { type: "physical", amountFixed: fp(20) },
+      maxRangeFixed: fp(8), delayTicks: 30, count: 5, intervalTicks: 4, stepFixed: fp(1.5), scatterFixed: fp(2),
+      knockbackFixed: fp(1), stunTicks: 15, onHit: { statusId: "chilled", durationTicks: 30, slowPct: 20 },
+    };
+    expect(ok(area).errors).toEqual([]);
+    expect(ok({ ...area, shape: "cone", arcDegrees: 90 }).errors).toEqual([]);
+    expect(ok({ ...area, shape: "cone" }).errors.some((e) => e.includes("arcDegrees"))).toBe(true);
+    expect(ok({ ...area, arcDegrees: 90 }).errors.some((e) => e.includes("arcDegrees"))).toBe(true);
+    expect(ok({ ...area, at: "floor" }).errors.some((e) => e.includes(".at"))).toBe(true);
+    expect(ok({ ...area, count: 0 }).errors.some((e) => e.includes(".count"))).toBe(true);
+    expect(ok({ ...area, scatterFixed: -1 }).errors.some((e) => e.includes("scatterFixed"))).toBe(true);
+  });
+
+  it("accepts a timed buff and an aura, and keeps reservation to auras", () => {
+    expect(ok({
+      type: "applyBuff", buffId: "blood_rage", durationTicks: 240, speedPct: 20, moveSpeedPct: 10,
+      lifeDrainPerSecFixed: fp(4), lifeRegenPerSecFixed: 0, critChancePct: 0, damagePct: 0, damageTakenPct: 0,
+    }).errors).toEqual([]);
+    expect(ok({
+      type: "applyBuff", buffId: "herald_of_ash", durationTicks: 0, reserveManaPct: 25, damagePct: 15,
+      onKillGround: { radiusFixed: fp(1.5), durationTicks: 60, ailment: burning },
+    }).errors).toEqual([]);
+    expect(ok({ type: "applyBuff", buffId: "haste", durationTicks: 90, reserveManaPct: 25 })
+      .errors.some((e) => e.includes("reserveManaPct"))).toBe(true);
+    expect(ok({ type: "applyBuff", buffId: "Haste", durationTicks: 0 }).errors.some((e) => e.includes("buffId"))).toBe(true);
+    expect(ok({ type: "applyBuff", buffId: "haste", durationTicks: 0, reserveManaPct: 101 })
+      .errors.some((e) => e.includes("reserveManaPct"))).toBe(true);
+    expect(ok({ type: "applyBuff", buffId: "herald_of_ash", durationTicks: 0, onKillGround: { radiusFixed: 1 } })
+      .errors.some((e) => e.includes("onKillGround"))).toBe(true);
+  });
+
+  it("accepts a curse and a single mark, rejects a bad type or slow", () => {
+    expect(ok({
+      type: "applyStatus", at: "target", radiusFixed: fp(2.5), maxRangeFixed: fp(10), statusId: "flammable",
+      durationTicks: 180, damageTakenPct: 25, damageTakenType: "fire",
+    }).errors).toEqual([]);
+    expect(ok({
+      type: "applyStatus", at: "target", radiusFixed: fp(3), single: 1, statusId: "marked", durationTicks: 240,
+      damageTakenPct: 30,
+    }).errors).toEqual([]);
+    expect(ok({
+      type: "applyStatus", at: "self", radiusFixed: fp(4), statusId: "taunted", durationTicks: 120, taunt: 1,
+      stunTicks: 0,
+    }).errors).toEqual([]);
+    const bad = { type: "applyStatus", at: "self", radiusFixed: fp(4), statusId: "scorched", durationTicks: 60 };
+    expect(ok({ ...bad, damageTakenType: "holy" }).errors.some((e) => e.includes("damageTakenType"))).toBe(true);
+    expect(ok({ ...bad, slowPct: 150 }).errors.some((e) => e.includes("slowPct"))).toBe(true);
+    expect(ok({ ...bad, single: true }).errors.some((e) => e.includes("single"))).toBe(true);
+  });
+
+  it("accepts a travel with arrival and trail, rejects zero ticks and a zero spacing", () => {
+    const travel = {
+      type: "travel", distanceFixed: fp(6), ticks: 12, direction: "toward",
+      arrival: { radiusFixed: fp(2), damage: { type: "physical", amountFixed: fp(30) }, knockbackFixed: fp(1), stunTicks: 10 },
+      trail: { spacingFixed: fp(1), radiusFixed: fp(0.8), durationTicks: 90, ailment: burning },
+    };
+    expect(ok(travel).errors).toEqual([]);
+    expect(ok({ ...travel, ticks: 0 }).errors.some((e) => e.includes("ticks"))).toBe(true);
+    expect(ok({ ...travel, direction: "up" }).errors.some((e) => e.includes("direction"))).toBe(true);
+    expect(ok({ ...travel, trail: { ...travel.trail, spacingFixed: 0 } })
+      .errors.some((e) => e.includes("spacingFixed"))).toBe(true);
+  });
+
+  it("lets a ground area pulse without an ailment, but not have neither", () => {
+    const ground = { type: "spawnGroundArea", radiusFixed: fp(2), durationTicks: 120 };
+    expect(ok({ ...ground, pulse: { damage: { type: "fire", amountFixed: fp(6) }, everyTicks: 15 } }).errors).toEqual([]);
+    expect(ok({ ...ground, ailment: burning, slowPct: 30 }).errors).toEqual([]);
+    expect(ok(ground).errors.some((e) => e.includes("needs an ailment"))).toBe(true);
+    expect(ok({ ...ground, pulse: { damage: { type: "fire", amountFixed: fp(6) }, everyTicks: 0 } })
+      .errors.some((e) => e.includes("everyTicks"))).toBe(true);
+  });
+});

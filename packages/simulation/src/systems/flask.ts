@@ -1,6 +1,7 @@
 import { flaskRecovery } from "@exiled/rules";
 import type { Simulation } from "../loop";
 import type { EnergyShieldC, FlasksC, Health, Mana, SessionC } from "../components";
+import { reservedMana } from "../status";
 
 export function registerFlaskSystem(sim: Simulation): void {
   sim.register("flask", (world, _tick, commands) => {
@@ -21,8 +22,10 @@ export function registerFlaskSystem(sim: Simulation): void {
       } else if (cmd.flask === "mana") {
         const m = world.get<Mana>(e, "mana");
         if (!m) continue;
-        if (f.manaCharges <= 0 || m.mana >= m.maxMana) continue;
-        world.set<Mana>(e, "mana", { ...m, mana: Math.min(m.maxMana, m.mana + flaskRecovery(m.maxMana)) });
+        // An aura's reservation is not there to refill.
+        const cap = m.maxMana - reservedMana(world, e, m.maxMana);
+        if (f.manaCharges <= 0 || m.mana >= cap) continue;
+        world.set<Mana>(e, "mana", { ...m, mana: Math.min(cap, m.mana + flaskRecovery(m.maxMana)) });
         world.set<FlasksC>(e, "flasks", { ...f, manaCharges: f.manaCharges - 1 });
       }
     }
@@ -36,7 +39,8 @@ export function registerFlaskSystem(sim: Simulation): void {
       if (!h || h.life <= 0) continue;
       if (h.life < h.maxLife) world.set<Health>(e, "health", { ...h, life: h.maxLife });
       const m = world.get<Mana>(e, "mana");
-      if (m && m.mana < m.maxMana) world.set<Mana>(e, "mana", { ...m, mana: m.maxMana });
+      const cap = m ? m.maxMana - reservedMana(world, e, m.maxMana) : 0;
+      if (m && m.mana < cap) world.set<Mana>(e, "mana", { ...m, mana: cap });
       const s = world.get<EnergyShieldC>(e, "energyShield");
       if (s && s.es < s.maxEs) world.set<EnergyShieldC>(e, "energyShield", { ...s, es: s.maxEs });
       const f = world.get<FlasksC>(e, "flasks");

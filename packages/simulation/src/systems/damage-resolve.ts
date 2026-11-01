@@ -15,6 +15,7 @@ import type { DamageEvent } from "../components";
 import { toNumber } from "@exiled/fixed-point";
 import { alertPack } from "./monster-ai";
 import { createStream, type RandomStream } from "../rng";
+import { damageTakenPct } from "../status";
 
 /** Spawn grace: 10 seconds at 30 Hz, or until the player moves or casts. */
 export const SPAWN_GRACE_TICKS = 300;
@@ -74,9 +75,13 @@ export function registerDamageResolve(
       const def = world.get<DefensesC>(ev.target, "defenses");
       if (!health || !def) continue;
 
+      // Increased damage taken (a buff on him, a curse or mark on a monster) lands
+      // before armour and resistance, and never takes a hit below a tenth.
+      const takenPct = damageTakenPct(world, ev.target, ev.type, tick);
+      const amount = takenPct === 0 ? ev.amountFixed : Math.trunc((ev.amountFixed * Math.max(10, 100 + takenPct)) / 100);
       // Armour stops hits, never a DoT tick (both PoE games); a DoT names its victim as source.
       const final = applyDamage(
-        { type: damageTypeOf(ev.type), amountFixed: ev.amountFixed },
+        { type: damageTypeOf(ev.type), amountFixed: amount },
         { resPct: def.res, armourFixed: ev.source === ev.target ? 0 : def.armour },
       );
       // Energy shield stands in front of life and pays double for chaos. Every

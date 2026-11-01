@@ -6,8 +6,10 @@ import type { Item } from "@exiled/content-schema";
 import { fp, type Fixed } from "@exiled/fixed-point";
 import { MAP_PORTALS, type DevOp } from "@exiled/protocol";
 import { atlasGraph, magicName, mapSeedFor, rollItem } from "@exiled/rules";
-import { spawnPortalRing } from "./areas";
-import type { BossC, Health, InventoryC, MonsterC, MoveTarget, PlayerC, Position, ProgressC, SessionC } from "./components";
+import { HIDEOUT_SPAWN, spawnPortalRing } from "./areas";
+import { spawnLabActors } from "./combat-sim";
+import type { BossC, Cooldowns, Health, InventoryC, Mana, MonsterC, MoveDir, MoveTarget, PlayerC, Position, ProgressC, SessionC } from "./components";
+import { reservedMana } from "./status";
 import { recomputePlayerStats } from "./derived";
 import type { World } from "./ecs";
 import { placeFirstFit } from "./inventory";
@@ -77,9 +79,39 @@ export function applyDevOp(world: World, op: DevOp, walkable?: Walkable): void {
     case "boss":
       readyBoss(world, op.phase, walkable);
       return;
+    case "refill":
+      refill(world);
+      return;
+    case "home":
+      home(world);
+      return;
     case "dump":
       return;
   }
+}
+
+/** The lab's start: back at the hideout spawn facing +y, stopped, no monsters but seven fresh dummies, refilled. */
+function home(world: World): void {
+  const player = world.query("player")[0];
+  if (player === undefined) return;
+  world.set<Position>(player, "position", { x: HIDEOUT_SPAWN.x, y: HIDEOUT_SPAWN.y });
+  world.remove(player, "travel");
+  if (world.has(player, "moveTarget")) world.set<MoveTarget>(player, "moveTarget", { x: HIDEOUT_SPAWN.x, y: HIDEOUT_SPAWN.y, active: 0 });
+  world.set<MoveDir>(player, "moveDir", { dx: 0, dy: 0, hx: 0, hy: fp(1) });
+  spawnLabActors(world, "clear", 0, 0);
+  spawnLabActors(world, "dummy", HIDEOUT_SPAWN.x, HIDEOUT_SPAWN.y, 7);
+  refill(world);
+}
+
+/** Every cooldown ready, life full, mana full up to what the auras hold back. */
+function refill(world: World): void {
+  const player = world.query("player")[0];
+  if (player === undefined) return;
+  if (world.has(player, "cooldowns")) world.set<Cooldowns>(player, "cooldowns", {});
+  const h = world.get<Health>(player, "health");
+  if (h && h.life > 0) world.set<Health>(player, "health", { ...h, life: h.maxLife });
+  const m = world.get<Mana>(player, "mana");
+  if (m) world.set<Mana>(player, "mana", { ...m, mana: m.maxMana - reservedMana(world, player, m.maxMana) });
 }
 
 /** Eight ways round a boss, unit vectors x1000: literals, like the sim's rings. */

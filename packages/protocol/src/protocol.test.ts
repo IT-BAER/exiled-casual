@@ -302,3 +302,38 @@ describe("validateIntent — dropItem", () => {
     expect(() => validateIntent({ kind: "dropItem", slot: "tail" })).toThrow(/slot/);
   });
 });
+
+describe("class skill expansion wire", () => {
+  test("a dummy spawn with its count and the refill dev op pass the guard", () => {
+    expect(isToWorker({ type: "spawn", what: "dummy", count: 7 })).toBe(true);
+    expect(isToWorker({ type: "spawn", what: "dummy", count: 41 })).toBe(false);
+    expect(isToWorker({ type: "dev", op: { op: "refill" } })).toBe(true);
+    expect(isToWorker({ type: "dev", op: { op: "home" } })).toBe(true);
+  });
+
+  test("a snapshot's skillArea, statuses, aura, reservation, cast and travel survive a structured clone", () => {
+    const msg = {
+      type: "snapshot",
+      snapshot: {
+        tick: 3, area: "map", portalsLeft: 0, mapOpen: false, areaTier: 0, atlasSeed: 0, completedNodes: [],
+        player: {
+          id: 1, x: 0, y: 0, life: 1, maxLife: 1, mana: 75, maxMana: 100, energyShield: 0, maxEnergyShield: 0,
+          cooldowns: {}, alive: true, casting: true, castSkill: "skill.leap_slam.v1",
+          flasks: { lifeCharges: 0, lifeMax: 0, manaCharges: 0, manaMax: 0 },
+          stats: { armour: 0, armourPct: 0, res: { fire: 0, cold: 0, lightning: 0, chaos: 0 }, manaRegenPerSec: 0, spellDamagePct: 0, castSpeedPct: 0, critChancePct: 0 },
+          level: 1, xp: 0, xpToNext: 1, gold: 0,
+          buffs: [{ id: "haste", kind: "buff", remainingSec: 0, aura: true }],
+          manaReserved: 25,
+          travel: { skillId: "skill.leap_slam.v1", ticks: 12, elapsed: 4, dirX: 1, dirY: 0 },
+        },
+        entities: [
+          { id: 9, kind: "skillArea", x: 4, y: 0, radius: 2, skillId: "skill.earthquake.v1", team: 0, impactIn: 1, shape: "cone", arc: 90, dirX: 1, dirY: 0, index: 2 },
+          { id: 10, kind: "monster", x: 5, y: 0, statuses: ["chilled", "marked"], stunned: true },
+        ],
+        inventory: { cols: 12, rows: 5, items: [] }, stash: { cols: 12, rows: 12, items: [] },
+        vendor: { cols: 12, rows: 12, items: [] }, equipment: {}, shards: {},
+      },
+    } satisfies FromWorker;
+    expect(structuredClone(msg)).toEqual(msg);
+  });
+});

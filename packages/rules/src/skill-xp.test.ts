@@ -181,7 +181,7 @@ describe("effectiveSkill", () => {
     const at10 = effectiveSkill(ground, 10);
     const e = at10.effects[0]!;
     if (e.type !== "spawnGroundArea") throw new Error("wrong effect");
-    expect(e.ailment.dpsFixed).toBeGreaterThan(fp(8));
+    expect(e.ailment!.dpsFixed).toBeGreaterThan(fp(8));
   });
 
   it("applies every breakpoint reached, in order, the later one winning", () => {
@@ -234,3 +234,41 @@ function pierceRange(def: SkillDef): number {
   if (e.type !== "spawnProjectile") throw new Error("wrong effect");
   return e.maxRangeFixed;
 }
+
+describe("effectiveSkill: damage on the expansion's effects", () => {
+  const burning = { kind: "burning" as const, stacksPerApply: 1, dpsFixed: fp(8), durationTicks: 60, maxStacks: 5 };
+  const kit: SkillDef = {
+    id: "skill.fixture_kit.v1",
+    name: "Fixture Kit",
+    unlockLevel: 1,
+    manaCostFixed: fp(10),
+    cooldownTicks: 30,
+    growth: { perLevel: { damagePct: 10, manaPct: 0 }, breakpoints: [] },
+    effects: [
+      { type: "areaHit", at: "self", radiusFixed: fp(2), damage: { type: "physical", amountFixed: fp(100) } },
+      {
+        type: "travel", distanceFixed: fp(5), ticks: 10,
+        arrival: { radiusFixed: fp(2), damage: { type: "physical", amountFixed: fp(100) } },
+        trail: { spacingFixed: fp(1), radiusFixed: fp(1), durationTicks: 60, ailment: burning },
+      },
+      { type: "spawnGroundArea", radiusFixed: fp(2), durationTicks: 60, pulse: { damage: { type: "fire", amountFixed: fp(100) }, everyTicks: 15 } },
+      { type: "applyBuff", buffId: "herald", durationTicks: 0, onKillGround: { radiusFixed: fp(1), durationTicks: 60, ailment: burning } },
+      { type: "areaHit", at: "target", radiusFixed: fp(1) },
+    ],
+  };
+
+  it("grows area, arrival, pulse, trail and corpse-ground damage, and leaves a damageless area alone", () => {
+    const e = effectiveSkill(kit, 3).effects;
+    const grown = Math.trunc((Math.trunc((fp(100) * 110) / 100) * 110) / 100);
+    const grownDot = Math.trunc((Math.trunc((fp(8) * 110) / 100) * 110) / 100);
+    if (e[0]!.type !== "areaHit" || e[1]!.type !== "travel" || e[2]!.type !== "spawnGroundArea"
+      || e[3]!.type !== "applyBuff" || e[4]!.type !== "areaHit") throw new Error("wrong effect");
+    expect(e[0]!.damage!.amountFixed).toBe(grown);
+    expect(e[1]!.arrival!.damage!.amountFixed).toBe(grown);
+    expect(e[1]!.trail!.ailment.dpsFixed).toBe(grownDot);
+    expect(e[2]!.pulse!.damage.amountFixed).toBe(grown);
+    expect(e[2]!.ailment).toBeUndefined();
+    expect(e[3]!.onKillGround!.ailment.dpsFixed).toBe(grownDot);
+    expect(e[4]).toEqual(kit.effects[4]);
+  });
+});

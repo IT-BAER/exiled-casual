@@ -31,12 +31,60 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
  * every bone name, so a clip drives the rig without retargeting machinery.
  */
 
+/**
+ * The class skills' own takes (`render/skills/`), each played once by `playSkill`.
+ * `full` takes own the legs too (a leap, a dash, a roar) and play over locomotion
+ * like the roll; the rest layer over the upper body like the cast. `bow` takes key
+ * the weapon hand and draw from the bow hand; `loop` takes run until `endSkillLoop`.
+ */
+export interface SkillClipSpec { name: string; full?: boolean; loop?: boolean; bow?: boolean }
+export const SKILL_CLIPS = {
+  aerialA: { name: "Rig|Sword_Aerial_A", full: true },
+  heavyB: { name: "Rig|Sword_Heavy_B" },
+  heavyC: { name: "Rig|Sword_Heavy_C" },
+  heavyD: { name: "Rig|Sword_Heavy_D" },
+  upperCut: { name: "Rig|Sword_UpperCut" },
+  swordDash: { name: "Rig|Sword_Dash", full: true },
+  shieldDash: { name: "Rig|Shield_Dash", full: true },
+  block: { name: "Rig|Sword_Block" },
+  transform: { name: "Rig|MonsterTransformation", full: true },
+  railCall: { name: "Rig|Idle_Rail_Call" },
+  surprise: { name: "Rig|Surprise" },
+  overhandThrow: { name: "Rig|OverhandThrow" },
+  bowAimUp: { name: "Rig|Bow_Aim_Up", bow: true },
+  bowAimNeutral: { name: "Rig|Bow_Aim_Neutral", bow: true },
+  bowNotch: { name: "Rig|Bow_Notch", bow: true },
+  bowRapid: { name: "Rig|Bow_RapidShoot_Loop", bow: true, loop: true },
+  jogFlip: { name: "Rig|JogToFlip", full: true },
+  slide: { name: "Rig|Slide_Start", full: true },
+  ninjaJumpStart: { name: "Rig|NinjaJump_Start", full: true },
+  ninjaJumpLand: { name: "Rig|NinjaJump_Land", full: true },
+  liftAir: { name: "Rig|LiftAir" },
+  meleeCombo: { name: "Rig|Melee_Combo" },
+  spellEnter: { name: "Rig|Spell_Simple_Enter" },
+  spellExit: { name: "Rig|Spell_Simple_Exit" },
+  spellIdle: { name: "Rig|Spell_Simple_Idle_Loop", loop: true },
+  spellShoot: { name: "Rig|Spell_Simple_Shoot" },
+  spellShootR: { name: "Rig|Spell_Simple_Shoot_R" },
+  punchJab: { name: "Rig|Punch_Jab" },
+  punchCross: { name: "Rig|Punch_Cross" },
+  jumpStart: { name: "Rig|Jump_Start", full: true },
+  jumpLoop: { name: "Rig|Jump_Loop", full: true, loop: true },
+  jumpLand: { name: "Rig|Jump_Land", full: true },
+  rollRM: { name: "Rig|Roll_RM", full: true },
+  sprint: { name: "Rig|Sprint_Loop", full: true, loop: true },
+} as const satisfies Record<string, SkillClipSpec>;
+export type SkillClip = keyof typeof SKILL_CLIPS;
+export const SKILL_CLIP_IDS = Object.keys(SKILL_CLIPS) as SkillClip[];
+export const isSkillClip = (clip: string): clip is SkillClip => Object.hasOwn(SKILL_CLIPS, clip);
+const skillSpec = (clip: RigClip): SkillClipSpec | undefined => (isSkillClip(clip) ? SKILL_CLIPS[clip] : undefined);
+
 /** Clips the game can actually trigger today. */
 export type RigClip =
   | "idle" | "walk" | "run" | "walkBack" | "runBack" | "runBackL" | "runBackR"
   | "walkStrafeL" | "walkStrafeR" | "runStrafeL" | "runStrafeR"
   | "walkFwdL" | "walkFwdR" | "walkBackL" | "walkBackR" | "cast" | "bow" | "strikeA" | "strikeB" | "strikeC"
-  | "heavy" | "slam" | "hit" | "drink" | "open" | "roll";
+  | "heavy" | "slam" | "hit" | "drink" | "open" | "roll" | SkillClip;
 export type StrikeClip = "strikeA" | "strikeB" | "strikeC" | "heavy" | "slam";
 
 /** Melee takes played in turn: UAL2's regular sword chain, forehand, backhand, finisher. */
@@ -104,9 +152,11 @@ export const CLIP_NAME: Record<RigClip, string> = {
   drink: "Rig|Consume",
   open: "Rig|Chest_Open",
   roll: "Rig|Roll",
+  ...(Object.fromEntries(SKILL_CLIP_IDS.map((c) => [c, SKILL_CLIPS[c].name])) as Record<SkillClip, string>),
 };
 
 const CLIP_LOOPS: Record<RigClip, boolean> = {
+  ...(Object.fromEntries(SKILL_CLIP_IDS.map((c) => [c, skillSpec(c)?.loop === true])) as Record<SkillClip, boolean>),
   idle: true,
   walk: true,
   run: true,
@@ -1011,14 +1061,19 @@ const WEAPON_HAND: ReadonlySet<string> = new Set([
 function layerKeys(clip: RigClip, bone: string): boolean {
   if (LOWER_BODY.has(bone)) return false;
   if (clip === "cast") return bone === "hand_r" || (!WEAPON_HAND.has(bone) && !bone.endsWith("_l"));
-  return clip === "bow" || !WEAPON_HAND.has(bone);
+  return clip === "bow" || skillSpec(clip)?.bow === true || !WEAPON_HAND.has(bone);
 }
 
 /** Attacks: a reaction never interrupts one, and one always cuts a reaction short. */
-const ACTION_CLIPS: readonly RigClip[] = ["cast", "bow", ...MELEE_CLIPS];
+const ACTION_CLIPS: readonly RigClip[] = ["cast", "bow", ...MELEE_CLIPS, ...SKILL_CLIP_IDS];
+
+/** Skill takes that own the whole body, over locomotion like the roll. */
+const FULL_SKILL_CLIPS: readonly SkillClip[] = SKILL_CLIP_IDS.filter((c) => skillSpec(c)?.full === true);
 
 /** Clips that layer over locomotion instead of replacing it. */
-const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>([...ACTION_CLIPS, ...REACTION_CLIPS]);
+const UPPER_BODY_CLIPS: ReadonlySet<RigClip> = new Set<RigClip>(
+  [...ACTION_CLIPS, ...REACTION_CLIPS].filter((c) => skillSpec(c)?.full !== true),
+);
 
 /** Whether locomotion keeps ownership of the pelvis and legs under this clip. */
 export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(clip);
@@ -1033,7 +1088,7 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * own arm motion shows through, or a fully held shield reads as bolted on.
  */
 const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean; hold: number }[] = [
-  { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: UPPER_BODY_CLIPS, roll: true, steady: false, idle: false, hold: 1 },
+  { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: new Set<RigClip>([...UPPER_BODY_CLIPS, ...FULL_SKILL_CLIPS]), roll: true, steady: false, idle: false, hold: 1 },
   { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true, idle: true, hold: 0.8 },
 ];
 
@@ -1063,6 +1118,7 @@ export const HIPS_BOB: Record<RigClip, number> = {
   runBack: 0.65, runBackL: 0.65, runBackR: 0.65,
   walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
   walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, heavy: 1, slam: 1, hit: 1, drink: 1, open: 1, roll: 1,
+  ...(Object.fromEntries(SKILL_CLIP_IDS.map((c) => [c, 1])) as Record<SkillClip, number>),
 };
 
 /**
@@ -1787,9 +1843,9 @@ export class RigActor {
    * standing one plays the take's own hips and legs. Paced per phase
    * (`strikePace`) so the blade stops on the tick the sim lands the hit.
    */
-  playStrike(seconds?: number, releaseSeconds?: number, skillId?: string): void {
+  playStrike(seconds?: number, releaseSeconds?: number, skillId?: string, take?: StrikeClip): void {
     this.strikeSkill = skillId;
-    const clip = strikeClipFor(skillId, this.nextStrikeIndex, (c) => this.groups.has(c));
+    const clip = take && this.groups.has(take) ? take : strikeClipFor(skillId, this.nextStrikeIndex, (c) => this.groups.has(c));
     const group = this.groups.get(clip);
     if (!group) return;
     this.stopReactions();
@@ -1835,8 +1891,55 @@ export class RigActor {
     group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
   }
 
+  /**
+   * A class skill's own take (`render/skills/`), or the shared cast, bow or strike
+   * it names. Paced so `release` (a fraction of the take) lands `releaseSeconds`
+   * in, the cast's rule, then sped by `playback`. A loop runs until
+   * `endSkillLoop`. False when the library has no such take: the caller falls back.
+   */
+  playSkill(clip: RigClip, seconds?: number, releaseSeconds?: number, release = 0.5, playback = 1, skillId?: string): boolean {
+    if (clip === "cast") { this.playCast(seconds, releaseSeconds); return this.groups.has("cast"); }
+    if (clip === "bow") { this.playBow(seconds, releaseSeconds); return this.groups.has("bow"); }
+    if ((MELEE_CLIPS as readonly RigClip[]).includes(clip)) {
+      this.playStrike(seconds, releaseSeconds, skillId, clip as StrikeClip);
+      return this.groups.has(clip);
+    }
+    const spec = skillSpec(clip);
+    const group = this.groups.get(clip);
+    if (!spec || !group) return false;
+    this.stopReactions();
+    this.cancelAction();
+    this.stopStrike();
+    const loop = spec.loop === true;
+    const paced = loop
+      ? 1
+      : releaseSeconds !== undefined ? actionRatio(clipSeconds(group) * release, releaseSeconds) : actionRatio(clipSeconds(group), seconds);
+    const ratio = paced * playback;
+    group.speedRatio = ratio;
+    group.start(loop, ratio);
+    this.scene.sortActiveAnimatables();
+    if (!loop) group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+    return true;
+  }
+
+  /** Let go of a looping skill take (a channel-like cast or a travel's loop). */
+  endSkillLoop(): void {
+    for (const clip of SKILL_CLIP_IDS) {
+      if (!skillSpec(clip)?.loop) continue;
+      const group = this.groups.get(clip);
+      if (!group?.isPlaying) continue;
+      group.stop();
+      this.easeOutToLocomotion();
+    }
+  }
+
   private isRolling(): boolean {
     return this.groups.get("roll")?.isPlaying === true;
+  }
+
+  /** The roll or a whole-body skill take: either owns the legs, so no gait is blended under it. */
+  private isWholeBody(): boolean {
+    return this.isRolling() || FULL_SKILL_CLIPS.some((c) => this.groups.get(c)?.isPlaying);
   }
 
   /** A reaction over the legs at the authored pace; skipped while an attack or the roll plays. */
@@ -1952,7 +2055,8 @@ export class RigActor {
   };
 
   private isDrawingBow(): boolean {
-    return this.groups.get("bow")?.isPlaying === true;
+    return this.groups.get("bow")?.isPlaying === true
+      || SKILL_CLIP_IDS.some((c) => skillSpec(c)?.bow === true && this.groups.get(c)?.isPlaying);
   }
 
   /** How far through the bow clip, or null when it is not playing. */
@@ -1991,7 +2095,7 @@ export class RigActor {
     const other = this.blendTo;
     const at = this.active?.animatables[0]?.masterFrame;
     // Runs after every clip: under the roll it would pull the whole body back toward a stride.
-    if (!other || !this.active || !this.activeClip || !this.blendClip || this.blendW < 1e-3 || at === undefined || this.isRolling()) return;
+    if (!other || !this.active || !this.activeClip || !this.blendClip || this.blendW < 1e-3 || at === undefined || this.isWholeBody()) return;
     const frame = framePhaseMatched(this.activeClip, [this.active.from, this.active.to], at, this.blendClip, [other.from, other.to]);
     const layered = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
     for (const { animation, target } of other.targetedAnimations) {
@@ -2266,7 +2370,7 @@ export class RigActor {
         group.normalize(source.from, source.to);
         // Layered clips and the roll apply after locomotion whenever the list is
         // sorted (`switchTo`); the roll keys every bone, so it covers the gait whole.
-        if (upperOnly || clip === "roll") group.playOrder = 1;
+        if (upperOnly || clip === "roll" || skillSpec(clip)?.full) group.playOrder = 1;
         group.enableBlending = true;
         // A 60Hz frame's worth until the first frame re-sets it off the real one.
         group.blendingSpeed = 1 / 60 / (upperOnly ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);

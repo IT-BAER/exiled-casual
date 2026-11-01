@@ -118,9 +118,9 @@ describe("SKILLS", () => {
     const effect = def.effects.find((e) => e.type === "spawnGroundArea");
     expect(effect).toBeDefined();
     if (effect?.type === "spawnGroundArea") {
-      expect(effect.ailment.kind).toBe("burning");
-      expect(effect.ailment.maxStacks).toBe(5);
-      expect(effect.ailment.dpsFixed).toBe(fp(8));           // 8000
+      expect(effect.ailment!.kind).toBe("burning");
+      expect(effect.ailment!.maxStacks).toBe(5);
+      expect(effect.ailment!.dpsFixed).toBe(fp(8));           // 8000
     }
   });
 
@@ -387,6 +387,24 @@ describe("skill unlocks and growth", () => {
     "skill.cinder_ground.v1": 8,
     "skill.ground_slam.v1": 8,
     "skill.split_arrow.v1": 8,
+    "skill.infernal_cry.v1": 3,
+    "skill.escape_shot.v1": 3,
+    "skill.flame_dash.v1": 3,
+    "skill.leap_slam.v1": 6,
+    "skill.ice_shot.v1": 6,
+    "skill.ember_nova.v1": 6,
+    "skill.earthquake.v1": 12,
+    "skill.snipers_mark.v1": 12,
+    "skill.flammability.v1": 12,
+    "skill.determination.v1": 14,
+    "skill.lightning_arrow.v1": 14,
+    "skill.solar_orb.v1": 14,
+    "skill.sunder.v1": 18,
+    "skill.rain_of_arrows.v1": 18,
+    "skill.firestorm.v1": 18,
+    "skill.blood_rage.v1": 24,
+    "skill.haste.v1": 24,
+    "skill.herald_of_ash.v1": 24,
   };
   const GEM_SKILLS = [...SKILLS.keys()].filter((id) => !UTILITY_SKILLS.has(id));
 
@@ -424,6 +442,24 @@ describe("skill unlocks and growth", () => {
       "skill.piercing_shot.v1": "class.stalker",
       "skill.ground_slam.v1": "class.ironsworn",
       "skill.split_arrow.v1": "class.stalker",
+      "skill.infernal_cry.v1": "class.ironsworn",
+      "skill.leap_slam.v1": "class.ironsworn",
+      "skill.earthquake.v1": "class.ironsworn",
+      "skill.determination.v1": "class.ironsworn",
+      "skill.sunder.v1": "class.ironsworn",
+      "skill.blood_rage.v1": "class.ironsworn",
+      "skill.escape_shot.v1": "class.stalker",
+      "skill.ice_shot.v1": "class.stalker",
+      "skill.snipers_mark.v1": "class.stalker",
+      "skill.lightning_arrow.v1": "class.stalker",
+      "skill.rain_of_arrows.v1": "class.stalker",
+      "skill.haste.v1": "class.stalker",
+      "skill.flame_dash.v1": "class.emberbound",
+      "skill.ember_nova.v1": "class.emberbound",
+      "skill.flammability.v1": "class.emberbound",
+      "skill.solar_orb.v1": "class.emberbound",
+      "skill.firestorm.v1": "class.emberbound",
+      "skill.herald_of_ash.v1": "class.emberbound",
     };
     for (const [id, def] of SKILLS) expect(def.classId, id).toBe(owner[id]);
   });
@@ -511,6 +547,101 @@ describe("skill unlocks and growth", () => {
         { atLevel: 15, patch: { radiusFixed: fp(4.5) } },
       ],
     },
+    "skill.infernal_cry.v1": {
+      own: { field: "durationTicks", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { radiusFixed: fp(5) } },
+        { atLevel: 15, patch: { damageTakenPct: 30 } },
+      ],
+    },
+    "skill.leap_slam.v1": {
+      own: { field: "distanceFixed", perMille: 20 },
+      breakpoints: [{ atLevel: 5, patch: { ticks: 12 } }],
+    },
+    "skill.earthquake.v1": {
+      own: { field: "radiusFixed", perMille: 15 },
+      breakpoints: [
+        { atLevel: 5, patch: { stunTicks: 45 } },
+        { atLevel: 15, patch: { count: 2 } },
+      ],
+    },
+    "skill.determination.v1": {
+      breakpoints: [{ atLevel: 10, patch: { damageTakenPct: -20 } }],
+    },
+    "skill.sunder.v1": {
+      own: { field: "radiusFixed", perMille: 15 },
+      breakpoints: [
+        { atLevel: 5, patch: { count: 6 } },
+        { atLevel: 15, patch: { count: 7 } },
+      ],
+    },
+    "skill.blood_rage.v1": {
+      own: { field: "durationTicks", perMille: 20 },
+      breakpoints: [{ atLevel: 10, patch: { speedPct: 30 } }],
+    },
+    "skill.escape_shot.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { explodeRadiusFixed: fp(2) } },
+        { atLevel: 15, patch: { pierceCount: 1 } },
+      ],
+    },
+    "skill.ice_shot.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { explodeRadiusFixed: fp(2.2) } },
+        { atLevel: 15, patch: { pierceCount: 1 } },
+      ],
+    },
+    "skill.snipers_mark.v1": {
+      breakpoints: [{ atLevel: 10, patch: { damageTakenPct: 40 } }],
+    },
+    "skill.lightning_arrow.v1": {
+      own: { field: "maxRangeFixed", perMille: 20 },
+      breakpoints: [
+        { atLevel: 5, patch: { chainCount: 4 } },
+        { atLevel: 15, patch: { chainCount: 5 } },
+      ],
+    },
+    "skill.rain_of_arrows.v1": {
+      own: { field: "radiusFixed", perMille: 15 },
+      breakpoints: [
+        { atLevel: 5, patch: { count: 16 } },
+        { atLevel: 15, patch: { count: 20 } },
+      ],
+    },
+    "skill.haste.v1": {
+      breakpoints: [{ atLevel: 10, patch: { speedPct: 20 } }],
+    },
+    "skill.flame_dash.v1": {
+      own: { field: "distanceFixed", perMille: 20 },
+      breakpoints: [],
+    },
+    "skill.ember_nova.v1": {
+      own: { field: "radiusFixed", perMille: 15 },
+      breakpoints: [{ atLevel: 5, patch: { knockbackFixed: fp(2.5) } }],
+    },
+    "skill.flammability.v1": {
+      own: { field: "radiusFixed", perMille: 20 },
+      breakpoints: [{ atLevel: 10, patch: { damageTakenPct: 35 } }],
+    },
+    "skill.solar_orb.v1": {
+      own: { field: "durationTicks", perMille: 25 },
+      breakpoints: [
+        { atLevel: 5, patch: { radiusFixed: fp(3) } },
+        { atLevel: 15, patch: { radiusFixed: fp(3.5) } },
+      ],
+    },
+    "skill.firestorm.v1": {
+      own: { field: "radiusFixed", perMille: 15 },
+      breakpoints: [
+        { atLevel: 5, patch: { count: 12 } },
+        { atLevel: 15, patch: { count: 15 } },
+      ],
+    },
+    "skill.herald_of_ash.v1": {
+      breakpoints: [{ atLevel: 10, patch: { damagePct: 20 } }],
+    },
   };
 
   it("pins every authored own-scalar and breakpoint number exactly", () => {
@@ -575,6 +706,12 @@ describe("skill kinds", () => {
       "skill.strike.v1": "attack", "skill.heavy_strike.v1": "attack", "skill.ground_slam.v1": "attack",
       "skill.snap_shot.v1": "attack", "skill.piercing_shot.v1": "attack", "skill.split_arrow.v1": "attack",
       "skill.town_portal.v1": null, "skill.blink.v1": null,
+      "skill.infernal_cry.v1": null, "skill.leap_slam.v1": "attack", "skill.earthquake.v1": "attack",
+      "skill.determination.v1": null, "skill.sunder.v1": "attack", "skill.blood_rage.v1": null,
+      "skill.escape_shot.v1": "attack", "skill.ice_shot.v1": "attack", "skill.snipers_mark.v1": null,
+      "skill.lightning_arrow.v1": "attack", "skill.rain_of_arrows.v1": "attack", "skill.haste.v1": null,
+      "skill.flame_dash.v1": "spell", "skill.ember_nova.v1": "spell", "skill.flammability.v1": "spell",
+      "skill.solar_orb.v1": "spell", "skill.firestorm.v1": "spell", "skill.herald_of_ash.v1": null,
     });
   });
 
@@ -583,11 +720,67 @@ describe("skill kinds", () => {
     expect(SKILLS.get("skill.ember_spark.v1")!.addedDamageEffectivenessPct).toBe(60);
     // Cinder Ground has no hit, only burning, and ailments do not read added damage.
     expect(SKILLS.get("skill.cinder_ground.v1")!.addedDamageEffectivenessPct).toBeUndefined();
+    expect(SKILLS.get("skill.ember_nova.v1")!.addedDamageEffectivenessPct).toBe(70);
+    expect(SKILLS.get("skill.solar_orb.v1")!.addedDamageEffectivenessPct).toBe(30);
+    expect(SKILLS.get("skill.firestorm.v1")!.addedDamageEffectivenessPct).toBe(50);
+    // A curse and a dash hit nothing, so they read no added damage either.
+    expect(SKILLS.get("skill.flammability.v1")!.addedDamageEffectivenessPct).toBeUndefined();
+    expect(SKILLS.get("skill.flame_dash.v1")!.addedDamageEffectivenessPct).toBeUndefined();
   });
 
   it("the schema refuses an unknown kind and effectiveness on a non-spell", () => {
     const def = SKILLS.get("skill.strike.v1")!;
     expect(validateSkillDef({ ...def, kind: "aura" }).ok).toBe(false);
     expect(validateSkillDef({ ...def, addedDamageEffectivenessPct: 50 }).ok).toBe(false);
+  });
+});
+
+describe("class skill expansion pacing (spec 2026-11-01 §1)", () => {
+  const def = (id: string) => SKILLS.get(`skill.${id}.v1`)!;
+
+  it("every aura is a free toggle that reserves a quarter of the pool", () => {
+    for (const id of ["determination", "haste", "herald_of_ash"]) {
+      const d = def(id);
+      const e = d.effects[0]!;
+      expect(d.manaCostFixed, id).toBe(0);
+      expect(e.type === "applyBuff" && e.durationTicks === 0 && e.reserveManaPct, id).toBe(25);
+    }
+  });
+
+  it("every movement skill costs 10-15 mana on a 60-150 tick cooldown", () => {
+    for (const id of ["leap_slam", "escape_shot", "flame_dash"]) {
+      const d = def(id);
+      expect(d.effects.some((e) => e.type === "travel"), id).toBe(true);
+      expect(d.manaCostFixed, id).toBeGreaterThanOrEqual(fp(10));
+      expect(d.manaCostFixed, id).toBeLessThanOrEqual(fp(15));
+      expect(d.cooldownTicks, id).toBeGreaterThanOrEqual(60);
+      expect(d.cooldownTicks, id).toBeLessThanOrEqual(150);
+    }
+  });
+
+  it("every curse and mark lasts 4-8 s", () => {
+    for (const id of ["snipers_mark", "flammability", "infernal_cry"]) {
+      const e = def(id).effects[0]!;
+      const ticks = e.type === "applyStatus" ? e.durationTicks : 0;
+      expect(ticks, id).toBeGreaterThanOrEqual(120);
+      expect(ticks, id).toBeLessThanOrEqual(240);
+    }
+  });
+
+  // Sum of every hit in one cast, over the cooldown: a big cooldown hits harder per
+  // cast than the class's 36-a-beat skill, and less per second.
+  it("a long-cooldown hitter hits harder per cast and softer per second than its class's beat", () => {
+    const perCast = (id: string) => def(id).effects.reduce((a, e) => {
+      if (e.type === "areaHit") return a + (e.damage?.amountFixed ?? 0) * (e.count ?? 1);
+      if (e.type === "travel") return a + (e.arrival?.damage?.amountFixed ?? 0);
+      return a;
+    }, 0);
+    for (const id of ["earthquake", "firestorm", "rain_of_arrows", "leap_slam"]) {
+      const d = def(id);
+      expect(perCast(id), id).toBeGreaterThan(fp(36));
+      // Rain and Firestorm scatter: about a quarter of the impacts land on one body.
+      const onOneBody = d.effects.some((e) => e.type === "areaHit" && e.scatterFixed) ? perCast(id) / 4 : perCast(id);
+      expect(onOneBody / d.cooldownTicks, id).toBeLessThan(fp(36) / 30);
+    }
   });
 });

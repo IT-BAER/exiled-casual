@@ -17,6 +17,7 @@ const SIM_ACTIONS: { kind: SpawnKind; label: string }[] = [
   { kind: "item", label: "drop an item" },
   { kind: "shields", label: "both shields" },
   { kind: "levelup", label: "level up +1" },
+  { kind: "dummy", label: "7 training dummies" },
   { kind: "clear", label: "kill all monsters" },
 ];
 

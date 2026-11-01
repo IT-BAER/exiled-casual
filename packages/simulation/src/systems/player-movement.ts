@@ -1,9 +1,12 @@
 import { FP_SCALE, fp, fpClamp, fpStepToward, isqrt, type Fixed } from "@exiled/fixed-point";
 import { Simulation } from "../loop";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
-import { slide, hasLineOfSight, type Collision, type CollisionRef } from "../collision";
+import { slide, sweep, hasLineOfSight, type Collision, type CollisionRef } from "../collision";
 import type { Command } from "../loop";
-import type { Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC, RollC, RollReadyC } from "../components";
+import type {
+  Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC, RollC, RollReadyC, TravelC, SkillAreaC,
+} from "../components";
+import { buffSum, spawnGroundPatch } from "../status";
 
 /** Player moves at this percent of moveSpeed during post-cast recovery. */
 export const CASTING_MOVE_PCT = 40;
@@ -188,6 +191,16 @@ function corner(
   };
 }
 
+/** A travel not yet ended. Ended ones linger until step 0 of the next tick hands control back. */
+function activeTravel(t: TravelC | undefined, tick: number): t is TravelC {
+  return t !== undefined && tick < t.untilTick;
+}
+
+/** The distance a travel covers on its tick `i` (1..n): linear, differenced so the steps sum to `d`. */
+export function travelStep(d: Fixed, n: number, i: number): Fixed {
+  return Math.trunc((d * i) / n) - Math.trunc((d * (i - 1)) / n);
+}
+
 /** A vector rescaled to length 1 (Fixed). Zero in, zero out. */
 export function unit(x: Fixed, y: Fixed): { x: Fixed; y: Fixed } {
   const len = isqrt(x * x + y * y);
@@ -250,6 +263,12 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       world.remove(e, "roll");
       if (roll.pending) applyMoveCommand(e, roll.pending.type, roll.pending.data);
     }
+    for (const e of world.query("position", "player", "travel")) {
+      const travel = world.get<TravelC>(e, "travel")!;
+      if (tick < travel.untilTick) continue;
+      world.remove(e, "travel");
+      if (travel.pending) applyMoveCommand(e, travel.pending.type, travel.pending.data);
+    }
 
     // 1. Apply commands to moveTarget / moveDir components.
     for (const cmd of commands) {
@@ -261,8 +280,9 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       if ((world.get<Health>(cmd.entity, "health")?.life ?? 1) <= 0) continue;
       const e = cmd.entity;
       const roll = world.get<RollC>(e, "roll");
+      const travel = world.get<TravelC>(e, "travel");
       if (cmd.type === "dodge") {
-        if (activeRoll(roll, tick)) continue;
+        if (activeRoll(roll, tick) || activeTravel(travel, tick)) continue;
         if (tick < (world.get<RollReadyC>(e, "rollReady")?.tick ?? 0)) continue;
         const pos = world.get<Position>(e, "position");
         if (!pos) continue;
@@ -288,6 +308,13 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
           });
           continue;
         }
+        if (activeTravel(travel, tick)) {
+          world.set<TravelC>(e, "travel", {
+            ...travel,
+            pending: cmd.data ? { type: cmd.type, data: { ...cmd.data } } : { type: cmd.type },
+          });
+          continue;
+        }
         applyMoveCommand(e, cmd.type, cmd.data);
       }
     }
@@ -307,15 +334,59 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       // Holding a skill is not casting it: the gap is the player's to run in.
       const casting = world.get<CastingC>(e, "casting");
       const hold = world.get<SkillHoldC>(e, "skillHold");
+      // Buffs move him faster (or slower) before the wind-up's slow is taken.
+      const moveSpeedPct = buffSum(world, e, tick, "moveSpeedPct");
+      const run = moveSpeedPct === 0 ? player.moveSpeed : Math.trunc((player.moveSpeed * Math.max(0, 100 + moveSpeedPct)) / 100);
       const speed = casting && casting.untilTick > tick
-        ? Math.trunc(player.moveSpeed * CASTING_MOVE_PCT / 100)
-        : player.moveSpeed;
+        ? Math.trunc(run * CASTING_MOVE_PCT / 100)
+        : run;
 
       // Intended movement delta for this tick.
       let ddx = 0;
       let ddy = 0;
       const dirActive = moveDir && (moveDir.dx !== 0 || moveDir.dy !== 0);
       const roll = world.get<RollC>(e, "roll");
+      const travel = world.get<TravelC>(e, "travel");
+      if (activeTravel(travel, tick)) {
+        // A leap or dash: a fixed heading, stopped dead by the first wall its body
+        // meets rather than slid along it, then the trail and the landing.
+        const i = tick - travel.startTick + 1;
+        const n = travel.untilTick - travel.startTick;
+        const step = travelStep(travel.distance, n, i);
+        const mx = Math.trunc((travel.dirX * step) / FP_SCALE);
+        const my = Math.trunc((travel.dirY * step) / FP_SCALE);
+        const reach = collision ? sweep(collision, pos.x, pos.y, mx, my, player.bodyRadius) : { dx: mx, dy: my };
+        const at = {
+          x: fpClamp(pos.x + reach.dx, WORLD_MIN, WORLD_MAX),
+          y: fpClamp(pos.y + reach.dy, WORLD_MIN, WORLD_MAX),
+        };
+        world.set<Position>(e, "position", at);
+        let next = travel;
+        if (travel.trail && travel.lastTrailX !== undefined && travel.lastTrailY !== undefined) {
+          const tx = at.x - travel.lastTrailX;
+          const ty = at.y - travel.lastTrailY;
+          if (tx * tx + ty * ty >= travel.trail.spacing * travel.trail.spacing) {
+            spawnGroundPatch(world, at.x, at.y, travel.trail.ground, travel.team, travel.skillId, tick);
+            next = { ...next, lastTrailX: at.x, lastTrailY: at.y };
+          }
+        }
+        if (next !== travel) world.set<TravelC>(e, "travel", next);
+        if (i >= n && travel.arrival) {
+          const a = travel.arrival;
+          const area = world.create();
+          world.set<Position>(area, "position", at);
+          world.set<SkillAreaC>(area, "skillArea", {
+            skillId: travel.skillId, ownerId: e, team: travel.team, radius: a.radius,
+            startTick: tick, impactTick: tick,
+            dirX: Math.trunc((travel.dirX * 1000) / FP_SCALE), dirY: Math.trunc((travel.dirY * 1000) / FP_SCALE),
+            parts: a.parts,
+            ...(a.knockback ? { knockback: a.knockback } : {}),
+            ...(a.stun ? { stun: a.stun } : {}),
+            ...(a.onHit ? { onHit: a.onHit } : {}),
+          });
+        }
+        continue;
+      }
       if (activeRoll(roll, tick)) {
         // A roll does not steer and is not slowed; the walk it interrupts, if
         // any, picks up where it was once the roll ends.

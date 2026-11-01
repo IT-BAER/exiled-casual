@@ -69,6 +69,8 @@ import {
   calmTowardFirst,
   IDLE_CALM_BONES,
   IDLE_LEG_BREATH,
+  SKILL_CLIP_IDS,
+  SKILL_CLIPS,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -2699,5 +2701,46 @@ describe("a cast points the wand at the target", () => {
     expect(release).toBeLessThan(15);
     expect(yaw).toBeLessThan(20);
     expect(pitch).toBeLessThan(25);
+  }, 60_000);
+});
+
+describe("a class skill plays its own take", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+
+  it("ships every skill take, layers the upper-body ones and lets whole-body ones own the legs", () => {
+    for (const clip of SKILL_CLIP_IDS) expect(CLIP_NAME[clip], clip).toBe(SKILL_CLIPS[clip].name);
+    expect(isLayeredClip("spellShootR")).toBe(true);
+    expect(isLayeredClip("aerialA")).toBe(false);
+    expect(clipLoops("bowRapid")).toBe(true);
+    expect(clipLoops("heavyC")).toBe(false);
+  });
+
+  it("starts the take, is cancelled like any action, and a loop runs until let go", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
+      const rig = attachRig(scene, new Mesh("hero", scene), "male")!;
+      for (let i = 0; i < 3; i++) { rig.setLocomotion(0); scene.render(); }
+      expect(rig.playSkill("heavyC", 1, 0.5, 0.4)).toBe(true);
+      expect(rig.clipGroups.get("heavyC")!.isPlaying).toBe(true);
+      rig.cancelAction();
+      expect(rig.clipGroups.get("heavyC")!.isPlaying).toBe(false);
+      expect(rig.playSkill("bowRapid")).toBe(true);
+      for (let i = 0; i < 90; i++) { rig.setLocomotion(0); scene.render(); }
+      expect(rig.clipGroups.get("bowRapid")!.isPlaying).toBe(true);
+      rig.endSkillLoop();
+      expect(rig.clipGroups.get("bowRapid")!.isPlaying).toBe(false);
+      // A shared take still goes through its own path.
+      expect(rig.playSkill("cast", 0.6, 0.3)).toBe(true);
+      expect(rig.clipGroups.get("cast")!.isPlaying).toBe(true);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
   }, 60_000);
 });

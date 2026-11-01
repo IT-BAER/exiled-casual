@@ -1,7 +1,9 @@
 import { Frustum, Plane, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import type { Mesh } from "@babylonjs/core";
-import { blinkBurst, fxProfile, groundSlam, meleeImpact, setStreakLength, strikesTheFloor } from "./skill-fx";
+import { blinkBurst, groundSlam, meleeImpact, setStreakLength, strikesTheFloor } from "./skill-fx";
+import { skillFx, skillLook, type CastLook } from "./skills";
+import { SkillLookDispatcher, travelLift, travelState } from "./skills/dispatcher";
 import { clearFxPools } from "./fx-pool";
 import { dangerGlow, landed } from "./boss-tells";
 import { bossFx, clearBossFx, isBossMark, PHASE_SHAKE, shakeFor } from "./boss-fx";
@@ -14,7 +16,7 @@ import { deviceBeckon } from "./props";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
 import { rigOf } from "./rig";
-import type { ReactionClip } from "./rig";
+import type { ReactionClip, RigClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { characterClass } from "@exiled/content-runtime";
 import { DEFAULT_CLASS_ID } from "@exiled/rules";
@@ -119,6 +121,8 @@ export interface ActionAnimation {
   playBow(seconds?: number, releaseSeconds?: number): void;
   playStrike(seconds?: number, releaseSeconds?: number, skillId?: string): void;
   stopStrike(): void;
+  /** A class skill's own take (`RigActor.playSkill`); false when the rig cannot play it. */
+  playSkill?(clip: RigClip, seconds?: number, releaseSeconds?: number, release?: number, playback?: number, skillId?: string): boolean;
 }
 
 /**
@@ -154,9 +158,12 @@ export function syncActionAnimation(
   seconds?: number,
   releaseSeconds?: number,
   skillId?: string,
+  look?: CastLook,
 ): void {
   if (!rig) return;
   if (isCasting && (!wasCasting || wasAction !== action)) {
+    // A class skill names its own take, whatever its action; the shared one is the fallback.
+    if (look && rig.playSkill?.(look.clip, seconds, releaseSeconds, look.release, look.playback, skillId)) return;
     if (action === "melee") rig.playStrike(seconds, releaseSeconds, skillId);
     else if (action === "bow") rig.playBow(seconds, releaseSeconds);
     else rig.playCast(seconds, releaseSeconds);
@@ -398,10 +405,16 @@ export class SnapshotRenderer {
   private readonly ailmentFx: PlayerAilmentFx;
   /** The companion cat, while the `ui.pet` setting is on. */
   private pet: PetActor | null = null;
+  /** Every class skill look (`render/skills`) and the lifetime of each. */
+  private readonly skillLooks: SkillLookDispatcher;
 
   constructor(scene: Scene) {
     this.scene = scene;
     this.ailmentFx = new PlayerAilmentFx(scene);
+    // A look's thump is the same camera trauma a landed swing adds (juice.ts).
+    this.skillLooks = new SkillLookDispatcher(scene, undefined, {
+      shake: (weight) => { this.shakeTrauma = addTrauma(this.shakeTrauma, 1, weight); },
+    });
     // DEV handle, like `window.__sfx` and `window.__scene`: a death is the one
     // thing that cannot be staged from a driven page (it needs a fight), and a
     // ragdoll that never falls looks exactly like one that was never asked to.
@@ -503,6 +516,7 @@ export class SnapshotRenderer {
     this.now = next.tick + alpha;
     this.lastSnapshot = next;
     const ms = performance.now();
+    this.skillLooks.begin(next, alpha, ms);
     /** Seconds since the last drawn frame, for what runs on the frame clock. */
     const frame = this.lastFrameMs > 0 ? Math.min(0.1, (ms - this.lastFrameMs) / 1000) : 0;
     if (this.lastFrameMs > 0) this.shakeTrauma = decayTrauma(this.shakeTrauma, (ms - this.lastFrameMs) / 1000);
@@ -556,8 +570,12 @@ export class SnapshotRenderer {
     // under the cursor during the wind-up, so following the cursor would swing
     // one way and hit another. `playerTurn` stays on the cursor: it is what
     // cancels the cast when he turns away (castDir null).
-    const bodyFacing = next.player.casting && next.player.facing && this.castDir
-      ? next.player.facing : playerFacing;
+    // A travel turns him down its heading, unless its look keeps him on the aim (a hop back).
+    const travel = travelState(prev, next, alpha);
+    const travelLook = travel ? skillLook(travel.skillId)?.travel : undefined;
+    const bodyFacing = travel && travelLook?.face !== "aim" ? { x: travel.dirX, y: travel.dirY }
+      : next.player.casting && next.player.facing && this.castDir
+        ? next.player.facing : playerFacing;
     const body = characterClass(next.player.classId ?? DEFAULT_CLASS_ID).body;
     if (next.player.alive) this.syncMesh(
       next.player.id,
@@ -580,6 +598,7 @@ export class SnapshotRenderer {
     // rebuilt underneath us.
     const playerMesh = this.meshes.get(next.player.id);
     if (playerMesh) rigOf(playerMesh)?.setLooks(looksForEquipment(next.equipment ?? {}, body));
+    if (playerMesh && travel && travelLook?.arcHeight) playerMesh.position.y += travelLift(travelLook.arcHeight, travel.progress);
     this.ailmentFx.update(
       next.player.alive && playerMesh ? next.player.buffs : undefined,
       playerMesh?.position.x ?? next.player.x, playerMesh?.position.z ?? next.player.y,
@@ -616,6 +635,8 @@ export class SnapshotRenderer {
     const view = viewPlanes(this.scene);
     for (const e of next.entities) {
       liveIds.add(e.id);
+      // Drawn by their skill's look alone (`this.skillLooks`), never as an entity mesh.
+      if (e.kind === "skillArea" || (e.kind === "groundArea" && this.skillLooks.ownsGround(e.skillId))) continue;
       const prevE = prev?.entities.find((p) => p.id === e.id);
       // On the bolt's first tick the cast animation hasn't moved the arm yet,
       // so castPoint() returns the idle-pose hand (at the hip). Skip the first
@@ -702,7 +723,13 @@ export class SnapshotRenderer {
         rig?.setAwake(!far);
         rig?.setBlending(dist <= BLEND_RANGE);
       }
-      if (e.kind === "projectile" && fxProfile(e.skillId).arrow) {
+      const arrow = e.kind === "projectile" && skillFx(e.skillId).arrow;
+      const ownLook = e.kind === "projectile" && this.skillLooks.ownsProjectile(e.skillId);
+      if (ownLook && !arrow) {
+        // Its look is authored down +z: point the root along the drawn path.
+        const run = Math.hypot(nx - ox, ny - oy);
+        if (run > 1e-6) mesh.rotation.y = Math.atan2(nx - ox, ny - oy);
+      } else if (arrow) {
         // Floored at the aim point: past it the arrow flies level, not into the floor.
         const drop = handEntry?.offset.y ?? 0;
         const yo = Y_LIFT.projectile + drop * dp;
@@ -720,6 +747,15 @@ export class SnapshotRenderer {
           mesh.rotation.x = Math.atan2(yo - yn, run);
         }
         if (e.spent) mesh.metadata = { ...(mesh.metadata ?? {}), struck: true };
+      }
+      if (ownLook) {
+        // An arrow keeps the shipped arrow and hands it to the look; anything else is the look's own root.
+        const run = Math.hypot(nx - ox, ny - oy);
+        const yaw = mesh.rotation.y;
+        this.skillLooks.projectile(
+          e, mesh, run > 1e-6 ? (nx - ox) / run : Math.sin(yaw), run > 1e-6 ? (ny - oy) / run : Math.cos(yaw),
+          arrow, this.chainSource(e, prev),
+        );
       }
       // The sim swung: one-shot strike over whatever locomotion was playing.
       const windup = e.kind === "monster" ? winding.get(e.id) : undefined;
@@ -872,6 +908,7 @@ export class SnapshotRenderer {
       slamDebris(this.scene).clear();
       clearFxPools(this.scene);
       clearBossFx(this.scene);
+      this.skillLooks.clear();
       for (const patch of this.embers) patch.mesh.dispose();
       this.embers.length = 0;
     }
@@ -924,6 +961,7 @@ export class SnapshotRenderer {
           // partway through the last interpolated step toward it.
           const last = prev?.entities.find((p) => p.id === id);
           if (last?.spent) this.placeImpact(mesh, last, prev!, next);
+          this.skillLooks.projectileGone(id, !areaChanged && last?.spent === true);
           rigOf(mesh)?.dispose();
           creatureOf(mesh)?.dispose();
           mesh.dispose();
@@ -940,6 +978,17 @@ export class SnapshotRenderer {
         this.ignited.delete(id);
       }
     }
+
+    // Every class skill look: areas, owned grounds, cast and travel FX, buffs, statuses.
+    const drawn = this.meshes.get(next.player.id);
+    this.skillLooks.frame({
+      prev, next, alpha,
+      player: drawn && next.player.alive ? { node: drawn, x: drawn.position.x, z: drawn.position.z, yaw: drawn.rotation.y } : null,
+      bodyOf: (id) => {
+        const m = this.meshes.get(id);
+        return m ? { node: m, x: m.position.x, z: m.position.z, yaw: m.rotation.y, visible: m.isEnabled(false) } : null;
+      },
+    });
 
     // Corpses whose time is up. They lie there long enough to be walked over and
     // looted around, then go down through the floor rather than blinking out:
@@ -1032,6 +1081,8 @@ export class SnapshotRenderer {
         if (next.player.casting) {
           this.castDir = next.player.facing ?? next.player.heading ?? this.aimFacing;
         }
+        // A class skill is read off the cast itself; the shipped kit keeps the cooldown edge.
+        const castLook = skillLook(next.player.castSkill)?.cast;
         syncActionAnimation(
           rig,
           prev?.player.casting ?? false,
@@ -1040,8 +1091,20 @@ export class SnapshotRenderer {
           next.player.castingAction,
           next.player.castTicks === undefined ? undefined : next.player.castTicks / TICKS_PER_SEC,
           next.player.castWindupTicks === undefined ? undefined : next.player.castWindupTicks / TICKS_PER_SEC,
-          castSkillOf(prev?.player.cooldowns, next.player.cooldowns),
+          castLook ? next.player.castSkill : castSkillOf(prev?.player.cooldowns, next.player.cooldowns),
+          castLook,
         );
+        // A looping take is held for the cast and let go with it.
+        if (!next.player.casting && !next.player.travel) rig?.endSkillLoop();
+      }
+      // A travel plays its own take over its length, and lets go of a loop when it lands.
+      const flying = next.player.travel;
+      const wasFlying = prev?.player.travel;
+      if (flying && flying.skillId !== wasFlying?.skillId) {
+        const look = skillLook(flying.skillId)?.travel;
+        if (look?.clip) rig?.playSkill(look.clip, flying.ticks / TICKS_PER_SEC, undefined, 0.5, look.playback ?? 1, flying.skillId);
+      } else if (!flying && wasFlying) {
+        rig?.endSkillLoop();
       }
       // The sim cancels any cast when the roll starts.
       const rolling = next.player.rolling ?? false;
@@ -1061,7 +1124,8 @@ export class SnapshotRenderer {
       if (prev) {
         const dx = next.player.x - prev.player.x;
         const dy = next.player.y - prev.player.y;
-        if (dx * dx + dy * dy > TELEPORT_STEP * TELEPORT_STEP) {
+        // A travel skill covers ground fast but is drawn the whole way, never as a blink.
+        if (dx * dx + dy * dy > TELEPORT_STEP * TELEPORT_STEP && !next.player.travel && !prev.player.travel) {
           const pm = this.meshes.get(next.player.id);
           if (pm) {
             pm.setEnabled(false);
@@ -1088,6 +1152,15 @@ export class SnapshotRenderer {
     const centre = new Vector3(e.x, Y_LIFT.projectile, e.y);
     const pick = precise || this.freePicks-- > 0;
     return contactPoint(mesh, new Vector3(blow.x, Y_LIFT.projectile, blow.z), centre, pick);
+  }
+
+  /** The body a chained bolt left: drawn where it stands now, or where it last stood if it died of the link before. */
+  private chainSource(e: SnapshotEntity, prev: Snapshot | null): { id: number; x: number; z: number; node: Mesh | null } | undefined {
+    if (e.chainFrom === undefined) return undefined;
+    const node = this.meshes.get(e.chainFrom) ?? null;
+    if (node) return { id: e.chainFrom, x: node.position.x, z: node.position.z, node };
+    const last = this.lastSnapshot?.entities.find((o) => o.id === e.chainFrom) ?? prev?.entities.find((o) => o.id === e.chainFrom);
+    return last ? { id: e.chainFrom, x: last.x, z: last.y, node: null } : undefined;
   }
 
   /** A spent projectile's mesh moved onto the body it struck, where its dispose bursts. */
