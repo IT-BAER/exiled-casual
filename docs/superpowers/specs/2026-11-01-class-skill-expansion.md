@@ -165,4 +165,4 @@ All new scalars are top-level so a breakpoint can patch them.
 - [x] B4 Emberbound looks + cues (6 skills; browser review passed round 2)
 - [x] C1 frame capture tool (tools/skill-lab) + every skill captured and judged (18/18)
 - [x] C2 fixes from capture review (risk review: 2 Important fixed)
-- [ ] C3 full suite (3710 pass), typecheck, build, dev-surface: done; commit: awaiting owner
+- [x] C3 full suite (3710 pass), typecheck, build, dev-surface: done; committed e1b327fa
