@@ -61,7 +61,9 @@ export class SkillLookDispatcher {
   private readonly projectiles = new Map<number, { handle: ProjectileHandle; last: ProjectileState }>();
   private readonly buffs = new Map<string, FxHandle<AttachedState>>();
   /** `<monster id>:<status id>` */
-  private readonly statuses = new Map<string, { monster: number; handle: FxHandle<AttachedState> }>();
+  private readonly statuses = new Map<string, {
+    monster: number; status: string; body: BodyRef; radius: number; boss: boolean; handle: FxHandle<AttachedState>;
+  }>();
   private cast: { skillId: string; handle: FxHandle<ActorRef> } | null = null;
   private travel: { skillId: string; handle?: FxHandle<{ body: ActorRef; travel: TravelState }>; last: TravelState } | null = null;
   private readonly bursts: BurstHandle[] = [];
@@ -342,7 +344,11 @@ export class SkillLookDispatcher {
       this.statuses.delete(key);
       // A body that left took its geometry with it; one still standing fades it.
       if (alive.has(s.monster)) this.retire(s.handle);
-      else s.handle.dispose();
+      else {
+        const burst = this.looks.statuses[s.status]?.death?.(this.ctx, s.body.node.getAbsolutePosition().clone(), s);
+        if (burst) this.bursts.push(burst);
+        s.handle.dispose();
+      }
     }
     for (const [key, { e, status, body }] of want) {
       const state: AttachedState = {
@@ -352,7 +358,7 @@ export class SkillLookDispatcher {
       if (s) s.handle.update?.(this.ctx, state);
       else {
         this.statuses.set(key, {
-          monster: e.id,
+          monster: e.id, status, body, radius: e.radius ?? 0.5, boss: e.boss === true,
           handle: this.looks.statuses[status]!.create(this.ctx, { ...state, radius: e.radius ?? 0.5, boss: e.boss === true }),
         });
       }

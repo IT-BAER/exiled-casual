@@ -167,6 +167,32 @@ describe("ailments on a monster", () => {
   });
 });
 
+describe("a status on a body that dies", () => {
+  it("fires its death burst once where the body stood, and never when the status merely ends", () => {
+    // A frozen monster killed shatters (PoE): the ice is the payoff of the freeze.
+    const { scene, player, monster } = world();
+    let deaths = 0;
+    const looks: ClassSkillLooks = {
+      skills: {}, buffs: {},
+      statuses: {
+        frozen: {
+          create: () => ({ update: () => {}, dispose: () => {} }),
+          death: () => { deaths++; return { update: () => false, dispose: () => {} }; },
+        },
+      },
+    };
+    const d = new SkillLookDispatcher(scene, looks);
+    const frame = (s: Snapshot) => d.frame({ prev: null, next: s, alpha: 0, player, bodyOf: () => monster });
+    frame(snap(1, [{ id: 6, kind: "monster", x: 3, y: 0, statuses: ["frozen"] }]));
+    frame(snap(2, [{ id: 6, kind: "monster", x: 3, y: 0 }]));
+    expect(deaths).toBe(0);
+    frame(snap(3, [{ id: 6, kind: "monster", x: 3, y: 0, statuses: ["frozen"] }]));
+    frame(snap(4, []));
+    expect(deaths).toBe(1);
+    d.clear();
+  });
+});
+
 describe("skill look hooks", () => {
   const burst = (log: { disposed: number }) => ({ update: vi.fn(() => true), dispose: () => { log.disposed++; } });
   const run = (d: SkillLookDispatcher, s: Snapshot, player: BodyRef | { node: TransformNode; x: number; z: number; yaw: number }, monster: BodyRef, prev: Snapshot | null = null) =>

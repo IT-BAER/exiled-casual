@@ -62,4 +62,16 @@ describe("warmSkillLooks", () => {
     expect(scene.meshes.some((m) => m.name.startsWith("eb-wake"))).toBe(false);
     release();
   });
+
+  it("fires each status's death burst too, so the first frozen kill compiles no shatter", () => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    let deaths = 0;
+    const release = warmSkillLooks(scene, {
+      skills: {}, buffs: {},
+      statuses: { frozen: { create: () => ({ dispose: () => {} }), death: () => { deaths++; } } },
+    });
+    expect(deaths).toBe(1);
+    release();
+  });
 });

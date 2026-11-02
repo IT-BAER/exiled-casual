@@ -1,4 +1,4 @@
-import { TransformNode } from "@babylonjs/core";
+import { TransformNode, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import { SKILL_LOOKS } from "./index";
 import type { ActorRef, BurstHandle, ClassSkillLooks, FxHandle, LookContext } from "./types";
@@ -43,6 +43,7 @@ export function warmSkillLooks(scene: Scene, looks: ClassSkillLooks = SKILL_LOOK
   }
   tryEach(Object.values(looks.buffs).map((b) => () => keep(b.create(ctx, { ...attached, aura: true }))));
   tryEach(Object.values(looks.statuses).map((s) => () => keep(s.create(ctx, { ...attached, radius: 0.5, boss: false }))));
+tryEach(Object.values(looks.statuses).map((s) => () => keep(s.death?.(ctx, new Vector3(), { radius: 0.5, boss: false }))));
 
   // The kit's templates and pools outlive the warm-up (that is what makes it pay), so
   // the always-drawn flag is handed back rather than left on them.

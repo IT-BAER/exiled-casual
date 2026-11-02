@@ -1,5 +1,5 @@
-import { bloodDrip, emberSmoulder, frostCreep, frostCrust, poisonSeep, shockCrackle, type Fx, type MeterFx, type Rgb } from "./kit";
-import type { AttachedState, ClassSkillLooks, FxHandle, StatusLook } from "./types";
+import { bloodDrip, emberSmoulder, frostBurst, frostCreep, frostCrust, poisonSeep, shockCrackle, type Fx, type MeterFx, type Rgb } from "./kit";
+import type { AttachedState, BurstHandle, ClassSkillLooks, FxHandle, StatusLook } from "./types";
 
 /**
  * What an ailment looks like on a monster, whichever class laid it: frozen and the
@@ -38,7 +38,14 @@ export const AILMENT_LOOKS: ClassSkillLooks = {
   skills: {},
   buffs: {},
   statuses: {
-    frozen: onBody(frostCrust),
+    frozen: {
+      ...onBody(frostCrust),
+      // Killed while frozen, the body shatters (PoE): ice thrown off where it stood, no ring.
+      death(ctx, at, s): BurstHandle {
+        const fx = frostBurst(ctx.scene, at, { radius: Math.max(0.9, s.radius * 2.2), shards: s.boss ? 36 : 22, ring: false, flash: 0.35 });
+        return { update: (c) => { fx.update(c.dt); return !fx.done; }, dispose: () => fx.dispose() };
+      },
+    },
     freezing: {
       create(ctx, s) {
         const fx = frostCreep(ctx.scene, s.body.node, { radius: s.radius, height: heightOf(s.radius, s.boss) });

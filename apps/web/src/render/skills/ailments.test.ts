@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NullEngine, Scene, TransformNode } from "@babylonjs/core";
+import { NullEngine, Scene, TransformNode, Vector3 } from "@babylonjs/core";
 import { AILMENT_LOOKS } from "./ailments";
 import { SKILL_LOOKS } from "./index";
 import type { AttachedState, FxHandle, LookContext } from "./types";
@@ -48,5 +48,17 @@ describe("ailment looks", () => {
     const high = run(0.9);
     expect(high).toBeGreaterThan(low * 3);
     node.dispose();
+  });
+
+  it("shatters a frozen body that dies into ice that runs out on its own", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 30);
+    const scene = new Scene(engine);
+    const ctx: LookContext = { scene, dt: DT, now: 0, flash: () => {} };
+    const burst = AILMENT_LOOKS.statuses.frozen!.death!(ctx, new Vector3(1, 0, 1), { radius: 0.5, boss: false })!;
+    expect(scene.meshes.length).toBeGreaterThan(0);
+    let t = 0;
+    while (burst.update(ctx)) { scene.onBeforeRenderObservable.notifyObservers(scene); t += DT; expect(t).toBeLessThan(5); }
+    burst.dispose();
   });
 });

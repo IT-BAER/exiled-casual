@@ -216,6 +216,8 @@ export interface BuffLook {
 export interface StatusLook {
   /** Created when the status id appears on a monster (`stunned` reads the `stunned` flag). */
   create(ctx: LookContext, s: AttachedState & { radius: number; boss: boolean }): FxHandle<AttachedState>;
+  /** Once, where the body stood, when it dies with this status on (a frozen body shatters). */
+  death?(ctx: LookContext, at: Vector3, s: { radius: number; boss: boolean }): BurstHandle | void;
 }
 
 // ── One skill, one class ───────────────────────────────────────────────────────
