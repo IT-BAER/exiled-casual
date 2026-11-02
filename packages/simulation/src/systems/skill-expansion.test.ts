@@ -271,7 +271,7 @@ describe("buffs and auras", () => {
     expect(r.life(r.p)).toBe(fp(1));
   });
 
-  it("an aura reserves mana, caps regeneration, toggles off for free and is refused when the pool cannot hold it", () => {
+  it("an aura reserves mana, caps regeneration, toggles off without mana and is refused when the pool cannot hold it", () => {
     const r = rig([aura]);
     r.w.set<Mana>(r.p, "mana", { mana: fp(100), maxMana: fp(100), regen: fp(5) });
     r.cast("haste", 1, 0);
@@ -286,9 +286,11 @@ describe("buffs and auras", () => {
     r.w.set<Cooldowns>(r.p, "cooldowns", {});
     r.cast("haste", 1, 0); // off
     expect(r.w.has(r.p, "buffs")).toBe(false);
-    expect(r.w.get<Cooldowns>(r.p, "cooldowns")!["skill.haste.v1"]).toBeUndefined();
-    r.sim.step();
+    // The key is still down: the client re-sends it next snapshot, which must not switch it back on.
+    r.cast("haste", 1, 0);
+    expect(r.w.has(r.p, "buffs")).toBe(false);
     expect(r.w.get<Mana>(r.p, "mana")!.mana).toBe(fp(80));
+    r.w.set<Cooldowns>(r.p, "cooldowns", {});
     r.w.set<Mana>(r.p, "mana", { mana: fp(20), maxMana: fp(100), regen: 0 });
     r.cast("haste", 1, 0); // refused: 20 cannot hold 25
     expect(r.w.has(r.p, "buffs")).toBe(false);

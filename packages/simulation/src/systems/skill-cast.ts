@@ -480,14 +480,16 @@ export function registerSkillCast(
       const cds = world.get<Cooldowns>(caster, "cooldowns") ?? {};
       if ((cds[cmd.skillId] ?? 0) > tick) continue; // on cooldown
 
-      // An aura that is on goes off: free, no new cooldown, its mana let go. Only
-      // once the cooldown is up, or a held key re-sent per snapshot undoes its own cast.
+      // An aura that is on goes off: no mana, its reservation let go. Only once the
+      // cooldown is up, and it re-arms the cooldown: a held key is re-sent per
+      // snapshot, and either edge unguarded lets the next re-send undo it.
       const aura = auraOf(base);
       const buffs = world.get<BuffsC>(caster, "buffs");
       if (aura && buffs?.list.some((b) => b.id === aura.buffId)) {
         const list = buffs.list.filter((b) => b.id !== aura.buffId);
         if (list.length === 0) world.remove(caster, "buffs");
         else world.set<BuffsC>(caster, "buffs", { list });
+        world.set<Cooldowns>(caster, "cooldowns", { ...cds, [cmd.skillId]: tick + base.cooldownTicks });
         continue;
       }
 
