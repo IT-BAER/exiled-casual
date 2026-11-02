@@ -71,7 +71,7 @@ _PUNCH = "344 Audio - Cinematic Fight Vol. 1/FGHTImpt_4 x Punch, Body 02_344 Aud
 _BOX_THUMP = "Mechanical Wave - Cardboard and Paper/OBJPack_Big Cardboard Box Impact_ 02_MWSFX_CDAP.wav"
 _AIR_RISER = "344 Audio - Cymbals From Hell/Time Bending Risers 21.wav"
 _SHIMMER = "Epic Stock Media - Anime Game/DSGNStngr_Power Up Bright Positive Successful Light Saturation Crash Shimmer 05_ESM_AG.wav"
-_CHARGE_DOWN = "Rogue Waves - Anime Studio/DSGNMisc_Charge Down Classic 1_RogueWaves_AnimeStudio.wav"
+_GUST = "Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav"
 _DARK_SPELL = "Rogue Waves - Druid Magic/MAGEvil_Dark Spell Dark Energy Attack_RogueWaves_DruidMagic.wav"
 _DARK_TONE = "Mechanical Wave - Glass/GLASTonl_Dark Tone Thrill_07_MWSFX_GL.wav"
 _NOISEBOX_10 = "InMotionAudio - Sinister Textures 4/DSGNErie_NoiseBoxHit_10_InMotionAudio_SinisterTextures4.wav"
@@ -113,14 +113,14 @@ _BUFF_TAKE_SEMIS = (0.0, 0.3, -0.3, 0.15)
 
 
 def _buff_up(semis: float, takes: int = 3) -> list[dict]:
-    """Every buff and aura coming up is ONE sound: the air riser with the shimmer struck at
-    its top, a few semitones of tape apart per skill. The shimmer's entry moves with the
-    tape speed, or a lower take strikes it before the riser has arrived."""
+    """Every buff and aura coming up is ONE sound: the last 0.6 s of the air riser with the
+    shimmer struck at its top, a few semitones of tape apart per skill. The shimmer's entry
+    moves with the tape speed, or a lower take strikes it before the riser has arrived."""
     out = []
     for k in range(takes):
         s = semis + _BUFF_TAKE_SEMIS[k]
-        at = round(1150 * 2 ** (-s / 12))
-        out.append({"layers": [(f"{_AIR_RISER}@4.90:1.60", s, 0, 0), (_SHIMMER, s, -8, at)]})
+        at = round(600 * 2 ** (-s / 12))
+        out.append({"layers": [(f"{_AIR_RISER}@5.45:1.05", s, 0, 0), (_SHIMMER, s, -8, at)]})
     return out
 
 
@@ -699,13 +699,9 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
     ],
 
     # ── Class skill expansion: shared aura and status cues ────────────────────────
-    # Any aura switched off: one charge-down that falls in level and brightness together
-    # (6.5 kHz to 2 kHz over a second), its takes a semitone or two of tape apart.
-    "skill-aura-off": [
-        _CHARGE_DOWN,
-        {"layers": [(_CHARGE_DOWN, -1.5, 0, 0)]},
-        {"layers": [(_CHARGE_DOWN, -3, 0, 0)]},
-    ],
+    # Any aura switched off: the falling half of a wind gust, low on tape, a breath going out
+    # (the anime charge-down it replaced read as sci-fi). Takes a semitone apart.
+    "skill-aura-off": [{"layers": [(f"{_GUST}@1.40:1.80", s, 0, 0)]} for s in (-4, -5, -3)],
     "skill-status-chilled": [
         f"{_ICE_SIZZLE}@0.26:0.70:-5",
         f"{_ICE_SIZZLE}@6.30:0.60",

@@ -62,6 +62,8 @@ MIN_RELEASE_MS = 140
 # enough that the cue still lands on the frame it is asked for.
 PRE_ROLL_MS = 12
 FADE_OUT_MS = 40
+# A take the cap cut while it still rang: 40 ms there is a sound stopping, not ending.
+CAP_FADE_MS = 250
 # Ceiling the shaped file may reach. Not 0: Opus is lossy and DOES overshoot the
 # sample values it was given — measured through the browser's own decoder, -1 dB came
 # back at +0.3 dBFS and -2 dB still clipped the sharpest footstep. That is a crackle
@@ -114,8 +116,8 @@ MAX_SECONDS: dict[str, float] = {
     "waystone-activate": 1.80,
     "portal-open": 1.25,
     # Class skill expansion. A hit is cut shorter than its cast's swell; an aura toggle is
-    # never spammed, so its rise gets the room to reach its top and the shimmer to ring out.
-    "skill-infernal-cry-cast": 2.60,
+    # never spammed, so its rise reaches its top and the shimmer rings out under the cap.
+    "skill-infernal-cry-cast": 1.60,
     "skill-infernal-cry-impact": 0.90,
     "skill-leap-slam-cast": 0.60,
     "skill-leap-slam-whoosh": 1.10,
@@ -123,11 +125,11 @@ MAX_SECONDS: dict[str, float] = {
     "skill-earthquake-cast": 0.60,
     "skill-earthquake-impact": 1.00,
     "skill-earthquake-aftershock": 1.60,
-    "skill-determination-cast": 2.60,
+    "skill-determination-cast": 1.60,
     "skill-sunder-cast": 0.70,
     "skill-sunder-impact": 0.80,
     "skill-sunder-burst": 0.70,
-    "skill-blood-rage-cast": 2.60,
+    "skill-blood-rage-cast": 1.60,
     "skill-escape-shot-cast": 0.70,
     "skill-escape-shot-impact": 0.80,
     "skill-ice-shot-cast": 0.80,
@@ -139,7 +141,7 @@ MAX_SECONDS: dict[str, float] = {
     "skill-rain-of-arrows-cast": 1.00,
     "skill-rain-of-arrows-impact": 0.60,
     "skill-rain-of-arrows-arrow": 0.35,
-    "skill-haste-cast": 2.60,
+    "skill-haste-cast": 1.60,
     "skill-flame-dash-cast": 0.80,
     "skill-flame-dash-trail": 0.60,
     "skill-flame-dash-impact": 0.90,
@@ -151,7 +153,7 @@ MAX_SECONDS: dict[str, float] = {
     "skill-firestorm-cast": 1.60,
     "skill-firestorm-impact": 1.60,
     "skill-firestorm-meteor": 1.20,
-    "skill-herald-of-ash-cast": 2.60,
+    "skill-herald-of-ash-cast": 1.60,
     "skill-herald-of-ash-burst": 0.70,
     "skill-aura-off": 1.00,
     "skill-status-": 0.60,
@@ -253,6 +255,7 @@ def trim(a: array.array, rate: int, max_s: float, channels: int = 1,
 
     start_i = max(0, onset * win - int(rate * PRE_ROLL_MS / 1000))
     end_i = min(len(m), (end + 1) * win)
+    capped = end_i > start_i + int(rate * max_s)
     end_i = min(end_i, start_i + int(rate * max_s))
     cut = a[start_i * channels:end_i * channels]
     frames = len(cut) // channels
@@ -264,7 +267,7 @@ def trim(a: array.array, rate: int, max_s: float, channels: int = 1,
             cut[c] = int(cut[c] * k)
 
     # Fade the tail, so a cut mid-decay is not a click.
-    fade = min(int(rate * FADE_OUT_MS / 1000), frames)
+    fade = min(int(rate * (CAP_FADE_MS if capped else FADE_OUT_MS) / 1000), frames)
     for i in range(fade):
         scale(frames - fade + i, 1.0 - i / fade)
     # And the first two milliseconds, for the same reason at the other end.
