@@ -41,6 +41,7 @@ Textures are downscaled to 512 and re-encoded as JPEG before they go in: the fou
 """
 import math
 import os
+import subprocess
 import random
 import sys
 
@@ -2225,6 +2226,8 @@ def main():
         export_lights=False,
     )
     print("wrote", OUT, os.path.getsize(OUT), "bytes")
+    # Served meshopt-packed, like the wardrobe and the monsters.
+    subprocess.run(["node", os.path.join(ROOT, "tools", "pack_props.mjs")], check=True)
 
 
 main()
