@@ -1530,6 +1530,15 @@ export class RigActor {
   private readonly groups = new Map<RigClip, AnimationGroup>();
   /** Each strike's own hips and legs, played only while nothing else is moving them. */
   private readonly strikeLegs = new Map<RigClip, AnimationGroup>();
+  /**
+   * Each whole-body skill take's hips and legs, split off its group: played while
+   * he stands or a travel carries him, let go to the gait while he walks or runs.
+   */
+  private readonly skillLegs = new Map<RigClip, AnimationGroup>();
+  /** A leap or dash is carrying the body: its take keeps the legs at any ground speed. */
+  private travelling = false;
+  /** The ground speed picked a gait this frame, so the legs are the gait's. */
+  private gaitMoving = false;
   /** Per strike, its sole's lift over the floor per frame, already in this rig's proportions. */
   private readonly planted: PlantedLeg[] = [];
   private plantObserver: Observer<Scene> | null = null;
@@ -1743,6 +1752,9 @@ export class RigActor {
     // flourish and the sim never hears about it.
     const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
     let clip = clipForSpeed(speed, gaitOf(this.locomotion) ?? "idle");
+    // A turn on the spot steps the feet but is still standing: the take keeps them.
+    this.gaitMoving = clip !== "idle";
+    this.syncSkillLegs();
     let stride = 1;
     this.blendTo = null;
     this.blendClip = null;
@@ -1918,8 +1930,16 @@ export class RigActor {
     const ratio = paced * playback;
     group.speedRatio = ratio;
     group.start(loop, ratio);
+    const legs = this.skillLegs.get(clip);
+    if (legs && (this.travelling || !this.gaitMoving)) {
+      legs.speedRatio = ratio;
+      legs.start(loop, ratio);
+    }
     this.scene.sortActiveAnimatables();
-    if (!loop) group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+    if (!loop) group.onAnimationGroupEndObservable.addOnce(() => {
+      this.skillLegs.get(clip)?.stop();
+      this.easeOutToLocomotion();
+    });
     return true;
   }
 
@@ -1930,7 +1950,33 @@ export class RigActor {
       const group = this.groups.get(clip);
       if (!group?.isPlaying) continue;
       group.stop();
+      this.skillLegs.get(clip)?.stop();
       this.easeOutToLocomotion();
+    }
+  }
+
+  /** A leap or dash carries the body from now until `false`; its take keeps the legs meanwhile. */
+  setTravelling(on: boolean): void {
+    this.travelling = on;
+  }
+
+  /**
+   * Hand a whole-body take's legs to whoever should have them this frame: the take
+   * while he stands or travels, the gait while he walks. Taken back mid-take in step.
+   */
+  private syncSkillLegs(): void {
+    const owns = this.travelling || !this.gaitMoving;
+    for (const [clip, legs] of this.skillLegs) {
+      const group = this.groups.get(clip);
+      const frame = group?.isPlaying ? group.animatables[0]?.masterFrame : undefined;
+      if (!owns || frame === undefined) {
+        if (legs.isPlaying) legs.stop();
+      } else if (!legs.isPlaying) {
+        legs.speedRatio = group!.speedRatio;
+        legs.start(group!.loopAnimation, group!.speedRatio);
+        legs.goToFrame(frame);
+        this.scene.sortActiveAnimatables();
+      }
     }
   }
 
@@ -1938,9 +1984,15 @@ export class RigActor {
     return this.groups.get("roll")?.isPlaying === true;
   }
 
-  /** The roll or a whole-body skill take: either owns the legs, so no gait is blended under it. */
+  /** The roll or a whole-body skill take with its legs: either owns them, so no gait is blended under it. */
   private isWholeBody(): boolean {
-    return this.isRolling() || FULL_SKILL_CLIPS.some((c) => this.groups.get(c)?.isPlaying);
+    return this.isRolling() || [...this.skillLegs.values()].some((g) => g.isPlaying);
+  }
+
+  /** A take over the gait's legs: a layered clip, or a whole-body skill take that let its legs go. */
+  private overGait(): boolean {
+    return [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying)
+      || FULL_SKILL_CLIPS.some((c) => this.groups.get(c)?.isPlaying && !this.skillLegs.get(c)?.isPlaying);
   }
 
   /** A reaction over the legs at the authored pace; skipped while an attack or the roll plays. */
@@ -2017,6 +2069,7 @@ export class RigActor {
       const group = this.groups.get(clip);
       if (group?.isPlaying) group.stop();
     }
+    for (const legs of this.skillLegs.values()) if (legs.isPlaying) legs.stop();
   }
 
   /** Cancel a strike when the actor is removed or otherwise reset. */
@@ -2098,7 +2151,7 @@ export class RigActor {
     // Runs after every clip: under the roll it would pull the whole body back toward a stride.
     if (!other || !this.active || !this.activeClip || !this.blendClip || this.blendW < 1e-3 || at === undefined || this.isWholeBody()) return;
     const frame = framePhaseMatched(this.activeClip, [this.active.from, this.active.to], at, this.blendClip, [other.from, other.to]);
-    const layered = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
+    const layered = this.overGait();
     for (const { animation, target } of other.targetedAnimations) {
       const node = target as TransformNode;
       if (layered && !LOWER_BODY.has(node.name)) continue;
@@ -2235,6 +2288,7 @@ export class RigActor {
         blendDt = dt;
         for (const [clip, group] of this.groups) group.blendingSpeed = dt / (isLayeredClip(clip) ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
         for (const group of this.strikeLegs.values()) group.blendingSpeed = dt / ACTION_BLEND_SEC;
+        for (const group of this.skillLegs.values()) group.blendingSpeed = dt / LOCO_BLEND_SEC;
       }
       if (looked) {
         gaze.forEach((n, i) => { if (ungazed[i]) n?.rotationQuaternion?.copyFrom(ungazed[i]!); });
@@ -2248,7 +2302,7 @@ export class RigActor {
       const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
       this.legs += wrapPi(this.legsTarget - this.legs) * Math.min(1, dt / LEG_EASE_SEC);
       this.blendDirection();
-      const layered = [...UPPER_BODY_CLIPS].some((c) => this.groups.get(c)?.isPlaying);
+      const layered = this.overGait();
       this.uprightGain += ((layered ? 0 : 1) - this.uprightGain) * Math.min(1, dt / ACTION_BLEND_SEC);
       // The jog leans its chest into the run; carried sideways, that lean points
       // at nothing, so the spine stands up by how sideways the move is. A layered
@@ -2377,7 +2431,10 @@ export class RigActor {
         group.blendingSpeed = 1 / 60 / (upperOnly ? ACTION_BLEND_SEC : LOCO_BLEND_SEC);
         return group;
       };
-      const group = retarget(`${this.host.name}-${clip}`, (bone) => !upperOnly || layerKeys(clip, bone));
+      const whole = skillSpec(clip)?.full === true;
+      const group = retarget(`${this.host.name}-${clip}`, (bone) => whole ? !LOWER_BODY.has(bone) : !upperOnly || layerKeys(clip, bone));
+      const skillLegs = whole ? retarget(`${this.host.name}-${clip}-legs`, (bone) => LOWER_BODY.has(bone)) : null;
+      if (skillLegs) this.skillLegs.set(clip, skillLegs);
       if (group && clip === "cast") {
         const span = source.to - source.from;
         group.normalize(source.from + span * CAST_RANGE.from, source.from + span * CAST_RANGE.to);
@@ -2743,6 +2800,8 @@ export class RigActor {
     this.groups.clear();
     for (const group of this.strikeLegs.values()) group.dispose();
     this.strikeLegs.clear();
+    for (const group of this.skillLegs.values()) group.dispose();
+    this.skillLegs.clear();
     this.planted.length = 0;
     if (this.plantObserver) this.scene.onAfterAnimationsObservable.remove(this.plantObserver);
     this.plantObserver = null;

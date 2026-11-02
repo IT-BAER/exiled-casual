@@ -54,6 +54,7 @@ import {
   SLOTS,
   HIPS_BOB,
   STRIKE_CLIPS,
+  MELEE_CLIPS,
   REACTION_CLIPS,
   isLayeredClip,
   hiddenBaseParts,
@@ -2102,10 +2103,11 @@ describe("a sword strike moves the legs only while standing", () => {
     await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
     const rig = attachRig(scene, new Mesh("hero", scene));
     expect(rig).not.toBeNull();
-    /** How far a bone sits off what a locomotion clip keys for it at that clip's current frame. */
+    /** How far a bone sits off what a clip (or its split-off legs) keys for it at that clip's current frame. */
     const off = (clip: RigClip, bone: string): number => {
-      const group = scene.animationGroups.find((g) => g.name === `hero-${clip}`)!;
-      const track = group.targetedAnimations.find((t) => (t.target as TransformNode).name === bone && t.animation.targetProperty === "rotationQuaternion")!;
+      const keys = (t: { target: unknown; animation: { targetProperty: string } }) => (t.target as TransformNode).name === bone && t.animation.targetProperty === "rotationQuaternion";
+      const group = scene.animationGroups.find((g) => (g.name === `hero-${clip}` || g.name === `hero-${clip}-legs`) && g.targetedAnimations.some(keys))!;
+      const track = group.targetedAnimations.find(keys)!;
       const frame = group.animatables[0]!.masterFrame;
       return deg((track.target as TransformNode).rotationQuaternion!, track.animation.evaluate(frame) as Quaternion);
     };
@@ -2335,6 +2337,75 @@ describe("a sword strike moves the legs only while standing", () => {
     for (let i = 0; i < 40; i++) { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); }
     expect(roll.isPlaying, "the roll plays once").toBe(false);
     expect(off("run", "thigh_l"), "thigh back on the run").toBeLessThan(2);
+  }), 60_000);
+
+  // The sim lets him walk through every cast: a whole-body take that kept the
+  // legs then stood still while the body slid (Skyfire's `transform`).
+  it("leaves the legs on the run under a whole-body skill take, and the arms on the take", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); };
+    for (let i = 0; i < 40; i++) frame();
+    expect(rig.playSkill("transform", 2)).toBe(true);
+    let thigh = 0;
+    let arm = 0;
+    for (let i = 0; i < 50; i++) {
+      frame();
+      if (i < 20) continue;
+      thigh = Math.max(thigh, off("run", "thigh_l"));
+      arm = Math.max(arm, off("transform", "upperarm_r"));
+    }
+    expect(thigh, "thigh off the run mid-take").toBeLessThan(2);
+    expect(arm, "arm off the take mid-take").toBeLessThan(2);
+  }), 60_000);
+
+  it("runs on under every skill take, cast, bow and strike when no travel carries him", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); };
+    for (let i = 0; i < 40; i++) frame();
+    const slid: string[] = [];
+    for (const clip of ["cast", "bow", ...MELEE_CLIPS, ...SKILL_CLIP_IDS] as RigClip[]) {
+      expect(rig.playSkill(clip, 1.5), clip).toBe(true);
+      let thigh = 0;
+      for (let i = 0; i < 40; i++) {
+        frame();
+        if (i >= 20) thigh = Math.max(thigh, off("run", "thigh_l"));
+      }
+      if (thigh >= 2) slid.push(`${clip} ${thigh.toFixed(1)}`);
+      rig.cancelAction();
+      rig.stopStrike();
+      rig.endSkillLoop();
+      for (let i = 0; i < 20; i++) frame();
+    }
+    expect(slid, "takes whose legs leave the run").toEqual([]);
+  }), 120_000);
+
+  it("gives a whole-body take's legs to the gait when he starts moving mid-take", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    rig.standSettled();
+    for (let i = 0; i < 30; i++) { rig.setLocomotion(0); scene.render(); }
+    rig.playSkill("transform", 2.5);
+    for (let i = 0; i < 30; i++) { rig.setLocomotion(0); scene.render(); }
+    expect(off("transform", "thigh_l"), "standing, the take has the legs").toBeLessThan(2);
+    for (let i = 0; i < 40; i++) { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); }
+    expect(off("run", "thigh_l"), "thigh on the run").toBeLessThan(2);
+    expect(off("transform", "upperarm_r"), "arm still on the take").toBeLessThan(2);
+  }), 60_000);
+
+  it("keeps the legs on a travel's take while the travel carries the body", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(9); scene.render(); };
+    for (let i = 0; i < 20; i++) frame();
+    rig.setTravelling(true);
+    rig.playSkill("aerialA", 1.5);
+    let thigh = 0;
+    for (let i = 0; i < 40; i++) {
+      frame();
+      if (i >= 20) thigh = Math.max(thigh, off("aerialA", "thigh_l"));
+    }
+    expect(thigh, "thigh off the leap mid-travel").toBeLessThan(2);
+    rig.setTravelling(false);
+    for (let i = 0; i < 40; i++) { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); }
+    expect(off("run", "thigh_l"), "landed and running, the gait has the legs").toBeLessThan(2);
   }), 60_000);
 });
 

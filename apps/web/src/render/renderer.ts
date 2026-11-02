@@ -1101,9 +1101,11 @@ export class SnapshotRenderer {
       const flying = next.player.travel;
       const wasFlying = prev?.player.travel;
       if (flying && flying.skillId !== wasFlying?.skillId) {
+        rig?.setTravelling(true);
         const look = skillLook(flying.skillId)?.travel;
         if (look?.clip) rig?.playSkill(look.clip, flying.ticks / TICKS_PER_SEC, undefined, 0.5, look.playback ?? 1, flying.skillId);
       } else if (!flying && wasFlying) {
+        rig?.setTravelling(false);
         rig?.endSkillLoop();
       }
       // The sim cancels any cast when the roll starts.

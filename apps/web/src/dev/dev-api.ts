@@ -70,6 +70,8 @@ export function createDevApi(d: DevApiDeps) {
     clear: () => d.post({ type: "spawn", what: "clear" }),
     /** Cast a skill at world (x, y), default the dummy arc's middle; the sim's own rules apply. */
     cast,
+    /** Hold a move direction, as the keys do (world +x, +y); `move(0, 0)` stops. */
+    move: (dx: -1 | 0 | 1, dy: -1 | 0 | 1) => d.post({ type: "intent", intent: { kind: "moveDir", dx, dy } }),
     /** Every cooldown ready, life and mana full (mana up to what auras leave free). */
     refill: () => op({ op: "refill" }),
     /** Back at the lab start facing +y: monsters cleared, seven fresh dummies, refilled. */
