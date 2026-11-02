@@ -168,6 +168,19 @@ let sps: SolidParticleSystem | null = null;
 let sparks: Spark[] = [];
 let tongues: Tongue[] = [];
 
+/** Tongues with no bowl stay drawn while this is set. See `warmFireFlames`. */
+let warming = false;
+
+/**
+ * Keep every tongue drawn, bowl or not, until the returned release: its program
+ * then links behind the loading plate, not on the first lit bowl in play. Held
+ * to the plate and not a frame count, since a mesh is skipped while it compiles.
+ */
+export function warmFireFlames(): () => void {
+  warming = true;
+  return () => { warming = false; };
+}
+
 /** What `updateParticle` needs and cannot be handed: the bowls burning this
  *  frame, and the clock they burn on. */
 let burning: readonly FireSpot[] = [];
@@ -242,6 +255,7 @@ export function resetFireFlames(): void {
   burning = [];
   clock = 0;
   lit = BOWLS;
+  warming = false;
 }
 
 /** How many sparks are alight, for tests. */
@@ -261,10 +275,12 @@ export function updateFireFlames(near: readonly FireSpot[], now: number): void {
     const s = near[b];
     const tongue = tongues[b];
     if (!s) {
-      tongue?.mesh.setEnabled(false);
+      tongue?.mesh.setEnabled(warming);
+      if (tongue) tongue.mesh.alwaysSelectAsActiveMesh = warming;
       continue;
     }
     if (!tongue) continue;
+    tongue.mesh.alwaysSelectAsActiveMesh = false;
     const ph = now + s.phase;
     tongue.mesh.position.set(s.x, TONGUE_Y, s.z);
     tongue.mesh.setEnabled(true);

@@ -27,4 +27,28 @@ describe("warmSkillLooks", () => {
     expect(left.filter((m) => m.name.startsWith("kit-tpl-") && m.alwaysSelectAsActiveMesh).map((m) => m.name)).toEqual([]);
     expect(scene.transformNodes.length).toBe(nodes);
   });
+
+  it("draws every look a second time squashed, the variant a growing or flinching mesh compiles", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 30);
+    const scene = new Scene(engine);
+    const meshes = scene.meshes.length;
+    const release = warmSkillLooks(scene);
+    // Sunder's fangs grow taller than wide: NONUNIFORMSCALING, a 0.4 s link on the first cast.
+    const fangs = scene.meshes.slice(meshes).filter((m) => m.name.startsWith("iron-fangs"));
+    const squashed = (m: (typeof fangs)[number]) => m.scaling.isNonUniformWithinEpsilon(1e-4);
+    expect(fangs.filter(squashed).length).toBeGreaterThan(0);
+    expect(fangs.filter((m) => !squashed(m)).length).toBeGreaterThan(0);
+    release();
+  });
+
+  it("ticks each warning into its last half second, where Firestorm builds the falling rock", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 30);
+    const scene = new Scene(engine);
+    const release = warmSkillLooks(scene);
+    // Built mid-fight instead, the rock and its wake cost Firestorm's first cast 0.15 s.
+    expect(scene.meshes.some((m) => m.name.startsWith("eb-wake"))).toBe(true);
+    release();
+  });
 });

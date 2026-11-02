@@ -17,7 +17,7 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
-import { applyAtmosphere, BETA_AT_DEFAULT, createScene, VOID_COLOR } from "./engine";
+import { applyAtmosphere, BETA_AT_DEFAULT, capMaterialLights, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
@@ -325,11 +325,24 @@ describe("how many lights a surface may take", () => {
     const probe = new StandardMaterial("cap-probe", scene);
     scene.render(); // the sweep runs before a frame, not at construction
 
-    // Plus one for the hit flash, which skill-fx.ts stands up on the first impact.
-    expect(probe.maxSimultaneousLights).toBeGreaterThanOrEqual(4 + LIGHT_POOL);
+    // Plus the hit flash and the solar orb's light, which skill-fx.ts stands up dark.
+    expect(probe.maxSimultaneousLights).toBeGreaterThanOrEqual(5 + LIGHT_POOL);
     // ...and the scene really does stand that many up, so the cap is not just a
     // number that happens to be big enough today.
     expect(scene.lights.length).toBe(3 + LIGHT_POOL);
+  });
+
+  it("caps a material made since the last frame on demand, before the plate's first readiness check", () => {
+    // Readied at four and raised to nine later, a material's defines list its
+    // lights in another order than a fresh clone's: same shader, a second
+    // compile, and Sunder's first cast stalled 0.2-0.5 s on exactly that.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    scene.render();
+    const late = new StandardMaterial("late-probe", scene);
+    expect(late.maxSimultaneousLights).toBe(4);
+    capMaterialLights(scene);
+    expect(late.maxSimultaneousLights).toBeGreaterThanOrEqual(5 + LIGHT_POOL);
   });
 });
 

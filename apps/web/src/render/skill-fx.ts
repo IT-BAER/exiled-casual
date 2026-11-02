@@ -1154,6 +1154,25 @@ export function warmSkillFx(scene: Scene): void {
   swingArcs(scene);
   const light = scene.getLightByName(FLASH_NAME) as PointLight | null;
   if (light) light.intensity = 0;
+  orbLight(scene);
+}
+
+export const ORB_LIGHT_NAME = "kit-sun-light";
+
+/**
+ * The one light a solar orb may hold, standing in the scene dark from the warm-up on
+ * and never removed: a light added or dropped mid-fight is a new shader for every
+ * lit material on screen, a 0.3 s link. The holder sets its colour and reach.
+ */
+export function orbLight(scene: Scene): PointLight {
+  const found = scene.getLightByName(ORB_LIGHT_NAME) as PointLight | null;
+  if (found) return found;
+  const light = new PointLight(ORB_LIGHT_NAME, Vector3.Zero(), scene);
+  light.specular = Color3.Black();
+  light.falloffType = Light.FALLOFF_GLTF;
+  light.shadowEnabled = false;
+  light.intensity = 0;
+  return light;
 }
 
 export function blinkBurst(scene: Scene, from: Vector3, to: Vector3): void {

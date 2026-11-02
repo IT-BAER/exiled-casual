@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   FreeCamera, Matrix, MeshBuilder, NullEngine, PointLight, Scene, ShadowGenerator, Vector3,
 } from "@babylonjs/core";
-import { cullCasters, cullShadowCasters } from "./shadow-cull";
+import { cullCasters, cullShadowCasters, drawAllCasters } from "./shadow-cull";
 
 /**
  * The frustum of one face of a point light's shadow cube: 90 degrees, square,
@@ -83,5 +83,26 @@ describe("a shadow map given its own caster filter", () => {
     // One mesh in the scene, six faces: six calls would be the per-face filtering
     // that made the first attempt at this 30% slower than the churn it removed.
     expect(asked).toBe(scene.meshes.length);
+  });
+
+  it("draws every caster on every face for the frames after a warm-up, then culls again", () => {
+    // A prop first drawn into a shadow map mid-fight (a crate the shake brought
+    // into the sun's box) stalled the frame 0.11 s while the driver built that pair.
+    const { scene, gen, map } = lamp();
+    const behind = MeshBuilder.CreateBox("behind", { size: 0.5 }, scene);
+    behind.position.set(0, 0, -5);
+    behind.computeWorldMatrix(true);
+    cullShadowCasters(gen, () => true);
+    const drawn = () => {
+      map.onBeforeRenderObservable.notifyObservers(0);
+      return map.getCustomRenderList!(0, [], 0)!.includes(behind);
+    };
+    expect(drawn()).toBe(false);
+    drawAllCasters(scene, 2);
+    expect(drawn()).toBe(true);
+    scene.render();
+    expect(drawn()).toBe(true);
+    scene.render();
+    expect(drawn()).toBe(false);
   });
 });

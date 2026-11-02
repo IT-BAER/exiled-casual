@@ -26,6 +26,7 @@ function counts(scene: Scene) {
     meshes: scene.meshes.length,
     materials: scene.materials.length,
     geometries: scene.geometries.length,
+    lit: scene.lights.filter((l) => l.name === SUN_LIGHT_NAME && l.intensity > 0).length,
     lights: scene.lights.filter((l) => l.name === SUN_LIGHT_NAME).length,
     transformNodes: scene.transformNodes.length,
     observers: scene.onBeforeRenderObservable.observers.filter((o) => !(o as unknown as { _willBeUnregistered: boolean })._willBeUnregistered).length,
@@ -110,11 +111,11 @@ function scenario(scene: Scene, seen: (s: Scene) => void): void {
 }
 
 describe("Emberbound looks", () => {
-  it("leave nothing behind, draw no camera-facing cards, and the orb owns one light at most", () => {
+  it("leave nothing behind, draw no camera-facing cards, and the orb lights one light at most", () => {
     const scene = newScene();
     let maxLights = 0;
     const seen = (s: Scene) => {
-      maxLights = Math.max(maxLights, counts(s).lights);
+      maxLights = Math.max(maxLights, counts(s).lit, counts(s).lights);
       for (const m of s.meshes) expect(m.billboardMode).toBe(0);
     };
     scenario(scene, seen);
@@ -123,7 +124,7 @@ describe("Emberbound looks", () => {
     scenario(scene, seen);
     expect(counts(scene)).toEqual(warmed);
     expect(maxLights).toBe(1);
-    expect(warmed.lights).toBe(0);
+    expect(warmed.lit).toBe(0);
   });
 
   it("keeps the orb a small sun at its height for the ground's whole life, and fades it as the ground runs out", () => {
@@ -146,7 +147,7 @@ describe("Emberbound looks", () => {
     h.dispose();
   });
 
-  it("gives a second orb no light while the first holds it, and the light back once it is gone", () => {
+  it("gives a second orb no light while the first holds it, and the light back once it is gone, dark but never removed", () => {
     const scene = newScene();
     const ctx: LookContext = { scene, dt: DT, now: 1, flash: () => {} };
     const g = (id: number): GroundState => ({ id, skillId: "o", x: id, y: 0, radius: 2.5, remaining: 4, age: 0.5, team: 0 });
@@ -154,13 +155,14 @@ describe("Emberbound looks", () => {
     const a = create(ctx, g(1));
     const b = create(ctx, g(2));
     a.update?.(ctx, g(1)); b.update?.(ctx, g(2));
-    expect(counts(scene).lights).toBe(1);
+    expect(counts(scene).lit).toBe(1);
     a.dispose(); b.dispose();
     const c = create(ctx, g(3));
     c.update?.(ctx, g(3));
-    expect(counts(scene).lights).toBe(1);
+    expect(counts(scene).lit).toBe(1);
     c.dispose();
-    expect(counts(scene).lights).toBe(0);
+    // The light count never moves: a light added or removed is a new shader for every lit material.
+    expect(counts(scene)).toMatchObject({ lit: 0, lights: 1 });
   });
 
   it("plays a different take for every skill and turns the dash down its heading", () => {

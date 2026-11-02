@@ -1,8 +1,9 @@
-import { Color3, Light, MeshBuilder, PointLight, Vector3 } from "@babylonjs/core";
+import { MeshBuilder, PointLight, Vector3 } from "@babylonjs/core";
 import type { Mesh, Scene } from "@babylonjs/core";
 import { addMat, clamp01, cloneOf, Fx, fxMesh, Geo, kitPools, pointOf, rand, rgba, TAU, template, type Point, type Rgb } from "./core";
 import { core, embers } from "./emit";
 import { shockRing } from "./ground";
+import { ORB_LIGHT_NAME, orbLight } from "../../skill-fx";
 
 /**
  * A hovering sun: a white-hot core in layered corona shells that breathe out of
@@ -11,7 +12,7 @@ import { shockRing } from "./ground";
  * yanked away by every hit). `pulse()` throws a ring of heat across the floor.
  */
 
-export const SUN_LIGHT_NAME = "kit-sun-light";
+export const SUN_LIGHT_NAME = ORB_LIGHT_NAME;
 const SUN_INTENSITY = 90;
 const SUN_RANGE = 6;
 
@@ -90,13 +91,9 @@ export function sunOrb(scene: Scene, follow: Point, o: SunOrbOptions = {}): SunO
   let light: PointLight | null = null;
   const peak = o.intensity ?? SUN_INTENSITY;
   if (o.light !== false) {
-    light = new PointLight(SUN_LIGHT_NAME, Vector3.Zero(), scene);
-    light.diffuse = new Color3(c[0], Math.min(1, c[1] * 1.1), c[2]);
-    light.specular = Color3.Black();
+    light = orbLight(scene);
+    light.diffuse.set(c[0], Math.min(1, c[1] * 1.1), c[2]);
     light.range = SUN_RANGE;
-    light.falloffType = Light.FALLOFF_GLTF;
-    light.shadowEnabled = false;
-    light.intensity = 0;
   }
   const at = new Vector3();
   let swell = 0;
@@ -137,7 +134,7 @@ export function sunOrb(scene: Scene, follow: Point, o: SunOrbOptions = {}): SunO
   }, 0.4) as SunOrbFx;
   for (const p of parts) fx.own(p.m);
   for (const fl of flares) fx.own(fl.m);
-  if (light) fx.own(light);
+  if (light) fx.onDispose(() => { light!.intensity = 0; });
   fx.pulse = (strength = 1) => {
     if (fx.stopped || fx.done) return;
     swell = Math.min(1.5, swell + strength);

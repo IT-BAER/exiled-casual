@@ -95,9 +95,21 @@ export const MAP_FILL_INTENSITY = 0.18;
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
 export const TORCH_INTENSITY = 175;
 /** Every light that can stand in a room at once: the fill, the sun, the torch,
- *  the hit flash (skill-fx.ts) and the whole brazier pool. Materials are capped to
+ *  the hit flash and the solar orb's light (skill-fx.ts) and the whole brazier pool. Materials are capped to
  *  exactly this, see `createScene` — Babylon's own default of four drops the rest without a word. */
-const SCENE_LIGHTS = 4 + LIGHT_POOL;
+const SCENE_LIGHTS = 5 + LIGHT_POOL;
+/**
+ * The light cap on every material in the scene, also run by hand before a readiness
+ * check that comes ahead of the next frame: a material readied at Babylon's four and
+ * raised later lists its lights in another order, a second compile of the same shader.
+ */
+export function capMaterialLights(scene: Scene): void {
+  for (const m of scene.materials) {
+    if ("maxSimultaneousLights" in m) {
+      (m as unknown as { maxSimultaneousLights: number }).maxSimultaneousLights = SCENE_LIGHTS;
+    }
+  }
+}
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *
@@ -476,11 +488,7 @@ export function createScene(engine: Engine): SceneHandle {
   scene.onBeforeRenderObservable.add(() => {
     if (scene.materials.length === lastMaterialCount) return;
     lastMaterialCount = scene.materials.length;
-    for (const m of scene.materials) {
-      if ("maxSimultaneousLights" in m) {
-        (m as unknown as { maxSimultaneousLights: number }).maxSimultaneousLights = SCENE_LIGHTS;
-      }
-    }
+    capMaterialLights(scene);
   });
   // Dark background so the greybox arena reads against the page (default is white,
   // which made a white ground plane invisible on a white page).

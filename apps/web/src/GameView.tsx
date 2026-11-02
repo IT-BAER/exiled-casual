@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Engine, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
-import { applyGraphics, createScene, setMapFill } from "./render/engine";
+import { applyGraphics, capMaterialLights, createScene, setMapFill } from "./render/engine";
+import { drawAllCasters } from "./render/shadow-cull";
+import { warmFireFlames } from "./render/flames";
 import { canvasProjector } from "./render/projector";
 import { buildLevel, applyBiomeTint, applyTilesetFloor, tilesetDir } from "./render/level";
 import { setGroundPatch } from "./render/ground-patch";
@@ -457,6 +459,18 @@ export function GameView({
     const { scene, camera, detachZoom } = createScene(engine);
     sceneRef.current = scene;
     cameraRef.current = camera;
+    /** Every spawnable look drawn once behind the plate, held until it settles. */
+    const warmLooks = () => {
+      releaseWarm?.();
+      const entities = warmEntityLooks(scene);
+      const skills = warmSkillLooks(scene);
+      const flames = warmFireFlames();
+      releaseWarm = () => { entities(); skills(); flames(); };
+      // Before the plate's readiness check readies the warm-up's new materials.
+      capMaterialLights(scene);
+      // Three frames: every map, the round-robin fire cubes included, gets one.
+      drawAllCasters(scene, 3);
+    };
     engineRef.current = engine;
     const renderer = new SnapshotRenderer(scene);
     rendererRef.current = renderer;
@@ -762,10 +776,7 @@ export function GameView({
         warmKit(scene);
         warmBossFx(scene);
         warmProjectiles(scene);
-        releaseWarm?.();
-        const entities = warmEntityLooks(scene);
-        const skills = warmSkillLooks(scene);
-        releaseWarm = () => { entities(); skills(); };
+        warmLooks();
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so
         // the plate always gets at least one render to appear in.
@@ -872,6 +883,9 @@ export function GameView({
       // dressing pass aborted on the missing container with no retry — a bare
       // hideout while every entity mesh had its art. Dress it again now.
       if (!unmounted && stoodIn === "hideout") buildHideoutDecor(scene);
+      // Same race: warmed before monsters.glb, every creature was a greybox, and a
+      // first flinch linked its squashed shader mid-fight.
+      if (!unmounted && releaseWarm) warmLooks();
       // AFTER the models, never before: these are panels nobody has asked for yet,
       // and the first frame is what the player is actually waiting on. Warming them
       // here is why the first Escape no longer draws a frameless panel — see

@@ -23,6 +23,7 @@ import {
   SCORCH_FALLOFF_STOPS,
   type GroundEmbers,
   FLASH_NAME,
+  ORB_LIGHT_NAME,
   warmSkillFx,
   FX_KEEPALIVE_NAME,
   fxProfile,
@@ -456,6 +457,15 @@ describe("warmSkillFx", () => {
     warmSkillFx(scene);
     warmSkillFx(scene);
     expect(scene.lights.filter((l) => l.name === FLASH_NAME)).toHaveLength(1);
+    expect(scene.lights.filter((l) => l.name === ORB_LIGHT_NAME)).toHaveLength(1);
+  });
+
+  it("stands the solar orb's light up dark too: a light arriving mid-fight relinks every lit shader", () => {
+    const scene = newScene();
+    warmSkillFx(scene);
+    const orb = scene.getLightByName(ORB_LIGHT_NAME);
+    expect(orb?.isEnabled()).toBe(true);
+    expect(orb!.intensity).toBe(0);
   });
 });
 

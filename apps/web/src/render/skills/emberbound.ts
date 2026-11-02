@@ -1,10 +1,11 @@
-import { Color3, FresnelParameters, Light, Material, MeshBuilder, PointLight, Quaternion, StandardMaterial, Vector3 } from "@babylonjs/core";
+import { Color3, FresnelParameters, Material, MeshBuilder, PointLight, Quaternion, StandardMaterial, Vector3 } from "@babylonjs/core";
 import type { Mesh, Scene, TransformNode } from "@babylonjs/core";
 import {
   addMat, blendMat, clamp01, cloneOf, core, easeOut, embers, fire, fissure, flameTrailPatch, Fx, fxMesh, Geo, kitFlash, kitPools,
   landingImpact, meteorBody, puff, pulseRingTemplate, ragged, rand, rgba, ribbonTrail, scorch, shockRing, skyFall, sparks,
-  SUN_LIGHT_NAME, TAU, template, throwChunks, type Rgb,
+  TAU, template, throwChunks, type Rgb,
 } from "./kit";
+import { orbLight } from "../skill-fx";
 import type {
   ActorRef, AreaState, AttachedState, BurstHandle, ClassSkillLooks, FxHandle, GroundState, LookContext, StatusLook,
 } from "./types";
@@ -650,13 +651,9 @@ function solarOrbGround(ctx: LookContext, g: GroundState): FxHandle<GroundState>
   const sun = sunBody(scene, ORB_SIZE);
   let light: PointLight | null = null;
   if (lit) {
-    light = new PointLight(SUN_LIGHT_NAME, Vector3.Zero(), scene);
-    light.diffuse = new Color3(1, 0.55, 0.18);
-    light.specular = Color3.Black();
+    light = orbLight(scene);
+    light.diffuse.set(1, 0.55, 0.18);
     light.range = 6;
-    light.falloffType = Light.FALLOFF_GLTF;
-    light.shadowEnabled = false;
-    light.intensity = 0;
   }
   const pool = cloneOf(scene, sunPool(scene), "eb-sun-pool");
   pool.position.set(g.x, 0.025, g.y);
@@ -711,7 +708,7 @@ function solarOrbGround(ctx: LookContext, g: GroundState): FxHandle<GroundState>
   }, 0.3);
   for (const m of sun.meshes) root.own(m);
   root.own(pool);
-  if (light) root.own(light);
+  if (light) root.onDispose(() => { light!.intensity = 0; });
   root.child(scorch(scene, floorAt(g.x, g.y), { radius: R * 0.8, hold: Math.max(0.5, g.remaining), fade: 1.2, alpha: 0.4 }));
   let released = false;
   const release = () => { if (lit && !released) { released = true; litOrbs.set(scene, 0); } };

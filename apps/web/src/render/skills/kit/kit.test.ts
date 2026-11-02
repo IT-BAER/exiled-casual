@@ -216,7 +216,7 @@ describe("VFX kit primitives", () => {
     for (const f of fxs) f.dispose();
   });
 
-  it("the sun orb owns exactly one light while it lives, and the kit's flashes borrow the shared one", () => {
+  it("the sun orb lights one shared light while it lives and leaves it dark, and the kit's flashes borrow the shared flash", () => {
     const scene = newScene();
     const c = stage(scene);
     const orb = sunOrb(scene, c.node);
@@ -228,7 +228,8 @@ describe("VFX kit primitives", () => {
     // Only the orb's light and the shared flash: no effect makes a light of its own.
     expect(scene.lights.map((l) => l.name).sort()).toEqual([FLASH_NAME, SUN_LIGHT_NAME].sort());
     orb.dispose();
-    expect(scene.lights.map((l) => l.name)).toEqual([FLASH_NAME]);
+    expect(scene.lights.map((l) => l.name).sort()).toEqual([FLASH_NAME, SUN_LIGHT_NAME].sort());
+    expect(scene.getLightByName(SUN_LIGHT_NAME)!.intensity).toBe(0);
   });
 
   it("a cold flash tints the shared light and gives the warm colour back once it has faded", () => {

@@ -51,6 +51,7 @@ vi.mock("@babylonjs/core", () => ({
   Color3: class { constructor(public r = 0, public g = 0, public b = 0) {} },
 }));
 vi.mock("./render/engine", () => ({
+  capMaterialLights: vi.fn(),
   createScene: () => ({
     scene: {
       render: vi.fn(),
@@ -114,6 +115,8 @@ vi.mock("./render/skill-fx", () => ({ warmSkillFx: vi.fn() }));
 // The class looks build their tables off skill-fx at import; the soundscape only reads profiles.
 vi.mock("./render/skills", () => ({ skillFx: () => ({ flightCue: null, impactCue: null }), skillLook: () => undefined }));
 vi.mock("./render/skills/kit", () => ({ warmKit: vi.fn() }));
+vi.mock("./render/flames", async (importOriginal) => ({ ...(await importOriginal<object>()), warmFireFlames: vi.fn(() => () => {}) }));
+vi.mock("./render/shadow-cull", async (importOriginal) => ({ ...(await importOriginal<object>()), drawAllCasters: vi.fn() }));
 vi.mock("./render/skills/warm-looks", () => ({ warmSkillLooks: vi.fn(() => () => {}) }));
 vi.mock("./render/boss-fx", () => ({ warmBossFx: vi.fn() }));
 vi.mock("./render/meshes", () => ({ warmProjectiles: vi.fn(), warmEntityLooks: vi.fn(() => () => {}) }));
@@ -234,6 +237,25 @@ describe("GameView", () => {
       vi.mocked(buildHideoutDecor).mockClear();
       await act(async () => { arrive(); await Promise.resolve(); });
       expect(buildHideoutDecor).toHaveBeenCalledTimes(1);
+    } finally {
+      hoisted.propsLoaded = null;
+    }
+  });
+
+  it("warms the spawnable looks again once the models land after the area message", async () => {
+    // Warmed before monsters.glb, the creatures were greyboxes: a cinder imp's
+    // first flinch then linked its squashed shader mid-fight, a 0.25 s stall.
+    let arrive!: () => void;
+    hoisted.propsLoaded = new Promise((r) => { arrive = r; });
+    try {
+      mountWithSnapshot();
+      act(() => {
+        hoisted.worker?.onmessage?.({ data: { type: "area", area: "hideout" } });
+      });
+      const { warmEntityLooks } = await import("./render/meshes");
+      vi.mocked(warmEntityLooks).mockClear();
+      await act(async () => { arrive(); await Promise.resolve(); });
+      expect(warmEntityLooks).toHaveBeenCalledTimes(1);
     } finally {
       hoisted.propsLoaded = null;
     }

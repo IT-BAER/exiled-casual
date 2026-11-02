@@ -1,4 +1,4 @@
-import { Frustum, Matrix, type AbstractMesh, type Plane, type ShadowGenerator } from "@babylonjs/core";
+import { Frustum, Matrix, type AbstractMesh, type Plane, type Scene, type ShadowGenerator } from "@babylonjs/core";
 
 /**
  * Per-face culling for shadow maps, which Babylon does not do for you.
@@ -55,6 +55,21 @@ export function cullCasters(
  * `fireColour` in lights.ts.
  */
 let PLANES: Plane[] | null = null;
+
+/** The frame id each scene's shadow maps cull again from. See `drawAllCasters`. */
+const uncullUntil = new WeakMap<Scene, number>();
+
+/**
+ * Every caster into every face for the next `frames` frames, behind the loading
+ * plate: the driver builds a program for each caster's vertex layout on its first
+ * draw into a map, and a prop first drawn mid-fight stalled the frame for 0.1 s.
+ * It ends by itself so the plate's settle gate never waits on unculled frames.
+ */
+export function drawAllCasters(scene: Scene, frames: number): void {
+  uncullUntil.set(scene, scene.getFrameId() + frames);
+}
+
+const uncull = (scene: Scene | null): boolean => !!scene && scene.getFrameId() < (uncullUntil.get(scene) ?? -1);
 
 /**
  * Hang the cull on a generator's shadow map. Call once, after creating it.
@@ -120,6 +135,6 @@ export function cullShadowCasters(
         if (mesh.isEnabled() && mesh.getTotalVertices() > 0 && keep(mesh)) kept.push(mesh);
       }
     }
-    return cullCasters(gen.getTransformMatrix(), kept, kept.length, out);
+    return uncull(scene) ? kept : cullCasters(gen.getTransformMatrix(), kept, kept.length, out);
   };
 }
