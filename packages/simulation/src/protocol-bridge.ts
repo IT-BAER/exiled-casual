@@ -170,6 +170,24 @@ function statusLines(s: StatusLike): string[] {
   return out;
 }
 
+/** What a buff does while it is on, one clause per number: the skill tooltip's words and the buff bar's. */
+function buffStatLines(b: {
+  damagePct?: number | undefined; speedPct?: number | undefined; moveSpeedPct?: number | undefined;
+  damageTakenPct?: number | undefined; critPct?: number | undefined; regen?: number | undefined; drain?: number | undefined;
+  onKill?: { ailmentKind: string; dps: number } | undefined;
+}): string[] {
+  const out: string[] = [];
+  if (b.damagePct) out.push(`${signed(b.damagePct)} Damage`);
+  if (b.speedPct) out.push(`${signed(b.speedPct)} Attack and Cast Speed`);
+  if (b.moveSpeedPct) out.push(`${signed(b.moveSpeedPct)} Movement Speed`);
+  if (b.damageTakenPct) out.push(`${signed(b.damageTakenPct)} Damage taken`);
+  if (b.critPct) out.push(`${signed(b.critPct)} Critical Strike Chance`);
+  if (b.regen) out.push(`Regenerates ${round1(toNumber(b.regen))} Life per second`);
+  if (b.drain) out.push(`Loses ${round1(toNumber(b.drain))} Life per second, never below 1`);
+  if (b.onKill) out.push(`Kills leave ${titleCase(b.onKill.ailmentKind)} ground dealing ${round1(toNumber(b.onKill.dps))} per second`);
+  return out;
+}
+
 /** The blue lines of the expansion's effect fields; hit damage and the older lines stay in describeSkills. */
 export function effectLines(effect: EffectNode): string[] {
   const out: string[] = [];
@@ -199,19 +217,12 @@ export function effectLines(effect: EffectNode): string[] {
     case "applyBuff":
       if (effect.durationTicks === 0) out.push(`Aura: reserves ${effect.reserveManaPct ?? 0}% of maximum Mana`);
       else out.push(`Lasts ${secs(effect.durationTicks)}`);
-      if (effect.damagePct) out.push(`${signed(effect.damagePct)} Damage`);
-      if (effect.speedPct) out.push(`${signed(effect.speedPct)} Attack and Cast Speed`);
-      if (effect.moveSpeedPct) out.push(`${signed(effect.moveSpeedPct)} Movement Speed`);
-      if (effect.damageTakenPct) out.push(`${signed(effect.damageTakenPct)} Damage taken`);
-      if (effect.critChancePct) out.push(`${signed(effect.critChancePct)} Critical Strike Chance`);
-      if (effect.lifeRegenPerSecFixed) out.push(`Regenerates ${round1(toNumber(effect.lifeRegenPerSecFixed))} Life per second`);
-      if (effect.lifeDrainPerSecFixed) {
-        out.push(`Loses ${round1(toNumber(effect.lifeDrainPerSecFixed))} Life per second, never below 1`);
-      }
-      if (effect.onKillGround) {
-        const a = effect.onKillGround.ailment;
-        out.push(`Kills leave ${titleCase(a.kind)} ground dealing ${round1(toNumber(a.dpsFixed))} per second`);
-      }
+      out.push(...buffStatLines({
+        damagePct: effect.damagePct, speedPct: effect.speedPct, moveSpeedPct: effect.moveSpeedPct,
+        damageTakenPct: effect.damageTakenPct, critPct: effect.critChancePct,
+        regen: effect.lifeRegenPerSecFixed, drain: effect.lifeDrainPerSecFixed,
+        onKill: effect.onKillGround ? { ailmentKind: effect.onKillGround.ailment.kind, dps: effect.onKillGround.ailment.dpsFixed } : undefined,
+      }));
       break;
     case "applyStatus":
       out.push(effect.single ? "Targets the enemy nearest the aim" : `Area radius is ${metres(effect.radiusFixed)}`);
@@ -709,26 +720,39 @@ export function buildSnapshot(
         return len > 1e-6 ? { x: dx / len, y: dy / len } : undefined;
       })(),
       buffs: (() => {
-        const out: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number; aura?: true }[] = [];
+        const out: NonNullable<Snapshot["player"]["buffs"]> = [];
         // Spawn grace (damage-resolve). 30 Hz; rounded up so it never shows 0
         // while still active.
         if (session?.graceUntilTick !== undefined && session.graceUntilTick > tick) {
-          out.push({ id: "grace", kind: "buff", remainingSec: Math.ceil((session.graceUntilTick - tick) / 30) });
+          out.push({
+            id: "grace", kind: "buff", remainingSec: Math.ceil((session.graceUntilTick - tick) / 30),
+            lines: ["Cannot be damaged", "Ends when you move or use a skill"],
+          });
         }
         // Skill buffs in the order they were cast; an aura has no clock.
         for (const b of world.get<BuffsC>(playerEntity, "buffs")?.list ?? []) {
-          if (b.untilTick === 0) out.push({ id: b.id, kind: "buff", remainingSec: 0, aura: true });
-          else if (b.untilTick > tick) out.push({ id: b.id, kind: "buff", remainingSec: Math.ceil((b.untilTick - tick) / 30) });
+          const lines = buffStatLines(b);
+          if (b.untilTick === 0) {
+            const pct = b.reservePct ?? 0;
+            out.push({
+              id: b.id, kind: "buff", remainingSec: 0, aura: true,
+              lines: [`Aura: reserves ${pct}% of maximum Mana`, ...lines],
+              reserved: toNumber(Math.trunc((pm.maxMana * pct) / 100)),
+            });
+          } else if (b.untilTick > tick) {
+            out.push({ id: b.id, kind: "buff", remainingSec: Math.ceil((b.untilTick - tick) / 30), lines });
+          }
         }
         // Ailments in a fixed order; only burning stacks. Live until its expiry
         // tick, the same test the ailment system removes it on.
-        for (const [comp, id] of [["ailment", "burning"], ["poison", "poison"], ["bleeding", "bleeding"]] as const) {
+        for (const [comp, id, type] of [["ailment", "burning", "Fire"], ["poison", "poison", "Chaos"], ["bleeding", "bleeding", "Physical"]] as const) {
           const a = world.get<AilmentC>(playerEntity, comp);
           if (!a || a.expiryTick <= tick) continue;
           const remainingSec = Math.ceil((a.expiryTick - tick) / 30);
+          const lines = [`Takes ${round1(toNumber(a.dps) * (id === "burning" ? a.stacks : 1))} ${type} Damage per second`];
           out.push(id === "burning"
-            ? { id, kind: "debuff", remainingSec, stacks: a.stacks }
-            : { id, kind: "debuff", remainingSec });
+            ? { id, kind: "debuff", remainingSec, stacks: a.stacks, lines }
+            : { id, kind: "debuff", remainingSec, lines });
         }
         return out;
       })(),

@@ -488,6 +488,7 @@ describe("buildSnapshot — boss & telegraph", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildSnapshot — session fields and interactables", () => {
+  const GRACE_LINES = ["Cannot be damaged", "Ends when you move or use a skill"];
   function makeWorldWithSession(area: "hideout" | "map", portalsLeft: number, mapOpen: 0 | 1) {
     const { world, playerEntity } = makeMinimalWorld();
     const sessionE = world.create();
@@ -524,7 +525,7 @@ describe("buildSnapshot — session fields and interactables", () => {
     });
     // 295 ticks left at tick 5 -> 10s, rounded up.
     expect(buildSnapshot(world, {} as never, 5, "test").player.buffs)
-      .toEqual([{ id: "grace", kind: "buff", remainingSec: 10 }]);
+      .toEqual([{ id: "grace", kind: "buff", remainingSec: 10, lines: GRACE_LINES }]);
     expect(buildSnapshot(world, {} as never, 300, "test").player.buffs).toEqual([]);
   });
 
@@ -540,20 +541,20 @@ describe("buildSnapshot — session fields and interactables", () => {
     world.set<AilmentC>(p, "poison", { kind: "poison", stacks: 1, dps: fp(2), expiryTick: 61 });
     world.set<AilmentC>(p, "ailment", { kind: "burning", stacks: 3, dps: fp(8), expiryTick: 31 });
     expect(buildSnapshot(world, {} as never, 0, "test").player.buffs).toEqual([
-      { id: "grace", kind: "buff", remainingSec: 10 },
-      { id: "burning", kind: "debuff", remainingSec: 2, stacks: 3 },
-      { id: "poison", kind: "debuff", remainingSec: 3 },
-      { id: "bleeding", kind: "debuff", remainingSec: 5 },
+      { id: "grace", kind: "buff", remainingSec: 10, lines: GRACE_LINES },
+      { id: "burning", kind: "debuff", remainingSec: 2, stacks: 3, lines: ["Takes 24 Fire Damage per second"] },
+      { id: "poison", kind: "debuff", remainingSec: 3, lines: ["Takes 2 Chaos Damage per second"] },
+      { id: "bleeding", kind: "debuff", remainingSec: 5, lines: ["Takes 2 Physical Damage per second"] },
     ]);
     // Expired but not yet removed by the tick system: not shown.
     expect(buildSnapshot(world, {} as never, 150, "test").player.buffs).toEqual([
-      { id: "grace", kind: "buff", remainingSec: 5 },
+      { id: "grace", kind: "buff", remainingSec: 5, lines: GRACE_LINES },
     ]);
     world.remove(p, "ailment");
     world.remove(p, "poison");
     world.remove(p, "bleeding");
     expect(buildSnapshot(world, {} as never, 0, "test").player.buffs).toEqual([
-      { id: "grace", kind: "buff", remainingSec: 10 },
+      { id: "grace", kind: "buff", remainingSec: 10, lines: GRACE_LINES },
     ]);
   });
 

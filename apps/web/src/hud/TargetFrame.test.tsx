@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { TARGET_BAR_H, TARGET_BAR_W, TargetFrame } from "./TargetFrame";
 import { Hud } from "./Hud";
@@ -113,6 +113,20 @@ describe("reserved mana", () => {
     cleanup();
     render(<Hud snapshot={{ ...base, player: testPlayer({ mana: 50, maxMana: 200 }) }} />);
     expect(screen.queryByTestId("mana-orb-reserved")).toBeNull();
+  });
+
+  it("says on hover what the grey cap is, aura by aura", () => {
+    const base = snap([]);
+    render(<Hud snapshot={{ ...base, player: testPlayer({
+      mana: 50, maxMana: 200, manaReserved: 50,
+      buffs: [{ id: "determination", kind: "buff", remainingSec: 0, aura: true, reserved: 50 }],
+    }) }} />);
+    fireEvent.mouseEnter(screen.getByTestId("mana-orb-sphere"));
+    const tip = screen.getByTestId("item-tooltip");
+    expect(tip).toHaveTextContent("50/200 Mana");
+    expect(tip).toHaveTextContent("50 Reserved (25% of maximum)");
+    expect(tip).toHaveTextContent("Iron Resolve: 50");
+    expect(tip).toHaveTextContent("150 left to spend");
   });
 });
 

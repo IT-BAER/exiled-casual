@@ -5,6 +5,7 @@ import { MONSTERS } from "@exiled/content-runtime";
 import { atlasGraph } from "@exiled/rules";
 import { DISPLAY, ItemTooltip, SERIF } from "./ItemTooltip";
 import { flaskTooltip } from "./flask-tooltip";
+import { manaTooltip } from "./mana-tooltip";
 import { PANEL_W } from "./layout";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
@@ -710,8 +711,11 @@ function Orb(props: {
   /** False draws the globe alone. The liquid is the reading; the numbers are a
    *  second opinion, and PoE lets you turn them off. */
   numbers?: boolean;
+  /** Shown while the pointer is over the sphere. Absent = the globe takes no pointer. */
+  tooltip?: Omit<React.ComponentProps<typeof ItemTooltip>, "x" | "y" | "inline">;
 }) {
-  const { pct, shield, reservedPct = 0, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true } = props;
+  const { pct, shield, reservedPct = 0, fillTestId, readoutTestId, art, figure, label, value, side, numbers = true, tooltip } = props;
+  const [tip, setTip] = React.useState<{ x: number; y: number } | null>(null);
   // Segments' worth of shield, filling the edge segment partway. Any shield left shows at
   // least a sliver: an empty ring has to mean the next hit is on life.
   const filled = shield && shield.max > 0 ? Math.max(0, Math.min(1, shield.value / shield.max)) * ES_SEGMENTS : 0;
@@ -730,12 +734,16 @@ function Orb(props: {
       }}
     >
       <div
+        data-testid={`${fillTestId.replace(/-fill$/, "")}-sphere`}
+        onMouseEnter={tooltip ? (e) => setTip({ x: e.clientX, y: e.clientY }) : undefined}
+        onMouseLeave={tooltip ? () => setTip(null) : undefined}
         style={{
           position: "absolute",
           inset: 0,
           borderRadius: "50%",
           overflow: "hidden",
           background: "radial-gradient(circle at 50% 42%, #12151b, #05070a)",
+          ...(tooltip ? { pointerEvents: "auto" as const } : {}),
         }}
       >
         <div
@@ -903,6 +911,7 @@ function Orb(props: {
           </div>
         ))}
       </div>}
+      {tooltip && tip && <ItemTooltip {...tooltip} x={tip.x} y={tip.y} />}
     </div>
   );
 }
@@ -1458,6 +1467,7 @@ export function Hud({
         value={`${Math.round(mana)}/${Math.round(maxMana)}`}
         side="right"
         numbers={orbNumbers && !coveredSides.right}
+        tooltip={manaTooltip(mana, maxMana, snapshot.player.manaReserved ?? 0, snapshot.player.buffs)}
       />
 
       <div data-testid="bar-connector" style={connectStyle} />

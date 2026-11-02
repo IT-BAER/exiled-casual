@@ -250,7 +250,7 @@ describe("buffs and auras", () => {
     r.sim.step([{ tick: r.sim.tick, entity: r.p, type: "moveDir", data: { dx: 1, dy: 0 } }]);
     expect(r.at(r.p).x).toBe(fp(0.3));
     const snap = buildSnapshot(r.w, r.sim, r.sim.tick, "t");
-    expect(snap.player.buffs).toContainEqual({ id: "blood_rage", kind: "buff", remainingSec: 1 });
+    expect(snap.player.buffs).toContainEqual({ id: "blood_rage", kind: "buff", remainingSec: 1, lines: ["50% increased Damage", "100% increased Movement Speed"] });
     while (r.sim.tick <= 32) r.sim.step();
     expect(r.w.has(r.p, "buffs")).toBe(false);
   });
@@ -280,7 +280,9 @@ describe("buffs and auras", () => {
     expect(r.w.get<Mana>(r.p, "mana")!.mana).toBe(fp(75));
     const snap = buildSnapshot(r.w, r.sim, r.sim.tick, "t");
     expect(snap.player.manaReserved).toBe(25);
-    expect(snap.player.buffs).toContainEqual({ id: "haste", kind: "buff", remainingSec: 0, aura: true });
+    const shown = snap.player.buffs?.find((b) => b.id === "haste");
+    expect(shown).toMatchObject({ kind: "buff", remainingSec: 0, aura: true, reserved: 25 });
+    expect(shown?.lines?.[0]).toBe("Aura: reserves 25% of maximum Mana");
     r.w.set<Cooldowns>(r.p, "cooldowns", {});
     r.cast("haste", 1, 0); // off
     expect(r.w.has(r.p, "buffs")).toBe(false);

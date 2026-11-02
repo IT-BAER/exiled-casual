@@ -1,6 +1,6 @@
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
-import { SERIF } from "./ItemTooltip";
+import { ItemTooltip, SERIF } from "./ItemTooltip";
 
 /**
  * Top-left effect squares, PoE's buff row (reference:
@@ -40,15 +40,34 @@ export const STATUS_ART: Record<string, { icon: string; name: string }> = {
 
 type Buff = NonNullable<Snapshot["player"]["buffs"]>[number];
 
+/** PoE's buff tooltip: the effect's name over what it does at the live numbers. */
+export function buffTooltip(b: Buff) {
+  const aura = b.aura === true;
+  const lines = [...(b.lines ?? [])];
+  if (aura && b.reserved !== undefined) lines.push(`Holds ${Math.round(b.reserved)} Mana`);
+  else if (!aura) lines.push(`${b.remainingSec} seconds remaining`);
+  return {
+    name: BUFF_ART[b.id]?.name ?? b.id,
+    rarity: "normal",
+    itemClass: aura ? "Aura" : b.kind === "debuff" ? "Debuff" : "Buff",
+    lines,
+    ...(aura ? { help: "Use the skill again to switch it off." } : {}),
+  };
+}
+
 function Tile({ b }: { b: Buff }): React.JSX.Element {
   const art = BUFF_ART[b.id];
   const aura = b.aura === true;
+  const [tip, setTip] = React.useState<{ x: number; y: number } | null>(null);
   return (
     <div
       data-testid="buff-tile"
       data-aura={aura ? "true" : "false"}
-      title={art?.name ?? b.id}
+      aria-label={art?.name ?? b.id}
+      onMouseEnter={(e) => setTip({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => setTip(null)}
       style={{
+        pointerEvents: "auto",
         position: "relative",
         width: `${TILE_VW}vw`,
         height: `${TILE_VW}vw`,
@@ -106,6 +125,7 @@ function Tile({ b }: { b: Buff }): React.JSX.Element {
           {b.stacks}
         </div>
       )}
+      {tip && <ItemTooltip {...buffTooltip(b)} x={tip.x} y={tip.y} />}
     </div>
   );
 }

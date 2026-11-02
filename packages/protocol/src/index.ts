@@ -507,8 +507,9 @@ export interface Snapshot {
      * Timed effects on the player, display-ready for the HUD's buff bar.
      * `remainingSec` is whole seconds, already rounded up. Absent on a sim
      * built without a session. `stacks` only on an ailment that stacks (burning).
+     * `lines` is the tooltip's blue block at the live numbers; `reserved` the mana an aura holds.
      */
-    buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number; aura?: true }[];
+    buffs?: { id: string; kind: "buff" | "debuff"; remainingSec: number; stacks?: number; aura?: true; lines?: string[]; reserved?: number }[];
     /** Mana held by active auras; absent when none. The globe draws it as a dark cap. */
     manaReserved?: number;
     /** The skill being wound up this tick; absent outside a cast. */
