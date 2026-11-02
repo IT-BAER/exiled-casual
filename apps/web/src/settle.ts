@@ -20,3 +20,16 @@ export function settleGate(start: number): (now: number) => boolean {
     return fast >= SETTLE_FRAMES || now - start >= SETTLE_CAP_MS;
   };
 }
+
+/**
+ * When the warm-up copies may go: two readiness polls in a row that find every mesh
+ * ready, so the frames between drew each of them. Held to the settle instead, the
+ * copies kept plate frames slow until `SETTLE_CAP_MS`.
+ */
+export function warmDoneGate(): (ready: number, all: number) => boolean {
+  let streak = 0;
+  return (ready, all) => {
+    streak = all > 0 && ready === all ? streak + 1 : 0;
+    return streak >= 2;
+  };
+}

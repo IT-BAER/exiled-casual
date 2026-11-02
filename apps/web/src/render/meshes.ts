@@ -2025,6 +2025,9 @@ export function makeMesh(
   skillId?: string,
 ): Mesh {
   const mesh = buildMesh(scene, kind, name, at, species, skillId);
+  // A flinch's squash, a telegraph's radius and a wake cut short are non-uniform scales:
+  // lit, each was a shader variant of its own, linked on first sight mid-fight or under the plate.
+  for (const part of [mesh, ...mesh.getChildMeshes()]) part.ignoreNonUniformScaling = true;
   // A look's own materials are named after it; shared ones (part-, glow-, mat-) are not.
   // mesh.dispose() leaves materials in the scene, so without this each one outlived its entity.
   const own = `${name}-`;
@@ -2320,26 +2323,25 @@ export const WARM_LOOK_PREFIX = "warm-look-";
  * caller once the plate settles, not on first ready: the fire pool switches its
  * lights on in the first frames, and a disabled light is its own variant.
  */
-export function warmEntityLooks(scene: Scene): () => void {
+export function warmEntityLooks(scene: Scene, { map = true }: { map?: boolean } = {}): () => void {
   const species = creatureSpecies(scene);
-  const looks: [MeshKind, string | undefined][] = [
+  // `map: false` is the hideout, the first load: no foe spawns and no loot drops there,
+  // and paying for them made it seconds longer. A map's own plate warms them.
+  const mapLooks: [MeshKind, string | undefined][] = [
     ["telegraph", undefined],
     ["telegraphLane", undefined],
     ["telegraphRing", undefined],
     ["broodMark", undefined],
     ["chargePath", undefined],
     ["groundArea", undefined],
-    ["portal", undefined],
     ["gold", "gold:1:0"],
     ["gold", "gold:1:1"],
     ...(species.length > 0 ? species : [undefined]).map((s): [MeshKind, string | undefined] => ["monster", s]),
     ...GROUND_LOOK_BASES.map((b): [MeshKind, string | undefined] => ["groundItem", b]),
   ];
-  // Twice: a flinch's squash, a telegraph's radius or a parent's lean is a
-  // non-uniform scale, which is its own shader variant (NONUNIFORMSCALING).
-  const meshes = [...looks, ...looks].map(([kind, look], i) => {
+  const looks: [MeshKind, string | undefined][] = [["portal", undefined], ...(map ? mapLooks : [])];
+  const meshes = looks.map(([kind, look], i) => {
     const mesh = makeMesh(scene, kind, `${WARM_LOOK_PREFIX}${i}`, Vector3.Zero(), look);
-    if (i >= looks.length) mesh.scaling.y *= 0.98;
     for (const part of [mesh, ...mesh.getChildMeshes()]) {
       part.alwaysSelectAsActiveMesh = true;
       part.computeWorldMatrix(true);

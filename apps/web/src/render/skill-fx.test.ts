@@ -493,16 +493,37 @@ describe("warmProjectiles", () => {
   });
 });
 
+describe("an entity's squash", () => {
+  it("never asks for the non-uniform shader variant, so a first flinch compiles nothing", () => {
+    // The squashed variant of a cinder imp linked on its first flinch: a 0.25 s frame mid-fight.
+    const scene = newScene();
+    const imp = makeMesh(scene, "monster", "imp-probe", Vector3.Zero());
+    imp.scaling.set(1.1, 0.8, 1.1);
+    for (const m of [imp, ...imp.getChildMeshes()]) m.computeWorldMatrix(true);
+    expect([imp, ...imp.getChildMeshes()].filter((m) => m.nonUniformScaling).map((m) => m.name)).toEqual([]);
+  });
+});
+
 describe("warmEntityLooks", () => {
+  it("warms only the portal for the hideout, where no foe spawns and no loot drops", () => {
+    // The hideout's first load paid for every monster, telegraph and drop it never shows.
+    const scene = newScene();
+    const release = warmEntityLooks(scene, { map: false });
+    const roots = scene.meshes.filter((m) => m.name.startsWith(WARM_LOOK_PREFIX) && !m.parent);
+    expect(roots.length).toBe(1);
+    release();
+  });
+
   it("draws every look the sim can spawn mid-run until released", async () => {
     const scene = newScene();
     const release = warmEntityLooks(scene);
     const warm = scene.meshes.filter((m) => m.name.startsWith(WARM_LOOK_PREFIX));
     const roots = warm.filter((m) => !m.parent);
     // Telegraph, a boss's lane, ring and brood mark, charge path, ground area, portal, a heap and a
-    // jackpot heap, a monster, and every drop that has a floor model, each once as built and once squashed.
-    expect(roots.length).toBe(2 * (10 + GROUND_LOOK_BASES.length));
-    expect(roots.filter((m) => m.scaling.y !== m.scaling.x)).toHaveLength(10 + GROUND_LOOK_BASES.length);
+    // jackpot heap, a monster, and every drop that has a floor model, each once: a flinch's squash
+    // no longer asks for a variant of its own (`ignoreNonUniformScaling`), so no squashed twin.
+    expect(roots.length).toBe(10 + GROUND_LOOK_BASES.length);
+    expect(roots.every((m) => m.ignoreNonUniformScaling)).toBe(true);
     expect(GROUND_LOOK_BASES).toContain("currency.wisdom");
     expect(warm.every((m) => m.alwaysSelectAsActiveMesh)).toBe(true);
     // Still drawn once ready: the fire pool's lights come on in the first frames after that.

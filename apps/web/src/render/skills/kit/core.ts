@@ -267,6 +267,8 @@ export function glowOwn(scene: Scene, mesh: Mesh, glow = true): void {
 export function fxMesh(scene: Scene, mesh: Mesh, material: Material, glow = true): Mesh {
   mesh.material = material;
   mesh.isPickable = false;
+  // An effect's stretch lasts a moment; its own shader variant cost a 0.2-0.4 s link.
+  mesh.ignoreNonUniformScaling = true;
   mesh.receiveShadows = false;
   if (mesh.getVerticesData("color")) mesh.hasVertexAlpha = true;
   mesh.metadata = { ...(mesh.metadata as object | null), kitGlow: glow };
@@ -394,6 +396,8 @@ export function cloneOf(scene: Scene, tpl: Mesh, name: string): Mesh {
   const m = tpl.clone(name, null, true)!;
   m.setEnabled(true);
   m.isPickable = false;
+  // A growing fang or a stretched ring is non-uniform for a moment, not a variant.
+  m.ignoreNonUniformScaling = true;
   if (m.getVerticesData("color")) m.hasVertexAlpha = true;
   const glow = (tpl.metadata as { kitGlow?: boolean } | null)?.kitGlow;
   if (glow !== undefined) glowOwn(scene, m, glow);

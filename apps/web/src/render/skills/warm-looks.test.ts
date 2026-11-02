@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NullEngine, Scene } from "@babylonjs/core";
 import { warmSkillLooks } from "./warm-looks";
+import { IRONSWORN_LOOKS } from "./ironsworn";
 
 let engine: NullEngine | undefined;
 afterEach(() => { engine?.dispose(); engine = undefined; });
@@ -28,17 +29,17 @@ describe("warmSkillLooks", () => {
     expect(scene.transformNodes.length).toBe(nodes);
   });
 
-  it("draws every look a second time squashed, the variant a growing or flinching mesh compiles", () => {
+  it("builds looks whose growth and stretch never ask for a squashed shader variant", () => {
     engine = new NullEngine();
     vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 30);
     const scene = new Scene(engine);
     const meshes = scene.meshes.length;
     const release = warmSkillLooks(scene);
-    // Sunder's fangs grow taller than wide: NONUNIFORMSCALING, a 0.4 s link on the first cast.
+    // Sunder's fangs grow taller than wide: NONUNIFORMSCALING was a 0.4 s link on the first cast.
     const fangs = scene.meshes.slice(meshes).filter((m) => m.name.startsWith("iron-fangs"));
-    const squashed = (m: (typeof fangs)[number]) => m.scaling.isNonUniformWithinEpsilon(1e-4);
-    expect(fangs.filter(squashed).length).toBeGreaterThan(0);
-    expect(fangs.filter((m) => !squashed(m)).length).toBeGreaterThan(0);
+    expect(fangs.length).toBeGreaterThan(0);
+    for (const m of fangs) { m.scaling.set(1, 1.18, 1); m.computeWorldMatrix(true); }
+    expect(fangs.filter((m) => m.nonUniformScaling).map((m) => m.name)).toEqual([]);
     release();
   });
 
@@ -49,6 +50,16 @@ describe("warmSkillLooks", () => {
     const release = warmSkillLooks(scene);
     // Built mid-fight instead, the rock and its wake cost Firestorm's first cast 0.15 s.
     expect(scene.meshes.some((m) => m.name.startsWith("eb-wake"))).toBe(true);
+    release();
+  });
+
+  it("warms only the looks it is handed: the hideout needs the player's own class", () => {
+    engine = new NullEngine();
+    vi.spyOn(engine, "getDeltaTime").mockReturnValue(1000 / 30);
+    const scene = new Scene(engine);
+    const release = warmSkillLooks(scene, IRONSWORN_LOOKS);
+    expect(scene.meshes.some((m) => m.name.startsWith("iron-fangs"))).toBe(true);
+    expect(scene.meshes.some((m) => m.name.startsWith("eb-wake"))).toBe(false);
     release();
   });
 });

@@ -113,7 +113,7 @@ vi.mock("./audio/sfx", async (importOriginal) => ({
 // file is about, and render/hideout.test.ts owns the placements.
 vi.mock("./render/skill-fx", () => ({ warmSkillFx: vi.fn() }));
 // The class looks build their tables off skill-fx at import; the soundscape only reads profiles.
-vi.mock("./render/skills", () => ({ skillFx: () => ({ flightCue: null, impactCue: null }), skillLook: () => undefined }));
+vi.mock("./render/skills", () => ({ skillFx: () => ({ flightCue: null, impactCue: null }), skillLook: () => undefined, CLASS_LOOKS: {}, SKILL_LOOKS: { skills: {}, buffs: {}, statuses: {} } }));
 vi.mock("./render/skills/kit", () => ({ warmKit: vi.fn() }));
 vi.mock("./render/flames", async (importOriginal) => ({ ...(await importOriginal<object>()), warmFireFlames: vi.fn(() => () => {}) }));
 vi.mock("./render/shadow-cull", async (importOriginal) => ({ ...(await importOriginal<object>()), drawAllCasters: vi.fn() }));
@@ -242,23 +242,42 @@ describe("GameView", () => {
     }
   });
 
-  it("warms the spawnable looks again once the models land after the area message", async () => {
-    // Warmed before monsters.glb, the creatures were greyboxes: a cinder imp's
-    // first flinch then linked its squashed shader mid-fight, a 0.25 s stall.
+  it("warms the spawnable looks once, when the models land after the area message", async () => {
+    // Warmed at the area message instead, every creature compiled as a greybox and
+    // again as itself once monsters.glb landed: seconds of a first load spent twice.
     let arrive!: () => void;
     hoisted.propsLoaded = new Promise((r) => { arrive = r; });
     try {
+      const { warmEntityLooks } = await import("./render/meshes");
+      vi.mocked(warmEntityLooks).mockClear();
       mountWithSnapshot();
       act(() => {
         hoisted.worker?.onmessage?.({ data: { type: "area", area: "hideout" } });
       });
-      const { warmEntityLooks } = await import("./render/meshes");
-      vi.mocked(warmEntityLooks).mockClear();
+      expect(warmEntityLooks).not.toHaveBeenCalled();
       await act(async () => { arrive(); await Promise.resolve(); });
       expect(warmEntityLooks).toHaveBeenCalledTimes(1);
     } finally {
       hoisted.propsLoaded = null;
     }
+  });
+
+  it("warms the hideout with the player's own looks and a map with every foe and class", async () => {
+    // The first load is always the hideout: no monster spawns there, and only this class casts.
+    const { warmEntityLooks } = await import("./render/meshes");
+    const { warmSkillLooks } = await import("./render/skills/warm-looks");
+    mountWithSnapshot();
+    await act(async () => { await Promise.resolve(); });
+    vi.mocked(warmEntityLooks).mockClear();
+    vi.mocked(warmSkillLooks).mockClear();
+    act(() => { hoisted.worker?.onmessage?.({ data: { type: "area", area: "hideout" } }); });
+    expect(vi.mocked(warmEntityLooks).mock.calls.at(-1)?.[1]).toEqual({ map: false });
+    expect(vi.mocked(warmSkillLooks).mock.calls.at(-1)?.[1]).toBeDefined();
+    act(() => {
+      hoisted.worker?.onmessage?.({ data: { type: "area", area: "map", mapBaseId: "map.swamp", layout: { grid: { w: 1, h: 1, cells: [0] }, objectiveAnchors: [] } } });
+    });
+    expect(vi.mocked(warmEntityLooks).mock.calls.at(-1)?.[1]).toEqual({ map: true });
+    expect(vi.mocked(warmSkillLooks).mock.calls.at(-1)?.[1]).toBeUndefined();
   });
 
   it("does not play the crossing cue for the area it restores into", () => {

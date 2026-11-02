@@ -54,6 +54,7 @@ import { MonsterHealthBars } from "./hud/MonsterHealthBars";
 import { warmSkillFx } from "./render/skill-fx";
 import { warmKit } from "./render/skills/kit";
 import { warmSkillLooks } from "./render/skills/warm-looks";
+import { CLASS_LOOKS, SKILL_LOOKS } from "./render/skills";
 import { warmBossFx } from "./render/boss-fx";
 import { warmEntityLooks, warmProjectiles } from "./render/meshes";
 import { Minimap } from "./hud/Minimap";
@@ -62,7 +63,7 @@ import { DebugStats } from "./hud/DebugStats";
 import { DeathRecap } from "./hud/DeathRecap";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
-import { settleGate } from "./settle";
+import { settleGate, warmDoneGate } from "./settle";
 import { createLoadClock } from "./load-phases";
 import { reloadPage } from "./chunk-reload";
 import { beginLoad, setLoadPart } from "./load-progress";
@@ -405,6 +406,11 @@ export function GameView({
     let settled: ((now: number) => boolean) | null = null;
     /** Drops the warm-up copies of every spawnable look. Held until the plate settles. */
     let releaseWarm: (() => void) | null = null;
+    /** The models are in and an area is built: the warm-up waits for both, or it warms greyboxes. */
+    let modelsIn = false;
+    let areaIn = false;
+    /** Lets the warm-up copies go once every mesh is ready and drawn. Reset per warm-up. */
+    let warmDone = warmDoneGate();
     /** Pending unmount of the plate, one fade after ready. Cancelled by a new area. */
     let fadeTimer: ReturnType<typeof setTimeout> | undefined;
     /** The plate is up and its bar is following the scene's materials. */
@@ -462,10 +468,13 @@ export function GameView({
     /** Every spawnable look drawn once behind the plate, held until it settles. */
     const warmLooks = () => {
       releaseWarm?.();
-      const entities = warmEntityLooks(scene);
-      const skills = warmSkillLooks(scene);
+      // No foe or loot in the hideout and only this class casts there; a map and the lab warm all.
+      const home = stoodIn === "hideout" && !labState;
+      const entities = warmEntityLooks(scene, { map: !home });
+      const skills = warmSkillLooks(scene, home ? CLASS_LOOKS[playedClassId] ?? SKILL_LOOKS : undefined);
       const flames = warmFireFlames();
       releaseWarm = () => { entities(); skills(); flames(); };
+      warmDone = warmDoneGate();
       // Before the plate's readiness check readies the warm-up's new materials.
       capMaterialLights(scene);
       // Three frames: every map, the round-robin fire cubes included, gets one.
@@ -776,7 +785,8 @@ export function GameView({
         warmKit(scene);
         warmBossFx(scene);
         warmProjectiles(scene);
-        warmLooks();
+        areaIn = true;
+        if (modelsIn) warmLooks();
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so
         // the plate always gets at least one render to appear in.
@@ -828,6 +838,10 @@ export function GameView({
           if (m.isReady(true)) ready++;
         }
         if (all > 0) setLoadPart("ready", ready / all);
+        if (releaseWarm && warmDone(ready, all)) {
+          releaseWarm();
+          releaseWarm = null;
+        }
       }
       // The one place the loading plate is allowed to come down: frames for
       // this area are on the glass at a playable pace. Guarded by a local rather
@@ -883,9 +897,10 @@ export function GameView({
       // dressing pass aborted on the missing container with no retry — a bare
       // hideout while every entity mesh had its art. Dress it again now.
       if (!unmounted && stoodIn === "hideout") buildHideoutDecor(scene);
-      // Same race: warmed before monsters.glb, every creature was a greybox, and a
-      // first flinch linked its squashed shader mid-fight.
-      if (!unmounted && releaseWarm) warmLooks();
+      // Same race: warmed before monsters.glb, every creature was a greybox, compiled
+      // twice over, and a first flinch still linked its squashed shader mid-fight.
+      modelsIn = true;
+      if (!unmounted && areaIn) warmLooks();
       // AFTER the models, never before: these are panels nobody has asked for yet,
       // and the first frame is what the player is actually waiting on. Warming them
       // here is why the first Escape no longer draws a frameless panel — see

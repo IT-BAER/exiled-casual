@@ -21,6 +21,12 @@ export function mergeLooks(parts: readonly ClassSkillLooks[]): ClassSkillLooks {
 }
 
 export const SKILL_LOOKS: ClassSkillLooks = mergeLooks([IRONSWORN_LOOKS, STALKER_LOOKS, EMBERBOUND_LOOKS]);
+/** Each class's own looks, by class id: all a character can cast where no one else stands. */
+export const CLASS_LOOKS: Readonly<Record<string, ClassSkillLooks>> = {
+  "class.ironsworn": IRONSWORN_LOOKS,
+  "class.stalker": STALKER_LOOKS,
+  "class.emberbound": EMBERBOUND_LOOKS,
+};
 
 export const skillLook = (id: string | undefined): SkillLook | undefined =>
   id === undefined ? undefined : SKILL_LOOKS.skills[id];
