@@ -99,6 +99,8 @@ function home(world: World): void {
   if (world.has(player, "moveTarget")) world.set<MoveTarget>(player, "moveTarget", { x: HIDEOUT_SPAWN.x, y: HIDEOUT_SPAWN.y, active: 0 });
   world.set<MoveDir>(player, "moveDir", { dx: 0, dy: 0, hx: 0, hy: fp(1) });
   spawnLabActors(world, "clear", 0, 0);
+  // A burning trail or a hovering orb left by the last skill would hit the next one's dummies.
+  for (const e of [...world.query("groundArea"), ...world.query("skillArea"), ...world.query("projectile")]) world.destroy(e);
   spawnLabActors(world, "dummy", HIDEOUT_SPAWN.x, HIDEOUT_SPAWN.y, 7);
   refill(world);
 }

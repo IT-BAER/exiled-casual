@@ -241,6 +241,25 @@ const ICE_ARROW: ArrowDecor = {
   },
 };
 
+/**
+ * The shipped physical arrows (Piercing Shot, Split Arrow): a pale wake, and a hit that
+ * punches through, sparks and grit thrown on along the flight. Before, a hairline landed silent.
+ */
+const PHYS_ARROW: ArrowDecor = {
+  flight(scene, _arrow, head) {
+    return ribbonTrail(scene, head, { colour: [1, 0.95, 0.85], life: 0.16, height: 0.12, width: 0.2, lift: -0.06, alpha: 0.4 });
+  },
+  impact(scene, at, dirX, dirZ) {
+    const yaw = Math.atan2(dirX, dirZ);
+    kitFlash(scene, at, 0.35);
+    core(scene, at, 0.45, [1, 0.95, 0.85], [1, 0.7, 0.4], 0.08);
+    sparks(scene, at, 16, [1, 0.95, 0.8], [1, 0.55, 0.2], { yaw, cone: 0.45, speed: [4, 9], up: [0.1, 0.6], life: [0.1, 0.25], length: 0.24 });
+    const floor = new Vector3(at.x, 0, at.z);
+    throwChunks(scene, "rock", floor, { count: 5, yaw, cone: 0.6, speed: [1.5, 3], up: [1.5, 3], size: [0.03, 0.07] });
+    fire(scene, shockRing(scene, floor, { radius: 0.7, duration: 0.18, colour: [0.75, 0.68, 0.55], lip: 0.12, width: 0.3, dust: 2, flash: 0, floorFlash: false }));
+  },
+};
+
 // ── Lightning Arrow ──────────────────────────────────────────────────────────────
 
 /** A strand of live lightning: a white core tube in a feathered blue halo, sharing one jagged path. */
@@ -884,6 +903,9 @@ const MARK_AREA: AreaLook = {
 
 export const STALKER_LOOKS: ClassSkillLooks = {
   skills: {
+    // The level-1 and level-8 arrows keep their shipped profile and cast; only the hit is dressed.
+    "skill.piercing_shot.v1": { projectileFx: SKILL_FX["skill.piercing_shot.v1"]!, projectile: arrowLook(PHYS_ARROW) },
+    "skill.split_arrow.v1": { projectileFx: SKILL_FX["skill.split_arrow.v1"]!, projectile: arrowLook(PHYS_ARROW) },
     "skill.escape_shot.v1": {
       // A hurried snap: the rapid-loose loop, sped to one cycle across the short wind-up.
       cast: bowCast("bowRapid", undefined, 1.8),

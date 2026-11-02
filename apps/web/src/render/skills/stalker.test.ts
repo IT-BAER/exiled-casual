@@ -91,7 +91,8 @@ describe("stalker looks", () => {
   });
 
   it("uses a different clip for every skill", () => {
-    const clips = Object.values(STALKER_LOOKS.skills).map((l) => l.cast!.clip);
+    const clips = Object.values(STALKER_LOOKS.skills).flatMap((l) => (l.cast ? [l.cast.clip] : []));
+    // The shipped skills dressed here keep their own cast, so only the class skills bring a clip.
     expect(new Set(clips).size).toBe(clips.length);
   });
 

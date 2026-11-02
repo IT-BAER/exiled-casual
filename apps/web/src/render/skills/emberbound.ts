@@ -402,6 +402,29 @@ function flameDashGround(ctx: LookContext, g: GroundState): FxHandle<GroundState
   return lasting(root, undefined, undefined, 1);
 }
 
+/**
+ * Cinder Ground (level 8): the field burns in tongues across its whole radius over one
+ * glowing scorch. The shipped look was a dim red disc beside the newer fire skills.
+ */
+function cinderGround(ctx: LookContext, g: GroundState): FxHandle<GroundState> {
+  const scene = ctx.scene;
+  const R = g.radius;
+  const burn = Math.max(0.5, g.remaining - 0.6);
+  const root = new Fx(() => false);
+  core(scene, floorAt(g.x, g.y, 0.3), R * 0.6, HOT, FIRE, 0.16);
+  sparks(scene, floorAt(g.x, g.y, 0.15), 18, HOT, DEEP, { speed: [2, 5], up: [0.6, 1.6], life: [0.3, 0.6] });
+  root.child(scorch(scene, floorAt(g.x, g.y), { radius: R * 1.05, glow: DEEP, hold: burn, fade: 1, alpha: 0.5 }));
+  const spots: [number, number][] = [[0, 0]];
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * TAU + Math.random() * 0.5;
+    spots.push([Math.sin(a) * R * rand(0.45, 0.7), Math.cos(a) * R * rand(0.45, 0.7)]);
+  }
+  for (const [dx, dz] of spots) {
+    root.child(flameTrailPatch(scene, floorAt(g.x + dx, g.y + dz), { radius: R * rand(0.22, 0.3), duration: burn * rand(0.85, 1), fade: 0.6, colour: FIRE, embers: 4 }));
+  }
+  return lasting(root, undefined, undefined, 1.2);
+}
+
 // ── Ember Nova ─────────────────────────────────────────────────────────────────
 
 function emberNovaCast(ctx: LookContext, body: ActorRef, cast: { windup?: number }): FxHandle<ActorRef> {
@@ -1071,6 +1094,8 @@ function heraldGround(ctx: LookContext, g: GroundState): FxHandle<GroundState> {
  */
 export const EMBERBOUND_LOOKS: ClassSkillLooks = {
   skills: {
+    // Level 8, before this kit: keeps its shipped cast and cue, only the field is redrawn.
+    "skill.cinder_ground.v1": { ground: { create: cinderGround } },
     "skill.flame_dash.v1": {
       // The cast take carries through the travel (which plays none), so the rush is one motion.
       cast: { clip: "swordDash", release: 0.2, start: flameDashCast },

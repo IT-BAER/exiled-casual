@@ -262,7 +262,7 @@ describe("Stalker", () => {
     const ms = [0, 3, 6, 9, 12].map((y) => r.mob(5, y));
     r.cast("lightning_arrow", 5, 0);
     r.steps(60);
-    expect(ms.map((m) => r.lost(m))).toEqual([30, 30, 30, 30, 0]);
+    expect(ms.map((m) => r.lost(m))).toEqual([38, 38, 38, 38, 0]);
   });
 
   it("Rain of Arrows drops twelve arrows over the target, two ticks apart", () => {

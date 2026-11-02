@@ -164,7 +164,8 @@ describe("Emberbound looks", () => {
   });
 
   it("plays a different take for every skill and turns the dash down its heading", () => {
-    const clips = Object.values(EMBERBOUND_LOOKS.skills).map((l) => l.cast!.clip);
+    const clips = Object.values(EMBERBOUND_LOOKS.skills).flatMap((l) => (l.cast ? [l.cast.clip] : []));
+    // The shipped skills dressed here keep their own cast, so only the class skills bring a clip.
     expect(new Set(clips).size).toBe(clips.length);
     expect(look("flame_dash").travel!.face).toBe("travel");
   });

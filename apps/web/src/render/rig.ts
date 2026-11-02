@@ -388,7 +388,7 @@ export const BOW_RELEASE = 12 / 30;
  * is short against a long wind-up: it may hang at the top instead of the drop
  * crawling, so the blow still lands on the sim's tick.
  */
-export interface StrikeTiming { drop: number; contact: number; raiseShare?: number; raiseMin?: number }
+export interface StrikeTiming { drop: number; contact: number; raiseShare?: number; raiseMin?: number; trailEnd?: number }
 
 /**
  * Where each sword take starts its drop and where the blade stops, as fractions
@@ -402,7 +402,8 @@ export const STRIKE_TIMING: Record<StrikeClip, StrikeTiming> = {
   strikeB: { drop: 0.128, contact: 0.213 },
   strikeC: { drop: 0.3, contact: 0.417 },
   heavy: { drop: 0.25, contact: 0.423 },
-  slam: { drop: 0.143, contact: 0.314, raiseShare: 0.8, raiseMin: 0.2 },
+  // The ribbon stops at the floor: samples laid on a resting hammer stack into a white blob.
+  slam: { drop: 0.143, contact: 0.314, raiseShare: 0.8, raiseMin: 0.2, trailEnd: 0.34 },
 };
 /** Share of the wind-up the raise gets. The drop gets the rest, so it snaps. */
 const STRIKE_RAISE_SHARE = 0.7;
@@ -2044,7 +2045,7 @@ export class RigActor {
     if (group.speedRatio !== ratio) group.speedRatio = ratio;
     if (legs && legs.speedRatio !== ratio) legs.speedRatio = ratio;
     // The ribbon is the drop and nothing else: on the raise it is a slow smear.
-    const tip = frac >= timing.drop && frac < TRAIL_END ? this.castPoint() : null;
+    const tip = frac >= timing.drop && frac < (timing.trailEnd ?? TRAIL_END) ? this.castPoint() : null;
     if (tip) {
       this.trail ??= swingTrail(this.scene, this.strikeSkill);
       this.trail.follow(tip, this.pivot.getAbsolutePosition().add(SWING_CENTRE));

@@ -170,7 +170,9 @@ const SKILL_DEFS: SkillDef[] = [
     description: "Smashes the ground, sending a shockwave through everything in front of you.",
     classId: "class.ironsworn",
     manaCostFixed: fp(20),
-    cooldownTicks: 90,
+    // Our own: every two seconds at 60 a hit. At 45 every three a pack took less
+    // from it than from Heavy Strike, the level-1 skill it is meant to outgrow.
+    cooldownTicks: 60,
     // PoE1 Ground Slam: 90% of base attack speed on a Driftwood Maul's 1.30/s
     // (poedb.tw) is 0.855 s, 26 ticks; PoE2 has no Ground Slam. The shockwave
     // leaves on the last tick, the frame the client's slam meets the floor.
@@ -190,7 +192,7 @@ const SKILL_DEFS: SkillDef[] = [
         type: "meleeStrike",
         reachFixed: fp(3.5),
         arcDegrees: 70,
-        damage: { type: "physical", amountFixed: fp(45) },
+        damage: { type: "physical", amountFixed: fp(60) },
       },
     ],
   },
@@ -714,9 +716,9 @@ const SKILL_DEFS: SkillDef[] = [
         speedPerSecFixed: fp(30),
         radiusFixed: fp(0.35),
         maxRangeFixed: fp(20),
-        // Our own: 30 a beat on one body, under Piercing Shot's 36; the chains
-        // are what it buys on a pack.
-        damage: { type: "lightning", amountFixed: fp(30) },
+        // Our own: 38 a beat, a little over Piercing Shot's 36 for two more mana; the
+        // chains are what it buys on a pack (at 30 it cleared no faster than Ice Shot).
+        damage: { type: "lightning", amountFixed: fp(38) },
         pierceCount: 0,
         // The spec's 3 chains (PoE2 chains 2, poe2db.tw); PoE2's 3.2 m beam
         // radius, rounded up to 4 for our looser packs.
@@ -753,7 +755,7 @@ const SKILL_DEFS: SkillDef[] = [
         // PoE2's arrow impact is 0.7 m (poe2db.tw); 1 for bodies our size.
         radiusFixed: fp(1),
         maxRangeFixed: fp(14),
-        damage: { type: "physical", amountFixed: fp(28) },
+        damage: { type: "physical", amountFixed: fp(34) },
         // The spec's twelve over 0.8 s: one every two ticks.
         count: 12,
         intervalTicks: 2,
@@ -933,14 +935,14 @@ const SKILL_DEFS: SkillDef[] = [
     },
     effects: [
       {
-        // The class's loudest moment: 40 a meteor, about three on every body in
+        // The class's loudest moment: 50 a meteor, about three on every body in
         // the storm, landing inside a second and a half.
         type: "areaHit",
         at: "target",
         // PoE2's impact is 1 m (poe2db.tw); 1.3 for bodies our size.
         radiusFixed: fp(1.3),
         maxRangeFixed: fp(16),
-        damage: { type: "fire", amountFixed: fp(40) },
+        damage: { type: "fire", amountFixed: fp(50) },
         // The spec's ten over 1.5 s.
         count: 10,
         intervalTicks: 5,

@@ -30,6 +30,7 @@ export const SWING_STYLE: Record<string, SwingStyle> = {
   "skill.strike.v1": STRIKE_ARC,
   "skill.heavy_strike.v1": HEAVY_STRIKE_ARC,
   "skill.ground_slam.v1": GROUND_SLAM_ARC,
+  "skill.earthquake.v1": GROUND_SLAM_ARC,
 };
 
 export function swingStyle(skillId: string | undefined): SwingStyle {

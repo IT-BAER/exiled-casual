@@ -1,5 +1,5 @@
 import { Color3, Material, Matrix, Mesh, MeshBuilder, PBRMaterial, Quaternion, StandardMaterial, Vector3, VertexData } from "@babylonjs/core";
-import type { Scene } from "@babylonjs/core";
+import type { GlowLayer, Scene } from "@babylonjs/core";
 
 /**
  * What Ground Slam breaks out of the floor: rock chunks and dirt clods thrown up
@@ -191,6 +191,10 @@ export class SlamDebris {
       mesh.setEnabled(false);
       this.cracks.push({ mesh, age: -1 });
     }
+    // The bloom pass reads emissive only (white here), never the dark vertex colour: a crack
+    // left in it bloomed into a white blob with white strands.
+    const glow = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
+    for (const c of this.cracks) glow?.addExcludedMesh(c.mesh);
     // The cracks start disabled, so compile now (behind the loading plate), not on the first slam.
     crackMat.forceCompilation(this.cracks[0]!.mesh);
     scene.onBeforeRenderObservable.add(() => this.step(Math.min(0.05, scene.getEngine().getDeltaTime() / 1000)));
