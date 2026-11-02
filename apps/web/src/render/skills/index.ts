@@ -2,6 +2,7 @@ import { fxProfile, type FxProfile } from "../skill-fx";
 import { IRONSWORN_LOOKS } from "./ironsworn";
 import { STALKER_LOOKS } from "./stalker";
 import { EMBERBOUND_LOOKS } from "./emberbound";
+import { AILMENT_LOOKS } from "./ailments";
 import type { BuffLook, ClassSkillLooks, SkillLook, StatusLook } from "./types";
 
 export type * from "./types";
@@ -20,7 +21,7 @@ export function mergeLooks(parts: readonly ClassSkillLooks[]): ClassSkillLooks {
   return out;
 }
 
-export const SKILL_LOOKS: ClassSkillLooks = mergeLooks([IRONSWORN_LOOKS, STALKER_LOOKS, EMBERBOUND_LOOKS]);
+export const SKILL_LOOKS: ClassSkillLooks = mergeLooks([IRONSWORN_LOOKS, STALKER_LOOKS, EMBERBOUND_LOOKS, AILMENT_LOOKS]);
 /** Each class's own looks, by class id: all a character can cast where no one else stands. */
 export const CLASS_LOOKS: Readonly<Record<string, ClassSkillLooks>> = {
   "class.ironsworn": IRONSWORN_LOOKS,

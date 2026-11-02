@@ -3,9 +3,11 @@ import { fp } from "@exiled/fixed-point";
 import { resBlock, type MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { registerDamageResolve, SPAWN_GRACE_TICKS } from "./damage-resolve";
-import { ES_RECHARGE_DELAY_TICKS } from "@exiled/rules";
+import { ES_RECHARGE_DELAY_TICKS, FREEZE_TICKS, SHOCK_TICKS } from "@exiled/rules";
+import { damageCode } from "../damage-types";
+import { activeStatuses, isStunned } from "../status";
 import { ROLL_AVOID_TICKS, ROLL_TICKS } from "./player-movement";
-import type { Health, DefensesC, FlasksC, EnergyShieldC, SessionC, RollC, DamageEvent, AilmentC } from "../components";
+import type { Health, DefensesC, FlasksC, EnergyShieldC, SessionC, RollC, DamageEvent, AilmentC, MonsterC } from "../components";
 
 it("applies two enqueued events, floored at 0", () => {
   const sim = new Simulation();
@@ -401,5 +403,96 @@ describe("a monster's hit leaves its ailment on the player", () => {
     registerDamageResolve(sim);
     sim.step();
     expect(sim.recentHits.map((h) => h.species)).toEqual(["ailment.burning", "ailment.bleeding", "ailment.poison"]);
+  });
+});
+
+describe("cold and lightning hits on a monster", () => {
+  const monster = (sim: Simulation, life = 100, boss = false) => {
+    const m = sim.world.create();
+    sim.world.set<Health>(m, "health", { life: fp(life), maxLife: fp(life) });
+    sim.world.set<DefensesC>(m, "defenses", { res: resBlock(), armour: fp(0) });
+    sim.world.set<MonsterC>(m, "monster", {
+      defId: "monster.probe", moveSpeed: fp(1), bodyRadius: fp(0.5), attackRange: fp(1), attackCooldownTicks: 30,
+      attackDamage: fp(1), attackType: damageCode("physical"), attackReadyTick: 0, slamReadyTick: 0, rootedUntilTick: 0,
+      state: "chase", rare: 0, summoned: 0,
+    });
+    if (boss) sim.world.set(m, "boss", { phase: 1 });
+    return m;
+  };
+  const hitEvery = (sim: Simulation, m: number, type: Parameters<typeof damageCode>[0], amount: number) =>
+    sim.register("testProducer", () => sim.enqueueDamage({ target: m, source: 999, amountFixed: fp(amount), type: damageCode(type) }));
+  const statuses = (sim: Simulation, m: number) => activeStatuses(sim.world, m, sim.tick).map((s) => s.id);
+
+  it("freeze once cold worth 30% of max life has landed: frozen 4 s, stunned, the meter emptied", () => {
+    const sim = new Simulation();
+    const m = monster(sim);
+    hitEvery(sim, m, "cold", 10);
+    registerDamageResolve(sim);
+    sim.step();
+    sim.step();
+    expect(statuses(sim, m)).not.toContain("frozen");
+    expect(sim.world.get<MonsterC>(m, "monster")!.freeze?.pct).toBe(68);
+    sim.step();
+    expect(statuses(sim, m)).toContain("frozen");
+    const mon = sim.world.get<MonsterC>(m, "monster")!;
+    expect(isStunned(mon, sim.tick)).toBe(true);
+    expect(mon.stunnedUntilTick).toBe(sim.tick - 1 + FREEZE_TICKS);
+    expect(mon.freeze).toBeUndefined();
+  });
+
+  it("builds nothing on a body already frozen, so cold hits cannot chain one freeze into the next", () => {
+    const sim = new Simulation();
+    const m = monster(sim);
+    hitEvery(sim, m, "cold", 10);
+    registerDamageResolve(sim);
+    for (let i = 0; i < 3; i++) sim.step();
+    expect(statuses(sim, m)).toContain("frozen");
+    const until = sim.world.get<MonsterC>(m, "monster")!.stunnedUntilTick;
+    for (let i = 0; i < 6; i++) sim.step();
+    expect(sim.world.get<MonsterC>(m, "monster")!.freeze).toBeUndefined();
+    expect(sim.world.get<MonsterC>(m, "monster")!.stunnedUntilTick).toBe(until);
+  });
+
+  it("never freezes a boss, which a stun cannot hold either", () => {
+    const sim = new Simulation();
+    const m = monster(sim, 100, true);
+    hitEvery(sim, m, "cold", 40);
+    registerDamageResolve(sim);
+    sim.step();
+    expect(statuses(sim, m)).not.toContain("frozen");
+  });
+
+  it("a lightning hit worth 40% of max life always shocks: 20% more damage taken for 8 s", () => {
+    const sim = new Simulation();
+    const m = monster(sim, 1000);
+    hitEvery(sim, m, "lightning", 400);
+    registerDamageResolve(sim);
+    sim.step();
+    const shock = activeStatuses(sim.world, m, sim.tick).find((s) => s.id === "shocked");
+    expect(shock).toMatchObject({ damageTakenPct: 20 });
+    expect(shock!.untilTick).toBe(sim.tick - 1 + SHOCK_TICKS);
+  });
+
+  it("a small lightning hit shocks by a seeded roll, the same every run", () => {
+    const runs = [1, 2].map(() => {
+      const sim = new Simulation();
+      const m = monster(sim, 1000);
+      hitEvery(sim, m, "lightning", 20);
+      registerDamageResolve(sim, 7);
+      const at: number[] = [];
+      for (let i = 0; i < 60; i++) { sim.step(); if (statuses(sim, m).includes("shocked") && at.length === 0) at.push(sim.tick); }
+      return at;
+    });
+    expect(runs[0]).toEqual(runs[1]);
+    expect(runs[0]!.length).toBe(1);
+  });
+
+  it("a burning or poison tick builds nothing and shocks nothing", () => {
+    const sim = new Simulation();
+    const m = monster(sim);
+    sim.register("testProducer", () => sim.enqueueDamage({ target: m, source: m, amountFixed: fp(50), type: damageCode("cold") }));
+    registerDamageResolve(sim);
+    sim.step();
+    expect(sim.world.get<MonsterC>(m, "monster")!.freeze).toBeUndefined();
   });
 });

@@ -5,7 +5,7 @@ import { damageCode, damageTypeOf } from "./damage-types";
 import { hitParts, weaponHit } from "./weapon";
 import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
-import { areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext } from "@exiled/rules";
+import { areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext, FREEZE_DECAY_TICKS } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { attackAddedDamage, describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -429,7 +429,9 @@ export function buildSnapshot(
     if (debuffs.length > 0) entry.debuffs = debuffs;
     const statuses = [...new Set(activeStatuses(world, e, tick).map((s) => s.id))].sort();
     if (statuses.length > 0) entry.statuses = statuses;
-    if (isStunned(mon, tick)) entry.stunned = true;
+    // A freeze holds the body through the stun; the ice says so, not the stun's stars.
+    if (isStunned(mon, tick) && !statuses.includes("frozen")) entry.stunned = true;
+    if (mon.freeze && tick - mon.freeze.tick <= FREEZE_DECAY_TICKS) entry.freeze = mon.freeze.pct;
     if (mon.magic === 1) entry.magic = true;
     if (mon.lastAttackTick !== undefined) entry.attackTick = mon.lastAttackTick;
     if (mon.state === "attack") {

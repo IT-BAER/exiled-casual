@@ -277,8 +277,10 @@ export interface SnapshotEntity {
   debuffs?: ("burning" | "poison" | "bleeding")[];
   /** monster only: skill statuses on it (chilled, scorched, marked, flammable, taunted...), sorted; absent when none. */
   statuses?: string[];
-  /** monster only: stunned this tick. */
+  /** monster only: stunned this tick (not while frozen: the `frozen` status carries that). */
   stunned?: true;
+  /** monster only: freeze buildup, percent of the meter (1..99); absent when empty or lapsed. */
+  freeze?: number;
   /**
    * Which monster def this is, so the renderer can pick a mesh. A plain string:
    * the wire contract must not depend on content, the same reason `element` and

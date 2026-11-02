@@ -295,6 +295,8 @@ export interface MonsterC {
   stunnedUntilTick?: number;
   /** A lab dummy: monster-ai leaves it alone, so it never moves, attacks or winds up. */
   inert?: 1;
+  /** Freeze buildup (0..100) and the tick of the cold hit that set it. Written only by a cold hit; never on a boss. */
+  freeze?: { pct: number; tick: number };
 }
 
 /** Damage parts already scaled at cast time: one hit, one entry per type. */

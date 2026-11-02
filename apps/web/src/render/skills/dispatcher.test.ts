@@ -147,6 +147,26 @@ describe("skill look dispatcher", () => {
   });
 });
 
+describe("ailments on a monster", () => {
+  it("draws its burning, poison and bleeding and a freezing meter, handing the meter to the look", () => {
+    const { scene, player, monster } = world();
+    const made: string[] = [];
+    const amounts: (number | undefined)[] = [];
+    const look = (id: string) => ({
+      create: (_c: unknown, s: { amount?: number }) => { made.push(id); amounts.push(s.amount); return { update: (_x: unknown, st: { amount?: number }) => { amounts.push(st.amount); }, dispose: () => {} }; },
+    });
+    const looks: ClassSkillLooks = { skills: {}, buffs: {}, statuses: { burning: look("burning"), poison: look("poison"), bleeding: look("bleeding"), freezing: look("freezing") } };
+    const d = new SkillLookDispatcher(scene, looks);
+    const mon = (freeze: number) => ({ id: 6, kind: "monster" as const, x: 3, y: 0, debuffs: ["burning", "poison", "bleeding"] as ("burning" | "poison" | "bleeding")[], freeze });
+    d.frame({ prev: null, next: snap(1, [mon(40)]), alpha: 0, player, bodyOf: () => monster });
+    expect(made.sort()).toEqual(["bleeding", "burning", "freezing", "poison"]);
+    d.frame({ prev: null, next: snap(2, [mon(70)]), alpha: 0, player, bodyOf: () => monster });
+    expect(amounts).toContain(0.4);
+    expect(amounts).toContain(0.7);
+    d.clear();
+  });
+});
+
 describe("skill look hooks", () => {
   const burst = (log: { disposed: number }) => ({ update: vi.fn(() => true), dispose: () => { log.disposed++; } });
   const run = (d: SkillLookDispatcher, s: Snapshot, player: BodyRef | { node: TransformNode; x: number; z: number; yaw: number }, monster: BodyRef, prev: Snapshot | null = null) =>

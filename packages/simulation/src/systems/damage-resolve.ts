@@ -1,5 +1,6 @@
 import {
   applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS, applySingleAilment,
+  freezeBuildupAt, FREEZE_TICKS, shockChancePct, SHOCK_DAMAGE_TAKEN_PCT, SHOCK_TICKS,
 } from "@exiled/rules";
 import { MONSTERS } from "@exiled/content-runtime";
 import type { MonsterDef } from "@exiled/content-schema";
@@ -12,10 +13,10 @@ import { damageTypeOf } from "../damage-types";
 import { BURNING_SOURCE, RECAP_WINDOW_TICKS } from "../death-recap";
 import type { World } from "../ecs";
 import type { DamageEvent } from "../components";
-import { toNumber } from "@exiled/fixed-point";
+import { toNumber, type Fixed } from "@exiled/fixed-point";
 import { alertPack } from "./monster-ai";
 import { createStream, type RandomStream } from "../rng";
-import { damageTakenPct } from "../status";
+import { activeStatuses, applyStatus, damageTakenPct, stun } from "../status";
 
 /** Spawn grace: 10 seconds at 30 Hz, or until the player moves or casts. */
 export const SPAWN_GRACE_TICKS = 300;
@@ -28,6 +29,8 @@ export function registerDamageResolve(
   // One stream for every on-hit ailment roll, drawn only when the hitter's
   // species has an onHit: a run with no applier consumes nothing.
   const ailmentRolls = createStream(seed, "ailment");
+  // Shock rolls on their own stream, drawn only for a lightning hit that can miss.
+  const shockRolls = createStream(seed, "shock");
   sim.register("damageResolve", (world, tick) => {
     // Maintain the spawn grace every tick, not only when damage arrives: the
     // break is one-way, so "he cast three seconds ago" must already have
@@ -109,6 +112,7 @@ export function registerDamageResolve(
 
       const after = Math.max(0, health.life - toLife);
       world.set<Health>(ev.target, "health", { ...health, life: after });
+      if (after > 0 && final > 0 && ev.source !== ev.target) elementalAilments(world, shockRolls, ev, final, health.maxLife, tick);
 
       // Being shot is the other way to notice someone (monster-ai.ts owns the
       // first: walking into earshot). Without this, a pack outside the aggro
@@ -137,6 +141,35 @@ export function registerDamageResolve(
       }
     }
   });
+}
+
+/**
+ * PoE2's freeze and shock on a monster a hit survived: cold builds a meter that
+ * freezes when full (a stun with a `frozen` status; never a boss), and lightning
+ * shocks by a chance that grows with the hit. A DoT tick names its victim as source,
+ * so it never gets here.
+ */
+function elementalAilments(world: World, rolls: RandomStream, ev: DamageEvent, final: Fixed, maxLife: Fixed, tick: number): void {
+  const mon = world.get<MonsterC>(ev.target, "monster");
+  if (!mon) return;
+  const type = damageTypeOf(ev.type);
+  if (type === "cold" && !world.has(ev.target, "boss")) {
+    // PoE2 builds no freeze on a frozen body: a chained lock would hold it forever.
+    if (activeStatuses(world, ev.target, tick).some((s) => s.id === "frozen")) return;
+    const pct = freezeBuildupAt(mon.freeze, final, maxLife, tick);
+    if (pct < 100) {
+      world.set<MonsterC>(ev.target, "monster", { ...mon, freeze: { pct, tick } });
+      return;
+    }
+    const { freeze: _spent, ...rest } = mon;
+    world.set<MonsterC>(ev.target, "monster", rest);
+    stun(world, ev.target, FREEZE_TICKS, tick);
+    applyStatus(world, ev.target, { statusId: "frozen", durationTicks: FREEZE_TICKS }, tick);
+  } else if (type === "lightning") {
+    const chance = shockChancePct(final, maxLife);
+    if (chance <= 0 || (chance < 100 && rolls.nextInt(0, 99) >= chance)) return;
+    applyStatus(world, ev.target, { statusId: "shocked", durationTicks: SHOCK_TICKS, damageTakenPct: SHOCK_DAMAGE_TAKEN_PCT }, tick);
+  }
 }
 
 /**

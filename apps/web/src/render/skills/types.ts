@@ -204,6 +204,8 @@ export interface AttachedState {
   remaining: number;
   /** False while the body is asleep off screen: hide or pause. */
   visible: boolean;
+  /** A meter status's fill, 0..1 (`freezing`); absent for every other one. */
+  amount?: number;
 }
 
 export interface BuffLook {

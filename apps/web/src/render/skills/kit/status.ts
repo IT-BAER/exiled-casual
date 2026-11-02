@@ -5,6 +5,7 @@ import {
   type Rgb,
 } from "./core";
 import { pulseRingTemplate } from "./buffs";
+import { sparks } from "./emit";
 
 /**
  * Status looks on a monster: frozen, smouldering, stunned, marked, taunted and
@@ -343,4 +344,123 @@ export function curseSigil(scene: Scene, node: TransformNode, o: StatusOptions =
   });
   fx.own(sigil);
   return fx;
+}
+
+/** A status whose strength the caller sets each frame: `amount` 0..1. */
+export type MeterFx = Fx & { amount: number };
+
+/**
+ * Freezing: the meter before the lock. Rime climbs out of the floor as high as the
+ * meter is full, and the cold shell and falling motes thicken with it, so a pack
+ * visibly whitens toward the freeze (PoE2 shows the buildup on the body too).
+ */
+export function frostCreep(scene: Scene, node: TransformNode, o: StatusOptions = {}): MeterFx {
+  const R = o.radius ?? 0.6;
+  const H = o.height ?? 1.6;
+  const collar = cloneOf(scene, frostCollar(scene), "kit-frost-creep");
+  const shell = cloneOf(scene, frostShell(scene, [0.55, 0.8, 1]), "kit-frost-creep-shell");
+  let motes = 0;
+  const pools = kitPools(scene);
+  const fx = statusFx(node, (f, dt, at) => {
+    const k = presence(f) * clamp01(out.amount);
+    collar.position.set(at.x, at.y, at.z);
+    collar.scaling.set(R * 0.9, R * 0.9 * k, R * 0.9);
+    shell.position.set(at.x, at.y + H * 0.5, at.z);
+    shell.scaling.set(R * 2.3, H * 1.1, R * 2.3);
+    shell.visibility = 0.16 * k;
+    motes += dt * 4 * k;
+    for (; motes >= 1; motes--) {
+      const a = Math.random() * TAU;
+      pools.motes.emit({
+        x: at.x + Math.sin(a) * R * rand(0.3, 1), y: at.y + H * rand(0.4, 1), z: at.z + Math.cos(a) * R * rand(0.3, 1),
+        vx: 0, vy: rand(-0.4, -0.2), vz: 0, life: rand(0.6, 1), size: 0.04, thick: 0.016,
+        r: 0.85, g: 0.95, b: 1, a: 0.7, r1: 0.5, g1: 0.75, b1: 0.95,
+      });
+    }
+  }) as MeterFx;
+  const out = fx;
+  out.amount = 0;
+  fx.own(collar);
+  fx.own(shell);
+  return out;
+}
+
+/**
+ * Shocked: the body crackles. A pale violet-white shell flickers on and off at
+ * random, and short white-hot arcs jump off its surface in uneven bursts: PoE's
+ * shocked monster reads as a light that cannot hold still.
+ */
+export function shockCrackle(scene: Scene, node: TransformNode, o: StatusOptions = {}): Fx {
+  const R = o.radius ?? 0.6;
+  const H = o.height ?? 1.6;
+  const shell = cloneOf(scene, frostShell(scene, [0.75, 0.7, 1]), "kit-shock-shell");
+  let next = 0;
+  const fx = statusFx(node, (f, dt, at) => {
+    const k = presence(f);
+    shell.position.set(at.x, at.y + H * 0.5, at.z);
+    shell.scaling.set(R * 2.3, H * 1.1, R * 2.3);
+    // A flicker, not a bubble: brighter than this, the shell read as a violet ball.
+    shell.visibility = k * (Math.random() < 0.25 ? 0.18 : 0.04);
+    next -= dt;
+    if (next > 0 || k < 0.2) return;
+    next = rand(0.05, 0.16);
+    const a = Math.random() * TAU;
+    const p = sShock.set(at.x + Math.sin(a) * R * 0.8, at.y + H * rand(0.2, 0.95), at.z + Math.cos(a) * R * 0.8);
+    sparks(scene, p, 4 + Math.floor(Math.random() * 4), [1, 1, 0.85], [0.55, 0.45, 1], {
+      speed: [3, 6], up: [-0.4, 0.6], gravity: 0, life: [0.05, 0.12], length: 0.22, thick: 0.018, yaw: a, cone: 1.4,
+    });
+  });
+  fx.own(shell);
+  return fx;
+}
+
+const sShock = new Vector3();
+
+/** Poisoned: green beads seeping up off the body and dripping from it, sickly, never bright. */
+export function poisonSeep(scene: Scene, node: TransformNode, o: StatusOptions = {}): Fx {
+  const R = o.radius ?? 0.6;
+  const H = o.height ?? 1.6;
+  let beads = 0, drips = 0;
+  const pools = kitPools(scene);
+  return statusFx(node, (f, dt, at) => {
+    const k = presence(f);
+    beads += dt * 7 * k;
+    for (; beads >= 1; beads--) {
+      const a = Math.random() * TAU;
+      const d = R * Math.sqrt(Math.random()) * 0.9;
+      pools.motes.emit({
+        x: at.x + Math.sin(a) * d, y: at.y + H * rand(0.2, 0.85), z: at.z + Math.cos(a) * d,
+        vx: rand(-0.08, 0.08), vy: rand(0.25, 0.55), vz: rand(-0.08, 0.08), drag: 1, life: rand(0.6, 1), size: 0.05, thick: 0.03,
+        r: 0.55, g: 0.95, b: 0.2, a: 0.75, r1: 0.12, g1: 0.35, b1: 0.04,
+      });
+    }
+    drips += dt * 2.5 * k;
+    for (; drips >= 1; drips--) {
+      const a = Math.random() * TAU;
+      pools.drops.emit({
+        x: at.x + Math.sin(a) * R * 0.7, y: at.y + H * rand(0.3, 0.7), z: at.z + Math.cos(a) * R * 0.7,
+        vx: 0, vy: -0.2, vz: 0, gravity: -6, life: rand(0.35, 0.55), size: rand(0.035, 0.06),
+        r: 0.3, g: 0.62, b: 0.08, a: 1, r1: 0.16, g1: 0.32, b1: 0.04,
+      });
+    }
+  });
+}
+
+/** Bleeding: dark red drops falling off the body onto the floor, steadily. */
+export function bloodDrip(scene: Scene, node: TransformNode, o: StatusOptions = {}): Fx {
+  const R = o.radius ?? 0.6;
+  const H = o.height ?? 1.6;
+  let drips = 0;
+  const pools = kitPools(scene);
+  return statusFx(node, (f, dt, at) => {
+    drips += dt * 5 * presence(f);
+    for (; drips >= 1; drips--) {
+      const a = Math.random() * TAU;
+      pools.drops.emit({
+        x: at.x + Math.sin(a) * R * 0.6, y: at.y + H * rand(0.35, 0.75), z: at.z + Math.cos(a) * R * 0.6,
+        vx: Math.sin(a) * 0.3, vy: rand(0, 0.6), vz: Math.cos(a) * 0.3, gravity: -10, life: rand(0.35, 0.6), size: rand(0.035, 0.065),
+        r: 0.5, g: 0.02, b: 0.02, a: 1, r1: 0.28, g1: 0.01, b1: 0.01,
+      });
+    }
+  });
 }

@@ -327,7 +327,11 @@ export class SkillLookDispatcher {
     for (const e of next.entities) {
       if (e.kind !== "monster") continue;
       alive.add(e.id);
-      const ids = [...(e.statuses ?? []), ...(e.stunned ? ["stunned"] : [])];
+      // Skill statuses, the stun, the DoTs on it, and a freeze meter still filling.
+      const ids = [
+        ...(e.statuses ?? []), ...(e.stunned ? ["stunned"] : []), ...(e.debuffs ?? []),
+        ...(e.freeze !== undefined ? ["freezing"] : []),
+      ];
       if (ids.length === 0) continue;
       const body = bodyOf(e.id);
       if (!body) continue;
@@ -341,7 +345,9 @@ export class SkillLookDispatcher {
       else s.handle.dispose();
     }
     for (const [key, { e, status, body }] of want) {
-      const state: AttachedState = { body, remaining: 0, visible: body.visible };
+      const state: AttachedState = {
+        body, remaining: 0, visible: body.visible, ...(status === "freezing" ? { amount: (e.freeze ?? 0) / 100 } : {}),
+      };
       const s = this.statuses.get(key);
       if (s) s.handle.update?.(this.ctx, state);
       else {

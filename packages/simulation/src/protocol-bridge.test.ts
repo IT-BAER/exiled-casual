@@ -4,7 +4,7 @@ import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { CONTENT_VERSION, MONSTERS, SKILLS, UTILITY_SKILLS } from "@exiled/content-runtime";
 import { ITEM_POOLS, baseOf, waystoneItem } from "@exiled/content-runtime";
-import { rollItem, effectiveSkill } from "@exiled/rules";
+import { rollItem, effectiveSkill, FREEZE_DECAY_TICKS } from "@exiled/rules";
 import type { Intent } from "@exiled/protocol";
 import { World } from "./ecs";
 import { spawnMonster } from "./areas";
@@ -254,6 +254,24 @@ describe("buildSnapshot", () => {
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
     expect(snap.entities.find((e) => e.id === sick)!.debuffs).toEqual(["burning", "bleeding"]);
     expect(snap.entities.find((e) => e.id === clean)!.debuffs).toBeUndefined();
+  });
+
+  it("a monster carries its freeze meter while it lasts, and a frozen one is not also stunned", () => {
+    // The meter is the anticipation: frost grows on the body before it locks.
+    const { world, sim } = createCombatSim(42);
+    const chilling = addMonster(world, 0, 0);
+    world.set<MonsterC>(chilling, "monster", { ...world.get<MonsterC>(chilling, "monster")!, freeze: { pct: 60, tick: 0 } });
+    const lapsed = addMonster(world, 2, 0);
+    world.set<MonsterC>(lapsed, "monster", { ...world.get<MonsterC>(lapsed, "monster")!, freeze: { pct: 60, tick: -FREEZE_DECAY_TICKS - 1 } });
+    const frozen = addMonster(world, 4, 0);
+    world.set<MonsterC>(frozen, "monster", { ...world.get<MonsterC>(frozen, "monster")!, stunnedUntilTick: 50 });
+    world.set(frozen, "statuses", { list: [{ id: "frozen", untilTick: 50 }] });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.entities.find((e) => e.id === chilling)!.freeze).toBe(60);
+    expect(snap.entities.find((e) => e.id === lapsed)!.freeze).toBeUndefined();
+    const f = snap.entities.find((e) => e.id === frozen)!;
+    expect(f.statuses).toEqual(["frozen"]);
+    expect(f.stunned).toBeUndefined();
   });
 
   it("a monster entity carries its body radius, so the client can measure reach to its surface", () => {

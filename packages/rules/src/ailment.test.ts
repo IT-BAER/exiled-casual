@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import {
   AILMENT_TICK_INTERVAL, refreshBurning, burningTickDamage, applySingleAilment, dotTickDamage, type AilmentState,
+  FREEZE_DECAY_TICKS, freezeBuildup, freezeBuildupAt, shockChancePct,
 } from "./ailment.js";
 
 describe("AILMENT_TICK_INTERVAL", () => {
@@ -88,5 +89,32 @@ describe("dotTickDamage", () => {
   it("is one interval's share of the dps, truncated", () => {
     expect(dotTickDamage(fp(2))).toBe(Math.trunc(fp(2) * AILMENT_TICK_INTERVAL / 30));
     expect(dotTickDamage(7)).toBe(1);
+  });
+});
+
+describe("freeze buildup", () => {
+  it("freezes once cold damage worth FREEZE_LIFE_PCT of max life has landed, in any number of hits", () => {
+    const life = fp(100);
+    expect(freezeBuildup(0, fp(15), life)).toBe(50);
+    expect(freezeBuildup(50, fp(15), life)).toBe(100);
+    expect(freezeBuildup(90, fp(60), life)).toBe(100);
+    // Three hits of exactly a third: rounded up, the meter fills.
+    expect([1, 2, 3].reduce((pct) => freezeBuildup(pct, fp(10), life), 0)).toBe(100);
+  });
+
+  it("starts over when the last cold hit is older than the decay window", () => {
+    const life = fp(100);
+    expect(freezeBuildupAt({ pct: 80, tick: 100 }, fp(3), life, 100 + FREEZE_DECAY_TICKS)).toBe(90);
+    expect(freezeBuildupAt({ pct: 80, tick: 100 }, fp(3), life, 101 + FREEZE_DECAY_TICKS)).toBe(10);
+  });
+});
+
+describe("shock chance", () => {
+  it("is certain for a hit worth SHOCK_LIFE_PCT of max life and proportional below", () => {
+    const life = fp(100);
+    expect(shockChancePct(fp(40), life)).toBe(100);
+    expect(shockChancePct(fp(80), life)).toBe(100);
+    expect(shockChancePct(fp(10), life)).toBe(25);
+    expect(shockChancePct(0, life)).toBe(0);
   });
 });
