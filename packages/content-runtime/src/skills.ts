@@ -479,7 +479,9 @@ const SKILL_DEFS: SkillDef[] = [
         // owns, on a whole pack, with a stun. PoE2's is 2.4 m at gem 1 (poe2db.tw);
         // 3 so a pack that walked in during the second is still under it.
         type: "areaHit",
-        at: "self",
+        // PoE2's aftershock erupts where the slam landed, not round the caster.
+        at: "target",
+        maxRangeFixed: fp(1.5),
         radiusFixed: fp(3),
         damage: { type: "physical", amountFixed: fp(80) },
         // The spec's one second between slam and aftershock.
@@ -543,7 +545,9 @@ const SKILL_DEFS: SkillDef[] = [
     effects: [
       {
         type: "areaHit",
-        at: "self",
+        // The line starts a radius ahead of him (PoE1's wave leaves the blade), never on him.
+        at: "target",
+        maxRangeFixed: fp(1.6),
         radiusFixed: fp(1.6),
         // Our own: bursts a radius apart overlap, so a body takes about two:
         // 48 per 1.5 s is 32/s, near Heavy Strike's 36.

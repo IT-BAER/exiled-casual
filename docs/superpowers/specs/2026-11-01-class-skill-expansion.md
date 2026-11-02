@@ -166,3 +166,4 @@ All new scalars are top-level so a breakpoint can patch them.
 - [x] C1 frame capture tool (tools/skill-lab) + every skill captured and judged (18/18)
 - [x] C2 fixes from capture review (risk review: 2 Important fixed)
 - [x] C3 full suite (3710 pass), typecheck, build, dev-surface: done; committed e1b327fa
+- [x] C4 second frame review (2 Nov): Earthquake on the ground-pound take with the aftershock at the slam; Sunder starts a radius ahead and grows to its last burst; Ice Shot trail and shatter readable; kit warmed under the loading plate (first Leap Slam had no landing); floor glows keep their hue (no lime)

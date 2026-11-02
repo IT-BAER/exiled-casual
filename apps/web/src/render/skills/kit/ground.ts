@@ -1,7 +1,7 @@
 import { Vector3 } from "@babylonjs/core";
 import type { Mesh, Scene } from "@babylonjs/core";
 import {
-  addMat, blendMat, clamp01, cloneOf, easeOut, easeOutInv, Fx, fxMesh, Geo, kitFlash, kitPools, ragged, rand, rgba, TAU, template,
+  addMat, blendMat, clamp01, cloneOf, easeOut, easeOutInv, Fx, fxMesh, Geo, kitFlash, kitPools, ragged, rand, rgba, rgbaHue, TAU, template,
   type Rgb,
 } from "./core";
 import { throwChunks, type ChunkKind } from "./chunks";
@@ -69,7 +69,7 @@ function discTemplate(scene: Scene, c: Rgb): Mesh {
   return template(scene, `floor-disc-${c.join("_")}`, () => {
     const g = new Geo();
     g.lathe([
-      { r: 0, y: 0, c: rgba(c, 0.85, 1.5) },
+      { r: 0, y: 0, c: rgbaHue(c, 0.85, 1.5) },
       { r: 0.45, y: 0, c: rgba(c, 0.4) },
       { r: 1, y: 0, c: rgba(c, 0) },
     ], 40);
@@ -311,7 +311,7 @@ export function scorch(scene: Scene, at: Vector3, o: ScorchOptions = {}): Fx {
     const e = new Geo();
     const inner = ragged(0.3);
     e.lathe([
-      { r: 0, y: 0, c: rgba(o.glow, 0.7, 1.3) },
+      { r: 0, y: 0, c: rgbaHue(o.glow, 0.7, 1.3) },
       { r: 0.5, y: 0, c: rgba(o.glow, 0.45) },
       { r: 0.85, y: 0, c: rgba(o.glow, 0) },
     ], 40, 0, TAU, { jitter: (yaw, k) => (k === 0 ? 1 : inner(yaw)) });

@@ -183,16 +183,19 @@ describe("Ironsworn", () => {
     expect(r.at(m).x).toBeGreaterThan(fp(8.5));
   });
 
-  it("Earthquake hits the cone now and the whole ring a second later, stunning it", () => {
+  it("Earthquake hits the cone now and erupts round the slam a second later, stunning it", () => {
     const r = rig();
     const front = r.mob(2, 0);
-    const behind = r.mob(-2, 0);
+    const far = r.mob(4.2, 0);
+    const behind = r.mob(-2.5, 0);
     r.cast("earthquake", 5, 0);
     expect(r.lost(front)).toBeGreaterThan(30);
-    expect(r.lost(behind)).toBe(0);
+    expect(r.lost(far)).toBe(0);
     r.steps(30);
-    expect(r.lost(behind)).toBeGreaterThan(60);
-    expect(isStunned(r.w.get<MonsterC>(behind, "monster")!, r.sim.tick)).toBe(true);
+    // The aftershock stands 1.5 ahead, where the slam landed: past the cone's reach, short of his back.
+    expect(r.lost(far)).toBeGreaterThan(60);
+    expect(isStunned(r.w.get<MonsterC>(far, "monster")!, r.sim.tick)).toBe(true);
+    expect(r.lost(behind)).toBe(0);
   });
 
   it("Determination holds a quarter of the pool and takes 15% off a hit", () => {
@@ -203,11 +206,11 @@ describe("Ironsworn", () => {
     expect(damageTakenPct(r.w, r.p, FIRE, r.sim.tick)).toBe(-15);
   });
 
-  it("Sunder rolls five bursts along the aim, one every four ticks", () => {
+  it("Sunder rolls five bursts along the aim from a radius ahead, one every four ticks", () => {
     const r = rig();
     r.cast("sunder", 10, 0);
     const a = areasOf(r, "sunder");
-    expect(a.map((x) => x.x)).toEqual([0, 1, 2, 3, 4].map((i) => fp(1.6) * i));
+    expect(a.map((x) => x.x)).toEqual([1, 2, 3, 4, 5].map((i) => fp(1.6) * i));
     expect(a.map((x) => x.impactTick - a[0]!.impactTick)).toEqual([0, 4, 8, 12, 16]);
   });
 

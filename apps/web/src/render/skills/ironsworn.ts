@@ -2,7 +2,7 @@ import { MeshBuilder, Vector3 } from "@babylonjs/core";
 import type { Mesh, Scene, TransformNode } from "@babylonjs/core";
 import {
   addMat, auraSigil, blendMat, bloodMist, clamp01, cloneOf, core, easeOut, easeOutInv, emberSmoulder, fissure, Fx, fxMesh,
-  Geo, kitFlash, kitPools, landingImpact, leapArcTrail, litMat, puff, rand, rgba, ribbonTrail, scorch, shockRing, sparks,
+  coneWave, Geo, kitFlash, kitPools, landingImpact, leapArcTrail, litMat, puff, rand, rgba, rgbaHue, ribbonTrail, scorch, shockRing, sparks,
   solidMat, TAU, tauntRage, template, throwChunks, type Rgb,
 } from "./kit";
 import type {
@@ -93,7 +93,7 @@ function shake(ctx: LookContext, weight: number): Fx | null {
 function floorGlowTpl(scene: Scene, c: Rgb): Mesh {
   return template(scene, `iron-glow-${c.join("_")}`, () => {
     const g = new Geo();
-    g.lathe([{ r: 0, y: 0, c: rgba(c, 0.85, 1.4) }, { r: 0.45, y: 0, c: rgba(c, 0.4) }, { r: 1, y: 0, c: rgba(c, 0) }], 40);
+    g.lathe([{ r: 0, y: 0, c: rgbaHue(c, 0.85, 1.4) }, { r: 0.45, y: 0, c: rgba(c, 0.4) }, { r: 1, y: 0, c: rgba(c, 0) }], 40);
     return fxMesh(scene, g.mesh(scene, "iron-glow"), addMat(scene));
   });
 }
@@ -610,7 +610,7 @@ function leapLanding(ctx: LookContext, a: AreaState): BurstHandle {
   const scene = ctx.scene;
   const at = new Vector3(a.x, 0, a.y);
   const R = Math.max(1.5, a.radius);
-  core(scene, new Vector3(at.x, 0.45, at.z), R * 1.1, HOT, FIRE, 0.22);
+  core(scene, new Vector3(at.x, 0.45, at.z), R * 0.8, HOT, FIRE, 0.2);
   sparks(scene, new Vector3(at.x, 0.2, at.z), 30, HOT, FIRE, { speed: [3, 8], up: [0.5, 1.6], gravity: -10, length: 0.24, thick: 0.03 });
   throwChunks(scene, "rock", at, { count: 26, speed: [1.2, 4], up: [3.5, 8], size: [0.1, 0.34], spread: 0.6 });
   dirtColumn(scene, at, R / 2.5, 6);
@@ -663,20 +663,15 @@ function quakeCone(ctx: LookContext, a: AreaState): BurstHandle {
   const L = a.radius;
   const dur = 0.32;
   kitFlash(scene, strike, 0.75, SEAM);
-  core(scene, new Vector3(strike.x, 0.35, strike.z), 1.2, [1, 0.75, 0.38], SEAM, 0.16);
-  // The front runs out down the wedge: rock thrown and dust lifted where it passes, no flat fill.
-  throwChunks(scene, "rock", at, { count: 36, yaw, cone: half, spread: L * 0.95, speed: [0.6, 2.2], up: [3.5, 7], size: [0.08, 0.28], delayAt: (d) => easeOutInv(d / L) * dur });
+  // Small: a big hot core at the hammer whites out the body swinging it.
+  core(scene, new Vector3(strike.x, 0.3, strike.z), 0.8, [1, 0.75, 0.38], SEAM, 0.14);
   throwChunks(scene, "rock", strike, { count: 14, speed: [1, 3], up: [4, 7], size: [0.1, 0.3], spread: 0.3 });
-  sparks(scene, new Vector3(strike.x, 0.2, strike.z), 20, HOT, FIRE, { yaw, cone: half, speed: [2, 6], up: [0.5, 1.4], gravity: -10, length: 0.22 });
+  sparks(scene, new Vector3(strike.x, 0.2, strike.z), 26, HOT, FIRE, { yaw, cone: half, speed: [3, 8], up: [0.5, 1.4], gravity: -10, length: 0.26 });
   dirtColumn(scene, strike, 0.8, 5);
-  for (let row = 1; row <= 5; row++) {
-    const d = (row / 5) * L;
-    for (let i = 0; i < 3; i++) {
-      const ay = yaw + ((i + 0.5) / 3 * 2 - 1) * half;
-      puff(scene, at.x + Math.sin(ay) * d, 0, at.z + Math.cos(ay) * d, { size: 0.8 + 0.2 * row, delay: easeOutInv(d / L) * dur, drift: 1.3, yaw: ay });
-    }
-  }
   return burst([
+    // The front runs out down the wedge as a standing wall of force, rock and dust thrown where it passes.
+    coneWave(scene, at, a.dirX, a.dirY, { length: L * 1.05, half, duration: dur, colour: EARTH, chunks: 40, dustRows: 5, lip: 1.1, flash: 0 }),
+    shockRing(scene, at, { radius: L, duration: dur * 1.2, colour: SEAM, width: 0.6, lip: 0, dust: 0, flash: 0, floorFlash: false, arc: { yaw, half } }),
     // Held glowing through the second: the cracks are the aftershock's fuse.
     crack(scene, at, L * 1.1, { yaw, spread: half * 0.95, branches: 7, hold: 1.15, width: 0.24 }),
     crack(scene, strike, 1.4, { branches: 5, hold: 1.15, width: 0.2 }),
@@ -862,9 +857,9 @@ function sunderBurst(ctx: LookContext, a: AreaState): BurstHandle {
   const scene = ctx.scene;
   const at = new Vector3(a.x, 0, a.y);
   const i = Math.min(a.index, 6);
-  const grow = 1 + 0.1 * i;
+  const grow = 1 + 0.15 * i;
   const yaw = yawOf(a.dirX, a.dirY);
-  core(scene, new Vector3(at.x, 0.35, at.z), 1.3 * grow, HOT, SEAM, 0.16);
+  core(scene, new Vector3(at.x, 0.35, at.z), 0.95 * grow, [1, 0.8, 0.5], SEAM, 0.14);
   sparks(scene, new Vector3(at.x, 0.2, at.z), 14 + 2 * i, HOT, FIRE, { speed: [2, 5], up: [0.8, 1.8], gravity: -10, length: 0.2, thick: 0.026 });
   throwChunks(scene, "rock", at, { count: 14 + 3 * i, speed: [0.8, 3], up: [4, 8], size: [0.08, 0.3 * grow], spread: 0.5 });
   dirtColumn(scene, at, 0.7 * grow, 4);
@@ -989,7 +984,7 @@ const earthquakeArea: AreaLook = {
  * - MonsterTransformation: arms up, then slammed down into a wide crouch at 0.25-0.28.
  * - NinjaJump_Start: the spring off a crouch at 0.03-0.05; Sword_Aerial_A over the flight raises the blade at the
  *   apex and brings it round on the way down.
- * - Sword_Heavy_D: overhead wind-up to 0.21, the blade on the floor at 0.27-0.29, held there to 0.55.
+ * - Sword_GroundPound (the shared "slam"): heaved up to 0.14, the hands on the floor at 0.31.
  * - Sword_Block: the guard is set by 0.12-0.24.
  * - Sword_Heavy_B: the diagonal chop lands at 0.32-0.37.
  * - LiftAir (upper body): arched back, head thrown up and arms spread by 0.55-0.7.
@@ -1006,7 +1001,8 @@ export const IRONSWORN_LOOKS: ClassSkillLooks = {
       travel: leapTravel,
       area: { impact: leapLanding },
     },
-    "skill.earthquake.v1": { cast: { clip: "heavyD", release: 0.28, start: castFx(quakeWindup) }, area: earthquakeArea },
+    // The ground pound, paced as a strike: Sword_Heavy_D is a level swing that never reaches the floor.
+    "skill.earthquake.v1": { cast: { clip: "slam", start: castFx(quakeWindup) }, area: earthquakeArea },
     "skill.determination.v1": { cast: { clip: "block", release: 0.2, start: castFx(determinationWindup) } },
     "skill.sunder.v1": { cast: { clip: "heavyB", release: 0.35, start: castFx(sunderWindup) }, area: { warn: sunderWarn, impact: sunderBurst } },
     "skill.blood_rage.v1": { cast: { clip: "liftAir", release: 0.6, start: castFx(bloodWindup) }, release: releaseFx(bloodRelease) },

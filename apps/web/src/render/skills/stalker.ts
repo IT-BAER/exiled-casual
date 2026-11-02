@@ -40,8 +40,8 @@ const ESCAPE_FX: FxProfile = {
   streakLength: 1.5, streakAlpha: 0.5, motes: 1.5, flash: 0.35, arrowImpact: "chip",
 };
 const ICE_FX: FxProfile = {
-  ...ARROW, core: new Color3(0.86, 0.97, 1), wake: new Color3(0.45, 0.8, 1), trailWidth: 0.09,
-  streakLength: 2.4, streakAlpha: 0.6, motes: 2.5, flash: 0.4, arrowImpact: "pierce",
+  ...ARROW, core: new Color3(0.86, 0.97, 1), wake: new Color3(0.45, 0.8, 1), trailWidth: 0.14,
+  streakLength: 3.2, streakAlpha: 0.85, motes: 4, flash: 0.6, arrowImpact: "pierce",
 };
 const LIGHTNING_FX: FxProfile = {
   ...ARROW, core: new Color3(0.92, 0.95, 1), wake: new Color3(0.6, 0.7, 1), trailWidth: 0.08,
@@ -226,12 +226,18 @@ const ICE_ARROW: ArrowDecor = {
     clad(scene, arrow, 3);
     const fx = new Fx(() => true);
     // The frost trail: a wide pale ribbon that hangs a beat behind the arrow.
-    fx.child(ribbonTrail(scene, head, { colour: FROST, life: 0.4, height: 0.3, width: 0.45, lift: -0.15, alpha: 0.7, motes: 4 }));
-    fx.child(frostFlakes(scene, head, 45));
+    // Wide and bright: the flight lasts a quarter second, so it must read at a glance.
+    fx.child(ribbonTrail(scene, head, { colour: FROST, life: 0.5, height: 0.45, width: 0.75, lift: -0.2, alpha: 0.9, motes: 6 }));
+    fx.child(frostFlakes(scene, head, 80));
     return fx;
   },
   impact(scene, at) {
-    coldBurst(scene, at, 1.5, 0.6, true);
+    // The shatter is the skill: a cold flash, a standing ring of frost out to the burst radius, ice thrown.
+    coldBurst(scene, at, 1.8, 0.9, true);
+    const floor = new Vector3(at.x, 0, at.z);
+    kitFlash(scene, floor, 0.8, FROST);
+    throwChunks(scene, "ice", floor, { count: 16, speed: [2, 5], up: [2, 4.5], size: [0.05, 0.14] });
+    fire(scene, shockRing(scene, floor, { radius: 1.9, duration: 0.3, colour: FROST, lip: 0.5, width: 0.4, dust: 0, flash: 0 }));
   },
 };
 

@@ -366,6 +366,14 @@ export class Geo {
 
 /** A colour scaled, with an alpha: the lathe profiles' shorthand. */
 export const rgba = (c: Rgb, a: number, k = 1): Rgba => [Math.min(1, c[0] * k), Math.min(1, c[1] * k), Math.min(1, c[2] * k), a];
+/**
+ * `rgba` boosted without the per-channel clamp: clamping red at 1 while green climbs turns
+ * orange yellow, and stacked additive floor glows of that yellow tonemap to lime under ACES.
+ */
+export const rgbaHue = (c: Rgb, a: number, k = 1): Rgba => {
+  const m = Math.max(1, c[0] * k, c[1] * k, c[2] * k);
+  return [(c[0] * k) / m, (c[1] * k) / m, (c[2] * k) / m, a];
+};
 
 /**
  * A per-scene template mesh, built once and kept disabled; effects take clones,
