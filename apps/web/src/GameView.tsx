@@ -51,6 +51,7 @@ import { NpcLabels } from "./hud/NpcLabels";
 import { MonsterHealthBars } from "./hud/MonsterHealthBars";
 import { warmSkillFx } from "./render/skill-fx";
 import { warmKit } from "./render/skills/kit";
+import { warmSkillLooks } from "./render/skills/warm-looks";
 import { warmBossFx } from "./render/boss-fx";
 import { warmEntityLooks, warmProjectiles } from "./render/meshes";
 import { Minimap } from "./hud/Minimap";
@@ -762,7 +763,9 @@ export function GameView({
         warmBossFx(scene);
         warmProjectiles(scene);
         releaseWarm?.();
-        releaseWarm = warmEntityLooks(scene);
+        const entities = warmEntityLooks(scene);
+        const skills = warmSkillLooks(scene);
+        releaseWarm = () => { entities(); skills(); };
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so
         // the plate always gets at least one render to appear in.

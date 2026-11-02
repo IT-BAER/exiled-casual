@@ -114,8 +114,9 @@ vi.mock("./render/skill-fx", () => ({ warmSkillFx: vi.fn() }));
 // The class looks build their tables off skill-fx at import; the soundscape only reads profiles.
 vi.mock("./render/skills", () => ({ skillFx: () => ({ flightCue: null, impactCue: null }), skillLook: () => undefined }));
 vi.mock("./render/skills/kit", () => ({ warmKit: vi.fn() }));
+vi.mock("./render/skills/warm-looks", () => ({ warmSkillLooks: vi.fn(() => () => {}) }));
 vi.mock("./render/boss-fx", () => ({ warmBossFx: vi.fn() }));
-vi.mock("./render/meshes", () => ({ warmProjectiles: vi.fn(), warmEntityLooks: vi.fn() }));
+vi.mock("./render/meshes", () => ({ warmProjectiles: vi.fn(), warmEntityLooks: vi.fn(() => () => {}) }));
 vi.mock("./render/hideout", () => ({
   buildHideoutDecor: vi.fn(), clearHideoutDecor: vi.fn(),
 }));
