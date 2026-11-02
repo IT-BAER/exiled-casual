@@ -925,6 +925,31 @@ describe("Hud gem levels and breakpoints", () => {
     expect(screen.getByTestId("skill-slot-2")).toHaveAttribute("data-flash", "1");
   });
 
+  it("frames the socket of a running buff in both rows, and only while it runs", () => {
+    const bar = ["skill.determination.v1", "skill.haste.v1", null, null, null, "skill.blood_rage.v1", null, null];
+    const withBuffs = (buffs: Snapshot["player"]["buffs"]) => {
+      const s = makeSnap({});
+      return { ...s, player: { ...s.player, buffs } };
+    };
+    const { rerender } = render(
+      <Hud
+        snapshot={withBuffs([
+          { id: "determination", kind: "buff", remainingSec: 0, aura: true, reserved: 50 },
+          { id: "blood_rage", kind: "buff", remainingSec: 4 },
+          // A debuff named like a skill must not light anything.
+          { id: "haste", kind: "debuff", remainingSec: 2 },
+        ])}
+        skillBar={bar}
+      />,
+    );
+    expect(screen.getByTestId("skill-slot-1")).toHaveAttribute("data-buff-active", "1");
+    expect(screen.getByTestId("skill-slot-6")).toHaveAttribute("data-buff-active", "1");
+    expect(screen.getByTestId("skill-slot-2")).not.toHaveAttribute("data-buff-active");
+    rerender(<Hud snapshot={withBuffs([])} skillBar={bar} />);
+    expect(screen.getByTestId("skill-slot-1")).not.toHaveAttribute("data-buff-active");
+    expect(screen.getByTestId("skill-slot-6")).not.toHaveAttribute("data-buff-active");
+  });
+
   it("stays silent when the save arrives, not just on the very first snapshot", () => {
     // The worker starts its clock before hydrate() resolves, so snapshot 1 is a
     // pre-hydration world with no gems and snapshot 2 is the whole restored save.

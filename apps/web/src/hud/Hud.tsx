@@ -242,7 +242,11 @@ function BarIconButton({ testId, art, label, hotkey, onClick }: {
   );
 }
 
-function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }: {
+/** One slow lap of light round a running buff's frame: present, never a blink. */
+const BUFF_ORBIT_CSS = "@keyframes skill-buff-orbit{to{transform:rotate(1turn)}}"
+  + "@media (prefers-reduced-motion: reduce){[data-buff-orbit]{animation:none!important}}";
+
+function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash, active }: {
   slot: SkillSlot;
   n: number;
   cooldowns: Record<string, number>;
@@ -256,6 +260,8 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }
   onAssignRequest?: () => void;
   /** The gem in this socket just levelled: the banner says WHAT, this says WHERE. */
   flash?: boolean;
+  /** This socket's buff or aura is running. */
+  active?: boolean;
 }) {
   const cd = slot.id ? cooldowns[slot.id] ?? 0 : 0;
   const ready = cd <= 0;
@@ -264,6 +270,7 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }
     <div
       data-testid={`skill-slot-${n}`}
       data-flash={flash ? "1" : undefined}
+      data-buff-active={active ? "1" : undefined}
       onMouseEnter={() => onHover(slot.id)}
       onMouseLeave={() => onHover(null)}
       // Left click opens the picker. A real drag never fires click, so this does
@@ -334,6 +341,28 @@ function SkillTile({ slot, n, cooldowns, onHover, drag, onAssignRequest, flash }
             filter: ready ? "none" : "grayscale(0.8) brightness(0.5)",
           }}
         />
+      )}
+      {/* Running buff: a soft glow in the skill's colour held inside the frame, and a
+          short arc of light lapping the border every 4s. The mask cuts the spinning
+          conic down to a 2px ring, so the icon itself never moves or dims. */}
+      {active && (
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          boxShadow: `inset 0 0 9px ${slot.glow ?? "#d9b04a"}88`,
+          border: `1px solid ${slot.glow ?? "#d9b04a"}aa`,
+        }}>
+          <style>{BUFF_ORBIT_CSS}</style>
+          <div style={{
+            position: "absolute", inset: -1, padding: 2, overflow: "hidden",
+            mask: "linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)",
+          }}>
+            <div data-buff-orbit="" style={{
+              position: "absolute", left: "-25%", top: "-25%", width: "150%", height: "150%",
+              background: `conic-gradient(transparent 0 70%, ${slot.glow ?? "#d9b04a"} 92%, #fff8e0 97%, transparent 100%)`,
+              animation: "skill-buff-orbit 4s linear infinite",
+            }} />
+          </div>
+        </div>
       )}
       {/* cooldown veil, PoE-style: the tile darkens and counts down */}
       {!ready && (
@@ -997,6 +1026,10 @@ export function Hud({
   // the banner stayed up for the rest of the run.
   const [banner, setBanner] = React.useState<{ text: string; seq: number } | null>(null);
   const [flashing, setFlashing] = React.useState<ReadonlySet<string>>(new Set());
+  // A class buff carries its skill's id stem: `haste` is `skill.haste.v1`'s.
+  const buffSkills = new Set(
+    (snapshot?.player.buffs ?? []).filter((b) => b.kind === "buff").map((b) => `skill.${b.id}.v1`),
+  );
   const level = snapshot?.player.level ?? null;
   const stones = snapshot?.inventory.items.filter((i) => i.baseId === "map.waystone").length ?? null;
   const gems = React.useMemo(() => {
@@ -1614,6 +1647,7 @@ export function Hud({
                 drag={fixed ? undefined : { index: idx, onDrop: swapSockets }}
                 onAssignRequest={fixed ? undefined : () => setAssigning(idx)}
                 flash={bar[idx] !== null && flashing.has(bar[idx]!)}
+                active={bar[idx] != null && buffSkills.has(bar[idx]!)}
               />
             );
           })}
@@ -1643,6 +1677,7 @@ export function Hud({
               drag={{ index: i, onDrop: swapSockets }}
               onAssignRequest={() => setAssigning(i)}
               flash={bar[i] !== null && flashing.has(bar[i]!)}
+              active={bar[i] != null && buffSkills.has(bar[i]!)}
             />
           ))}
         </div>
