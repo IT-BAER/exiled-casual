@@ -32,7 +32,6 @@ import tempfile
 
 # Library files the class-skill cues (the 18 skills of the 1 Nov 2026 expansion) share,
 # named once because most of them are cut into several takes and layers below.
-_BATTLE_CRY = "Pole Position Production - The Grunts Library/Male 2 - Grunt - Battle Cry - Long - Ehrlund M1.wav"
 _FIRE_GROWL = "Epic Stock Media - Elemental Mutation Whooshes and Impacts/FIREWhsh_Whoosh Fire Deep Growl Monster Saturated Crisp 03_ESM_EMWI.wav"
 _FIRE_BED = "Epic Stock Media - Synthesized Nature Loops and Sounds/FIREBurn_Loop Elements Fire Crackling Crunchy Flame Burn 03_ESM_SNLS.wav"
 _SEAR = "Orbital Emitter - Cinematic Transitions for Editors Volume 2/27,Searing.wav"
@@ -69,18 +68,10 @@ _COLLAPSE_RUBBLE = "BluezoneCorp - Building Collapse/Bluezone_BC0275_building_co
 _QUAKE = "BluezoneCorp - Alien Tripod/Bluezone_BC0292_alien_tripod_debris_rock_collapse_earthquake_rumble_large_005.wav"
 _BODY_CRUNCH = "344 Audio - Flesh, Bones & Gore/Heavy Body Crunch 02.wav"
 _PUNCH = "344 Audio - Cinematic Fight Vol. 1/FGHTImpt_4 x Punch, Body 02_344 Audio_Cinematic Fight Vol 1.wav"
-_ORC_RAGE = "Epic Stock Media - Humanoid Creatures Vol 4 - Monstrous and Undead Creature Vocalization Sound Sets/CREAHmn_Designed Orc Male Attack Long Heavy Hit Charged Up 03_ESM_HC4.wav"
-_GROWL = "Chupapsound - Essential Scifi/GRWL ROAR ANGRY.wav"
 _BOX_THUMP = "Mechanical Wave - Cardboard and Paper/OBJPack_Big Cardboard Box Impact_ 02_MWSFX_CDAP.wav"
-_METAL_RISER = "Jake Fielding - Haunted Metal Vol.2 - Cinematic Creaks & Risers/DSGNRise_Cinematic Metallic Riser, Trailer, Designed,_JF_Haunted Metal Vol 2_39.wav"
-_GONG_RISER = "344 Audio - Cymbals From Hell Vol. 2/DSGNStngr_Gong, Distorted, Riser, Stinger 06_344 Audio_Cymbals From Hell Vol 2.wav"
 _AIR_RISER = "344 Audio - Cymbals From Hell/Time Bending Risers 21.wav"
-_DARK_RISER = "344 Audio - Cymbals From Hell/Disturbing Risers 06.wav"
-_STRING_RISER = "Justsoundeffects - Horror Jumpscares/DSGNRise_String Riser 13_JSE_HJS.wav"
-_ENERGY_SWELL = "Alexander Kopeikin - Emotion and Magic/magic, energy flow, astonishment-001.wav"
 _SHIMMER = "Epic Stock Media - Anime Game/DSGNStngr_Power Up Bright Positive Successful Light Saturation Crash Shimmer 05_ESM_AG.wav"
 _CHARGE_DOWN = "Rogue Waves - Anime Studio/DSGNMisc_Charge Down Classic 1_RogueWaves_AnimeStudio.wav"
-_GUST = "Rescopic Sound - Distinct Whooshes/WHSH_Airy-Whoosh Wind Gust 11_RSCPC_DW.wav"
 _DARK_SPELL = "Rogue Waves - Druid Magic/MAGEvil_Dark Spell Dark Energy Attack_RogueWaves_DruidMagic.wav"
 _DARK_TONE = "Mechanical Wave - Glass/GLASTonl_Dark Tone Thrill_07_MWSFX_GL.wav"
 _NOISEBOX_10 = "InMotionAudio - Sinister Textures 4/DSGNErie_NoiseBoxHit_10_InMotionAudio_SinisterTextures4.wav"
@@ -115,6 +106,22 @@ _BUG_ZAP = "Rogue Waves - Druid Magic/ELECZap_Bug zapper zapping, electricity, c
 def _beats(spec: str, semis: float, period_ms: int, count: int) -> list[tuple[str, float, float, int]]:
     """One thump repeated `count` times `period_ms` apart: a pulse to cut a loop from."""
     return [(spec, semis, 0, k * period_ms) for k in range(count)]
+
+
+# Takes of one buff differ by a third of a semitone at most: a pool, not a choice of sounds.
+_BUFF_TAKE_SEMIS = (0.0, 0.3, -0.3, 0.15)
+
+
+def _buff_up(semis: float, takes: int = 3) -> list[dict]:
+    """Every buff and aura coming up is ONE sound: the air riser with the shimmer struck at
+    its top, a few semitones of tape apart per skill. The shimmer's entry moves with the
+    tape speed, or a lower take strikes it before the riser has arrived."""
+    out = []
+    for k in range(takes):
+        s = semis + _BUFF_TAKE_SEMIS[k]
+        at = round(1150 * 2 ** (-s / 12))
+        out.append({"layers": [(f"{_AIR_RISER}@4.90:1.60", s, 0, 0), (_SHIMMER, s, -8, at)]})
+    return out
 
 
 # cue name -> path under the library root, optionally `@start:duration` to pick a
@@ -483,14 +490,9 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
     ],
 
     # ── Class skill expansion: Ironsworn ──────────────────────────────────────────
-    # Infernal Cry: a man's battle cry with fire growling up under it. Four cries of one
-    # voice, the fastest-attacking of the fifteen in the recording (120-680 ms to the top).
-    "skill-infernal-cry-cast": [
-        {"layers": [(f"{_BATTLE_CRY}@12.97:1.70", 0, 0, 0), (_FIRE_GROWL, 0, -10, 150)]},
-        {"layers": [(f"{_BATTLE_CRY}@16.69:1.70", 0, 0, 0), (_FIRE_GROWL, -2, -10, 120)]},
-        {"layers": [(f"{_BATTLE_CRY}@57.83:1.70", 0, 0, 0), (_FIRE_GROWL, 1, -10, 150)]},
-        {"layers": [(f"{_BATTLE_CRY}@5.39:1.70", 0, 0, 0), (_FIRE_GROWL, -1, -10, 200)]},
-    ],
+    # The five buffs come up on the one `_buff_up` sound, lowest for the heaviest:
+    # Iron Resolve -3, Furnace Roar -2, Crimson Fury -1, Mantle of Embers 0, Windstride +2.
+    "skill-infernal-cry-cast": _buff_up(-2, takes=4),
     # The cry landing on each enemy: a short fiery blast; the built takes lay crackle or the
     # fire growl under a blast or a designed impact.
     "skill-infernal-cry-impact": [
@@ -532,12 +534,7 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         {"layers": [(_RUMBLE_BOOM, 0, -3, 0), (f"{_COLLAPSE_ROCK}@0.80:1.80", 0, -6, 60)]},
         {"layers": [(f"{_TRAILER_BOOM_075}@0.24:1.80", 0, -3, 0), (f"{_COLLAPSE_RUBBLE}@0:1.80", 0, -7, 40)]},
     ],
-    # Determination: plate and iron swelling up. A metallic riser and two rises of a gong.
-    "skill-determination-cast": [
-        f"{_METAL_RISER}@2.70:2.40",
-        f"{_GONG_RISER}@0.36:2.40",
-        f"{_GONG_RISER}@7.10:2.20",
-    ],
+    "skill-determination-cast": _buff_up(-3),
     # Sunder: the same two-hander as Earthquake a tone down, a stone cracking into a body
     # for the hit, and one rock burst per step of the line.
     "skill-sunder-cast": [
@@ -556,13 +553,7 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         {"layers": [(f"{_COLLAPSE_RUBBLE}@3.92:0.45", 0, -3, 0), (_IMPACT_059, -2, -8, 0)], "gain": -3},
         {"layers": [(f"{_COLLAPSE_RUBBLE}@4.52:0.40", 0, -3, 0), (_IMPACT_059, -4, -8, 0)]},
     ],
-    # Blood Rage: a charged-up roar with a heart thump under it (the box below, an octave
-    # of tape down). Take 3 is an angrier growl over the same thump.
-    "skill-blood-rage-cast": [
-        {"layers": [(_ORC_RAGE, 0, -3, 0), (f"{_BOX_THUMP}@0:0.62", -5, -8, 0)]},
-        {"layers": [(_ORC_RAGE, -2, -3, 0), (f"{_BOX_THUMP}@0:0.62", -7, -8, 0)]},
-        {"layers": [(f"{_GROWL}@0:2.00", 0, -3, 0), (f"{_BOX_THUMP}@0:0.62", -5, -8, 0)]},
-    ],
+    "skill-blood-rage-cast": _buff_up(-1),
 
     # ── Class skill expansion: Stalker ────────────────────────────────────────────
     # Four real looses exist (two Nocked bows, a crossbow, the Super Heroes shot), so a
@@ -632,12 +623,7 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         {"layers": [(_WOOD_DROP, 3, 0, 0)]},
         {"layers": [(f"{_SAIL_HIT}@0:0.40", 3, 0, 0)], "gain": -4},
     ],
-    # Haste: an airy riser climbing to 13 kHz with a bright shimmer struck at its top.
-    "skill-haste-cast": [
-        {"layers": [(f"{_AIR_RISER}@4.90:1.60", 0, 0, 0), (_SHIMMER, 0, -8, 1150)]},
-        {"layers": [(f"{_ENERGY_SWELL}@1.00:1.50", 0, 6, 0), (_SHIMMER, 2, -8, 750)]},
-        {"layers": [(f"{_AIR_RISER}@4.90:1.60", 2, 0, 0), (_SHIMMER, -2, -8, 960)]},
-    ],
+    "skill-haste-cast": _buff_up(2),
 
     # ── Class skill expansion: Emberbound ─────────────────────────────────────────
     # The bundle still holds no designed fire impact, so the fire cues are built: a fire
@@ -704,13 +690,8 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         {"layers": [(f"{_TRAILER_BOOM_214}@0.24:1.40", 0, -3, 0), (f"{_FIRE_BED}@6.50:0.90", 0, -10, 20)]},
         {"layers": [(f"{_FIREWORKS}@12.40:0.60", -4, -3, 0), (f"{_SUB_BOOM}@0.36:1.20", 0, -6, 0)]},
     ],
-    # Herald of Ash: a riser with fire crackling through it; a kill igniting is a pop of
-    # flame with crackle after.
-    "skill-herald-of-ash-cast": [
-        {"layers": [(f"{_DARK_RISER}@2.80:2.10", 0, -3, 0), (f"{_FIRE_BED}@0.50:2.10", 0, -8, 0)]},
-        {"layers": [(f"{_STRING_RISER}@3.40:1.80", 0, -3, 0), (f"{_FIRE_BED}@5.50:1.80", 0, -8, 0)]},
-        {"layers": [(_FIRE_GROWL, -5, 0, 0), (f"{_FIRE_BED}@8.50:1.60", 0, -10, 0)]},
-    ],
+    # Herald of Ash: a kill igniting is a pop of flame with crackle after.
+    "skill-herald-of-ash-cast": _buff_up(0),
     "skill-herald-of-ash-burst": [
         {"layers": [(f"{_FIREWORKS}@15.12:0.50", -3, 0, 0), (f"{_FIRE_BED}@2.20:0.60", 0, -8, 20)], "gain": 2},
         {"layers": [(f"{_LAUNCH}@0:0.70", 3, -3, 0), (f"{_FIRE_BED}@4.60:0.60", 0, -8, 0)]},
@@ -718,11 +699,11 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
     ],
 
     # ── Class skill expansion: shared aura and status cues ────────────────────────
-    # Any aura switched off: a charge-down that falls in level and brightness together
-    # (6.5 kHz to 2 kHz over a second), and the falling half of a gust a third down.
+    # Any aura switched off: one charge-down that falls in level and brightness together
+    # (6.5 kHz to 2 kHz over a second), its takes a semitone or two of tape apart.
     "skill-aura-off": [
         _CHARGE_DOWN,
-        {"layers": [(f"{_GUST}@1.40:1.80", -4, 0, 0)]},
+        {"layers": [(_CHARGE_DOWN, -1.5, 0, 0)]},
         {"layers": [(_CHARGE_DOWN, -3, 0, 0)]},
     ],
     "skill-status-chilled": [
