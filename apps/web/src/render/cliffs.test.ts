@@ -29,7 +29,7 @@ describe("cliffs", () => {
       }
       expect(bad, `${g} ${seed}`).toEqual([]);
     }
-  }, 30_000);
+  });
 
   it("rounds the corners of an obstacle", () => {
     // 36 square islands: the foot starts further in on a corner's diagonal than on

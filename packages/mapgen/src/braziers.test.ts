@@ -14,7 +14,7 @@ describe("brazierSpotsFor", () => {
         }
       }
     }
-  }, 30_000);
+  });
 
   it("leaves a body's width between a bowl and every rock in front of its wall", () => {
     // A 0.5 body is 1 wide; a rock a cell off the lane's diagonal shut the way past the bowl.
@@ -36,7 +36,7 @@ describe("brazierSpotsFor", () => {
         }
       }
     }
-  }, 30_000);
+  });
 
   it("never stands a bowl against a fen pool", () => {
     let wet = 0;

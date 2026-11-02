@@ -1,14 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { CLASS_IDS } from "@exiled/rules";
-import { campaign, summarize, type Summary } from "./playtest";
+import { summarize, type MapRun, type Summary } from "./playtest";
+import { campaigns } from "./playtest-parallel";
 
 /** Level 10 holds every class's level-8 area skill, which a level-1 map never sees. */
 describe("three maps at level 10 (bot)", () => {
   // Thirty, not ten: on ten, moving a few braziers swung the parity ratio 1.20 -> 1.31
   // while thirty seeds of the same code read 1.14.
   const PARITY_SEEDS = Array.from({ length: 30 }, (_, i) => i + 1);
-  const runs = Object.fromEntries(CLASS_IDS.map((c) => [c, PARITY_SEEDS.flatMap((s) => campaign(c, 400 + s, 3, {}, 10))]));
-  const sum = Object.fromEntries(CLASS_IDS.map((c) => [c, summarize(runs[c]!)])) as Record<string, Summary>;
+  let runs: Record<string, MapRun[]>;
+  let sum: Record<string, Summary>;
+  beforeAll(async () => {
+    const jobs = CLASS_IDS.flatMap((c) => PARITY_SEEDS.map((s) => ({ classId: c, seed: 400 + s, maps: 3, level: 10 })));
+    const played = await campaigns(jobs);
+    runs = Object.fromEntries(CLASS_IDS.map((c) => [c, played.filter((_, i) => jobs[i]!.classId === c).flat()]));
+    sum = Object.fromEntries(CLASS_IDS.map((c) => [c, summarize(runs[c]!)]));
+  }, 600_000);
 
   it.each(CLASS_IDS)("%s clears every map and rarely dies", (c) => {
     expect(sum[c]!.clearRate).toBe(1);

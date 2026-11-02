@@ -119,7 +119,7 @@ describe("pool-driven spawning", () => {
     };
     expect(heavies([])).toBe(0);
     expect(heavies(["node.the_wrackline"])).toBeGreaterThan(0);
-  }, 20_000);
+  });
 
   // Its rares now stand at the first pack (H1): on a level 1 map they keep their
   // life, element and name, and hit for half again a normal monster, not 2-3x.
@@ -141,7 +141,7 @@ describe("pool-driven spawning", () => {
     expect(first.length).toBeGreaterThan(0);
     for (const r of first) expect(r).toBeCloseTo(1.5, 2);
     for (const r of ratios(["node.the_wrackline"])) expect(r).toBeGreaterThanOrEqual(2);
-  }, 20_000);
+  });
 
   it("a socket holds that archetype's pack count", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });
@@ -276,7 +276,7 @@ describe("pool-driven spawning", () => {
       }
     }
     expect(stuck).toEqual([]);
-  }, 20_000);
+  });
 
   it("no two monsters of a map spawn on the same spot", () => {
     const stacked: string[] = [];
@@ -295,7 +295,7 @@ describe("pool-driven spawning", () => {
       }
     }
     expect(stacked).toEqual([]);
-  }, 20_000);
+  });
 
   // PoE2's rare-monster density (docs/09 section 2): two or three rares a map,
   // the first on the first pack the player meets, the rest spread down the route.
@@ -342,7 +342,7 @@ describe("pool-driven spawning", () => {
     }
     expect(bad).toEqual([]);
     expect([...counts].sort()).toEqual([2, 3]);
-  }, 30_000);
+  });
 
   // docs/09: variance is the mechanism. Each rare rolls its own theme, so two
   // rares of one size in one map can ask for different resistances.
@@ -365,7 +365,7 @@ describe("pool-driven spawning", () => {
       }
     }
     expect(mixed).toBeGreaterThan(0);
-  }, 30_000);
+  });
 
   it("one whole pack is magic: one species, never the rare's pack, the same pack for the same seed", () => {
     const magicOf = (mapSeed: number) => {
@@ -515,7 +515,7 @@ describe("areaCollision", () => {
       }
     }
     expect(near).toEqual([]);
-  }, 20_000);
+  });
 
   it("map: a container is solid, and its walls are still walls", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });

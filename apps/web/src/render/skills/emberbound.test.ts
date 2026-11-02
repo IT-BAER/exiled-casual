@@ -124,7 +124,7 @@ describe("Emberbound looks", () => {
     expect(counts(scene)).toEqual(warmed);
     expect(maxLights).toBe(1);
     expect(warmed.lights).toBe(0);
-  }, 20000);
+  });
 
   it("keeps the orb a small sun at its height for the ground's whole life, and fades it as the ground runs out", () => {
     const scene = newScene();

@@ -131,7 +131,7 @@ describe("Ironsworn looks", () => {
     expect(scene.meshes.length).toBe(meshesBefore);
     driveAll(scene, monster, true);
     expect(counts(scene)).toEqual(warm);
-  }, 20_000); // three full passes over every look
+  }); // three full passes over every look
 
   it("thumps the camera through the shared shake", () => {
     const scene = newScene();

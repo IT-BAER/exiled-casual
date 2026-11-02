@@ -221,7 +221,7 @@ describe("the Options route", () => {
     setKv(null);
     // 20s, not the default 5: this is the only test that boots the whole client
     // module graph, and it passes in 3.6s alone but not against a loaded machine.
-  }, 20000);
+  });
 });
 
 describe("graphics presets", () => {

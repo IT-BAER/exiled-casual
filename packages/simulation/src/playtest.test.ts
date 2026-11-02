@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { CLASS_IDS } from "@exiled/rules";
-import { newCharacter, playNextMap, summarize, type MapRun, type Summary } from "./playtest";
+import { summarize, type MapRun, type Summary } from "./playtest";
+import { campaigns } from "./playtest-parallel";
 
 /**
  * The owner's targets for a fresh character on its first tier-1 map, played by
@@ -11,11 +12,17 @@ import { newCharacter, playNextMap, summarize, type MapRun, type Summary } from 
  * the wide sweep in playtest-report-<class>.test.ts.
  */
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const firstMap = (classId: string, seed: number): MapRun => playNextMap(newCharacter(classId, seed))!;
 
 describe("first tier-1 map, fresh character (bot)", () => {
-  const runs = Object.fromEntries(CLASS_IDS.map((c) => [c, SEEDS.map((s) => firstMap(c, s))]));
-  const sum = Object.fromEntries(CLASS_IDS.map((c) => [c, summarize(runs[c]!)])) as Record<string, Summary>;
+  let runs: Record<string, MapRun[]>;
+  let sum: Record<string, Summary>;
+  // A one-map campaign is a fresh character's first map.
+  beforeAll(async () => {
+    const jobs = CLASS_IDS.flatMap((c) => SEEDS.map((s) => ({ classId: c, seed: s, maps: 1 })));
+    const played = await campaigns(jobs);
+    runs = Object.fromEntries(CLASS_IDS.map((c) => [c, played.filter((_, i) => jobs[i]!.classId === c).map((r) => r[0]!)]));
+    sum = Object.fromEntries(CLASS_IDS.map((c) => [c, summarize(runs[c]!)]));
+  }, 600_000);
 
   it.each(CLASS_IDS)("%s clears every map and rarely dies", (c) => {
     expect(sum[c]!.clearRate).toBe(1);

@@ -33,13 +33,13 @@ describe("assembleArea", () => {
       const layout = gen(seed);
       expect(layout.validationChecks.every((c) => c.passed), `seed ${seed}`).toBe(true);
     }
-  }, 30_000);
+  });
 
   it("assembles rather than falling back for the overwhelming majority of seeds", () => {
     let assembled = 0;
     for (let seed = 0; seed < 200; seed++) if (!gen(seed).usedFallback) assembled++;
     expect(assembled).toBeGreaterThan(190);
-  }, 30_000);
+  });
 
   it("has no wall facing floor across any tile seam", () => {
     // The stamp as matched, before softenWalls bites across a seam on purpose.
@@ -275,7 +275,7 @@ describe("assembleArea, open ground", () => {
         expect(best, `${grammar.id} seed ${seed}`).toBeLessThanOrEqual(8);
       }
     }
-  }, 30_000);
+  });
 
   it("breaks open ground with obstacles: never a screen of bare floor", () => {
     // PoE's open maps (reference-screenshots/map-layout-1.jpeg) are open ground
@@ -298,7 +298,7 @@ describe("assembleArea, open ground", () => {
         expect(widestSquare(grid.cells, grid.cols), `${grammar.id} seed ${seed}`).toBeLessThanOrEqual(widest);
       }
     }
-  }, 30_000);
+  });
 
   /** Cells of the 2x2 tile block holding the boss, plus a one-cell margin. */
   const bossBlock = (grammar: Grammar, seed: number) => {
@@ -346,7 +346,7 @@ describe("assembleArea, open ground", () => {
       }
       expect(bad, `seed ${seed}`).toEqual([]);
     }
-  }, 30_000);
+  });
 
   it("draws the edge of open ground ragged, never a long ruler-straight wall", () => {
     // Longest run of wall cells in one row or column that all face floor on the
@@ -382,7 +382,7 @@ describe("assembleArea, open ground", () => {
     }
     runs.sort((a, b) => a - b);
     expect(runs[20], "median").toBeLessThanOrEqual(12);
-  }, 30_000);
+  });
 
   it("leaves no seam wall or lattice post standing in open ground", () => {
     for (let seed = 0; seed < 30; seed++) {

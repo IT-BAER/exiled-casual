@@ -740,7 +740,7 @@ describe("creature instances", () => {
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
-  }, 30_000);
+  });
 
   /**
    * Where the blow lands rides in each strike's glTF extras as `blow`, seconds on
@@ -776,7 +776,7 @@ describe("creature instances", () => {
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
-  }, 30_000);
+  });
 
   /**
    * The blow sits on the contact. Whatever moves furthest in one frame on the
@@ -831,7 +831,7 @@ describe("creature instances", () => {
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
-  }, 30_000);
+  });
 
   /**
    * The owner's complaint as geometry: a sword "in the hand" that never swings.
@@ -927,7 +927,7 @@ describe("creature instances", () => {
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
-  }, 30_000);
+  });
 
   /**
    * A paused group still counts as started, so `start` on waking returned early
