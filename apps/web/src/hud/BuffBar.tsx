@@ -21,11 +21,11 @@ export const BUFF_ART: Record<string, { icon: string; name: string }> = {
   poison: { icon: "/textures/buffs/poison.webp", name: "Poisoned" },
   bleeding: { icon: "/textures/buffs/bleeding.webp", name: "Bleeding" },
   // The class skills' buffs (spec 2026-11-01): three auras, two timed.
-  infernal_cry: { icon: "/textures/buffs/infernal_cry.webp", name: "Infernal Cry" },
-  blood_rage: { icon: "/textures/buffs/blood_rage.webp", name: "Blood Rage" },
-  determination: { icon: "/textures/buffs/determination.webp", name: "Determination" },
-  haste: { icon: "/textures/buffs/haste.webp", name: "Haste" },
-  herald_of_ash: { icon: "/textures/buffs/herald_of_ash.webp", name: "Herald of Ash" },
+  infernal_cry: { icon: "/textures/buffs/infernal_cry.webp", name: "Furnace Roar" },
+  blood_rage: { icon: "/textures/buffs/blood_rage.webp", name: "Crimson Fury" },
+  determination: { icon: "/textures/buffs/determination.webp", name: "Iron Resolve" },
+  haste: { icon: "/textures/buffs/haste.webp", name: "Windstride" },
+  herald_of_ash: { icon: "/textures/buffs/herald_of_ash.webp", name: "Mantle of Embers" },
 };
 
 /** The statuses a class skill puts on a monster (TargetFrame), in the same frames. */

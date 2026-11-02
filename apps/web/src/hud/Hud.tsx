@@ -769,7 +769,8 @@ function Orb(props: {
             transition: "height 120ms linear",
           }}
         />
-        {/* Reserved by auras (PoE1): a dark cap down from the top that the liquid can never reach. */}
+        {/* Reserved by auras (PoE1: a grey section of the orb): the globe's own liquid, drained of
+            colour, from the top down to a lit seam. A flat dark cap read as mana missing. */}
         {reservedPct > 0 && (
           <div
             data-testid={`${fillTestId.replace(/-fill$/, "")}-reserved`}
@@ -779,8 +780,13 @@ function Orb(props: {
               right: 0,
               top: 0,
               height: `${Math.min(100, reservedPct)}%`,
-              background: "linear-gradient(to bottom, rgba(6,8,14,0.92), rgba(14,18,30,0.88))",
-              borderBottom: "1px solid rgba(120,140,190,0.45)",
+              backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(0,0,0,0) 60%), url(${art})`,
+              backgroundSize: `${ORB} ${ORB}, ${ORB} ${ORB}`,
+              // The art's lit middle band, whatever the cap's height: its crown and rim are near-black.
+              backgroundPosition: "center top, center center",
+              filter: "grayscale(1) brightness(1.4) contrast(1.1)",
+              borderBottom: "2px solid rgba(214,220,232,0.85)",
+              boxShadow: "0 2px 6px rgba(200,210,230,0.45), inset 0 -10px 14px rgba(255,255,255,0.12)",
               transition: "height 120ms linear",
             }}
           />

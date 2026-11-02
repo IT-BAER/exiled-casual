@@ -386,7 +386,7 @@ const SKILL_DEFS: SkillDef[] = [
   // ── Ironsworn ──
   {
     id: "skill.infernal_cry.v1",
-    name: "Infernal Cry",
+    name: "Furnace Roar",
     description: "A roar that drags every nearby enemy's attention to you and leaves them scorched, open to fire, while the fury lifts your own damage.",
     classId: "class.ironsworn",
     manaCostFixed: fp(10),
@@ -422,7 +422,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.leap_slam.v1",
-    name: "Leap Slam",
+    name: "Cratering Leap",
     description: "Leaps to the target and crashes down, battering everything where you land and throwing it back.",
     classId: "class.ironsworn",
     // Movement band: 15 mana, three seconds between leaps.
@@ -456,7 +456,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.earthquake.v1",
-    name: "Earthquake",
+    name: "Faultline",
     description: "Smashes the ground ahead; a second later the earth erupts around the impact, stunning everything it catches.",
     classId: "class.ironsworn",
     manaCostFixed: fp(20),
@@ -506,7 +506,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.determination.v1",
-    name: "Determination",
+    name: "Iron Resolve",
     description: "An aura of iron will: while it holds a quarter of your mana, you take less damage from every hit.",
     classId: "class.ironsworn",
     // An aura costs its reservation, not a cast: PoE1 auras are free to switch on.
@@ -526,7 +526,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.sunder.v1",
-    name: "Sunder",
+    name: "Earthsplitter",
     description: "Splits the earth in a rolling line of bursts along the aim.",
     classId: "class.ironsworn",
     manaCostFixed: fp(12),
@@ -562,7 +562,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.blood_rage.v1",
-    name: "Blood Rage",
+    name: "Crimson Fury",
     description: "Eight seconds of frenzy: you swing and run faster while your own blood burns away. It never kills you.",
     classId: "class.ironsworn",
     manaCostFixed: fp(15),
@@ -591,7 +591,7 @@ const SKILL_DEFS: SkillDef[] = [
   // ── Stalker ──
   {
     id: "skill.escape_shot.v1",
-    name: "Escape Shot",
+    name: "Vaulting Shot",
     description: "Hops backwards and looses a freezing arrow at the aim that bursts and chills.",
     classId: "class.stalker",
     manaCostFixed: fp(12),
@@ -622,13 +622,14 @@ const SKILL_DEFS: SkillDef[] = [
         // Our own: a 30% slow for two seconds, the room to get away.
         onHit: { statusId: "chilled", durationTicks: 60, slowPct: 30 },
       },
-      // PoE2 0.3.0: Escape Shot travels 6 m back (poe2db.tw), here in 0.3 s.
-      { type: "travel", distanceFixed: fp(6), ticks: 9, direction: "away" },
+      // PoE2 0.3.0: Escape Shot travels 6 m back (poe2db.tw), here in half a second
+      // (0.3 s read as a teleport, not a leap).
+      { type: "travel", distanceFixed: fp(6), ticks: 15, direction: "away" },
     ],
   },
   {
     id: "skill.ice_shot.v1",
-    name: "Ice Shot",
+    name: "Rime Arrow",
     description: "A frozen arrow that shatters on the first enemy, chilling everything around it.",
     classId: "class.stalker",
     manaCostFixed: fp(10),
@@ -662,7 +663,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.snipers_mark.v1",
-    name: "Sniper's Mark",
+    name: "Marked Prey",
     description: "Marks the enemy nearest the aim; it takes far more damage from everything while the mark lasts.",
     classId: "class.stalker",
     manaCostFixed: fp(10),
@@ -692,7 +693,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.lightning_arrow.v1",
-    name: "Lightning Arrow",
+    name: "Arcing Arrow",
     description: "A charged arrow that leaps from its target to three more enemies nearby.",
     classId: "class.stalker",
     manaCostFixed: fp(12),
@@ -729,7 +730,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.rain_of_arrows.v1",
-    name: "Rain of Arrows",
+    name: "Skyfall Volley",
     description: "Fires a volley skywards; twelve arrows fall scattered across the target area.",
     classId: "class.stalker",
     manaCostFixed: fp(20),
@@ -768,7 +769,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.haste.v1",
-    name: "Haste",
+    name: "Windstride",
     description: "An aura of speed: while it holds a quarter of your mana, you attack, cast and move faster.",
     classId: "class.stalker",
     manaCostFixed: 0,
@@ -788,7 +789,7 @@ const SKILL_DEFS: SkillDef[] = [
   // ── Emberbound ──
   {
     id: "skill.flame_dash.v1",
-    name: "Flame Dash",
+    name: "Blaze Step",
     description: "Dashes to the target in a rush of fire, leaving a trail of burning ground behind you.",
     classId: "class.emberbound",
     manaCostFixed: fp(12),
@@ -847,7 +848,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.flammability.v1",
-    name: "Flammability",
+    name: "Kindling Hex",
     description: "Curses an area: enemies in it take more fire damage.",
     classId: "class.emberbound",
     manaCostFixed: fp(15),
@@ -879,7 +880,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.solar_orb.v1",
-    name: "Solar Orb",
+    name: "Captive Sun",
     description: "Throws an orb of fire that hovers in place, pulsing flame through everything around it.",
     classId: "class.emberbound",
     manaCostFixed: fp(20),
@@ -914,7 +915,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.firestorm.v1",
-    name: "Firestorm",
+    name: "Skyfire",
     description: "Calls down ten meteors that crash at random across the target area.",
     classId: "class.emberbound",
     manaCostFixed: fp(25),
@@ -955,7 +956,7 @@ const SKILL_DEFS: SkillDef[] = [
   },
   {
     id: "skill.herald_of_ash.v1",
-    name: "Herald of Ash",
+    name: "Mantle of Embers",
     description: "An aura of cinders: while it holds a quarter of your mana, you deal more damage and every kill leaves burning ground.",
     classId: "class.emberbound",
     manaCostFixed: 0,

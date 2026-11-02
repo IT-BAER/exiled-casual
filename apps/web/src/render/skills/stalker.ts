@@ -265,17 +265,20 @@ const PHYS_ARROW: ArrowDecor = {
 /** A strand of live lightning: a white core tube in a feathered blue halo, sharing one jagged path. */
 interface Strand { core: Mesh; halo: Mesh; path: Vector3[]; r: number }
 
+/** The feathered halo round a bolt, as a multiple of its core: at 3.5 the bolts read as ropes. */
+const HALO = 2.6;
+
 function strand(scene: Scene, points: number, r: number): Strand {
   const path = Array.from({ length: points }, (_, i) => new Vector3(0, 0, i * 0.1));
   const tube = (name: string, radius: number, glow: Rgb, feather: boolean) => fxMesh(scene, MeshBuilder.CreateTube(name, {
     path, radius, tessellation: 4, cap: Mesh.NO_CAP, updatable: true,
   }, scene), addMat(scene, glow, feather));
-  return { core: tube("stalker-arc-core", r, [0.9, 0.95, 1], false), halo: tube("stalker-arc-halo", r * 3.5, SHOCK, true), path, r };
+  return { core: tube("stalker-arc-core", r, [0.9, 0.95, 1], false), halo: tube("stalker-arc-halo", r * HALO, SHOCK, true), path, r };
 }
 
 function relay(scene: Scene, s: Strand): void {
   s.core = MeshBuilder.CreateTube("stalker-arc-core", { path: s.path, radius: s.r, instance: s.core }, scene);
-  s.halo = MeshBuilder.CreateTube("stalker-arc-halo", { path: s.path, radius: s.r * 3.5, instance: s.halo }, scene);
+  s.halo = MeshBuilder.CreateTube("stalker-arc-halo", { path: s.path, radius: s.r * HALO, instance: s.halo }, scene);
 }
 
 interface LiveArcOptions {
@@ -371,7 +374,7 @@ function electricBody(scene: Scene, arrow: Mesh, head: () => Vector3): Fx {
   };
   const tail = new Vector3();
   const fx = new Fx(() => true, 0.06);
-  fx.child(liveArc(scene, () => along(1, tail), head, { r: 0.022, segs: 7, amp: 0.09 }));
+  fx.child(liveArc(scene, () => along(1, tail), head, { r: 0.016, segs: 7, amp: 0.09 }));
   let clock = 0;
   for (let k = 0; k < 2; k++) {
     const root = new Vector3(), tip = new Vector3();
@@ -441,7 +444,7 @@ const LIGHTNING_ARROW: ArrowDecor = {
     kitFlash(scene, src, 0.6, [0.6, 0.75, 1]);
     core(scene, src, 0.9, [0.7, 0.82, 1], SHOCK, 0.14);
     sparks(scene, src, 12, SHOCK_HOT, SHOCK, { speed: [2, 6], up: [0, 1], life: [0.1, 0.25], length: 0.2 });
-    return liveArc(scene, () => src, head, { r: 0.045, segs: 9, amp: 0.12, branch: true });
+    return liveArc(scene, () => src, head, { r: 0.026, segs: 9, amp: 0.12, branch: true });
   },
   flight(scene, arrow, head) {
     return electricBody(scene, arrow, head);
@@ -454,14 +457,14 @@ const LIGHTNING_ARROW: ArrowDecor = {
       for (let i = 0; i < 4; i++) {
         const a = (i / 4) * TAU + rand(-0.4, 0.4), d = rand(1, 1.5);
         const from = at.clone(), to = new Vector3(at.x + Math.sin(a) * d, 0.05, at.z + Math.cos(a) * d);
-        fire(scene, heldArc(scene, () => from, () => to, 0.15, { r: 0.022, segs: 6, amp: 0.18, branch: i % 2 === 0 }));
+        fire(scene, heldArc(scene, () => from, () => to, 0.15, { r: 0.016, segs: 6, amp: 0.18, branch: i % 2 === 0 }));
       }
     } else if (Math.hypot(src.x - at.x, src.z - at.z) > 0.3) {
       // The leap held a beat after it lands: thick, forked, bright at both ends.
       const a = src.clone(), b = at.clone();
       kitFlash(scene, a, 0.5, [0.6, 0.75, 1]);
       core(scene, a, 0.8, [0.7, 0.82, 1], SHOCK, 0.14);
-      fire(scene, heldArc(scene, () => a, () => b, 0.3, { r: 0.05, segs: 10, amp: 0.13, branch: true, rejag: 0.04 }));
+      fire(scene, heldArc(scene, () => a, () => b, 0.3, { r: 0.03, segs: 10, amp: 0.13, branch: true, rejag: 0.04 }));
     }
   },
 };
@@ -681,8 +684,8 @@ const CHILLED: StatusLook = {
 // ── Rain of Arrows ───────────────────────────────────────────────────────────────
 
 const VOLLEY_ARROWS = 9;
-/** Twice nocked size: at the game camera a true-size arrow falling is a hair. */
-const VOLLEY_ARROW_SCALE = 2;
+/** Over nocked size, so a falling arrow is no hair at the game camera; at twice it read as a spear. */
+const VOLLEY_ARROW_SCALE = 1.35;
 const volleyArrow = (scene: Scene): TransformNode => {
   const a = buildArrow(scene, "stalker-volley-arrow");
   a.scaling.setAll(VOLLEY_ARROW_SCALE);
@@ -709,7 +712,7 @@ const RAIN_CAST: CastLook = {
       for (let i = 0; i < VOLLEY_ARROWS; i++) {
         const to = new Vector3(hand.x + cast.dirX * rand(1.5, 3) + rand(-1.2, 1.2), 14, hand.z + cast.dirY * rand(1.5, 3) + rand(-1.2, 1.2));
         fire(scene, skyFall(scene, hand.clone(), to, {
-          speed: 24, delay: i * 0.025, body: volleyArrow, wake: VOLLEY_WAKE, wakeLength: 3, wakeWidth: 0.13, motes: 3, stick: 0,
+          speed: 24, delay: i * 0.025, body: volleyArrow, wake: VOLLEY_WAKE, wakeLength: 3, wakeWidth: 0.09, motes: 3, stick: 0,
         }));
       }
     };
@@ -761,7 +764,7 @@ const RAIN_AREA: AreaLook = {
     const drop = Math.min(flight, a.impactIn) * FALL_SPEED;
     const from = to.add(new Vector3(rand(-0.25, 0.25) * drop, drop, rand(-0.25, 0.25) * drop));
     fire(scene, skyFall(scene, from, to, {
-      speed: FALL_SPEED, delay: Math.max(0, a.impactIn - flight), body: volleyArrow, wake: VOLLEY_WAKE, wakeLength: 3.5, wakeWidth: 0.14, motes: 3, stick: 0.9,
+      speed: FALL_SPEED, delay: Math.max(0, a.impactIn - flight), body: volleyArrow, wake: VOLLEY_WAKE, wakeLength: 3.5, wakeWidth: 0.1, motes: 3, stick: 0.9,
     }));
     let set = falling.get(scene);
     if (!set) { set = new Set(); falling.set(scene, set); }
@@ -791,7 +794,7 @@ const RAIN_AREA: AreaLook = {
     const set = falling.get(scene);
     if (set && !set.delete(a.id)) {
       // Seen only once landed: a short drop so it still arrives as an arrow.
-      fire(scene, skyFall(scene, at.add(new Vector3(0, 2.5, 0)), at.clone(), { speed: FALL_SPEED, body: volleyArrow, wake: VOLLEY_WAKE, wakeLength: 1.5, wakeWidth: 0.14, stick: 0.9 }));
+      fire(scene, skyFall(scene, at.add(new Vector3(0, 2.5, 0)), at.clone(), { speed: FALL_SPEED, body: volleyArrow, wake: VOLLEY_WAKE, wakeLength: 1.5, wakeWidth: 0.1, stick: 0.9 }));
     }
     const first = a.index === 0;
     kitFlash(scene, at, first ? 0.6 : 0.25);
