@@ -61,9 +61,14 @@ MIN_RELEASE_MS = 140
 # Room in front of the transient. Enough that the attack is not clipped, short
 # enough that the cue still lands on the frame it is asked for.
 PRE_ROLL_MS = 12
-FADE_OUT_MS = 40
+# The release walk stops a take at RELEASE_FRACTION of its peak (about -22 dB), and a
+# 40 ms fade from there still read as the sound stopping: measured on the shipped set,
+# 86 of 412 cues ended within 30 dB of their peak.
+FADE_OUT_MS = 120
 # A take the cap cut while it still rang: 40 ms there is a sound stopping, not ending.
 CAP_FADE_MS = 250
+# Neither fade takes more than this share of the take, or a 0.25 s UI tick loses its body.
+FADE_MAX_SHARE = 0.35
 # Ceiling the shaped file may reach. Not 0: Opus is lossy and DOES overshoot the
 # sample values it was given — measured through the browser's own decoder, -1 dB came
 # back at +0.3 dBFS and -2 dB still clipped the sharpest footstep. That is a crackle
@@ -266,10 +271,11 @@ def trim(a: array.array, rate: int, max_s: float, channels: int = 1,
         for c in range(frame * channels, frame * channels + channels):
             cut[c] = int(cut[c] * k)
 
-    # Fade the tail, so a cut mid-decay is not a click.
-    fade = min(int(rate * (CAP_FADE_MS if capped else FADE_OUT_MS) / 1000), frames)
+    # Fade the tail, so a cut mid-decay is not a click. Squared, so it falls the way a
+    # decay does rather than in a straight line that holds level and then drops.
+    fade = min(int(rate * (CAP_FADE_MS if capped else FADE_OUT_MS) / 1000), int(frames * FADE_MAX_SHARE))
     for i in range(fade):
-        scale(frames - fade + i, 1.0 - i / fade)
+        scale(frames - fade + i, (1.0 - i / fade) ** 2)
     # And the first two milliseconds, for the same reason at the other end.
     lead = min(int(rate * 0.002), frames)
     for i in range(lead):
