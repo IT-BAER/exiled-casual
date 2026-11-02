@@ -57,3 +57,19 @@ the grass clump stretched up, coloured green to tan up each blade in COLOR_0. Th
 palette (its own lichen is lilac); the vaal set wears
 `apps/web/public/textures/tilesets/vaal_stone/wall_color.jpg` as a palette,
 except the bowl, which keeps its paint.
+
+## Hideout set
+
+Free BlenderKit assets, appended and re-dressed by `tools/build_props.py`, placed
+by `packages/content-runtime/src/hideout.ts`.
+
+| prop | source file | asset | licence |
+|---|---|---|---|
+| `candles` | `source/candles.blend` | Candles set (`09c1b548-e2fb-4f4b-aad1-e855d90e6986`) | royalty_free |
+| `bookshelf` | `source/bookshelf.blend` | Bookshelf (`6351b46f-ac67-44f5-a00b-e769b94bf215`) | royalty_free |
+| `cauldron` | `source/cauldron.blend` | Antique Iron Cauldron (`4df4c3e3-6afa-42b0-9e1a-1fb3fea5bc3a`) | royalty_free |
+| `grainSack` | `source/grain_sack.blend` | Grain Sack (`634ed247-031b-4028-8243-a0cd9cc11617`) | royalty_free |
+
+The candles wear flat colours (the source's wax and glass are shaders, not
+textures) with a cone flame per jar; the bookshelf wears the barrel's wood as a
+palette and is filled with books built in the script (the source ships it empty).

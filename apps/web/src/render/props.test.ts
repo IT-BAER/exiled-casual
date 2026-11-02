@@ -49,6 +49,7 @@ describe("props asset", () => {
     // The two the sim spawns, then the furniture render/hideout.ts places.
     expect(roots.map((n) => n.name)).toEqual(expect.arrayContaining([
       "mapDevice", "stash", "lootChest", "rug", "table", "bench", "crate", "barrel", "pillar", "brazier",
+      "candles", "bookshelf", "cauldron", "grainSack",
     ]));
   });
 
@@ -70,6 +71,7 @@ describe("props asset", () => {
     for (const wanted of [
       "brass_top", "brass_side", "chest_wood", "iron", "rug", "pillar_stone",
       "brazier_coal", "stash_chest", "loot_chest", "barrel_wood", "crate_wood",
+      "bookshelf", "cauldron", "grain_sack", "candle_wax", "candle_flame",
     ]) {
       expect(names).toContain(wanted);
     }

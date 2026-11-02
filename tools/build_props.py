@@ -1595,6 +1595,157 @@ def build_barrel():
     )
 
 
+# The hideout's lived-in set: free BlenderKit downloads (ids and licences in
+# assets/props/SOURCE.md), placed by content-runtime/hideout.ts. Real-world sizes:
+# the shelf is a 2-metre ladder unit and stands at the top edge of the frame,
+# where nothing is behind it to hide; everything else stays under a metre.
+BOOKSHELF_W = 0.60
+BOOKSHELF_BUDGET = {
+    "Cube.008": 760, "Cube.006": 570, "Cube.004": 570,
+    "Cube.002": 380, "Cube.001": 190, "Cube": 12,
+}
+CAULDRON_W = 0.62
+CAULDRON_BUDGET = {
+    "Сфера": 900, "Окружность": 400, "Цилиндр": 120,
+    "Окружность.001": 120, "Окружность.002": 100, "Окружность.003": 100,
+}
+GRAIN_SACK_W = 0.78
+GRAIN_SACK_BUDGET = {"Grain Sack": 900}
+# Three jars, a vase and a book, 0.18 across in the source: scaled up to a tabletop
+# cluster that still reads from nine metres. The source's flame is a two-triangle
+# card that collapses under decimation, so each jar gets a cone of its own.
+CANDLES_W = 0.42
+CANDLES_BUDGET = {
+    "candles in the glass": 360, "candles in the glass.001": 360,
+    "candles in the glass.002": 360, "vase": 320, "book-01.001": 160,
+}
+CANDLE_FLAME_SLOT = 3
+
+
+def build_bookshelf():
+    # The source's "Black wood" is grey at 0.17 and went to a black stick under the
+    # brazier light; it wears the barrel's stained oak instead.
+    _, carrier, parts = _scan("bookshelf", "bookshelf.blend", BOOKSHELF_BUDGET, "wood03_diffuse",
+                              BOOKSHELF_W, gain=1.1, roughness=0.8,
+                              palette=os.path.join(BUILD_DIR, "barrel_wood.jpg"))
+    _shelve_books(carrier, parts[:2])
+
+
+# Bound leather, sRGB. The source ships its shelves empty, and from above an empty
+# ladder shelf read as a zigzag sculpture; book tops in a row are what say "shelf".
+BOOK_COLOURS = [(0.46, 0.14, 0.10), (0.22, 0.32, 0.18), (0.44, 0.30, 0.16),
+                (0.20, 0.22, 0.34), (0.58, 0.48, 0.32)]
+
+
+def _shelve_books(carrier, units):
+    """Rows of books along every shelf board of `units`, in the carrier's (source) frame.
+
+    The shelf is a zigzag: every board runs at 45 degrees, so a book stands square
+    to its board and the row leans the way books in such a shelf do.
+    """
+    rng = random.Random(7)
+    mats = [flat_material(f"book_{i}", c, 0.8) for i, c in enumerate(BOOK_COLOURS)]
+    books = []
+    for unit in units:
+        m = unit.matrix_basis
+        rot = m.to_3x3()
+        boards = {}
+        for p in unit.data.polygons:
+            nrm = (rot @ p.normal).normalized()
+            if nrm.z < 0.5:
+                continue
+            key = (round(nrm.x, 1), round((m @ p.center).z, 1))
+            boards.setdefault(key, [nrm, []])[1].extend(m @ unit.data.vertices[i].co for i in p.vertices)
+        for nrm, vs in boards.values():
+            c = sum(vs, mathutils.Vector()) / len(vs)
+            t = mathutils.Vector((nrm.z, 0.0, -nrm.x)).normalized()
+            s0 = min((v - c).dot(t) for v in vs)
+            s1 = max((v - c).dot(t) for v in vs)
+            y0, y1 = min(v.y for v in vs), max(v.y for v in vs)
+            if s1 - s0 < 0.2 or y1 - y0 < 0.15:
+                continue  # a bevel strip or a board's end, not a shelf
+            yaw = math.atan2(nrm.x, nrm.z)
+            s = s0 + 0.03
+            while s < s1 - 0.06:
+                w = rng.uniform(0.025, 0.05)
+                if rng.random() < 0.12:  # a gap where a book is out being read
+                    s += w
+                    continue
+                h = rng.uniform(0.15, 0.24)
+                d = rng.uniform(0.16, min(0.22, y1 - y0 - 0.02))
+                book = box(f"bookshelf_book_{len(books)}", (0.0, 0.0, 0.0), (w, d, h))
+                book.location = c + t * (s + w / 2) + nrm * (h / 2) + mathutils.Vector((0.0, y1 - 0.01 - d / 2 - c.y, 0.0))
+                book.rotation_euler = (0.0, yaw, 0.0)
+                book.data.materials.append(rng.choice(mats))
+                book.parent = carrier
+                books.append(book)
+                s += w + 0.004
+    # One mesh, not eighty draw calls in a room that also holds two point lights.
+    with bpy.context.temp_override(active_object=books[0], selected_editable_objects=books):
+        bpy.ops.object.join()
+    books[0].name = "bookshelf_books"
+    print("bookshelf:", len(books), "books")
+
+
+def build_cauldron():
+    # Cast iron authored at 0.14 mean; metallic 0 here, so the gain is its only sheen.
+    _scan("cauldron", "cauldron.blend", CAULDRON_BUDGET, "BaseColor", CAULDRON_W,
+          gain=1.7, roughness=0.6)
+
+
+def build_grain_sack():
+    _scan("grainSack", "grain_sack.blend", GRAIN_SACK_BUDGET, "BaseColor", GRAIN_SACK_W,
+          gain=0.8, roughness=0.95, mat_name="grain_sack")
+
+
+def build_candles():
+    """The source's materials are glass and wax shaders, not textures: flat colours here.
+
+    Wax and jar glass emit well past the house 6% so the cluster glows at the table
+    the way a lit candle does; the flame cones are the brightest thing on it.
+    """
+    root = _root("candles")
+    root.rotation_euler = (0.0, 0.0, math.pi)  # front at -Y, see build_appended
+    parts = append_objects("candles.blend", list(CANDLES_BUDGET))
+    by_source = {
+        "Wax candle": flat_material("candle_wax", (0.93, 0.86, 0.70), 0.6, emit=0.3),
+        "Glass": flat_material("candle_glass", (0.86, 0.55, 0.24), 0.25, emit=0.5),
+        "Pavil candle": flat_material("candle_wick", (0.12, 0.10, 0.08), 0.9),
+        "Flame": None,
+        "Ceramica bege": flat_material("candle_vase", (0.72, 0.60, 0.46), 0.7),
+        "pages": flat_material("candle_pages", (0.86, 0.80, 0.66), 0.9),
+        "Books Cover": flat_material("candle_book", (0.42, 0.13, 0.09), 0.8),
+    }
+    flame = flat_material("candle_flame", (1.0, 0.80, 0.42), 0.9, emit=1.0)
+    flames = []
+    for obj in parts:
+        jar = obj.name.startswith("candles in the glass")
+        if jar:
+            bm = bmesh.new()
+            bm.from_mesh(obj.data)
+            bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.material_index == CANDLE_FLAME_SLOT],
+                             context="FACES")
+            bm.to_mesh(obj.data)
+            bm.free()
+        decimate_to(obj, CANDLES_BUDGET[obj.name])
+        for attr in list(obj.data.color_attributes):
+            obj.data.color_attributes.remove(attr)
+        for i, m in enumerate(obj.data.materials):
+            key = next(k for k in by_source if m.name.startswith(k))
+            obj.data.materials[i] = by_source[key] or flame
+        smooth_by_angle(obj, 40)
+        if jar:
+            ws = [obj.matrix_world @ v.co for v in obj.data.vertices]
+            cx = (min(w.x for w in ws) + max(w.x for w in ws)) / 2
+            cy = (min(w.y for w in ws) + max(w.y for w in ws)) / 2
+            top = max(w.z for w in ws)
+            cone_obj = cone(obj.name + "_flame", (cx, cy, top + 0.009), 0.009, 0.0, 0.026, "z", 8)
+            cone_obj.data.materials.append(flame)
+            flames.append(cone_obj)
+    _carry("candles", parts + flames, CANDLES_W).parent = root
+    return root
+
+
 def build_pillar(mats):
     """A broken column, not a whole one.
 
@@ -2212,6 +2363,10 @@ def main():
     build_bench(mats)
     build_barrel()  # before the crate: the crate is palettized onto its texture
     build_crate()
+    build_bookshelf()  # after the barrel: palettized onto its texture
+    build_cauldron()
+    build_grain_sack()
+    build_candles()
     build_pillar(mats)
     build_brazier(mats)
     build_drops(mats)

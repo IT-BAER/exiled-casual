@@ -11,11 +11,14 @@
  * Every piece is capped near a metre. The camera sits about 49 degrees above the
  * horizon, so a prop of height h hides roughly 0.87h of world behind it, and a
  * hideout you cannot see yourself in is worse than a bare one. The tallest thing
- * here is a broken column at 1.12.
+ * on the floor is a broken column at 1.12, bar the bookshelf: two metres, so it stands
+ * at the top edge of the frame where nothing is behind it to hide.
  */
 
 /** The `props.glb` kinds the hideout dresses itself with. */
-export type DecorKind = "rug" | "table" | "bench" | "crate" | "barrel" | "pillar" | "brazier";
+export type DecorKind =
+  | "rug" | "table" | "bench" | "crate" | "barrel" | "pillar" | "brazier"
+  | "candles" | "bookshelf" | "cauldron" | "grainSack";
 
 export interface Decor {
   kind: DecorKind;
@@ -24,6 +27,8 @@ export interface Decor {
   z: number;
   /** Radians about Y. See SCREEN_SQUARE for what to measure it against. */
   yaw: number;
+  /** Height it stands at, for a piece set on other furniture; the floor if absent. */
+  y?: number;
 }
 
 /**
@@ -73,6 +78,9 @@ function at(sx: number, sy: number): { x: number; z: number } {
  * behind the life and mana globes, so the columns take the top corners and the
  * mid-flanks instead.
  */
+/** The table's top, from `build_table` in tools/build_props.py. */
+const TABLE_TOP = 0.83;
+
 export const HIDEOUT_DECOR: readonly Decor[] = [
   // A table with a bench either side, down on the left where nothing else is.
   { kind: "table", ...at(-6.0, -1.2), yaw: SCREEN_SQUARE },
@@ -107,6 +115,16 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
   { kind: "brazier", ...at(-7.4, 3.4), yaw: 0 },
   { kind: "brazier", ...at(7.4, 3.2), yaw: 0 },
   { kind: "brazier", ...at(0, -4.0), yaw: 0 },
+  // Lived in. Candles at both ends of the table, on its 0.83 top; a bookshelf
+  // behind the stash, by the left fire; sacks of grain with the stores on both
+  // flanks; a cauldron by the right fire. All on the flanks, off every walk.
+  { kind: "candles", ...at(-6.8, -1.2), yaw: SCREEN_SQUARE + 0.4, y: TABLE_TOP },
+  { kind: "candles", ...at(-5.2, -1.25), yaw: SCREEN_SQUARE - 0.7, y: TABLE_TOP },
+  { kind: "bookshelf", ...at(-6.3, 3.8), yaw: SCREEN_SQUARE },
+  { kind: "grainSack", ...at(-7.5, 2.5), yaw: SCREEN_SQUARE + 0.3 },
+  { kind: "grainSack", ...at(-7.0, -2.5), yaw: SCREEN_SQUARE - 0.5 },
+  { kind: "grainSack", ...at(6.9, -0.2), yaw: SCREEN_SQUARE + 0.8 },
+  { kind: "cauldron", ...at(7.2, 2.3), yaw: 0.6 },
 ];
 
 /**
@@ -136,6 +154,11 @@ const FOOTPRINT: Record<DecorKind, readonly (readonly [number, number, number])[
   barrel: [[0, 0, 0.2]],
   pillar: [[0, 0, 0.3]],
   brazier: [[0, 0, 0.2]],
+  // On the table, whose discs already stop the player.
+  candles: [],
+  bookshelf: [[-0.15, 0, 0.2], [0.15, 0, 0.2]],
+  cauldron: [[0, 0, 0.22]],
+  grainSack: [[0, 0, 0.25]],
 };
 
 /**

@@ -27,6 +27,7 @@ export const HIDEOUT_FIRES: readonly FireSpot[] = HIDEOUT_DECOR
 const DECOR_BLOBS: Partial<Record<PropKind, [number, number]>> = {
   table: [1.25, 0.7], bench: [0.7, 0.35], crate: [0.5, 0.5],
   barrel: [0.42, 0.42], pillar: [0.55, 0.55], brazier: [0.5, 0.5],
+  bookshelf: [0.55, 0.35], cauldron: [0.45, 0.45], grainSack: [0.55, 0.4],
 };
 
 /** The dark band around the walkable floor. Named apart from the decor, which a
@@ -110,7 +111,7 @@ export function buildHideoutDecor(scene: Scene): void {
   for (let i = 0; i < HIDEOUT_DECOR.length; i++) {
     const d = HIDEOUT_DECOR[i]!;
     const root = new Mesh(`${DECOR_PREFIX}${i}`, scene);
-    root.position.set(d.x, 0, d.z);
+    root.position.set(d.x, d.y ?? 0, d.z);
     root.rotation.y = d.yaw;
     root.isPickable = false;
     // Shared: furniture has no hover state, and the room stands a dozen of these

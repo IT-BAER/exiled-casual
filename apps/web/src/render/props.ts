@@ -40,6 +40,8 @@ export const PROP_KINDS = [
   // box and a lathe (meshes.ts still greyboxes all three when the fetch fails).
   "lootChest",
   "rug", "table", "bench", "crate", "barrel", "pillar",
+  // The hideout's lived-in set, placed by content-runtime/hideout.ts.
+  "candles", "bookshelf", "cauldron", "grainSack",
   // The beach set, placed by render/level.ts along a coast's shoreline.
   "driftwood", "shell", "coastRock", "wreckTimber", "bones",
   // The desert set, placed by render/level.ts over open ground.
