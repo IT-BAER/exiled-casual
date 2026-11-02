@@ -7,7 +7,7 @@ import { ITEM_POOLS, baseOf, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runti
 import { waystoneRarity } from "@exiled/rules";
 import { Profiler } from "react";
 import { InventoryPanel } from "./InventoryPanel";
-import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
+import { CARTOGRAPHER_NAME, CARTOGRAPHER_TITLE, VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { playSfx } from "../audio/sfx";
 
 vi.mock("../audio/sfx", async (orig) => ({ ...(await orig<typeof import("../audio/sfx")>()), playSfx: vi.fn() }));
@@ -1160,5 +1160,44 @@ describe("comparing with what is worn", () => {
     fireEvent.mouseLeave(screen.getByTestId("inventory-item-0"));
     fireEvent.mouseEnter(screen.getByTestId("equip-slot-helmet"), { clientX: 100, clientY: 100 });
     expect(tips()).toEqual([expect.stringContaining("Old Cowl")]);
+  });
+});
+
+describe("InventoryPanel - the cartographer's table", () => {
+  const table = {
+    cols: 12, rows: 8,
+    items: [
+      { x: 0, y: 0, w: 1, h: 1, rarity: "magic" as const, name: "Waystone (Tier 3)", itemClass: "waystone", baseId: "map.waystone", lines: [], price: 512 },
+      { x: 1, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Waystone (Tier 2)", itemClass: "waystone", baseId: "map.waystone", lines: [], price: 192 },
+    ],
+  };
+  const stones = { cols: 12, rows: 5, items: [{ x: 3, y: 1, w: 1, h: 1, rarity: "rare" as const, name: "Waystone (Tier 4)", itemClass: "waystone", baseId: "map.waystone", lines: [] }] };
+
+  it("is Maren's window: her name, her trade, and a price on every stone", () => {
+    render(<InventoryPanel inventory={inv} vendorOpen shop="maps" vendor={table} gold={600} onClose={() => {}} />);
+    const text = screen.getByTestId("vendor-panel").textContent;
+    expect(text).toContain(CARTOGRAPHER_NAME);
+    expect(text).toContain(CARTOGRAPHER_TITLE);
+    expect(text).not.toContain(VENDOR_NAME);
+    expect(screen.getByTestId("vendor-price-0").textContent).toBe("512");
+    expect(screen.getByTestId("vendor-price-1").textContent).toBe("192");
+  });
+
+  it("buys and sells at her counter, naming it on the intent", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={stones} vendorOpen shop="maps" vendor={table} gold={600} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent.pointerDown(screen.getByTestId("vendor-item-0"));
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
+    expect(intents).toEqual([{ kind: "buyItem", x: 0, y: 0, shop: "maps" }, { kind: "sellItem", x: 3, y: 1, shop: "maps" }]);
+  });
+
+  it("will not offer her anything but a waystone, and says so", () => {
+    const intents: unknown[] = [];
+    render(<InventoryPanel inventory={inv} vendorOpen shop="maps" vendor={table} gold={600} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
+    fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
+    dragFrom(screen.getByTestId("inventory-item-0"));
+    fireEvent.pointerUp(screen.getByTestId("vendor-cell-5-5"));
+    expect(intents).toEqual([]);
+    expect(screen.getByTestId("vendor-sell-note").textContent).toMatch(/waystone/i);
   });
 });

@@ -1,8 +1,8 @@
-import { baseOf, isCurrency, canonicalBaseId, currencyItem } from "@exiled/content-runtime";
-import { disenchantYield, SHARDS_PER_ORB, vendorBuyPrice, vendorSellPrice } from "@exiled/rules";
+import { baseOf, isCurrency, isWaystone, canonicalBaseId, currencyItem } from "@exiled/content-runtime";
+import { cartographerPrice, disenchantYield, CARTOGRAPHER_ROTATE_TICKS, SHARDS_PER_ORB, vendorBuyPrice, vendorSellPrice } from "@exiled/rules";
 import { SORT_MODES } from "@exiled/protocol";
 import { Simulation } from "../loop";
-import { isStaple, recordSale, unpayShards } from "../vendor";
+import { isStaple, recordSale, restockMapShop, unpayShards } from "../vendor";
 import { placeFirstFit, canPlaceAt, sortInventory } from "../inventory";
 import { canEquip } from "../equipment";
 import { recomputePlayerStats } from "../derived";
@@ -13,6 +13,12 @@ export function registerEquipmentSystem(sim: Simulation): void {
   sim.register("equipment", (world, tick, commands) => {
     const sessionE = world.query("session")[0];
     if (sessionE === undefined) return;
+
+    // The cartographer turns her table over every ten minutes, before this tick's
+    // trades, so a purchase on the boundary is from the new stones.
+    if (tick > 0 && tick % CARTOGRAPHER_ROTATE_TICKS === 0) {
+      restockMapShop(world, sessionE, world.get<ProgressC>(sessionE, "progress")?.level ?? 1, tick);
+    }
 
     for (const cmd of commands) {
       if (cmd.entity === undefined) continue;
@@ -167,6 +173,8 @@ export function registerEquipmentSystem(sim: Simulation): void {
 
         const placed = container.items.find((p) => p.x === x && p.y === y);
         if (!placed) continue;
+        // `shop` 1 is the cartographer, who deals in waystones and nothing else.
+        if (cmd.data?.["shop"] === 1 && !isWaystone(placed.item)) continue;
 
         // Gold is what the counter always pays; shards are the extra a magic or
         // better piece breaks down into. A refusal is a refusal on both — the two
@@ -226,13 +234,16 @@ export function registerEquipmentSystem(sim: Simulation): void {
         const y = cmd.data?.["y"];
         if (x === undefined || y === undefined) continue;
 
-        const shelf = world.get<VendorC>(sessionE, "vendor");
+        // `shop` 1 is the cartographer's table, 0 (or absent) the vendor's shelf.
+        const maps = cmd.data?.["shop"] === 1;
+        const shelfComp = maps ? "mapShop" : "vendor";
+        const shelf = world.get<VendorC>(sessionE, shelfComp);
         if (!shelf) continue;
         const stocked = shelf.items.find((p) => p.x === x && p.y === y);
         if (!stocked) continue;
 
         const prog = world.get<ProgressC>(sessionE, "progress")!;
-        const price = vendorBuyPrice(stocked.item);
+        const price = maps ? cartographerPrice(stocked.item) : vendorBuyPrice(stocked.item);
         if (prog.gold < price) continue; // cannot afford it; the shelf keeps the piece
 
         // Room before money: a purchase that cannot be carried must not be charged
@@ -258,7 +269,7 @@ export function registerEquipmentSystem(sim: Simulation): void {
         // A staple's cell is a price tag, not a unit: buying one leaves it on the
         // shelf, because the shop is where the way home comes from (vendor.ts).
         if (!isStaple(stocked.item)) {
-          world.set<VendorC>(sessionE, "vendor", {
+          world.set<VendorC>(sessionE, shelfComp, {
             ...shelf,
             items: shelf.items.filter((p) => !(p.x === x && p.y === y)),
           });

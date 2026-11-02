@@ -8,6 +8,7 @@ import {
   Material,
   Mesh,
   MeshBuilder,
+  PBRMaterial,
   ShaderMaterial,
   StandardMaterial,
   Texture,
@@ -21,7 +22,7 @@ import { attachProp, type PropKind } from "./props";
 import { attachCreature, creatureSpecies, type CreatureRig } from "./monsters";
 import { attachArrowStreak, attachBoltTrail, attachCinderFX, buildArrow, CINDER_DISC_ALPHA, cinderGlow, PROJECTILE_ARROW_SCALE, setStreakLength, SKILL_FX } from "./skill-fx";
 import { projectileProfiles, skillFx, skillLook } from "./skills";
-import { attachRig, isBody, rigOf, type Looks, type RigParts } from "./rig";
+import { attachRig, isBody, rigOf, type Looks, type RigActor, type RigParts } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { attachGroundModel, GROUND_LOOK_BASES } from "./ground-looks";
 import { groundMaterial } from "./ground-fx";
@@ -30,7 +31,7 @@ import { BROOD_ABILITY } from "./boss-tells";
 import { playSfxAt } from "../audio/sfx";
 import type { SnapshotEntity } from "@exiled/protocol";
 
-export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "telegraphLane" | "telegraphRing" | "broodMark" | "chargePath" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
+export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "telegraphLane" | "telegraphRing" | "broodMark" | "chargePath" | "portal" | "mapDevice" | "stash" | "vendor" | "cartographer" | "container" | "groundItem" | "gold";
 
 /**
  * Y-lift off the ground plane per kind (render only). The authored actors
@@ -57,6 +58,7 @@ const Y_LIFT: Record<MeshKind, number> = {
   mapDevice: 0,
   stash: 0,
   vendor: 0,
+  cartographer: 0,
   container: 0,
   // small floor-level beacon marker
   groundItem: 0.15,
@@ -1898,6 +1900,11 @@ export function updateStash(root: Mesh, hovered: boolean): void {
  * warming them on hover would light the player up too.
  */
 function buildVendor(scene: Scene, root: Mesh): void {
+  buildNpc(scene, root, "vendor", VENDOR_LOOKS);
+}
+
+/** A hideout person: contact blob, hover ring and the wardrobe rig in `looks`. */
+function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", looks: Looks): RigActor | null {
   // He is a man standing on a floor before he is a thing to click, and the mark
   // below is a hover cue, not a shadow. While the sun cast, that read fine; with
   // it gone the ring was the only thing under him and it looked like a contact
@@ -1927,13 +1934,50 @@ function buildVendor(scene: Scene, root: Mesh): void {
 
   // The man himself. Null when the models have not loaded (headless tests, a
   // failed fetch), which leaves the ring standing on its own.
-  const rig = attachRig(scene, root);
+  const rig = attachRig(scene, root, isBody(looks.base) ? looks.base : "male");
   if (rig) {
-    rig.setLooks(VENDOR_LOOKS);
+    rig.setLooks(looks);
     rig.setLocomotion(0); // stand and breathe; he never goes anywhere
   }
 
-  root.metadata = { markMat, interactKind: "vendor", ...(rig ? { rig } : {}) };
+  root.metadata = { markMat, interactKind: kind, ...(rig ? { rig } : {}) };
+  return rig;
+}
+
+/**
+ * Maren, the cartographer: the female body in the Stalker leathers, bare-headed
+ * so her hair shows. A traveller's kit, and nothing like Varkis's robe.
+ */
+export const CARTOGRAPHER_LOOKS: Looks = looksForEquipment({
+  chest: { baseId: "base.stalker_leathers" },
+  gloves: { baseId: "base.stalker_gloves" },
+  boots: { baseId: "base.stalker_boots" },
+}, "female");
+
+/** Her hair colour, linear like the glTF base colour it replaces (the pack's brown is 0.34, 0.19, 0.10). */
+export const CARTOGRAPHER_HAIR = new Color3(0.6, 0.05, 0.02);
+
+/**
+ * The cartographer. Her hair and brows get material CLONES tinted red: the
+ * wardrobe's materials are shared by every rig built from it, the player's too.
+ */
+function buildCartographer(scene: Scene, root: Mesh): void {
+  if (!buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS)) return;
+  const clones = new Map<Material, Material>();
+  for (const mesh of root.getChildMeshes()) {
+    const [slot, , part] = mesh.name.split(".");
+    if (slot !== "base" || (part !== "hair" && part !== "brows") || !mesh.material) continue;
+    let tinted = clones.get(mesh.material);
+    if (!tinted) {
+      tinted = mesh.material.clone(`${root.name}-${part}`)!;
+      if (tinted instanceof PBRMaterial) tinted.albedoColor = CARTOGRAPHER_HAIR.clone();
+      else if (tinted instanceof StandardMaterial) tinted.diffuseColor = CARTOGRAPHER_HAIR.clone();
+      clones.set(mesh.material, tinted);
+    }
+    mesh.material = tinted;
+  }
+  // Clones are hers alone, so they go with her; the rig's own teardown keeps the shared ones.
+  root.onDisposeObservable.addOnce(() => { for (const m of clones.values()) m.dispose(false, false); });
 }
 
 /** The disenchanter wears the whole Ember set, a robed caster, and holds nothing. */
@@ -2147,6 +2191,12 @@ function buildMesh(
   if (kind === "vendor") {
     const root = new Mesh(name, scene);
     buildVendor(scene, root);
+    return root;
+  }
+
+  if (kind === "cartographer") {
+    const root = new Mesh(name, scene);
+    buildCartographer(scene, root);
     return root;
   }
 

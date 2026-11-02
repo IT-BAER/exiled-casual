@@ -15,3 +15,10 @@
  */
 export const VENDOR_NAME = "Varkis";
 export const VENDOR_TITLE = "the Disenchanter";
+
+/**
+ * The cartographer, who trades in waystones and nothing else. Her own names for
+ * her own job: PoE's map-giver is not borrowed by name.
+ */
+export const CARTOGRAPHER_NAME = "Maren";
+export const CARTOGRAPHER_TITLE = "Cartographer";

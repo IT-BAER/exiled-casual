@@ -13,7 +13,7 @@ import { MAP_INSET_VW, MAP_VW } from "./Minimap";
 import { TargetFrame } from "./TargetFrame";
 import { playDropSound } from "../audio/drop-sound";
 import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_ACTIONS, SKILL_SLOT_COUNT, keyCap, type ControlMode, type Keybinds } from "../settings";
-import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
+import { CARTOGRAPHER_NAME, CARTOGRAPHER_TITLE, VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import type { FrameHook, Projector } from "./LootLabels";
 
 // Bottom HUD geometry, measured off reference-screenshots/poe1-lower-bar.png, a 2558x388 crop
@@ -952,7 +952,7 @@ function Orb(props: {
  * NpcLabels keeps at 2.15.
  */
 const LABEL_HEIGHT: Partial<Record<Snapshot["entities"][number]["kind"], number>> = {
-  portal: 2.55, mapDevice: 1.25, stash: 1.05, vendor: 2.7,
+  portal: 2.55, mapDevice: 1.25, stash: 1.05, vendor: 2.7, cartographer: 2.7,
 };
 
 export function Hud({
@@ -1207,7 +1207,7 @@ export function Hud({
   const hoveredEntity =
     hoveredEntityId !== null
       ? snapshot.entities.find(
-          (e) => e.id === hoveredEntityId && (e.kind === "portal" || e.kind === "mapDevice" || e.kind === "stash" || e.kind === "vendor"),
+          (e) => e.id === hoveredEntityId && (e.kind === "portal" || e.kind === "mapDevice" || e.kind === "stash" || e.kind === "vendor" || e.kind === "cartographer"),
         )
       : undefined;
   const hoverLabel = hoveredEntity
@@ -1216,6 +1216,8 @@ export function Hud({
       : hoveredEntity.kind === "vendor"
       // A person, not a service. "Vendor" is a job title on a form.
       ? `${VENDOR_NAME}, ${VENDOR_TITLE}`
+      : hoveredEntity.kind === "cartographer"
+      ? `${CARTOGRAPHER_NAME}, ${CARTOGRAPHER_TITLE}`
       : hoveredEntity.kind === "mapDevice"
       ? "Map Device"
       : snapshot.area === "hideout"

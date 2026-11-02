@@ -13,6 +13,12 @@ import type { AreaLayout } from "@exiled/mapgen";
  */
 export type ContainerId = "backpack" | "stash" | "vendor" | "buyback";
 
+/**
+ * Whose counter a `buyItem` or `sellItem` is at. Absent is the disenchanter;
+ * `maps` is the cartographer, who sells off her own table and buys only waystones.
+ */
+export type ShopId = "maps";
+
 export type Intent =
   /** `routed`: a walk to a thing the player picked (monster, loot, portal), routed past a plain click's cap. */
   | { kind: "moveTo"; x: Fixed; y: Fixed; routed?: true }
@@ -55,13 +61,13 @@ export type Intent =
    * Sell the item whose ORIGIN cell is (x,y) to the disenchanter. `from` defaults
    * to the backpack, matching moveItem's convention so the two share a read path.
    */
-  | { kind: "sellItem"; x: number; y: number; from?: ContainerId }
+  | { kind: "sellItem"; x: number; y: number; from?: ContainerId; shop?: ShopId }
   /**
    * Buy the vendor's stock item whose ORIGIN cell on the shelf is (x,y). The sim
    * re-checks the price against the purse and the backpack for room, so a client
    * that shows a piece it cannot afford can still only ever be told no.
    */
-  | { kind: "buyItem"; x: number; y: number }
+  | { kind: "buyItem"; x: number; y: number; shop?: ShopId }
   /**
    * Undo the sale whose ORIGIN cell on the buyback page is (x,y): the piece comes
    * back for the gold it fetched, and the shards it paid come off the counter.
@@ -259,7 +265,7 @@ export type ToWorker = ToWorker_Init | ToWorker_Intent | ToWorker_Spawn | ToWork
 
 export interface SnapshotEntity {
   id: number;
-  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "skillArea" | "portal" | "mapDevice" | "stash" | "vendor" | "container" | "groundItem" | "gold";
+  kind: "monster" | "projectile" | "groundArea" | "telegraph" | "skillArea" | "portal" | "mapDevice" | "stash" | "vendor" | "cartographer" | "container" | "groundItem" | "gold";
   x: number; y: number;
   radius?: number;
   life?: number; maxLife?: number;
@@ -549,6 +555,11 @@ export interface Snapshot {
     cols: number; rows: number;
     items: (DisplayItem & { x: number; y: number; w: number; h: number; count?: number; price: number })[];
   };
+  /** The cartographer's table, the vendor's display shape, priced at her markup. Absent without a session. */
+  mapShop?: {
+    cols: number; rows: number;
+    items: (DisplayItem & { x: number; y: number; w: number; h: number; count?: number; price: number })[];
+  };
   /**
    * The vendor's buyback page: pieces sold since his last restock, each priced at
    * the gold it fetched. `refused` marks one whose shard payout already became an
@@ -774,16 +785,21 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent sellItem: y must be an integer");
       if (obj["from"] !== undefined && obj["from"] !== "backpack" && obj["from"] !== "stash")
         throw new Error("validateIntent sellItem: from must be \"backpack\" or \"stash\"");
+      if (obj["shop"] !== undefined && obj["shop"] !== "maps")
+        throw new Error("validateIntent sellItem: shop must be \"maps\"");
       return {
         kind: "sellItem",
         x: obj["x"] as number, y: obj["y"] as number,
         ...(obj["from"] !== undefined ? { from: obj["from"] as ContainerId } : {}),
+        ...(obj["shop"] !== undefined ? { shop: "maps" as const } : {}),
       };
     }
     case "buyItem": {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent buyItem: x must be an integer");
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent buyItem: y must be an integer");
-      return { kind: "buyItem", x: obj["x"] as number, y: obj["y"] as number };
+      if (obj["shop"] !== undefined && obj["shop"] !== "maps")
+        throw new Error("validateIntent buyItem: shop must be \"maps\"");
+      return { kind: "buyItem", x: obj["x"] as number, y: obj["y"] as number, ...(obj["shop"] !== undefined ? { shop: "maps" as const } : {}) };
     }
     case "buybackItem": {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent buybackItem: x must be an integer");

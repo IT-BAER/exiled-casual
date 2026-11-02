@@ -1266,3 +1266,32 @@ describe("attachBindings attack-move (mouse mode)", () => {
     expect(feed(snapWith(monster(1, 0)))).toEqual([]);
   });
 });
+
+describe("attachBindings cartographer", () => {
+  function fakeNpcScene(entityId: number, kind: string): Scene {
+    const root = { name: `entity-${entityId}`, metadata: { interactKind: kind }, parent: null };
+    const childMesh = { name: `entity-${entityId}-body`, metadata: null, parent: root };
+    return {
+      createPickingRay: () => downRay(5, 7),
+      pick: () => ({ hit: true, pickedPoint: { x: 5, z: 7 }, pickedMesh: childMesh }),
+    } as unknown as Scene;
+  }
+
+  it("walking up to Maren opens the shop window on her table, and walking off closes it", () => {
+    const canvas = document.createElement("canvas");
+    document.body.appendChild(canvas);
+    const worker = { postMessage: vi.fn() };
+    const onOpenVendor = vi.fn();
+    const { detach, onSnapshot } = attachBindings(
+      canvas, worker as unknown as Worker, fakeNpcScene(9, "cartographer"), undefined, undefined, undefined, onOpenVendor,
+    );
+    canvas.dispatchEvent(new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50, bubbles: true }));
+    onSnapshot(makeSnap([{ id: 9, kind: "cartographer", inRange: true }]));
+    expect(onOpenVendor).toHaveBeenLastCalledWith(true, "maps");
+    expect(intentCount(worker.postMessage, "interact")).toBe(0);
+    onSnapshot(makeSnap([{ id: 9, kind: "cartographer", inRange: false }]));
+    expect(onOpenVendor).toHaveBeenLastCalledWith(false);
+    detach();
+    canvas.remove();
+  });
+});

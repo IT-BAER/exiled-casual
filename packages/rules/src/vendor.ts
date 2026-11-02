@@ -4,6 +4,8 @@
 import type { Item, ItemPools, Rarity } from "@exiled/content-schema";
 import { CURRENCY_IDS } from "./currency.js";
 import { rollItem } from "./items.js";
+import { waystoneRarity } from "./waystone.js";
+import { areaLevel, WAYSTONE_MAX_TIER, type Waystone } from "./atlas.js";
 
 function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
@@ -37,6 +39,11 @@ const RARITY_MULT: Record<Item["rarity"], number> = { normal: 1, magic: 4, rare:
 
 /** Gold to buy this item out of the vendor's stock. */
 export function vendorBuyPrice(item: Item): number {
+  // A waystone's own rarity and item level are blanks (content-runtime
+  // `waystoneItem`): what it is worth is the rarity its seed rolls and the area
+  // level its tier opens, so the stone is priced as that item would be.
+  const { waystone, ...rest } = item;
+  if (waystone) return vendorBuyPrice({ ...rest, rarity: waystoneRarity(waystone.seed), itemLevel: areaLevel(waystone.tier) });
   // Linear in item level rather than a curve: a level 85 base costs 5x a level 1
   // one, which keeps late shopping meaningful without pricing it out of reach.
   const decades = Math.trunc(Math.max(0, item.itemLevel) / 10);
@@ -53,6 +60,8 @@ export function vendorBuyPrice(item: Item): number {
 export function vendorSellPrice(item: Item): number {
   if (CURRENCY_IDS.includes(item.baseId)) return 0;
   if (item.unidentified === true) return 0;
+  // Every load hands the permanent stone back, so buying it would mint gold.
+  if (item.waystone?.permanent === true) return 0;
   // Floor of one coin: an item the shop accepts always pays something, or the
   // player learns to stop offering and the sell half of the window goes dead.
   return Math.max(1, Math.trunc((vendorBuyPrice(item) * VENDOR_MARGIN_PCT) / 100));
@@ -107,6 +116,53 @@ export function rollVendorStock(pools: ItemPools, seed: number, level: number, o
     // reveal — that beat belongs to the drop (docs/09 rule 1).
     delete item.unidentified;
     stock.push(item);
+  }
+  return stock;
+}
+
+/**
+ * What the cartographer asks over the counter's own price for the same stone.
+ * Steep on purpose: a bought stone is a map the player did not have to earn, and
+ * the stones a cleared map hands back (`waystoneDrops`) are the fixed-ratio track
+ * docs/09 rule 7 keeps running underneath, so the shop must never undercut it.
+ */
+export const CARTOGRAPHER_MARKUP = 4;
+
+/** How many stones her table holds at once, inclusive. */
+export const CARTOGRAPHER_STOCK_MIN = 6;
+export const CARTOGRAPHER_STOCK_MAX = 10;
+
+/** Ten minutes of sim time at 30 Hz: how long one table of stones stands. */
+export const CARTOGRAPHER_ROTATE_TICKS = 10 * 60 * 30;
+
+/** Gold to buy this stone off the cartographer's table. */
+export function cartographerPrice(item: Item): number {
+  return vendorBuyPrice(item) * CARTOGRAPHER_MARKUP;
+}
+
+/** The highest tier whose area level a character of `level` has reached, at least Tier 1. */
+export function cartographerTopTier(level: number): number {
+  return Math.max(1, Math.min(WAYSTONE_MAX_TIER, Math.trunc((level - areaLevel(1)) / 6) + 1));
+}
+
+/**
+ * Roll the cartographer's table. Deterministic in `seed` and `level` alone; the
+ * sim folds the rotation into the seed.
+ *
+ * Tiers run from two below the level's top tier up to it and never above, for the
+ * vendor's reason: a shop that outsells the zone you are in replaces playing it.
+ * Rarity is the stone's own seed roll (`waystoneRarity`), the same odds a drop has.
+ */
+export function rollCartographerStock(seed: number, level: number): Waystone[] {
+  const rnd = mulberry32(seed);
+  const top = cartographerTopTier(level);
+  const count = CARTOGRAPHER_STOCK_MIN + (rnd() % (CARTOGRAPHER_STOCK_MAX - CARTOGRAPHER_STOCK_MIN + 1));
+  const stock: Waystone[] = [];
+  for (let i = 0; i < count; i++) {
+    const tier = Math.max(1, top - (rnd() % 3));
+    // Seed 0 is the no-stone sentinel and the permanent stone's own; never sell it.
+    const stoneSeed = rnd() || 1;
+    stock.push({ id: `carto-${i}`, seed: stoneSeed, tier });
   }
   return stock;
 }

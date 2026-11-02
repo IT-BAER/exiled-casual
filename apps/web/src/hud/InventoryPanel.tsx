@@ -1,5 +1,5 @@
 import React from "react";
-import type { ContainerId, DisplayItem, EquipSlotId, Intent, Snapshot } from "@exiled/protocol";
+import type { ContainerId, DisplayItem, EquipSlotId, Intent, ShopId, Snapshot } from "@exiled/protocol";
 import { SORT_MODES } from "@exiled/protocol";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "@exiled/simulation";
 import { currencyAccepts, currencyResultRarity, waystoneCurrencyAccepts, SHARDS_PER_ORB } from "@exiled/rules";
@@ -7,7 +7,7 @@ import { ItemCompare, ItemTooltip } from "./ItemTooltip";
 import { flaskTooltip } from "./flask-tooltip";
 import { playDropSound } from "../audio/drop-sound";
 import { playSfx } from "../audio/sfx";
-import { VENDOR_NAME, VENDOR_TITLE } from "../npc";
+import { CARTOGRAPHER_NAME, CARTOGRAPHER_TITLE, VENDOR_NAME, VENDOR_TITLE } from "../npc";
 import { keyCap } from "../settings";
 import { BAR_H, ORB_RISE } from "./Hud";
 import { CELL, CELL_VW, PANEL_PAD, PANEL_W } from "./layout";
@@ -486,7 +486,7 @@ const DEFAULT_FLASK_KEYS = { life: "1", mana: "2" };
 
 // memo: GameView renders at 30 Hz while monsters move; this panel only when its own props change.
 export const InventoryPanel = React.memo(function InventoryPanel({
-  inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false,
+  inventory, stash, vendor = EMPTY_SHELF, buyback = EMPTY_SHELF, gold = 0, equipment = {}, shards = {}, vendorOpen = false, shop,
   socketWanted = false, socketedCell = null, compareKey = "ctrl", flaskKeys = DEFAULT_FLASK_KEYS, flasks, level,
   pet = false, onPetToggle,
   onClose, onCloseStash, onCloseVendor, onIntent, onRefused, onSocketWaystone,
@@ -513,6 +513,9 @@ export const InventoryPanel = React.memo(function InventoryPanel({
       backpack's Shards counter can read it whether or not the bench is open. */
   shards?: Record<string, number>;
   vendorOpen?: boolean;
+  /** Whose counter the shop window is: absent the disenchanter, `maps` the
+   *  cartographer, whose table arrives as `vendor` and who takes waystones only. */
+  shop?: ShopId;
   /** True while an Atlas node is selected and its socket is empty; enables ctrl+click socketing. */
   socketWanted?: boolean;
   /** Backpack cell of the stone seated in the map device: it stays there until the map opens. */
@@ -714,7 +717,10 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   const [sellHover, setSellHover] = React.useState<"ok" | "refused" | null>(null);
   const sellRef = React.useRef<"ok" | "refused" | null>(null);
   const sellable = (d: NonNullable<typeof drag>): boolean =>
-    d.from.kind === "grid" && d.item.itemClass !== "currency" && !d.item.unidentified;
+    d.from.kind === "grid" && d.item.itemClass !== "currency" && !d.item.unidentified
+    && (shop !== "maps" || d.item.baseId === "map.waystone");
+  /** Names the counter on a buy or sell; absent for the disenchanter, as before. */
+  const atShop = shop ? { shop } : {};
   // The sim refuses those sales without a word, so a ctrl-click on one says why here.
   const [sellNote, setSellNote] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -803,6 +809,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
           onIntent?.({
             kind: "sellItem", x: drag.from.x, y: drag.from.y,
             ...(drag.from.container === "stash" ? { from: "stash" as const } : {}),
+            ...atShop,
           });
         }
         return;
@@ -1041,7 +1048,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     if (barred(container, it)) return;
                     setHover(null);
                     // Heard as coins once the sim takes the gold (soundscape.ts), not here.
-                    onIntent?.({ kind: container === "vendor" ? "buyItem" : "buybackItem", x: it.x, y: it.y });
+                    onIntent?.(container === "vendor" ? { kind: "buyItem", x: it.x, y: it.y, ...atShop } : { kind: "buybackItem", x: it.x, y: it.y });
                     return;
                   }
                   // Ctrl-click breaks an item down, but only while the bench is open:
@@ -1049,6 +1056,10 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                   if (e.ctrlKey && vendorOpen) {
                     e.preventDefault();
                     setHover(null);
+                    if (shop === "maps" && it.baseId !== "map.waystone") {
+                      setSellNote(`${CARTOGRAPHER_NAME} deals in waystones and nothing else.`);
+                      return;
+                    }
                     if (it.unidentified || it.itemClass === "currency") {
                       setSellNote(it.unidentified
                         ? "Unidentified items will not sell. Read it with a Scroll of Wisdom first."
@@ -1058,6 +1069,7 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     onIntent?.({
                       kind: "sellItem", x: it.x, y: it.y,
                       ...(container === "stash" ? { from: "stash" as const } : {}),
+                      ...atShop,
                     });
                     return;
                   }
@@ -1236,12 +1248,12 @@ export const InventoryPanel = React.memo(function InventoryPanel({
           style={{ ...PANE, padding: PANEL_PAD, overflowY: "auto", scrollbarWidth: "none" }}
         >
           {/* His name, not the transaction: the window belongs to a person. */}
-          <PaneHeader title={VENDOR_NAME} bleed={PANEL_PAD} onClose={() => onCloseVendor?.()} testId="vendor-close" />
+          <PaneHeader title={shop === "maps" ? CARTOGRAPHER_NAME : VENDOR_NAME} bleed={PANEL_PAD} onClose={() => onCloseVendor?.()} testId="vendor-close" />
 
           {/* The reference labels the shelf and then tabs it: PoE1's page chip for
               his goods, then PoE2's Buyback tab, because a sale has no confirm. */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontSize: 11, letterSpacing: 1.5, color: "#b7ac8e" }}>{VENDOR_TITLE}</span>
+            <span style={{ fontSize: 11, letterSpacing: 1.5, color: "#b7ac8e" }}>{shop === "maps" ? CARTOGRAPHER_TITLE : VENDOR_TITLE}</span>
             <span style={{ display: "flex", gap: 2 }}>
               {(["vendor", "buyback"] as const).map((p) => (
                 <button
@@ -1331,8 +1343,9 @@ export const InventoryPanel = React.memo(function InventoryPanel({
             </div>
           ) : (
             <div style={{ fontSize: 11, color: "#8c8069", lineHeight: 1.45, marginTop: 2 }}>
-              Click the shelf to buy. Drag your own onto it or ctrl-click it to sell: all of it pays gold,
-              magic and better also break into shards.
+              {shop === "maps"
+                ? "Click a stone to buy it. Drag a waystone onto her table or ctrl-click it to sell."
+                : "Click the shelf to buy. Drag your own onto it or ctrl-click it to sell: all of it pays gold, magic and better also break into shards."}
             </div>
           )}
         </div>

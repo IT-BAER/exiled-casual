@@ -331,9 +331,19 @@ describe("class skill expansion wire", () => {
           { id: 10, kind: "monster", x: 5, y: 0, statuses: ["chilled", "marked"], stunned: true },
         ],
         inventory: { cols: 12, rows: 5, items: [] }, stash: { cols: 12, rows: 12, items: [] },
-        vendor: { cols: 12, rows: 12, items: [] }, equipment: {}, shards: {},
+        vendor: { cols: 12, rows: 12, items: [] }, mapShop: { cols: 12, rows: 8, items: [] }, equipment: {}, shards: {},
       },
     } satisfies FromWorker;
     expect(structuredClone(msg)).toEqual(msg);
+  });
+});
+
+describe("validateIntent — the cartographer's counter", () => {
+  it("passes shop: maps on a buy and a sell, and refuses any other shop", () => {
+    expect(validateIntent({ kind: "buyItem", x: 1, y: 0, shop: "maps" })).toEqual({ kind: "buyItem", x: 1, y: 0, shop: "maps" });
+    expect(validateIntent({ kind: "sellItem", x: 1, y: 0, shop: "maps" })).toEqual({ kind: "sellItem", x: 1, y: 0, shop: "maps" });
+    expect(validateIntent({ kind: "buyItem", x: 1, y: 0 })).toEqual({ kind: "buyItem", x: 1, y: 0 });
+    expect(() => validateIntent({ kind: "buyItem", x: 1, y: 0, shop: "gems" })).toThrow(/buyItem/);
+    expect(() => validateIntent({ kind: "sellItem", x: 1, y: 0, shop: "gems" })).toThrow(/sellItem/);
   });
 });

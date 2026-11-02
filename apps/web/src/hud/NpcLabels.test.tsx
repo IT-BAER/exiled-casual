@@ -4,7 +4,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import React from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { NpcLabels } from "./NpcLabels";
-import { VENDOR_NAME } from "../npc";
+import { CARTOGRAPHER_NAME, VENDOR_NAME } from "../npc";
 
 afterEach(cleanup);
 
@@ -23,6 +23,17 @@ describe("NpcLabels", () => {
       />,
     );
     expect(screen.getByTestId("npc-label-7").textContent).toBe(VENDOR_NAME);
+  });
+
+  it("names the cartographer Maren", () => {
+    render(
+      <NpcLabels
+        snapshot={snapshotWith([{ id: 9, kind: "cartographer", x: -1, y: -1 }] as Snapshot["entities"])}
+        project={project}
+      />,
+    );
+    expect(screen.getByTestId("npc-label-9").textContent).toBe(CARTOGRAPHER_NAME);
+    expect(CARTOGRAPHER_NAME).toBe("Maren");
   });
 
   it("labels nothing but npcs", () => {

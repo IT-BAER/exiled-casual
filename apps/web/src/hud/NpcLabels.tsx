@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import type { Snapshot } from "@exiled/protocol";
 import { SERIF } from "./ItemTooltip";
 import type { FrameHook, Projector } from "./LootLabels";
-import { VENDOR_NAME } from "../npc";
+import { CARTOGRAPHER_NAME, VENDOR_NAME } from "../npc";
 
 /**
  * WORLD units the name floats above the NPC's feet — his height plus a little,
@@ -20,6 +20,7 @@ const NAME_HEIGHT = 2.15;
 /** Who each NPC entity kind is. One name per kind: the hideout holds one of each. */
 const NPC_NAME: Partial<Record<Snapshot["entities"][number]["kind"], string>> = {
   vendor: VENDOR_NAME,
+  cartographer: CARTOGRAPHER_NAME,
 };
 
 export interface NpcLabelsProps {

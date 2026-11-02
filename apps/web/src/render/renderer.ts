@@ -324,6 +324,7 @@ function kindOf(e: SnapshotEntity): MeshKind {
   if (e.kind === "mapDevice") return "mapDevice";
   if (e.kind === "stash") return "stash";
   if (e.kind === "vendor") return "vendor";
+  if (e.kind === "cartographer") return "cartographer";
   if (e.kind === "container") return "container";
   if (e.kind === "groundItem") return "groundItem";
   if (e.kind === "gold") return "gold";
@@ -845,7 +846,7 @@ export class SnapshotRenderer {
       if (e.kind === "stash") {
         updateStash(mesh, this.hoveredEntityId === e.id);
       }
-      if (e.kind === "vendor") {
+      if (e.kind === "vendor" || e.kind === "cartographer") {
         updateVendor(mesh, this.hoveredEntityId === e.id);
       }
       if (e.kind === "container") {

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { vendorBuyPrice, vendorSellPrice, rollVendorStock, VENDOR_MARGIN_PCT, VENDOR_STOCK, START_GOLD } from "./vendor.js";
+import {
+  vendorBuyPrice, vendorSellPrice, rollVendorStock, VENDOR_MARGIN_PCT, VENDOR_STOCK, START_GOLD,
+  cartographerPrice, rollCartographerStock, cartographerTopTier, CARTOGRAPHER_MARKUP, CARTOGRAPHER_STOCK_MIN, CARTOGRAPHER_STOCK_MAX,
+} from "./vendor.js";
+import { waystoneRarity } from "./waystone.js";
+import { areaLevel, WAYSTONE_MAX_TIER } from "./atlas.js";
 import { START_LEVEL } from "./xp.js";
 import type { Item, ItemAffix, ItemPools } from "@exiled/content-schema";
 
@@ -112,5 +117,62 @@ describe("rollVendorStock", () => {
     for (const it_ of rollVendorStock(POOLS, 11, 25)) {
       expect(vendorBuyPrice(it_)).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("waystone pricing", () => {
+  // Seeds whose stones roll each rarity, found rather than hard-coded.
+  const seedOf = (r: string) => { for (let s = 1; ; s++) if (waystoneRarity(s) === r) return s; };
+  const stone = (seed: number, tier: number): Item =>
+    ({ baseId: "map.waystone", rarity: "normal", itemLevel: 1, affixes: [], waystone: { seed, tier } });
+
+  it("values a stone by its own rarity and tier, not the blank item fields it carries", () => {
+    const normal = seedOf("normal");
+    expect(vendorBuyPrice(stone(normal, 8))).toBeGreaterThan(vendorBuyPrice(stone(normal, 1)));
+    expect(vendorBuyPrice(stone(seedOf("rare"), 5))).toBeGreaterThan(vendorBuyPrice(stone(seedOf("magic"), 5)));
+    expect(vendorBuyPrice(stone(seedOf("magic"), 5))).toBeGreaterThan(vendorBuyPrice(stone(normal, 5)));
+  });
+
+  it("will not buy the permanent stone, which every load hands back", () => {
+    expect(vendorSellPrice({ ...stone(0, 1), waystone: { seed: 0, tier: 1, permanent: true } })).toBe(0);
+    expect(vendorSellPrice(stone(seedOf("magic"), 3))).toBeGreaterThan(0);
+  });
+
+  it("the cartographer asks four times the counter's own price", () => {
+    const s = stone(seedOf("rare"), 6);
+    expect(CARTOGRAPHER_MARKUP).toBe(4);
+    expect(cartographerPrice(s)).toBe(vendorBuyPrice(s) * 4);
+  });
+});
+
+describe("rollCartographerStock", () => {
+  it("lays out six to ten stones, the same ones for the same seed and level", () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const stock = rollCartographerStock(seed, 30);
+      expect(stock.length).toBeGreaterThanOrEqual(CARTOGRAPHER_STOCK_MIN);
+      expect(stock.length).toBeLessThanOrEqual(CARTOGRAPHER_STOCK_MAX);
+      expect(rollCartographerStock(seed, 30)).toEqual(stock);
+    }
+  });
+
+  it("stocks the tiers the level can run, never above them, and never the seed-0 blank", () => {
+    for (const level of [1, 14, 30, 60, 100]) {
+      const top = cartographerTopTier(level);
+      expect(areaLevel(top)).toBeLessThanOrEqual(Math.max(level, areaLevel(1)));
+      for (const w of rollCartographerStock(level * 7919, level)) {
+        expect(w.tier).toBeGreaterThanOrEqual(Math.max(1, top - 2));
+        expect(w.tier).toBeLessThanOrEqual(top);
+        expect(w.seed).not.toBe(0);
+      }
+    }
+    expect(cartographerTopTier(100)).toBe(WAYSTONE_MAX_TIER);
+  });
+
+  it("mixes rarities, and a new seed or tier band is a new stock", () => {
+    const rarities = new Set<string>();
+    for (let seed = 1; seed <= 10; seed++) for (const w of rollCartographerStock(seed, 30)) rarities.add(waystoneRarity(w.seed));
+    expect([...rarities].sort()).toEqual(["magic", "normal", "rare"]);
+    expect(rollCartographerStock(5, 60)).not.toEqual(rollCartographerStock(5, 30));
+    expect(rollCartographerStock(6, 30)).not.toEqual(rollCartographerStock(5, 30));
   });
 });

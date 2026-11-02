@@ -8,7 +8,7 @@ import { generateArea, type AreaLayout } from "@exiled/mapgen";
 import type { Item } from "@exiled/content-schema";
 import { type CollisionRef } from "./collision";
 import { fnv1a32 } from "./rng";
-import { stockVendor } from "./vendor";
+import { stockMapShop, stockVendor } from "./vendor";
 import { withPermanentWaystone, placeFirstFit } from "./inventory";
 import { Simulation } from "./loop";
 import { World } from "./ecs";
@@ -149,6 +149,7 @@ export function createCombatSim(
     // so a separate world.set here would only be overwritten one line later.
     grantSkills(world);
     world.set<VendorC>(sessionE, "vendor", stockVendor(seed, START_LEVEL));
+    world.set<VendorC>(sessionE, "mapShop", stockMapShop(seed, START_LEVEL, 0));
     world.set<EquipmentC>(sessionE, "equipment", { slots: {} });
     world.set<FlasksC>(playerEntity, "flasks", {
       lifeCharges: FLASK_MAX_CHARGES, lifeMax: FLASK_MAX_CHARGES,

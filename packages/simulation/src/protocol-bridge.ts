@@ -5,7 +5,7 @@ import { damageCode, damageTypeOf } from "./damage-types";
 import { hitParts, weaponHit } from "./weapon";
 import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
-import { areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext, FREEZE_DECAY_TICKS } from "@exiled/rules";
+import { cartographerPrice, areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext, FREEZE_DECAY_TICKS } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { attackAddedDamage, describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -121,10 +121,12 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
           // Omitting `from` for backpack so a sell recorded before stash existed
           // replays byte-identically, mirroring moveItem's convention.
           ...(intent.from === "stash" ? { from: 1 } : {}),
+          // Same convention: absent is the vendor, so older recordings replay unchanged.
+          ...(intent.shop === "maps" ? { shop: 1 } : {}),
         },
       };
     case "buyItem":
-      return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y } };
+      return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y, ...(intent.shop === "maps" ? { shop: 1 } : {}) } };
     case "buybackItem":
       return { tick, entity: player, type: "buybackItem", data: { x: intent.x, y: intent.y } };
     case "allocatePassive":
@@ -596,6 +598,13 @@ export function buildSnapshot(
     // describeGrid preserves order, so index i is the same placed item in both.
     items: shelfGrid.items.map((d, i) => ({ ...d, price: vendorBuyPrice(shelf!.items[i]!.item) })),
   };
+  const table = sessionE !== undefined ? world.get<VendorC>(sessionE, "mapShop") : undefined;
+  const tableGrid = describeGrid(table, VENDOR_COLS, VENDOR_ROWS);
+  const mapShop: Snapshot["mapShop"] = {
+    cols: tableGrid.cols,
+    rows: tableGrid.rows,
+    items: tableGrid.items.map((d, i) => ({ ...d, price: cartographerPrice(table!.items[i]!.item) })),
+  };
   // Refused is the sim's own undo check, so the page can never offer a sale it would turn down.
   const page = sessionE !== undefined ? world.get<BuybackC>(sessionE, "buyback") : undefined;
   const pageGrid = describeGrid(page, VENDOR_COLS, VENDOR_ROWS);
@@ -789,6 +798,7 @@ export function buildSnapshot(
     inventory,
     stash,
     vendor,
+    mapShop,
     buyback,
     equipment,
     shards: (sessionE !== undefined ? world.get<ShardsC>(sessionE, "shards") : undefined)?.counts ?? {},

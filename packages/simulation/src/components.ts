@@ -120,7 +120,7 @@ export interface SkillsC {
 
 /** Something the player can activate with the `interact` intent. */
 export interface InteractableC {
-  kind: "mapDevice" | "portal" | "stash" | "vendor" | "container";
+  kind: "mapDevice" | "portal" | "stash" | "vendor" | "cartographer" | "container";
   /** Activation range, Fixed. */
   radius: Fixed;
   /** Render-only fixed yaw in radians. A literal constant, never computed. */
@@ -577,6 +577,7 @@ export type StashC = InventoryC;
  * The vendor's shelf. Same grid shape again, so the placement helpers and the
  * client's grid renderer both work on it unchanged; it is a container rather than
  * a derived list because buying has to take a piece off it and leave a hole.
+ * The cartographer's table (`mapShop` on the session) is one of these too.
  */
 export type VendorC = InventoryC;
 /** One sale the vendor will undo: the piece, the gold it fetched and the shards it paid. */

@@ -1,7 +1,7 @@
 import { Simulation } from "../loop";
 import type { World } from "../ecs";
 import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, SkillsC } from "../components";
-import { restockVendor } from "../vendor";
+import { restockMapShop, restockVendor } from "../vendor";
 import { openReturnPortal } from "../areas";
 import { fp } from "@exiled/fixed-point";
 import { fnv1a32 } from "../rng";
@@ -210,6 +210,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
             // the shop is worth walking back to, so the new level and the new goods
             // land together rather than the goods arriving unannounced.
             restockVendor(world, sessionE, next.level);
+            restockMapShop(world, sessionE, next.level, tick);
             // The level may have opened a skill. Granting its gem here rather than
             // only on load is what makes it slottable in the moment it is earned.
             grantSkills(world);

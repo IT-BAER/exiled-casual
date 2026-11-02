@@ -1,5 +1,5 @@
-import { ITEM_POOLS, baseOf, canonicalBaseId, currencyItem, isPortalScroll, PORTAL_SCROLL_BASE_ID, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
-import { familyForClass, rollVendorStock, SHARDS_PER_ORB } from "@exiled/rules";
+import { ITEM_POOLS, baseOf, canonicalBaseId, currencyItem, isPortalScroll, waystoneItem, PORTAL_SCROLL_BASE_ID, WISDOM_SCROLL_BASE_ID } from "@exiled/content-runtime";
+import { familyForClass, rollCartographerStock, rollVendorStock, CARTOGRAPHER_ROTATE_TICKS, SHARDS_PER_ORB } from "@exiled/rules";
 import { placeFirstFit } from "./inventory";
 import type { Item } from "@exiled/content-schema";
 import type { BuybackC, BuybackItem, InventoryC, SessionC, VendorC } from "./components";
@@ -101,4 +101,33 @@ export function stockVendor(worldSeed: number, level: number, classId?: string):
     shelf.items.push({ x: at.x, y: at.y, w: base.w, h: base.h, item });
   }
   return shelf;
+}
+
+/**
+ * The cartographer's table for `level` and the `rotation`th ten minutes of the
+ * session: a function of those and the world seed, like the vendor's shelf, so a
+ * replay lands on the same stones. Laid out on the vendor's grid so the shop
+ * window draws it unchanged.
+ */
+export function stockMapShop(worldSeed: number, level: number, rotation: number): VendorC {
+  const table: VendorC = { cols: VENDOR_COLS, rows: VENDOR_ROWS, items: [] };
+  // Salted apart from the vendor's seed, or the two shops would share a stream.
+  const seed = (worldSeed ^ Math.imul(level, 0x9e3779b1) ^ Math.imul(rotation + 1, 0x85ebca6b) ^ 0x6d617073) >>> 0;
+  for (const w of rollCartographerStock(seed, level)) {
+    const at = placeFirstFit(table, 1, 1);
+    if (at === null) break;
+    table.items.push({ x: at.x, y: at.y, w: 1, h: 1, item: waystoneItem(w.seed, w.tier) });
+  }
+  return table;
+}
+
+/** Which ten minutes of the session `tick` falls in. */
+export function mapShopRotation(tick: number): number {
+  return Math.floor(tick / CARTOGRAPHER_ROTATE_TICKS);
+}
+
+/** New stones for `level` at the rotation `tick` is in. The shared buyback page is the vendor's and stays. */
+export function restockMapShop(world: World, sessionE: Entity, level: number, tick: number): void {
+  const s = world.get<SessionC>(sessionE, "session")!;
+  world.set<VendorC>(sessionE, "mapShop", stockMapShop(s.atlasSeed, level, mapShopRotation(tick)));
 }

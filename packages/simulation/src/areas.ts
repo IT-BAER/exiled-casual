@@ -49,6 +49,7 @@ export const PORTAL_RADIUS: number = fp(2.5);
 // no longer round. Re-derive them if `CAMERA_ALPHA` ever moves again.
 const MAP_DEVICE_X: number = fp(-2.828);
 const MAP_DEVICE_Y: number = fp(2.828);
+export const MAP_DEVICE_POS = { x: MAP_DEVICE_X, y: MAP_DEVICE_Y } as const;
 const STASH_X: number = fp(-4.95);
 const STASH_Y: number = fp(-2.121);
 // Mirror of the stash on the opposite side of the map device, so the two
@@ -56,6 +57,12 @@ const STASH_Y: number = fp(-2.121);
 // on either side of the fire.
 const VENDOR_X: number = fp(2.121);
 const VENDOR_Y: number = fp(4.95);
+// Maren, the cartographer: screen (-2.2, 0.4), down-left of the device on the
+// stash's side, so Varkis keeps the right flank to himself. 4.2 from the device,
+// 3.8 from the nearest portal slot (whose reach is 2.5) and 2.2 off the lane from
+// the arrival spot to the device.
+const CARTOGRAPHER_X: number = fp(-1.838);
+const CARTOGRAPHER_Y: number = fp(-1.273);
 
 /**
  * Offsets from the map device, plus the render yaw that angles each portal outward.
@@ -300,6 +307,16 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
 
     // Portals equal to the current portal budget (0 if map not open or exhausted).
     spawnPortalRing(world, session.portalsLeft);
+
+    // The cartographer, created last so every entity before her keeps the id it
+    // had before she existed. Faces the camera, as the disenchanter does.
+    const cartographerE = world.create();
+    world.set<Position>(cartographerE, "position", { x: CARTOGRAPHER_X, y: CARTOGRAPHER_Y });
+    world.set<InteractableC>(cartographerE, "interactable", {
+      kind: "cartographer",
+      radius: fp(2.5),
+      yaw: 3.14159,
+    });
   } else {
     // Map: the active node's biome pool fills the spawn sockets (two or three
     // carry a rare), the warden holds the boss room, and the return portal
@@ -477,6 +494,7 @@ const BLOCK_RADIUS: Partial<Record<InteractableC["kind"], number>> = {
   mapDevice: 0.55,   // DEVICE_SPAN 1.61 across in build_props.py
   stash: 0.4,        // STASH_CHEST_W 1.20
   vendor: 0.28,      // a man
+  cartographer: 0.28, // a woman
   container: 0.28,   // the widest of chest 0.82, crate 0.80, barrel 0.56
 };
 

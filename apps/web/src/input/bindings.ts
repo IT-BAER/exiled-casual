@@ -1,4 +1,4 @@
-import type { Intent, Snapshot, SnapshotEntity, SpawnKind, ToWorker } from "@exiled/protocol";
+import type { Intent, ShopId, Snapshot, SnapshotEntity, SpawnKind, ToWorker } from "@exiled/protocol";
 import { toNumber } from "@exiled/fixed-point";
 import { isTextEntry } from "./text-entry";
 import { dodgeIntent, heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
@@ -132,7 +132,7 @@ const PICK_HEIGHT = 2.0;
  * item — a column round every drop would eat the movement clicks in the middle of
  * the fight that made the drops.
  */
-const FORGIVING_KINDS: ReadonlySet<string> = new Set(["mapDevice", "stash", "vendor", "container"]);
+const FORGIVING_KINDS: ReadonlySet<string> = new Set(["mapDevice", "stash", "vendor", "cartographer", "container"]);
 
 /**
  * Where a picking ray enters the column at `(cx, cz)`, or null if it misses.
@@ -211,7 +211,8 @@ export function attachBindings(
   onHoverInteractable?: (entityId: number | null) => void,
   onOpenPanel?: (open: boolean) => void,
   onOpenStash?: (open: boolean) => void,
-  onOpenVendor?: (open: boolean) => void,
+  /** The shop window; `maps` when it is the cartographer's table rather than the vendor's shelf. */
+  onOpenVendor?: (open: boolean, shop?: ShopId) => void,
   /**
    * Which skill the key row fires, read fresh on every press: the bar is
    * reorderable and this listener is attached once, so a snapshot of the mapping
@@ -291,7 +292,7 @@ export function attachBindings(
   let shiftHeld = false;
   // Kinds of furniture whose panel is open because the player walked up to it,
   // so the walk away can close it again.
-  const openedNear = new Set<"mapDevice" | "stash" | "vendor">();
+  const openedNear = new Set<"mapDevice" | "stash" | "vendor" | "cartographer">();
 
   // Currently hovered interactable entity id; null when the cursor is over ground.
   // Tracked here so we only fire the callback on actual changes.
@@ -690,9 +691,14 @@ export function attachBindings(
         } else if (entity.kind === "stash") {
           onOpenStash?.(true);
           openedNear.add("stash");
-        } else if (entity.kind === "vendor") {
-          onOpenVendor?.(true);
-          openedNear.add("vendor");
+        } else if (entity.kind === "vendor" || entity.kind === "cartographer") {
+          // One shop window between the two of them: whoever opened it last owns
+          // it, so walking off the other one must not shut it.
+          const other = entity.kind === "vendor" ? "cartographer" : "vendor";
+          openedNear.delete(other);
+          if (entity.kind === "vendor") onOpenVendor?.(true);
+          else onOpenVendor?.(true, "maps");
+          openedNear.add(entity.kind);
         } else if (entity.kind === "groundItem") {
           post({ kind: "pickupItem", entityId: pendingInteractId });
         } else {

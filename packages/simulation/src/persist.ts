@@ -2,7 +2,7 @@ import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
 import type { SessionC, InventoryC, StashC, VendorC, BuybackC, EquipmentC, ProgressC, ShardsC, SkillsC, FloorItem } from "./components";
 import { hideoutFloor as hideoutFloorOf, layFloor } from "./hideout-floor";
-import { stockVendor } from "./vendor";
+import { stockMapShop, stockVendor } from "./vendor";
 import { withPermanentWaystone } from "./inventory";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext, classIdOr } from "@exiled/rules";
@@ -45,6 +45,9 @@ export interface PersistedState {
   vendor?: VendorC;
   /** The buyback page. Absent when nothing was sold since the last restock. */
   buyback?: BuybackC;
+  /** The cartographer's table, holes and all, for the vendor's reason. Absent on
+   *  a save written before she existed, which loads with a fresh table. */
+  mapShop?: VendorC;
   /** What lies on the hideout floor. Absent when it is bare, and on every older save. */
   hideoutFloor?: FloorItem[];
 }
@@ -63,11 +66,13 @@ export function snapshot(world: World): PersistedState | null {
   const vendor = world.get<VendorC>(e, "vendor");
   const skills = world.get<SkillsC>(e, "skills");
   const buyback = world.get<BuybackC>(e, "buyback");
+  const mapShop = world.get<VendorC>(e, "mapShop");
   const hideoutFloor = hideoutFloorOf(world, e);
   return {
     version: VERSION, session, inventory, stash, equipment, progress, shards,
     ...(vendor ? { vendor } : {}),
     ...(buyback ? { buyback } : {}),
+    ...(mapShop ? { mapShop } : {}),
     ...(skills ? { skills } : {}),
     ...(hideoutFloor.length > 0 ? { hideoutFloor } : {}),
   };
@@ -267,6 +272,8 @@ export function restore(world: World, state: PersistedState): void {
   grantSkills(world, stripped);
   world.set<ShardsC>(e, "shards", state.shards ?? { counts: {} });
   world.set<VendorC>(e, "vendor", state.vendor ?? stockVendor(state.session.atlasSeed, progress.level, state.session.classId));
+  // A load is tick 0 again, so a missing table is rotation 0's.
+  world.set<VendorC>(e, "mapShop", state.mapShop ?? stockMapShop(state.session.atlasSeed, progress.level, 0));
   if (state.buyback) world.set<BuybackC>(e, "buyback", state.buyback);
   else world.remove(e, "buyback");
   // A restore always lands in the hideout, so the floor goes straight onto it.

@@ -79,7 +79,7 @@ import { recordFrames } from "./dev/frame-recorder";
 import type { FrameHook, Projector } from "./hud/LootLabels";
 import { brazierSpotsFor, fnv1a32, type AreaLayout } from "@exiled/mapgen";
 import { BIOMES, characterClass, defaultAttackFor, mapBase } from "@exiled/content-runtime";
-import type { Snapshot, FromWorker, Intent, ToWorker, SpawnKind } from "@exiled/protocol";
+import type { Snapshot, FromWorker, Intent, ShopId, ToWorker, SpawnKind } from "@exiled/protocol";
 import { atlasGraph, atlasNodeTier, isNodeReachable, mapBaseIdForNode, DEFAULT_CLASS_ID } from "@exiled/rules";
 
 /** The lab and harness world, which has no character to seed from. */
@@ -135,13 +135,15 @@ export function GameView({
   const [stashOpen, setStashOpen] = useState(false);
   // The bench takes the same left-hand slot as the stash, so one closes the other.
   const [vendorOpen, setVendorOpen] = useState(false);
+  // Whose counter that window is: the vendor's shelf, or Maren's table of waystones.
+  const [shop, setShop] = useState<ShopId | undefined>(undefined);
   // Transfers the panel refuses before any intent: the sim never sees them, so its
   // pickupRefusedTick cannot carry the Inventory Full note.
   const [refusedSeq, setRefusedSeq] = useState(0);
   const onTransferRefused = useCallback(() => setRefusedSeq((n) => n + 1), []);
   const [varkis] = useState(createVarkisVoice);
   // The window's state, not the click: he speaks only for a window that really opened or closed.
-  useEffect(() => { varkis.window(vendorOpen); }, [varkis, vendorOpen]);
+  useEffect(() => { varkis.window(vendorOpen && shop === undefined); }, [varkis, vendorOpen, shop]);
   const [characterOpen, setCharacterOpen] = useState(false);
   // The passive tree (P). Fullscreen, like PoE's own, and render-only until a
   // node is clicked — the sim owns whether that click is allowed.
@@ -531,7 +533,7 @@ export function GameView({
       // thing that raised it. Closing with the X is a different path and still leaves
       // the inventory up, which is the case where it IS the player's own panel.
       (open) => { setStashOpen(open); setInventoryOpen(open); if (open) { setVendorOpen(false); setCharacterOpen(false); } },
-      (open) => { setVendorOpen(open); setInventoryOpen(open); if (open) { setStashOpen(false); setCharacterOpen(false); } },
+      (open, which) => { if (open) setShop(which); setVendorOpen(open); setInventoryOpen(open); if (open) { setStashOpen(false); setCharacterOpen(false); } },
       // The skill keys ARE the bar's order: the first one fires the first socket,
       // whatever the player last dragged into it.
       (key) => skillBarRef.current[socketForKey(key, keybindsRef.current)] ?? null,
@@ -887,8 +889,8 @@ export function GameView({
     // mid-run. A failed load resolves too and leaves the primitive fallback in
     // place.
     let unmounted = false;
-    // The vendor is male, so his body always loads; the player's own beside it.
-    const bodies = [...new Set<Body>(["male", characterClass(playedClassId).body])];
+    // The vendor is male and the cartographer female, so both bodies always load.
+    const bodies = [...new Set<Body>(["male", "female", characterClass(playedClassId).body])];
     void Promise.all([loadPlayerRig(scene, bodies), loadProps(scene), loadRocks(scene), loadMonsters(scene)]).then(() => {
       clock.models(performance.now());
       setLoadPart("models", 1);
@@ -1226,7 +1228,8 @@ export function GameView({
           onCloseStash={closeStash}
           shards={snapshot.shards}
           vendorOpen={vendorOpen}
-          vendor={snapshot.vendor}
+          {...(shop ? { shop } : {})}
+          vendor={shop === "maps" ? snapshot.mapShop : snapshot.vendor}
           buyback={snapshot.buyback}
           gold={snapshot.player.gold}
           onCloseVendor={closeVendor}
