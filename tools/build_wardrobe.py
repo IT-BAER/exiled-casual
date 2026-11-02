@@ -682,7 +682,7 @@ WAND_MAX_STRETCH = 1.8     # past this the carving visibly smears
 # direction that lands here is measured off the clip, not assumed.
 WAND_AIM = (-0.18, -0.62, 0.76)
 IDLE_CLIP = "Rig|Idle_Loop"
-ANIMS = "D:/VSC/exiled-casual/apps/web/public/models/anim-library.glb"
+ANIMS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "characters", "anim-library.glb")
 
 BUCKLER_DIA_RATIO = 0.20   # of body height
 BUCKLER_GAP = 0.008        # air between the arm and the shield's back face

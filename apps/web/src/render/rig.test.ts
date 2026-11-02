@@ -1178,9 +1178,23 @@ describe.each(WARDROBES)("wardrobe asset $file", ({ file, body, root }) => {
  * hand. So this measures which arm actually moves, per bone, straight out of the
  * glb — the mirror is a swap, so the two chains trade places exactly.
  */
+describe("the served anim library", () => {
+  it("is the packed master: same clips, same channels (else run node tools/pack_anims.mjs)", () => {
+    const json = (path: string) => {
+      const glb = readFileSync(fileURLToPath(new URL(path, import.meta.url)));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
+    };
+    const shape = (j: { animations: { name: string; channels: unknown[] }[] }) => j.animations.map((a) => `${a.name}:${a.channels.length}`);
+    const served = json("../../public/models/anim-library.glb");
+    expect(served.extensionsRequired).toContain("EXT_meshopt_compression");
+    expect(shape(served)).toEqual(shape(json("../../../../assets/characters/anim-library.glb")));
+  });
+});
+
 describe("the cast clip drives the weapon arm", () => {
-  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
-  const glb = readFileSync(`${MODELS}anim-library.glb`);
+  // The unpacked master: the served copy is meshopt-packed, so its accessors are not raw floats.
+  const glb = readFileSync(fileURLToPath(new URL("../../../../assets/characters/anim-library.glb", import.meta.url)));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
   const bin = 20 + glb.readUInt32LE(12) + 8;
@@ -1345,9 +1359,11 @@ describe("the cast clip drives the weapon arm", () => {
 describe("the idle clip leaves the soles planted", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
-  /** A glb's json chunk plus a reader for any accessor in it, by index. */
+  /** A glb's json chunk plus a reader for any accessor in it, by index. The clips come from their unpacked master. */
   function open(file: string) {
-    const glb = readFileSync(`${MODELS}${file}`);
+    const glb = readFileSync(file === "anim-library.glb"
+      ? fileURLToPath(new URL("../../../../assets/characters/anim-library.glb", import.meta.url))
+      : `${MODELS}${file}`);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
     const bin = 20 + glb.readUInt32LE(12) + 8;
@@ -1999,8 +2015,8 @@ describe("idleRatio", () => {
 describe("a melee swing lands heavy and on the hit", () => {
   const WINDUP = 7 / 30;
   const BEAT = 21 / 30;
-  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
-  const glb = readFileSync(`${MODELS}anim-library.glb`);
+  // The unpacked master: the served copy is meshopt-packed, so its accessors are not raw floats.
+  const glb = readFileSync(fileURLToPath(new URL("../../../../assets/characters/anim-library.glb", import.meta.url)));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const json = JSON.parse(glb.subarray(20, 20 + glb.readUInt32LE(12)).toString("utf8")) as any;
   const bin = 20 + glb.readUInt32LE(12) + 8;

@@ -35,7 +35,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_cast_mirror import compact  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ANIMS = os.path.join(ROOT, "apps/web/public/models/anim-library.glb")
+# The unpacked master; the served copy is `node tools/pack_anims.mjs` of it.
+ANIMS = os.path.join(ROOT, "assets/characters/anim-library.glb")
 SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-slash-variant.glb")
 
 SOURCE_CLIP = "Rig|Sword_Attack"

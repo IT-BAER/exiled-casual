@@ -38,7 +38,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_cast_mirror import read_glb, write_glb  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ANIMS = os.path.join(ROOT, "apps/web/public/models/anim-library.glb")
+# The unpacked master; the served copy is `node tools/pack_anims.mjs` of it.
+ANIMS = os.path.join(ROOT, "assets/characters/anim-library.glb")
 WARDROBE = os.path.join(ROOT, "assets/characters/wardrobe.glb")
 SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-bow-clip.glb")
 

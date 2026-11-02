@@ -32,7 +32,8 @@ import bpy
 from mathutils import Matrix
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ANIMS = os.path.join(ROOT, "apps/web/public/models/anim-library.glb")
+# The unpacked master; the served copy is `node tools/pack_anims.mjs` of it.
+ANIMS = os.path.join(ROOT, "assets/characters/anim-library.glb")
 SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-cast-mirror.glb")
 
 SOURCE_CLIP = "Rig|Spell_Simple_Shoot"

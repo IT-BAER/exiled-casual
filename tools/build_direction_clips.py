@@ -35,7 +35,8 @@ from build_cast_mirror import compact  # noqa: E402
 from build_slash_variant import read_glb, write_glb  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ANIMS = os.path.join(ROOT, "apps/web/public/models/anim-library.glb")
+# The unpacked master; the served copy is `node tools/pack_anims.mjs` of it.
+ANIMS = os.path.join(ROOT, "assets/characters/anim-library.glb")
 SCRATCH = os.path.join(tempfile.gettempdir(), "exiled-direction-clips.glb")
 
 # name part -> yaw of the travel off the hips, degrees, positive toward the body's LEFT.
