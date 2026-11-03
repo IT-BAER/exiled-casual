@@ -126,6 +126,26 @@ describe("trading with Maren", () => {
     expect(getShop(world).items.some((p) => p.x === cell.x && p.y === cell.y)).toBe(false);
   });
 
+  it("refuses a buy on the rotation tick: the stone clicked is gone, the cell's new one is not charged for", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    const clicked = getShop(world).items[0]!;
+    while (sim.tick < CARTOGRAPHER_ROTATE_TICKS) sim.step([]);
+    setGold(world, 1_000_000);
+    const before = getInv(world);
+    sim.step([intentToCommand({ kind: "buyItem", x: clicked.x, y: clicked.y, shop: "maps", seed: clicked.item.waystone!.seed }, playerEntity, 0)]);
+    expect(getGold(world)).toBe(1_000_000);
+    expect(getInv(world)).toEqual(before);
+  });
+
+  it("sells the stone the seed names when the table has not turned", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    const cell = getShop(world).items[0]!;
+    setGold(world, cartographerPrice(cell.item));
+    sim.step([intentToCommand({ kind: "buyItem", x: cell.x, y: cell.y, shop: "maps", seed: cell.item.waystone!.seed }, playerEntity, 0)]);
+    expect(getGold(world)).toBe(0);
+    expect(getInv(world).items.map((p) => p.item)).toContainEqual(cell.item);
+  });
+
   it("refuses a purse one coin short", () => {
     const { sim, world, playerEntity } = makeWorld();
     const cell = getShop(world).items[0]!;

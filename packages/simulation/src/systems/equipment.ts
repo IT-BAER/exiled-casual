@@ -241,6 +241,9 @@ export function registerEquipmentSystem(sim: Simulation): void {
         if (!shelf) continue;
         const stocked = shelf.items.find((p) => p.x === x && p.y === y);
         if (!stocked) continue;
+        // A stone clicked before the table turned is no longer in its cell.
+        const seed = cmd.data?.["seed"];
+        if (seed !== undefined && stocked.item.waystone?.seed !== seed) continue;
 
         const prog = world.get<ProgressC>(sessionE, "progress")!;
         const price = maps ? cartographerPrice(stocked.item) : vendorBuyPrice(stocked.item);

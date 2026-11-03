@@ -126,7 +126,10 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
         },
       };
     case "buyItem":
-      return { tick, entity: player, type: "buyItem", data: { x: intent.x, y: intent.y, ...(intent.shop === "maps" ? { shop: 1 } : {}) } };
+      return {
+        tick, entity: player, type: "buyItem",
+        data: { x: intent.x, y: intent.y, ...(intent.shop === "maps" ? { shop: 1 } : {}), ...(intent.seed !== undefined ? { seed: intent.seed } : {}) },
+      };
     case "buybackItem":
       return { tick, entity: player, type: "buybackItem", data: { x: intent.x, y: intent.y } };
     case "allocatePassive":

@@ -1167,7 +1167,7 @@ describe("InventoryPanel - the cartographer's table", () => {
   const table = {
     cols: 12, rows: 8,
     items: [
-      { x: 0, y: 0, w: 1, h: 1, rarity: "magic" as const, name: "Waystone (Tier 3)", itemClass: "waystone", baseId: "map.waystone", lines: [], price: 512 },
+      { x: 0, y: 0, w: 1, h: 1, rarity: "magic" as const, name: "Waystone (Tier 3)", itemClass: "waystone", baseId: "map.waystone", lines: [], price: 512, waystone: { seed: 4242, tier: 3 } },
       { x: 1, y: 0, w: 1, h: 1, rarity: "normal" as const, name: "Waystone (Tier 2)", itemClass: "waystone", baseId: "map.waystone", lines: [], price: 192 },
     ],
   };
@@ -1188,7 +1188,7 @@ describe("InventoryPanel - the cartographer's table", () => {
     render(<InventoryPanel inventory={stones} vendorOpen shop="maps" vendor={table} gold={600} onIntent={(i) => intents.push(i)} onClose={() => {}} />);
     fireEvent.pointerDown(screen.getByTestId("vendor-item-0"));
     fireEvent(screen.getByTestId("inventory-item-0"), new MouseEvent("pointerdown", { bubbles: true, ctrlKey: true, clientX: 10, clientY: 10 }));
-    expect(intents).toEqual([{ kind: "buyItem", x: 0, y: 0, shop: "maps" }, { kind: "sellItem", x: 3, y: 1, shop: "maps" }]);
+    expect(intents).toEqual([{ kind: "buyItem", x: 0, y: 0, shop: "maps", seed: 4242 }, { kind: "sellItem", x: 3, y: 1, shop: "maps" }]);
   });
 
   it("will not offer her anything but a waystone, and says so", () => {

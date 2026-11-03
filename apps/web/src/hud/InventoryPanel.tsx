@@ -1048,7 +1048,9 @@ export const InventoryPanel = React.memo(function InventoryPanel({
                     if (barred(container, it)) return;
                     setHover(null);
                     // Heard as coins once the sim takes the gold (soundscape.ts), not here.
-                    onIntent?.(container === "vendor" ? { kind: "buyItem", x: it.x, y: it.y, ...atShop } : { kind: "buybackItem", x: it.x, y: it.y });
+                    onIntent?.(container === "vendor"
+                      ? { kind: "buyItem", x: it.x, y: it.y, ...atShop, ...(it.waystone ? { seed: it.waystone.seed } : {}) }
+                      : { kind: "buybackItem", x: it.x, y: it.y });
                     return;
                   }
                   // Ctrl-click breaks an item down, but only while the bench is open:

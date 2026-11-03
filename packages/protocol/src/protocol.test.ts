@@ -344,6 +344,8 @@ describe("validateIntent — the cartographer's counter", () => {
     expect(validateIntent({ kind: "sellItem", x: 1, y: 0, shop: "maps" })).toEqual({ kind: "sellItem", x: 1, y: 0, shop: "maps" });
     expect(validateIntent({ kind: "buyItem", x: 1, y: 0 })).toEqual({ kind: "buyItem", x: 1, y: 0 });
     expect(() => validateIntent({ kind: "buyItem", x: 1, y: 0, shop: "gems" })).toThrow(/buyItem/);
+    expect(validateIntent({ kind: "buyItem", x: 1, y: 0, shop: "maps", seed: 4294967295 })).toEqual({ kind: "buyItem", x: 1, y: 0, shop: "maps", seed: 4294967295 });
+    expect(() => validateIntent({ kind: "buyItem", x: 1, y: 0, shop: "maps", seed: 1.5 })).toThrow(/buyItem/);
     expect(() => validateIntent({ kind: "sellItem", x: 1, y: 0, shop: "gems" })).toThrow(/sellItem/);
   });
 });

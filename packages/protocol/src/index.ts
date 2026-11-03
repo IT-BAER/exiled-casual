@@ -65,9 +65,10 @@ export type Intent =
   /**
    * Buy the vendor's stock item whose ORIGIN cell on the shelf is (x,y). The sim
    * re-checks the price against the purse and the backpack for room, so a client
-   * that shows a piece it cannot afford can still only ever be told no.
+   * that shows a piece it cannot afford can still only ever be told no. `seed`
+   * names the waystone clicked: her table can turn over under the click.
    */
-  | { kind: "buyItem"; x: number; y: number; shop?: ShopId }
+  | { kind: "buyItem"; x: number; y: number; shop?: ShopId; seed?: number }
   /**
    * Undo the sale whose ORIGIN cell on the buyback page is (x,y): the piece comes
    * back for the gold it fetched, and the shards it paid come off the counter.
@@ -799,7 +800,13 @@ export function validateIntent(v: unknown): Intent {
       if (!Number.isInteger(obj["y"])) throw new Error("validateIntent buyItem: y must be an integer");
       if (obj["shop"] !== undefined && obj["shop"] !== "maps")
         throw new Error("validateIntent buyItem: shop must be \"maps\"");
-      return { kind: "buyItem", x: obj["x"] as number, y: obj["y"] as number, ...(obj["shop"] !== undefined ? { shop: "maps" as const } : {}) };
+      if (obj["seed"] !== undefined && !Number.isInteger(obj["seed"]))
+        throw new Error("validateIntent buyItem: seed must be an integer");
+      return {
+        kind: "buyItem", x: obj["x"] as number, y: obj["y"] as number,
+        ...(obj["shop"] !== undefined ? { shop: "maps" as const } : {}),
+        ...(obj["seed"] !== undefined ? { seed: obj["seed"] as number } : {}),
+      };
     }
     case "buybackItem": {
       if (!Number.isInteger(obj["x"])) throw new Error("validateIntent buybackItem: x must be an integer");
