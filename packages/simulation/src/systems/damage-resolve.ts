@@ -1,6 +1,7 @@
 import {
   applyDamage, bossChargeSteps, absorbWithEnergyShield, ES_RECHARGE_DELAY_TICKS, applySingleAilment,
   freezeBuildupAt, FREEZE_TICKS, shockChancePct, SHOCK_DAMAGE_TAKEN_PCT, SHOCK_TICKS,
+  electrocuteBuildupAt, ELECTROCUTE_TICKS,
 } from "@exiled/rules";
 import { MONSTERS } from "@exiled/content-runtime";
 import type { MonsterDef } from "@exiled/content-schema";
@@ -166,10 +167,25 @@ function elementalAilments(world: World, rolls: RandomStream, ev: DamageEvent, f
     stun(world, ev.target, FREEZE_TICKS, tick);
     applyStatus(world, ev.target, { statusId: "frozen", durationTicks: FREEZE_TICKS }, tick);
   } else if (type === "lightning") {
+    if (ev.electrocutes && !world.has(ev.target, "boss")) electrocute(world, ev.target, mon, final, maxLife, tick);
     const chance = shockChancePct(final, maxLife);
     if (chance <= 0 || (chance < 100 && rolls.nextInt(0, 99) >= chance)) return;
     applyStatus(world, ev.target, { statusId: "shocked", durationTicks: SHOCK_TICKS, damageTakenPct: SHOCK_DAMAGE_TAKEN_PCT }, tick);
   }
+}
+
+/** Freeze's meter for electrocute: no buildup on a held body, a stun with an `electrocuted` status when full. */
+function electrocute(world: World, e: number, mon: MonsterC, final: Fixed, maxLife: Fixed, tick: number): void {
+  if (activeStatuses(world, e, tick).some((s) => s.id === "electrocuted" || s.id === "frozen")) return;
+  const pct = electrocuteBuildupAt(mon.electrocute, final, maxLife, tick);
+  if (pct < 100) {
+    world.set<MonsterC>(e, "monster", { ...mon, electrocute: { pct, tick } });
+    return;
+  }
+  const { electrocute: _spent, ...rest } = mon;
+  world.set<MonsterC>(e, "monster", rest);
+  stun(world, e, ELECTROCUTE_TICKS, tick);
+  applyStatus(world, e, { statusId: "electrocuted", durationTicks: ELECTROCUTE_TICKS }, tick);
 }
 
 /**

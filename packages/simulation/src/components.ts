@@ -297,6 +297,8 @@ export interface MonsterC {
   inert?: 1;
   /** Freeze buildup (0..100) and the tick of the cold hit that set it. Written only by a cold hit; never on a boss. */
   freeze?: { pct: number; tick: number };
+  /** Electrocute buildup, as `freeze`; written only by a hit that `electrocutes`. */
+  electrocute?: { pct: number; tick: number };
 }
 
 /** Damage parts already scaled at cast time: one hit, one entry per type. */
@@ -450,6 +452,8 @@ export interface ProjectileC {
   chainFrom?: Entity;
   chainRange?: Fixed;
   onHit?: StatusOnHit;
+  /** Its lightning builds electrocute; a chained bolt keeps it. */
+  electrocutes?: true;
 }
 export interface GroundAreaC {
   radius: Fixed;
@@ -539,6 +543,8 @@ export interface DamageEvent {
   via?: "projectile" | "melee" | "slam";
   /** The single-instance DoT this tick belongs to. Absent on a burning tick and on every hit. */
   ailment?: "poison" | "bleeding";
+  /** A lightning hit from a skill that builds electrocute (PoE2: none does by default). */
+  electrocutes?: true;
 }
 
 /** Two utility flasks: life on Q, mana on E. Charges are plain integers, not Fixed. */

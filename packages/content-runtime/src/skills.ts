@@ -725,6 +725,8 @@ const SKILL_DEFS: SkillDef[] = [
         // radius, rounded up to 4 for our looser packs.
         chainCount: 3,
         chainRangeFixed: fp(4),
+        // Our own: PoE2's Lightning Arrow does not electrocute; ours is the only lightning skill.
+        electrocutes: true,
       },
     ],
   },

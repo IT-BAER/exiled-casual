@@ -274,6 +274,16 @@ describe("buildSnapshot", () => {
     expect(f.stunned).toBeUndefined();
   });
 
+  it("an electrocuted monster shows the lightning, not the stun's stars", () => {
+    const { world, sim } = createCombatSim(42);
+    const held = addMonster(world, 4, 0);
+    world.set<MonsterC>(held, "monster", { ...world.get<MonsterC>(held, "monster")!, stunnedUntilTick: 50 });
+    world.set(held, "statuses", { list: [{ id: "electrocuted", untilTick: 50 }] });
+    const e = buildSnapshot(world, sim, 0, CONTENT_VERSION).entities.find((x) => x.id === held)!;
+    expect(e.statuses).toEqual(["electrocuted"]);
+    expect(e.stunned).toBeUndefined();
+  });
+
   it("a monster entity carries its body radius, so the client can measure reach to its surface", () => {
     const { world, sim } = createCombatSim(42);
     const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);

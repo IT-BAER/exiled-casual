@@ -91,6 +91,7 @@ export function registerProjectileMove(sim: Simulation, collisionRef?: Collision
               amountFixed: proj.damageAmount,
               type: proj.damageType,
               via: "projectile",
+              ...(proj.electrocutes ? { electrocutes: true as const } : {}),
             });
             for (const x of proj.extraDamage ?? []) {
               sim.enqueueDamage({ target: t, source: proj.ownerId, amountFixed: x.amount, type: x.type, via: "projectile" });

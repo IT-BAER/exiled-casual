@@ -12,7 +12,7 @@ const DT = 1 / 30;
 
 describe("ailment looks", () => {
   it("are registered for every ailment the snapshot names on a monster", () => {
-    for (const id of ["frozen", "freezing", "shocked", "burning", "poison", "bleeding"]) expect(SKILL_LOOKS.statuses[id], id).toBeDefined();
+    for (const id of ["frozen", "freezing", "shocked", "electrocuted", "burning", "poison", "bleeding"]) expect(SKILL_LOOKS.statuses[id], id).toBeDefined();
   });
 
   it("leave nothing behind but their shared templates and pools, and the freeze meter grows its rime", () => {

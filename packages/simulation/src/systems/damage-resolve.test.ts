@@ -3,7 +3,7 @@ import { fp } from "@exiled/fixed-point";
 import { resBlock, type MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import { registerDamageResolve, SPAWN_GRACE_TICKS } from "./damage-resolve";
-import { ES_RECHARGE_DELAY_TICKS, FREEZE_TICKS, SHOCK_TICKS } from "@exiled/rules";
+import { ES_RECHARGE_DELAY_TICKS, ELECTROCUTE_TICKS, FREEZE_TICKS, SHOCK_TICKS } from "@exiled/rules";
 import { damageCode } from "../damage-types";
 import { activeStatuses, isStunned } from "../status";
 import { ROLL_AVOID_TICKS, ROLL_TICKS } from "./player-movement";
@@ -485,6 +485,47 @@ describe("cold and lightning hits on a monster", () => {
     });
     expect(runs[0]).toEqual(runs[1]);
     expect(runs[0]!.length).toBe(1);
+  });
+
+  const electrocuteEvery = (sim: Simulation, m: number, amount: number) =>
+    sim.register("testProducer", () => sim.enqueueDamage({ target: m, source: 999, amountFixed: fp(amount), type: damageCode("lightning"), electrocutes: true }));
+
+  it("electrocutes once an electrocuting skill's lightning worth 50% of max life has landed: 3 s, stunned, the meter emptied", () => {
+    const sim = new Simulation();
+    const m = monster(sim);
+    electrocuteEvery(sim, m, 20);
+    registerDamageResolve(sim);
+    sim.step();
+    sim.step();
+    expect(statuses(sim, m)).not.toContain("electrocuted");
+    expect(sim.world.get<MonsterC>(m, "monster")!.electrocute?.pct).toBeGreaterThanOrEqual(80);
+    sim.step();
+    expect(statuses(sim, m)).toContain("electrocuted");
+    const mon = sim.world.get<MonsterC>(m, "monster")!;
+    expect(isStunned(mon, sim.tick)).toBe(true);
+    expect(mon.stunnedUntilTick).toBe(sim.tick - 1 + ELECTROCUTE_TICKS);
+    expect(ELECTROCUTE_TICKS).toBe(90);
+    expect(mon.electrocute).toBeUndefined();
+  });
+
+  it("plain lightning builds no electrocute, however hard it hits", () => {
+    const sim = new Simulation();
+    const m = monster(sim, 1000);
+    hitEvery(sim, m, "lightning", 400);
+    registerDamageResolve(sim);
+    sim.step();
+    sim.step();
+    expect(statuses(sim, m)).not.toContain("electrocuted");
+    expect(sim.world.get<MonsterC>(m, "monster")!.electrocute).toBeUndefined();
+  });
+
+  it("never electrocutes a boss", () => {
+    const sim = new Simulation();
+    const m = monster(sim, 100, true);
+    electrocuteEvery(sim, m, 60);
+    registerDamageResolve(sim);
+    sim.step();
+    expect(statuses(sim, m)).not.toContain("electrocuted");
   });
 
   it("a burning or poison tick builds nothing and shocks nothing", () => {

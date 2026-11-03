@@ -99,6 +99,23 @@ export function freezeBuildupAt(prev: { pct: number; tick: number } | undefined,
 }
 
 /**
+ * PoE2's electrocute: lightning HITS from skills that say so (never lightning by
+ * default) build a meter like freeze's; full, the body is immobilised. Casual:
+ * ELECTROCUTE_LIFE_PCT of max life fills it, and it holds 3 s (PoE2 5 s) because
+ * freeze holds 4 s and the one skill that electrocutes fires fast.
+ */
+export const ELECTROCUTE_LIFE_PCT = 50;
+export const ELECTROCUTE_TICKS = 90;
+export const ELECTROCUTE_DECAY_TICKS = 60;
+
+/** `freezeBuildupAt` for electrocute: its own threshold, the same drain. */
+export function electrocuteBuildupAt(prev: { pct: number; tick: number } | undefined, lightningFixed: Fixed, maxLifeFixed: Fixed, tick: number): number {
+  if (maxLifeFixed <= 0) return prev?.pct ?? 0;
+  const live = prev && tick - prev.tick <= ELECTROCUTE_DECAY_TICKS ? prev.pct : 0;
+  return Math.min(100, live + Math.ceil((lightningFixed * 100 * 100) / (maxLifeFixed * ELECTROCUTE_LIFE_PCT)));
+}
+
+/**
  * PoE2's shock chance is 25% per 100% of the ailment threshold a lightning hit deals;
  * casual: certain at SHOCK_LIFE_PCT of max life, proportional below.
  */

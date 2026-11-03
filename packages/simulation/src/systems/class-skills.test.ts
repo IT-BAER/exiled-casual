@@ -265,6 +265,14 @@ describe("Stalker", () => {
     expect(ms.map((m) => r.lost(m))).toEqual([38, 38, 38, 38, 0]);
   });
 
+  it("Lightning Arrow electrocutes what it strikes, down the chain too, once a hit fills half a life", () => {
+    const r = rig();
+    const ms = [0, 3].map((y) => r.mob(5, y, 60));
+    r.cast("lightning_arrow", 5, 0);
+    r.steps(30);
+    for (const m of ms) expect(r.statuses(m)).toContain("electrocuted");
+  });
+
   it("Rain of Arrows drops twelve arrows over the target, two ticks apart", () => {
     const r = rig();
     r.cast("rain_of_arrows", 6, 0);

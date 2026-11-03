@@ -416,6 +416,47 @@ export function shockCrackle(scene: Scene, node: TransformNode, o: StatusOptions
 
 const sShock = new Vector3();
 
+/**
+ * Electrocuted (PoE2): the body is held in the current. A cold blue-white shell stays
+ * lit and buzzes, arcs fire off it several times as fast as a shock's, and every few
+ * beats a bolt grounds into the floor at its feet. Shocked flickers; this never lets go.
+ */
+export function electrocuteHold(scene: Scene, node: TransformNode, o: StatusOptions = {}): Fx {
+  const R = o.radius ?? 0.6;
+  const H = o.height ?? 1.6;
+  const shell = cloneOf(scene, frostShell(scene, [0.6, 0.8, 1]), "kit-electrocute-shell");
+  let arc = 0, ground = 0;
+  const fx = statusFx(node, (f, dt, at) => {
+    const k = presence(f);
+    shell.position.set(at.x, at.y + H * 0.5, at.z);
+    // A tremor through the shell: the body cannot hold still inside it.
+    const j = 1 + 0.04 * Math.sin(f.age * 47) * Math.sin(f.age * 31);
+    shell.scaling.set(R * 2.3 * j, H * 1.1, R * 2.3 * j);
+    shell.visibility = k * (0.2 + 0.08 * Math.random());
+    if (k < 0.2) return;
+    arc -= dt;
+    if (arc <= 0) {
+      arc = rand(0.025, 0.06);
+      const a = Math.random() * TAU;
+      const p = sShock.set(at.x + Math.sin(a) * R * 0.75, at.y + H * rand(0.15, 1), at.z + Math.cos(a) * R * 0.75);
+      sparks(scene, p, 3 + Math.floor(Math.random() * 3), [0.92, 0.97, 1], [0.35, 0.6, 1], {
+        speed: [4, 8], up: [-0.6, 0.6], gravity: 0, life: [0.04, 0.09], length: 0.28, thick: 0.02, yaw: a, cone: 1.6,
+      });
+    }
+    ground -= dt;
+    if (ground <= 0) {
+      ground = rand(0.25, 0.45);
+      const a = Math.random() * TAU;
+      const p = sShock.set(at.x + Math.sin(a) * R * 0.5, at.y + H * 0.6, at.z + Math.cos(a) * R * 0.5);
+      sparks(scene, p, 6, [1, 1, 1], [0.4, 0.65, 1], {
+        speed: [9, 13], up: [-1, -0.7], gravity: 0, life: [0.06, 0.1], length: 0.45, thick: 0.026, yaw: a, cone: 0.5,
+      });
+    }
+  });
+  fx.own(shell);
+  return fx;
+}
+
 /** Poisoned: green beads seeping up off the body and dripping from it, sickly, never bright. */
 export function poisonSeep(scene: Scene, node: TransformNode, o: StatusOptions = {}): Fx {
   const R = o.radius ?? 0.6;

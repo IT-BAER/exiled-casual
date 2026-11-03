@@ -169,6 +169,7 @@ export function registerSkillCast(
             ...(effect.explodeRadiusFixed ? { explodeRadius: effect.explodeRadiusFixed } : {}),
             ...(effect.chainCount ? { chainLeft: effect.chainCount, chainRange: effect.chainRangeFixed ?? 0 } : {}),
             ...(effect.onHit ? { onHit: statusOnHit(effect.onHit) } : {}),
+            ...(effect.electrocutes ? { electrocutes: true as const } : {}),
           });
         }
       } else if (effect.type === "spawnGroundArea") {

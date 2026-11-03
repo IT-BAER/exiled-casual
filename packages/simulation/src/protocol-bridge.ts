@@ -434,8 +434,8 @@ export function buildSnapshot(
     if (debuffs.length > 0) entry.debuffs = debuffs;
     const statuses = [...new Set(activeStatuses(world, e, tick).map((s) => s.id))].sort();
     if (statuses.length > 0) entry.statuses = statuses;
-    // A freeze holds the body through the stun; the ice says so, not the stun's stars.
-    if (isStunned(mon, tick) && !statuses.includes("frozen")) entry.stunned = true;
+    // A freeze or electrocute holds the body through the stun; its own look says so, not the stun's stars.
+    if (isStunned(mon, tick) && !statuses.includes("frozen") && !statuses.includes("electrocuted")) entry.stunned = true;
     if (mon.freeze && tick - mon.freeze.tick <= FREEZE_DECAY_TICKS) entry.freeze = mon.freeze.pct;
     if (mon.magic === 1) entry.magic = true;
     if (mon.lastAttackTick !== undefined) entry.attackTick = mon.lastAttackTick;

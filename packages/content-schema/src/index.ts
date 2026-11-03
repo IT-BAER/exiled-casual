@@ -102,6 +102,8 @@ export type EffectNode =
       /** How far a chain looks for its next body. Required with chainCount. */
       chainRangeFixed?: Fixed;
       onHit?: StatusSpec;
+      /** Its lightning builds electrocute (PoE2: only skills that say so do). */
+      electrocutes?: true;
     }
   | {
       type: "spawnGroundArea";
@@ -632,6 +634,7 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
       errors.push(`${path}.chainRangeFixed: required with chainCount`);
     }
     if (v["onHit"] !== undefined) validateStatusSpec(v["onHit"], `${path}.onHit`, true, errors);
+    if (v["electrocutes"] !== undefined && v["electrocutes"] !== true) errors.push(`${path}.electrocutes: must be true when present`);
     if (errors.length > before) ok = false;
   } else if (type === "spawnGroundArea") {
     if (!isNonNegInt(v["radiusFixed"])) {

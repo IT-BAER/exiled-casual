@@ -1,9 +1,9 @@
-import { bloodDrip, emberSmoulder, frostBurst, frostCreep, frostCrust, poisonSeep, shockCrackle, type Fx, type MeterFx, type Rgb } from "./kit";
+import { bloodDrip, electrocuteHold, emberSmoulder, frostBurst, frostCreep, frostCrust, poisonSeep, shockCrackle, type Fx, type MeterFx, type Rgb } from "./kit";
 import type { AttachedState, BurstHandle, ClassSkillLooks, FxHandle, StatusLook } from "./types";
 
 /**
  * What an ailment looks like on a monster, whichever class laid it: frozen and the
- * freeze meter filling, shocked, burning, poisoned, bleeding. PoE shows each on the
+ * freeze meter filling, shocked, electrocuted, burning, poisoned, bleeding. PoE shows each on the
  * body itself (an ice shell, a crackle, flames, green seep, blood), never as an icon.
  */
 
@@ -54,6 +54,7 @@ export const AILMENT_LOOKS: ClassSkillLooks = {
       },
     },
     shocked: onBody(shockCrackle),
+    electrocuted: onBody(electrocuteHold),
     burning: onBody((scene, node, o) => emberSmoulder(scene, node, { ...o, colour: FIRE })),
     poison: onBody(poisonSeep),
     bleeding: onBody(bloodDrip),
