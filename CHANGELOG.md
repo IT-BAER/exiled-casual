@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-04
+
 ### Fixed
 
 - Entering a map can no longer leave you stuck on the loading screen. If the
