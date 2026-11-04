@@ -76,6 +76,7 @@ import os
 import struct
 import sys
 
+import bmesh
 import bpy
 import numpy
 from mathutils import Matrix, Vector
@@ -720,6 +721,8 @@ WEIGHT_POWER = 4.0
 # limb's own geometry does. This is the haunch that moves with the leg, and
 # without it the hip is a hard seam that opens as the leg swings.
 CROSS_PART = 0.55
+# The owner of a point two limbs share (`apart_limbs`): moved by the trunk alone.
+CROTCH = -1
 
 # How far the trunk travels, as fractions of the creature's height.
 BOB = 0.016
@@ -977,6 +980,8 @@ def skin(obj, bones, owner, height):
             parent = own[0].parent
             up = [(b, CROSS_PART) for b in by_part[0] if b.name == parent]
             allowed[pi] = [(b, 1.0) for b in own] + up
+
+    allowed[CROTCH] = [(b, 1.0) for b in by_part[0]]
 
     eps = 0.045 * height
     buckets = {}
@@ -1946,11 +1951,13 @@ def hoarfrost_spitter():
     The elbows rest on the hips at 0.51-0.58 H, and the smoothing left the right
     hand's weight on the outer shin, which bulges past the thigh line to 0.18 H
     at 0.20 H: the raised claws drew it up as a spike (+0.30 m). `fused_arms`
-    drops each chain's weight from the other and cuts the elbows free.
+    drops each chain's weight from the other and cuts the elbows free. The inside
+    of each upper arm is fused to the flank as well: `armpit` cuts it below 0.76 H,
+    or the throw drew the flank up into the arm (+0.38 m).
     """
     return GeneratedCreature("monster.hoarfrost_spitter.v1", HOARFROST_SPITTER_SOURCE, "forest", 2.0,
                              normal=HOARFROST_SPITTER_NORMAL, thigh=0.17, knee=0.15, fused_arms=True,
-                             attack="throw")
+                             attack="throw", armpit=0.76)
 
 
 TIDE_SPITTER_SOURCE = os.path.join(TEX_DIR, "source", "tide_spitter_v1.glb")
@@ -2020,11 +2027,12 @@ def bog_drowned():
     and is one surface piece with its thigh up to 0.38 H: the knee bulges to
     0.246 H and the fist's inner face starts at 0.241 H, so the thigh rule sits
     at 0.245 H and `fused_arms` cuts the join, or the strike drew the fist out of
-    the knee as a sheet (+1.11 m).
+    the knee as a sheet (+1.11 m). The right upper arm is fused to the flank at
+    0.64-0.67 H: `armpit` cuts it below 0.76 H (the grab tore it +0.15 m).
     """
     return GeneratedCreature("monster.bog_drowned.v1", BOG_DROWNED_SOURCE, "swamp", 1.7,
                              normal=BOG_DROWNED_NORMAL, offset=(-0.015, 0.0),
-                             thigh=0.245, knee=0.20, fused_arms=True, attack="grab")
+                             thigh=0.245, knee=0.20, fused_arms=True, attack="grab", armpit=0.76)
 
 
 WRACK_DROWNED_SOURCE = os.path.join(TEX_DIR, "source", "wrack_drowned_v2.glb")
@@ -2039,11 +2047,13 @@ def wrack_drowned():
     4k triangles, rig_humanoid. The default band at res 240 closed the anchor's
     crook and the decimator left a lump. As loaded the anchor hangs from 0.19 H
     and both hands clear the thighs by ~0.06 H, so no floor split or thigh rule.
-    Feet midpoint measured at x 0.033 H: the offset centres the stance.
+    Feet midpoint measured at x 0.033 H: the offset centres the stance. The upper
+    arms are fused to the flank: `armpit` cuts them below 0.76 H, or the raised
+    anchor arm drew a sheet down the chest side (+0.24 m).
     """
     return GeneratedCreature("monster.wrack_drowned.v1", WRACK_DROWNED_SOURCE, "coast", 1.8,
                              normal=WRACK_DROWNED_NORMAL, offset=(-0.059, 0.0), carry="r",
-                             attack="smash")
+                             attack="smash", armpit=0.76)
 
 
 GRUBLING_SOURCE = os.path.join(TEX_DIR, "source", "drowned_grubling_v2.glb")
@@ -2085,12 +2095,14 @@ class GeneratedCreature:
 
     def __init__(self, def_id, source, family, height, normal=None, tex=TEX_SIZE,
                  offset=(0.0, 0.0), carry=None, thigh=None, knee=0.25, held=None, fused_arms=False,
-                 attack="rake", slam=None):
+                 attack="rake", slam=None, armpit=None):
         self.def_id, self.source, self.family, self.height = def_id, source, family, height
         # Strike styles by name (`rig_humanoid.STRIKES`); `rake` is the shared one.
         self.attack, self.slam = attack, slam
         # The shell fused the arms down the flank and thigh: cut them free (rig_humanoid.skin).
         self.fused_arms = fused_arms
+        # A fraction of H: below it the upper arm the shell fused to the flank is cut free.
+        self.armpit = armpit
         # "l"/"r": the hand carrying a long blade, held low through the walk.
         # `held`, a fraction of H: past it from the midline, that side's floor
         # contact is the carried thing standing on the floor, not the foot.
@@ -2121,7 +2133,7 @@ class GeneratedCreature:
 
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height, self.carry, self.held))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
-        rig.skin(mesh, arm, self.thigh, self.knee, self.carry, self.held, self.fused_arms)
+        rig.skin(mesh, arm, self.thigh, self.knee, self.carry, self.held, self.fused_arms, self.armpit)
         # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
@@ -2137,10 +2149,12 @@ class GeneratedSkin(Creature):
     mesh, and the roster's own bone graph, weights and gait drive it. The mesh
     must face +Y as imported, as every node-graph species is authored."""
 
-    def __init__(self, def_id, source, normal, family, height, offset, tex=1024, flip=False):
+    def __init__(self, def_id, source, normal, family, height, offset, tex=1024, flip=False, apart=False):
         super().__init__(def_id, family, 0.25, height)
         self.source, self.normal = source, normal
         self.offset = offset
+        # The shell fused neighbouring limbs: split it where two limbs' faces meet.
+        self.apart = apart
         # Sheet size: 512 for a mob, 1024 for a boss, which fills far more screen.
         self.tex = tex
         # TRELLIS faces a mesh whichever way its reference looked: turn it to +Y.
@@ -2181,7 +2195,10 @@ class GeneratedSkin(Creature):
         self.root = arm
         mesh.name = mesh.data.name = self.def_id + ".mesh"
         mesh.parent = arm
-        skin(mesh, bones, nearest_part(mesh, bones), self.height)
+        owner = nearest_part(mesh, bones)
+        if self.apart:
+            owner = apart_limbs(mesh, root_owned(mesh, bones, owner, self.height), 1e-4 * self.height)
+        skin(mesh, bones, owner, self.height)
         # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
@@ -2215,6 +2232,120 @@ def nearest_part(mesh, bones):
 BODY_BIAS = 0.6
 
 
+def root_owned(mesh, bones, owner, height):
+    """Hand each trunk vertex that a limb's root bone outweighs, as `skin` scores
+    it, to that limb. Between two fused tendrils such a vertex blends both roots,
+    and the faces it shares with each limb tear however the limbs are parted."""
+    eps = 0.045 * height
+    trunk = [b for b in bones if b.part == 0]
+    roots = {}
+    for b in bones:
+        roots.setdefault(b.part, b)
+    roots.pop(0, None)
+    out = list(owner)
+    for vi, vert in enumerate(mesh.data.vertices):
+        if owner[vi]:
+            continue
+        score = lambda b, mul: mul / (seg_distance(vert.co, b.head, b.tail) + eps) ** WEIGHT_POWER
+        best = max(score(b, 1.0) for b in trunk)
+        part, root = max(((p, score(b, CROSS_PART)) for p, b in roots.items()), key=lambda x: x[1])
+        if root > best:
+            out[vi] = part
+    print("  root-owned: %d trunk vertices handed to a limb" % sum(a != b for a, b in zip(owner, out)))
+    return out
+
+
+def face_patches(faces, layer):
+    """The faces split into patches that share an edge and the `layer` value."""
+    left, patches = dict.fromkeys(faces), []
+    while left:
+        seed = next(iter(left))
+        del left[seed]
+        patch, todo = [seed], [seed]
+        while todo:
+            f = todo.pop()
+            for e in f.edges:
+                for g in e.link_faces:
+                    if g in left and g[layer] == f[layer]:
+                        del left[g]
+                        patch.append(g)
+                        todo.append(g)
+        patches.append(patch)
+    return patches
+
+
+def apart_limbs(mesh, owner, weld):
+    """Split a mesh along every edge where the faces of two different limbs meet,
+    and return the owner per vertex of the result.
+
+    Each face goes to the part most of its corners belong to. A split vertex
+    keeps the part of the faces it stays on: re-measured by nearest bone, the two
+    copies of a seam point land on one limb and the seam stretches again. The
+    import is split at every UV seam, which leaves a cut joined wherever one
+    crosses it, so coincident points are welded first. The cut is left open:
+    a cap ends at the crotch, which follows the trunk, and its fan folds out of
+    the moving limb as shards, where an open cut shows only a gap between two
+    limbs.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    vown = bm.verts.layers.int.new("owner")
+    fown = bm.faces.layers.int.new("owner")
+    for b in bm.verts:
+        b[vown] = owner[b.index]
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=weld)
+    for f in bm.faces:
+        parts = [b[vown] for b in f.verts]
+        # A face touching two limbs is one of theirs, or the trunk keeps it whole.
+        if len(set(parts) - {0}) > 1:
+            parts = [p for p in parts if p]
+        f[fown] = max(set(parts), key=lambda p: (parts.count(p), p == 0, -p))
+    # A few faces of one limb inside another's would split off as a floating
+    # chip: each limb keeps its largest connected patch, and the rest joins
+    # whatever surrounds it.
+    for _ in range(8):
+        moved = 0
+        for part in sorted({f[fown] for f in bm.faces} - {0}):
+            patches = face_patches([f for f in bm.faces if f[fown] == part], fown)
+            for patch in sorted(patches, key=len)[:-1]:
+                around = [g[fown] for f in patch for e in f.edges for g in e.link_faces if g[fown] != part]
+                if around:
+                    new = max(set(around), key=lambda p: (around.count(p), -p))
+                    for f in patch:
+                        f[fown] = new
+                    moved += 1
+        if not moved:
+            break
+    seam = []
+    for e in bm.edges:
+        sides = {f[fown] for f in e.link_faces}
+        if len(sides) == 2 and 0 not in sides:
+            seam.append(e)
+    bmesh.ops.split_edges(bm, edges=seam)
+    joined = 0
+    for b in bm.verts:
+        faces = {f[fown] for f in b.link_faces}
+        limbs = faces - {0}
+        if len(limbs) > 1:
+            # Where a cut stops, one point stays on both limbs: following either,
+            # it tears toward the other, so it stays with the trunk as a crotch.
+            b[vown] = CROTCH
+            joined += 1
+        elif limbs and b[vown] not in limbs and (b[vown] or 0 not in faces):
+            # A trunk point on the rim of one limb stays trunk: two limbs a strip
+            # of trunk apart would otherwise share its faces.
+            b[vown] = limbs.pop()
+    print("  apart: %d seam edges, %d crotch vertices" % (len(seam), joined))
+    bm.verts.ensure_lookup_table()
+    out = [b[vown] for b in bm.verts]
+    for layer in (bm.verts.layers.int, bm.faces.layers.int):
+        for name in list(layer.keys()):
+            layer.remove(layer[name])
+    bm.to_mesh(mesh.data)
+    bm.free()
+    return out
+
+
 def drowned_grubling():
     """A squat toad on two legs, pot belly, glowing eyes and a moss clump on one
     shoulder: the swamp's pack of eight.
@@ -2227,11 +2358,13 @@ def drowned_grubling():
     inner face from 0.20 H; the right fist hangs clear of the belly, which reaches
     0.274 H. Both forearms are fused to the belly's flanks above 0.45 H, and the
     belly rides the thighs: `fused_arms` cuts both arms free, or raising the right
-    arm pulled the flank up as a sheet (+0.44 m).
+    arm pulled the flank up as a sheet (+0.44 m). The upper arms are fused to the
+    flank too: `armpit` cuts them below 0.76 H, or the strike drew a web down the
+    torso (+0.24 m).
     """
     return GeneratedCreature("monster.drowned_grubling.v1", GRUBLING_SOURCE, "swamp", 0.95,
                              normal=GRUBLING_NORMAL, offset=(-0.015, 0.0),
-                             thigh=(0.20, 0.28), knee=0.23, fused_arms=True)
+                             thigh=(0.20, 0.28), knee=0.23, fused_arms=True, armpit=0.76)
 
 
 BOAR_SOURCE = os.path.join(TEX_DIR, "source", "thornhide_boar_v2.glb")
@@ -2278,11 +2411,13 @@ def blood_sentinel():
 
     Generated (review/3d/blood-sentinel-v2), volumetric opening res 240 r 2,
     4k triangles, rig_humanoid. Ankles measured at x 0.325 and -0.375 as loaded:
-    the offset centres the stance.
+    the offset centres the stance. The upper arms are fused to the flank:
+    `armpit` cuts them below 0.76 H, or the cleave drew a web from the armpit to
+    the hood (+0.35 m).
     """
     return GeneratedCreature("monster.blood_sentinel.v1", BLOOD_SENTINEL_SOURCE, "vaal", 2.1,
                              normal=BLOOD_SENTINEL_NORMAL, offset=(0.022, 0.0), carry="r",
-                             attack="cleave", slam="chop")
+                             attack="cleave", slam="chop", armpit=0.76)
 
 
 COLOSSUS_SOURCE = os.path.join(TEX_DIR, "source", "sunbaked_colossus_v2.glb")
@@ -2368,12 +2503,14 @@ def cinder_warden():
     thigh from 0.37 to 0.41 H, the waist at 0.20 H (the knee bulges to 0.203 H):
     the left thigh rule sits there, the right one at 0.25 H between the thigh
     (0.248 H) and the slab (0.256 H), and `fused_arms` cuts the left join, or the
-    strike drew the fist out of the thigh as a sheet (+0.70 m).
+    strike drew the fist out of the thigh as a sheet (+0.70 m). `armpit` cuts the
+    upper arms from the flank below 0.76 H, or the slam tore the raised shoulder
+    open (+0.38 m).
     """
     return GeneratedCreature("monster.cinder_warden.v1", CINDER_WARDEN_SOURCE, "cinder", 2.9,
                              normal=CINDER_WARDEN_NORMAL, tex=1024, offset=(-0.20, 0.0),
                              carry="r", held=0.28, thigh=(0.20, 0.25), knee=0.32, fused_arms=True,
-                             attack="hook", slam="slab")
+                             attack="hook", slam="slab", armpit=0.76)
 
 
 SIRRATH_SOURCE = os.path.join(TEX_DIR, "source", "sirrath_v2.glb")
@@ -2421,9 +2558,11 @@ def mother_vhal():
     --legs 9 --flip 1, except two. The left fore-mid tendril runs into its
     neighbour and traced under the body: its foot is the --legs 10 trace's. The
     left fore tendril traced its hip at the tip: hip and knee mirror the right's.
+    Neighbouring tendrils are fused into webs: `apart` splits every edge between
+    two tendrils' faces, or the walk tore grey sheets between them (+0.74 m).
     """
     c = GeneratedSkin("monster.mother_vhal.v1", MOTHER_VHAL_SOURCE, MOTHER_VHAL_NORMAL,
-                      "swamp", 1.5, (-0.322, 0.281), flip=True)
+                      "swamp", 1.5, (-0.322, 0.281), flip=True, apart=True)
     spine = c.body.chain([(0, -1.20, 0.85), (0, 0.0, 0.95), (0, 1.20, 0.85)], [0.3] * 3)
     c.body.chain([(0, 1.40, 0.70), (0, 1.60, 0.55)], [0.15] * 2, parent=spine[-1])
     for i, (hip, knee, foot) in enumerate([

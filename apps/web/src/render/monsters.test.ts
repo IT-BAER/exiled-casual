@@ -743,6 +743,84 @@ describe("creature instances", () => {
   });
 
   /**
+   * Edges whose two ends follow different groups of bones, stretched past twice
+   * their rest through a clip: what a shell fused between two parts that move
+   * apart tears into. `group` names a vertex's group by its strongest bone.
+   */
+  async function tornEdges(id: string, clip: string, group: (bone: string) => string | null): Promise<number> {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    new FreeCamera("cam", new Vector3(0, 10, -10), scene);
+    try {
+      const container = await LoadAssetContainerAsync("/models/monsters.glb", scene);
+      container.addAllToScene();
+      for (const g of container.animationGroups) g.stop();
+      const g = container.animationGroups.find((x) => x.name === `${id}|${clip}`);
+      expect(g, `${id}|${clip}`).toBeDefined();
+      g!.start(false);
+      g!.pause();
+      let torn = 0;
+      for (let f = g!.from; f <= g!.to; f++) {
+        g!.goToFrame(f);
+        scene.render();
+        for (const m of meshesOf(container, id)) {
+          m.computeWorldMatrix(true);
+          m.skeleton!.prepare(true);
+          const rest = m.getPositionData(false, false)!, pose = m.getPositionData(true, true)!;
+          const idx = m.getIndices()!, mi = m.getVerticesData("matricesIndices")!, mw = m.getVerticesData("matricesWeights")!;
+          const of = (v: number) => {
+            let k0 = 0;
+            for (let k = 1; k < 4; k++) if (mw[4 * v + k]! > mw[4 * v + k0]!) k0 = k;
+            return group(m.skeleton!.bones[mi[4 * v + k0]!]!.name);
+          };
+          const len = (p: ArrayLike<number>, a: number, b: number) =>
+            Math.hypot(p[3 * a]! - p[3 * b]!, p[3 * a + 1]! - p[3 * b + 1]!, p[3 * a + 2]! - p[3 * b + 2]!);
+          for (let t = 0; t < idx.length; t += 3) {
+            for (const [a, b] of [[idx[t]!, idx[t + 1]!], [idx[t + 1]!, idx[t + 2]!], [idx[t + 2]!, idx[t]!]] as const) {
+              const ga = of(a), gb = of(b);
+              if (ga !== null && gb !== null && ga !== gb && len(pose, a, b) > 2 * len(rest, a, b) + 0.03) torn++;
+            }
+          }
+        }
+      }
+      g!.stop();
+      return torn;
+    } finally {
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }
+
+  /**
+   * A generated shell can fuse the inside of the upper arm to the flank below
+   * the armpit, and the build cuts it there (`armpit` in `build_monsters.py`).
+   * Uncut, a raised arm drew the flank up as a sheet: the Hoarfrost Spitter's
+   * arm into a ribbon (+0.38 m), the Grubling's into a faceted web.
+   */
+  it("keeps a raised arm off its flank through every strike", async () => {
+    const group = (bone: string) => (/^(arm_|hand_)/.test(bone) ? "arm" : bone === "spine" || bone === "hips" ? "trunk" : null);
+    for (const id of ["monster.blood_sentinel.v1", "monster.bog_drowned.v1", "monster.cinder_warden.v1", "monster.drowned_grubling.v1", "monster.hoarfrost_spitter.v1", "monster.wrack_drowned.v1"]) {
+      for (const clip of SLAMS.has(id) ? ["attack", "slam"] : ["attack"]) {
+        expect(await tornEdges(id, clip, group), `${id}: arm-to-flank edges stretched past 2x through the ${clip}`).toBe(0);
+      }
+    }
+  });
+
+  /**
+   * Mother Vhal's generated shell fuses neighbouring tendrils, and the build
+   * parts every face that joins two of them (`apart` in `build_monsters.py`).
+   * Joined, her walk tore grey sheets between them (+0.74 m).
+   */
+  it("keeps each tendril off its neighbour through every clip", async () => {
+    const group = (bone: string) => /^(leg\d+)_/.exec(bone)?.[1] ?? null;
+    for (const clip of ["idle", "walk", "attack", "slam"]) {
+      expect(await tornEdges("monster.mother_vhal.v1", clip, group), `mother_vhal: tendril-to-tendril edges stretched past 2x through the ${clip}`).toBe(0);
+    }
+  });
+
+  /**
    * Where the blow lands rides in each strike's glTF extras as `blow`, seconds on
    * the clip's timeline, so a wind-up's impact can be met by the clip's own
    * contact rather than one share guessed for every clip. The exporter writes no

@@ -187,7 +187,7 @@ def surface_dist(seed, free, ew, p):
             return dist
 
 
-def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=False):
+def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=False, armpit=None):
     """Nearest-bone weights, restricted to that bone and its direct neighbours.
 
     Bone heat fails on these generated shells, even on a watertight voxel copy.
@@ -380,6 +380,26 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=
         W[numpy.ix_(body, free)] = 0.0
         W /= W.sum(axis=1, keepdims=True)
         cut = fist if cut is None else cut | fist
+    flank = numpy.zeros(len(v), dtype=bool)
+    if armpit is not None:
+        # `armpit`, a fraction of H: below it the inside of an upper arm the shell
+        # fused to the flank is cut free, or a raised arm draws the flank up as a
+        # sheet. The chest is left out: what it owns is the shoulder's own blend.
+        trunk = numpy.array([b.name in ("hips", "spine") for b in bones])
+        dom = W.argmax(axis=1)
+        low = v[:, 2] < armpit * H
+        limb = numpy.zeros(len(v), dtype=bool)
+        for s, t in ((1, "l"), (-1, "r")):
+            chain = armish & numpy.array([b.name.endswith("_" + t) for b in bones])
+            mine = chain[dom] & low
+            theirs = trunk[dom] & low & (s * v[:, 0] > 0)
+            W[numpy.ix_(mine, trunk)] = 0.0
+            W[numpy.ix_(theirs, chain)] = 0.0
+            limb |= mine
+            flank |= theirs
+        W /= W.sum(axis=1, keepdims=True)
+        print("armpit below %.2f H: %d arm, %d flank vertices" % (armpit, limb.sum(), flank.sum()))
+        cut = limb if cut is None else cut | limb
     keep = numpy.argsort(-W, axis=1)[:, :4]
     groups = [mesh.vertex_groups.new(name=b.name) for b in bones]
     for vi in range(len(v)):
@@ -390,49 +410,105 @@ def skin(mesh, arm, thigh=None, knee=0.25, carry=None, held_at=None, fused_arms=
                 groups[bi].add([vi], float(wt), "REPLACE")
     print("weights: %d vertices, %d bones" % (len(v), len(bones)))
     if cut is not None:
-        part(mesh, cut, ~cut & (legs | hips)[W.argmax(axis=1)], 1e-4 * H)
+        part(mesh, cut, ~cut & ((legs | hips)[W.argmax(axis=1)] | flank), 1e-4 * H)
 
 
-def boundary_loops(edges):
-    """The boundary edges as closed vertex loops in walking order. A vertex where
-    more than two of them meet makes its loop ambiguous, and that loop is skipped."""
-    edges, loops = set(edges), []
-    while edges:
-        e = edges.pop()
-        loop, prev, at = [e.verts[0]], e.verts[0], e.verts[1]
-        while at is not loop[0]:
-            nxt = [x for x in at.link_edges if x in edges]
-            if len(nxt) != 1:
-                break
-            edges.discard(nxt[0])
-            loop.append(at)
-            prev, at = at, nxt[0].other_vert(at)
-        if at is loop[0] and len(loop) >= 3:
-            loops.append(loop)
-    return loops
+def edge_runs(edges):
+    """The edges as vertex runs, in the given order, broken wherever other than
+    two of them meet. A closed run repeats its first vertex last."""
+    left = dict.fromkeys(edges)
+    degree = {}
+    for e in edges:
+        for b in e.verts:
+            degree[b] = degree.get(b, 0) + 1
+
+    def walk(b, e):
+        run = [b]
+        while e is not None:
+            del left[e]
+            b = e.other_vert(b)
+            run.append(b)
+            e = next((x for x in b.link_edges if x in left), None) if degree[b] == 2 else None
+        return run
+
+    runs = []
+    for b in [b for b, n in degree.items() if n != 2]:
+        for e in [x for x in b.link_edges if x in left]:
+            if e in left:
+                runs.append(walk(b, e))
+    while left:
+        e = next(iter(left))
+        runs.append(walk(e.verts[0], e))
+    return runs
 
 
-def split_runs(sides):
-    """For a loop whose vertices are held (1), body (2) or neither (0): the two
-    index spans, junction to junction, that hold one side each, or None when the
-    loop is all one side or changes side more than twice."""
-    n = len(sides)
-    marked = [i for i in range(n) if sides[i]]
-    if len({sides[i] for i in marked}) < 2:
-        return None
-    junctions = []
-    for i in range(n):
-        # The first neither-side vertex of a run between the two sides is its junction.
-        if sides[i] or not sides[i - 1]:
+def cap_runs(bm, edges):
+    """Close each run of open edges with a fan around a new point at its centroid,
+    an open run across from end to end. Returns the cap faces and the runs no fan
+    could close.
+
+    One n-gon over a run that bends along a curved surface folds out of it when
+    triangulated, as shards. The centre is a copy of the run's middle point, so it
+    carries that point's side. A new face has no UVs and draws the sheet's corner
+    texel, and one UV for a whole cap draws it as a flat plate: each fan triangle
+    takes its rim edge's UVs from the skin along that edge, one island, and the
+    centre their midpoint, so the skin runs into the cap. The cap is smooth within
+    itself and sharp at its rim, or its normals bend the skin around it."""
+    caps, failed = [], 0
+    uvs = bm.loops.layers.uv.values()
+    deform = bm.verts.layers.deform.active
+    for run in edge_runs(edges):
+        seg = run[:-1] if run[0] is run[-1] else run
+        if len(seg) < 3:
             continue
-        before = next(sides[(i - k) % n] for k in range(1, n) if sides[(i - k) % n])
-        after = next(sides[(i + k) % n] for k in range(1, n) if sides[(i + k) % n])
-        if before != after:
-            junctions.append(i)
-    if len(junctions) != 2:
-        return None
-    a, b = junctions
-    return [(a, b), (b, a)]
+        mid = seg[len(seg) // 2]
+        centre = bm.verts.new(sum((b.co for b in seg), Vector()) / len(seg), mid)
+        if deform is not None:
+            # A run can span a joint: the centre blends the whole run's weights, or
+            # its fan swings with the middle point's bone when the joint bends.
+            acc = {}
+            for b in seg:
+                for g, w in b[deform].items():
+                    acc[g] = acc.get(g, 0.0) + w
+            top = sorted(acc.items(), key=lambda gw: -gw[1])[:4]
+            centre[deform].clear()
+            for g, w in top:
+                centre[deform][g] = w / sum(w for _, w in top)
+        skin = next(iter(mid.link_faces), None)
+        pairs = list(zip(seg, seg[1:] + seg[:1]))
+        # The skin runs each rim edge one way; its cap must run it the other, or
+        # the cap faces into the body. The whole fan turns the way most edges ask.
+        votes = 0
+        for a, b in pairs:
+            rim = bm.edges.get((a, b))
+            if rim is not None and rim.link_faces:
+                la = next(x for x in rim.link_faces[0].loops if x.vert is a)
+                votes += 1 if la.link_loop_next.vert is b else -1
+        fan = []
+        for a, b in pairs:
+            rim = bm.edges.get((a, b))
+            src = rim.link_faces[0] if rim is not None and rim.link_faces else skin
+            try:
+                f = bm.faces.new((b, a, centre) if votes > 0 else (a, b, centre))
+            except ValueError:
+                continue
+            f.smooth = True
+            if rim is not None:
+                rim.smooth = False
+            if src is not None:
+                at = {x.vert: x for x in src.loops}
+                for layer in uvs:
+                    mean = sum((x[layer].uv for x in src.loops), Vector((0.0, 0.0))) / len(src.loops)
+                    ends = [at[v][layer].uv if v in at else mean for v in (a, b)]
+                    for loop in f.loops:
+                        loop[layer].uv = ends[0] if loop.vert is a else ends[1] if loop.vert is b else (ends[0] + ends[1]) / 2
+            fan.append(f)
+        if not fan:
+            bm.verts.remove(centre)
+            failed += 1
+            continue
+        caps += fan
+    return caps, failed
 
 
 def part(mesh, held, body, weld):
@@ -454,24 +530,20 @@ def part(mesh, held, body, weld):
     near = {i for f in bm.faces if cut(f) for b in f.verts for _, i, _ in tree.find_range(b.co, weld)}
     bmesh.ops.remove_doubles(bm, verts=[bm.verts[i] for i in near], dist=weld)
     faces = [f for f in bm.faces if cut(f)]
-    rim = {e for f in faces for e in f.edges}
+    rim = list(dict.fromkeys(e for f in faces for e in f.edges))
     bmesh.ops.delete(bm, geom=faces, context="FACES")
     rim = [e for e in rim if e.is_valid and e.is_boundary]
-    # A strip one face wide leaves ONE hole running down the held side and back up
-    # the body side; a single cap across it would fuse them again. Such a loop is
-    # closed per side, each cap meeting the other only at the two neither-side
-    # vertices where the runs change.
-    caps = []
-    for loop in boundary_loops(rim):
-        for i, j in split_runs([b[side] for b in loop]) or []:
-            seg = loop[i:j + 1] if i < j else loop[i:] + loop[:j + 1]
-            if len(seg) >= 3:
-                caps.append(bm.faces.new(seg))
-    caps += bmesh.ops.holes_fill(bm, edges=[e for e in rim if e.is_boundary], sides=0)["faces"]
-    bmesh.ops.recalc_face_normals(bm, faces=caps)
-    bmesh.ops.triangulate(bm, faces=caps)
+    # A cap over a whole hole meets both sides and fuses them again, so each side
+    # closes its own runs, meeting the other only at neither-side vertices. No
+    # face that was cut had an edge from held to body, so each rim edge names
+    # its side by whichever of the two its ends hold.
+    caps, failed = [], 0
+    for s in (1, 2):
+        c, n = cap_runs(bm, [e for e in rim if s in {b[side] for b in e.verts}])
+        caps, failed = caps + c, failed + n
     joined = sum(1 for f in bm.faces if cut(f))
-    print("  parted: %d faces cut, %d rim edges, %d caps, %d still joined" % (len(faces), len(rim), len(caps), joined))
+    print("  parted: %d faces cut, %d rim edges, %d caps, %d runs left open, %d still joined"
+          % (len(faces), len(rim), len(caps), failed, joined))
     bm.verts.layers.int.remove(side)
     bm.to_mesh(mesh.data)
     bm.free()
