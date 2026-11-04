@@ -212,6 +212,8 @@ export function App(): React.ReactElement {
         telemetry.setLoading(true);
         setScreen({ kind: "game", characterId: first, fresh: isFresh(r, first) });
       }
+    }).catch((e: unknown) => {
+      if (live) setError(String(e instanceof Error ? e.message : e));
     });
     return () => { live = false; };
   }, []);
@@ -361,7 +363,9 @@ export function App(): React.ReactElement {
             onExit={() => {
               // The worker saved past the menu's boot copy; rows and Export read this one.
               // Settings stay the menu's own: a change from the last 400ms is not on disk yet.
-              void readRoster().then((r) => setRoster((prev) => putSettings(r, prev.settings)));
+              void readRoster()
+                .then((r) => setRoster((prev) => putSettings(r, prev.settings)))
+                .catch((e: unknown) => setError(String(e instanceof Error ? e.message : e)));
               setScreen({ kind: "select" });
             }}
             onLoadFailed={() => {

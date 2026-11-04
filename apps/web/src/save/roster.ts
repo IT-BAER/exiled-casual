@@ -25,6 +25,7 @@ import {
   saveRoster,
 } from "@exiled/persistence";
 import { sanitize, type Settings } from "../settings";
+import { reportError } from "../telemetry/errors";
 import { makeCharacterRecord, migrateSingleSave, openRoster, type NewCharacter } from "@exiled/simulation/roster-io";
 
 export type Mode = "local" | "online";
@@ -47,14 +48,46 @@ export function setKv(next: KvStore | null): void {
   store = next;
 }
 
-export async function readRoster(): Promise<RosterBlob> {
-  try {
-    return await openRoster(kv());
-  } catch {
-    // A browser that refuses IndexedDB (private mode, blocked storage) must still
-    // reach a menu. It gets an empty roster and a create that will fail loudly.
-    return emptyRoster();
+/** Tries of the boot read, the wait before each retry, and how long one try may hang. */
+const READ_TRIES = 3;
+const READ_RETRY_MS = 300;
+const READ_TIMEOUT_MS = 4_000;
+
+export class RosterUnreadableError extends Error {
+  constructor() {
+    super("Your save could not be read. Reload the page to try again; nothing was changed.");
   }
+}
+
+/**
+ * The roster at boot. A read that throws or hangs is retried on a fresh connection,
+ * then reported and rejected: shown as an empty list, a save that is only
+ * unreadable for a moment looks deleted.
+ */
+export async function readRoster(): Promise<RosterBlob> {
+  let last: unknown;
+  for (let i = 0; i < READ_TRIES; i++) {
+    if (i > 0) {
+      await new Promise((r) => setTimeout(r, READ_RETRY_MS));
+      // A hung open is cached inside the store; only a new one opens a new connection.
+      if (store instanceof IndexedDbKv) store = new IndexedDbKv();
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        openRoster(kv()),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`no answer in ${READ_TIMEOUT_MS} ms`)), READ_TIMEOUT_MS);
+        }),
+      ]);
+    } catch (e) {
+      last = e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  reportError("promise", "roster read failed", last instanceof Error ? `${last.name}: ${last.message}` : String(last));
+  throw new RosterUnreadableError();
 }
 
 export async function createCharacter(

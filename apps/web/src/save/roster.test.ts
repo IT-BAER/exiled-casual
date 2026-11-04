@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryKv, emptyRoster, loadRoster, putCharacterState, putStash, saveRoster } from "@exiled/persistence";
 import { DEFAULT_SETTINGS } from "../settings";
+import { telemetry } from "../telemetry/client";
 import {
   SETTINGS_DEBOUNCE_MS,
   createCharacter,
@@ -8,6 +9,7 @@ import {
   exportRoster,
   flushSettingsSave,
   importRoster,
+  readRoster,
   saveSettingsSoon,
   setKv,
   settingsOf,
@@ -134,5 +136,44 @@ describe("a menu write after a game session", () => {
     const stored = (await loadRoster(store))!;
     expect(stored.characters.find((c) => c.id === id)).toMatchObject({ level: 12, state: { life: 42 } });
     expect(stored.stash).toEqual({ tabs: ["pendant"] });
+  });
+});
+
+describe("reading the roster at boot", () => {
+  const vess = { id: "v", name: "Vess", classId: "class.stalker", level: 15, league: "Local", createdAt: 1, state: null };
+
+  it("loads the roster when a read fails and a later one succeeds", async () => {
+    await saveRoster(store, { ...emptyRoster(), characters: [vess] });
+    let fails = 1;
+    setKv({ load: () => (fails-- > 0 ? Promise.reject(new Error("UnknownError")) : store.load()), save: (v) => store.save(v) });
+    const read = readRoster();
+    await vi.runAllTimersAsync();
+    expect((await read).characters).toEqual([vess]);
+  });
+
+  it("rejects and reports a save it cannot read, rather than showing an empty roster", async () => {
+    const track = vi.spyOn(telemetry, "track");
+    setKv({ load: () => Promise.reject(new Error("UnknownError")), save: (v) => store.save(v) });
+    const read = readRoster();
+    const settled = expect(read).rejects.toThrow(/could not be read/i);
+    await vi.runAllTimersAsync();
+    await settled;
+    expect(track.mock.calls.map(([e]) => e).filter((e) => e.k === "error"))
+      .toEqual([expect.objectContaining({ src: "promise", msg: "roster read failed" })]);
+    track.mockRestore();
+  });
+
+  it("gives up on a read that never answers", async () => {
+    setKv({ load: () => new Promise<string | null>(() => {}), save: (v) => store.save(v) });
+    const read = readRoster();
+    const settled = expect(read).rejects.toThrow(/could not be read/i);
+    await vi.runAllTimersAsync();
+    await settled;
+  });
+
+  it("still treats a browser with no save as a new player", async () => {
+    const read = readRoster();
+    await vi.runAllTimersAsync();
+    expect(await read).toEqual(emptyRoster());
   });
 });
