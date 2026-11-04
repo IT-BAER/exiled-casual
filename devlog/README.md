@@ -648,3 +648,18 @@ A new character now finds its way: the hideout tracks FIRST MAP under the minima
 glows until the first map, and the first loading plate says where to start. Leaving puts the next goal
 on the character screen, with an Install button where the browser offers one. Names take letters of
 any script, and spitters that circle the player step sideways or back on their legs.
+
+## 2026-11-03 · Maren's table, and monsters that freeze
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-11-03-maren-cozy-hideout.jpeg" alt="The hideout: Maren the red-haired cartographer beside the Map Device, candles on the table, a bookshelf and grain sacks" width="100%"><br><sub>Maren sells waystones beside the Map Device.</sub></td>
+<td width="50%"><img src="screenshots/2026-11-03-frozen-shatter.jpeg" alt="A frozen monster shattering into a burst of ice shards in the hideout test pack" width="100%"><br><sub>A frozen monster shatters into ice.</sub></td>
+</tr>
+</table>
+
+Maren the cartographer now trades waystones beside the Map Device, from a table that turns over every
+ten minutes, and the hideout gained candles, a bookshelf, grain sacks and a cauldron. Ailments show on
+the body: cold builds frost until a monster freezes and shatters when killed, lightning shocks, and
+Arcing Arrow electrocutes. Six new skills per class arrived with their own clips, effects and sounds,
+and the first load into the hideout is about a third faster.

@@ -10,6 +10,46 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Six new skills for every class, each with its own animation, effect, sound
+  and icon. Every class skill now carries a name of its own.
+- Ailments show on the monster itself. Cold hits build up frost until the
+  monster freezes solid for 4 seconds, and a frozen monster killed shatters
+  into ice. Lightning can shock, so the monster takes more damage for a while.
+  Burning, poison and bleeding each have their own look on the body.
+- Arcing Arrow electrocutes: its lightning builds a charge on what it strikes,
+  down the whole chain, and a full charge holds the monster in place for
+  3 seconds inside a crackling shell of arcs. Bosses are immune.
+- Maren the cartographer now stands beside the Map Device. She sells waystones
+  from a table that changes every ten minutes and whenever you level up, at a
+  high price, and buys waystones from you.
+- The hideout feels lived-in: candles on the table, a full bookshelf, grain
+  sacks by the stores and a cauldron by the fire.
+- A running buff or aura lights its skill slot with a slow lap of light round
+  the frame. Buffs have tooltips, and the mana globe's tooltip names the share
+  your auras reserve, which the globe draws as grey liquid.
+
+### Changed
+
+- The first load into the hideout is about a third faster (13.7 instead of
+  21 seconds on the test machine), and the props and animation downloads are
+  smaller.
+- No skill stutters on its first cast any more: everything a fight can show is
+  prepared behind the loading screen.
+- Older skills were rebalanced against the new ones. Earthquake now slams the
+  floor, and Sunder and its aftershock land ahead of you.
+- Buff casts are shorter, and an aura now switches off with a falling gust of
+  wind. No sound ends abruptly any more: every one fades out.
+- Skills that use the whole body leave the legs to walking while you move.
+
+### Fixed
+
+- Switching an aura off starts its cooldown again.
+- Ground Slam's crack no longer flares white.
+- A waystone bought from Maren in the very moment her table changes is no
+  longer swapped for a different stone at a different price.
+
 ## [0.6.0] - 2026-10-31
 
 ### Added
