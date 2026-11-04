@@ -63,7 +63,7 @@ import { DebugStats } from "./hud/DebugStats";
 import { DeathRecap } from "./hud/DeathRecap";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
-import { settleGate, warmDoneGate } from "./settle";
+import { READY_CAP_MS, settleGate, warmDoneGate } from "./settle";
 import { createLoadClock } from "./load-phases";
 import { reloadPage } from "./chunk-reload";
 import { beginLoad, setLoadPart } from "./load-progress";
@@ -111,6 +111,33 @@ export interface GameViewProps {
    * of this class, every skill granted, dummies standing. Touches no save.
    */
   lab?: string;
+}
+
+/**
+ * What `scene.isReady` is still waiting on, in its own order: pending loads, meshes,
+ * the per-mesh stages (glow layer), particle systems, the camera. Reads Babylon
+ * internals, so every field is optional and a stub scene yields "".
+ */
+function readinessBlockers(scene: Scene): string {
+  const s = scene as unknown as {
+    _pendingData?: { url?: string; name?: string }[];
+    _isReadyForMeshStage?: { action: (mesh: unknown, instanced: boolean) => boolean }[];
+    meshes?: Scene["meshes"];
+    particleSystems?: Scene["particleSystems"];
+    activeCamera?: Scene["activeCamera"];
+  };
+  const names = (xs: { name?: string }[]) => xs.slice(0, 12).map((x) => x.name ?? "?").join(",");
+  const meshes = (s.meshes ?? []).filter((m) => m.subMeshes?.length);
+  const out = [
+    `pending=${names((s._pendingData ?? []).map((p) => ({ name: p.url ?? p.name ?? "?" })))}`,
+    `meshes=${names(meshes.filter((m) => !m.isReady(true)))}`,
+    `stages=${names(meshes.filter((m) => !(s._isReadyForMeshStage ?? []).every((st) => {
+      try { return st.action(m, m.hasInstances || m.hasThinInstances); } catch { return false; }
+    })))}`,
+    `particles=${names((s.particleSystems ?? []).filter((p) => !p.isReady()))}`,
+    `camera=${s.activeCamera ? s.activeCamera.isReady(true) : "none"}`,
+  ];
+  return out.join(" ");
 }
 
 export function GameView({
@@ -406,6 +433,8 @@ export function GameView({
      * for it, StrictMode's second mount included.
      */
     let settled: ((now: number) => boolean) | null = null;
+    /** When the current area arrived; the settle arms without `executeWhenReady` READY_CAP_MS after it. */
+    let areaAt: number | null = null;
     /** Drops the warm-up copies of every spawnable look. Held until the plate settles. */
     let releaseWarm: (() => void) | null = null;
     /** The models are in and an area is built: the warm-up waits for both, or it warms greyboxes. */
@@ -716,6 +745,7 @@ export function GameView({
         // already in flight for the OLD area must not be allowed to report the
         // new one ready.
         settled = null;
+        areaAt = performance.now();
         // The one sound the player makes and never hears an entity for: the
         // crossing itself. Every id in the new area is new, so the diff has to
         // start over or the whole old population would be reported dead.
@@ -792,7 +822,7 @@ export function GameView({
         // Arms the paint only once this area's materials and textures are in.
         // Babylon defers this through a timeout even when nothing is pending, so
         // the plate always gets at least one render to appear in.
-        scene.executeWhenReady(() => { settled = settleGate(performance.now()); });
+        scene.executeWhenReady(() => { if (plateUp) settled = settleGate(performance.now()); });
       }
     };
 
@@ -844,6 +874,10 @@ export function GameView({
           releaseWarm();
           releaseWarm = null;
         }
+      }
+      if (plateUp && settled === null && areaAt !== null && frameMs - areaAt >= READY_CAP_MS) {
+        reportError("webgl", "scene not ready at the plate cap", readinessBlockers(scene));
+        settled = settleGate(frameMs);
       }
       // The one place the loading plate is allowed to come down: frames for
       // this area are on the glass at a playable pace. Guarded by a local rather

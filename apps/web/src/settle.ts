@@ -10,6 +10,13 @@ export const SETTLE_FRAME_MS = 66;
 /** A GPU that never settles still gets its world after this long. */
 export const SETTLE_CAP_MS = 15_000;
 
+/**
+ * How long an area waits for `executeWhenReady` before the settle starts without it.
+ * Babylon clears every pending callback after its own two-minute timeout, so a scene
+ * that is ready late would otherwise hold the plate up for good.
+ */
+export const READY_CAP_MS = 20_000;
+
 /** Call once per painted frame with its timestamp; true once settled. */
 export function settleGate(start: number): (now: number) => boolean {
   let last = start;

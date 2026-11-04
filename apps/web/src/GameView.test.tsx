@@ -143,7 +143,7 @@ vi.mock("./input/bindings", () => ({
 
 import { GameView } from "./GameView";
 import { FADE_MS } from "./LoadingScreen";
-import { SETTLE_FRAMES } from "./settle";
+import { READY_CAP_MS, SETTLE_FRAMES } from "./settle";
 import { playSfx } from "./audio/sfx";
 import { telemetry } from "./telemetry/client";
 
@@ -507,6 +507,26 @@ describe("GameView", () => {
     paintSettled();
     await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
+  });
+
+  it("lowers the plate on its own when the scene never reports ready, and says what was not ready", async () => {
+    // Babylon drops every executeWhenReady callback after its own two-minute
+    // timeout, so a scene that is late once would hold the plate up for good.
+    const track = vi.spyOn(telemetry, "track");
+    await mountGame();
+    sendArea("map.forest");
+    paintSettled();
+    expect(screen.getByTestId("loading-screen").getAttribute("data-leaving")).toBeNull();
+
+    const later = performance.now() + READY_CAP_MS + 1;
+    const now = vi.spyOn(performance, "now").mockReturnValue(later);
+    paintFrame();
+    paintSettled();
+    expect(screen.getByTestId("loading-screen").getAttribute("data-leaving")).toBe("");
+    const errors = track.mock.calls.map(([e]) => e).filter((e) => e.k === "error");
+    expect(errors).toEqual([expect.objectContaining({ src: "webgl", msg: "scene not ready at the plate cap" })]);
+    now.mockRestore();
+    track.mockRestore();
   });
 
   it("comes back for the next area and names where the player is going", async () => {
