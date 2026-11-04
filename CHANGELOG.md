@@ -10,6 +10,15 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Fixed
+
+- Entering a map can no longer leave you stuck on the loading screen. If the
+  world takes too long to report itself ready, the screen comes down anyway
+  after about 20 seconds.
+- Your characters no longer go missing from character select when the browser
+  is slow to read your save. The game tries again, and if it still cannot
+  read it, it says so and asks you to reload instead of showing an empty list.
+
 ## [0.7.0] - 2026-11-04
 
 ### Added
