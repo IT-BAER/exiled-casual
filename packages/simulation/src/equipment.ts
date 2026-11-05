@@ -14,7 +14,6 @@ export const EQUIP_SLOTS_BY_CLASS: Record<string, EquipSlotId[]> = {
   wand:   ["weapon1"],
   mace:   ["weapon1"],
   sword:  ["weapon1"],
-  // ponytail: PoE's bow is two-handed; nothing blocks a buckler beside it until a quiver exists.
   bow:    ["weapon1"],
   focus:  ["weapon2"],
   shield: ["weapon2"],
@@ -26,6 +25,13 @@ export const EQUIP_SLOTS_BY_CLASS: Record<string, EquipSlotId[]> = {
   amulet: ["amulet"],
   ring:   ["ring1", "ring2"],
 };
+
+/** PoE's bow takes both hands, so nothing is held in `weapon2` beside it (no quiver slot yet). */
+const TWO_HANDED = new Set(["bow"]);
+
+export function isTwoHanded(itemClass: string): boolean {
+  return TWO_HANDED.has(itemClass);
+}
 
 /** True when itemClass can legally go into slot. Classes absent from the map are not equippable. */
 export function canEquip(itemClass: string, slot: EquipSlotId): boolean {

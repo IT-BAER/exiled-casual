@@ -19,6 +19,10 @@ const WAND: Item = { baseId: "base.ember_wand", rarity: "normal", itemLevel: 65,
 const HELMET: Item = { baseId: "base.ironsworn_helm", rarity: "normal", itemLevel: 65, affixes: [] };
 // base.ember_focus: itemClass="focus", w=2, h=2
 const FOCUS: Item = { baseId: "base.ember_focus", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.stalker_bow: itemClass="bow", w=2, h=4, two-handed
+const BOW: Item = { baseId: "base.stalker_bow", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.stalker_buckler: itemClass="shield", w=2, h=2
+const BUCKLER: Item = { baseId: "base.stalker_buckler", rarity: "normal", itemLevel: 65, affixes: [] };
 
 function makeWorld() {
   return createCombatSim(7, { area: "hideout" });
@@ -206,6 +210,45 @@ describe("equipment system — equipItem", () => {
     const stash = world.get<InventoryC>(sessionE(world), "stash")!;
     expect(stash.items.map((p) => p.item.rarity)).toEqual(["magic"]);
     expect(getInv(world).items).toHaveLength(0);
+  });
+
+  it("a bow takes both hands: the off-hand piece goes to the backpack", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon2: BUCKLER } });
+    placeInInv(world, BOW, 0, 0, 2, 4);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots).toEqual({ weapon1: BOW });
+    expect(getInv(world).items.map((p) => p.item.baseId)).toEqual(["base.stalker_buckler"]);
+  });
+
+  it("an off-hand piece put on beside a bow sends the bow to the backpack", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: BOW } });
+    placeInInv(world, BUCKLER, 0, 0, 2, 2);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon2" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots).toEqual({ weapon2: BUCKLER });
+    expect(getInv(world).items.map((p) => p.item.baseId)).toEqual(["base.stalker_bow"]);
+  });
+
+  it("refuses the bow, changing nothing, when both hands' pieces have no room to go", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    // The bow's 2x4 holds the 1x2 wand or the 2x3 tower shield, never both.
+    const TOWER: Item = { baseId: "base.ironsworn_tower_shield", rarity: "normal", itemLevel: 65, affixes: [] };
+    world.set<InventoryC>(sessionE(world), "inventory", { cols: 2, rows: 4, items: [] });
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: WAND, weapon2: TOWER } });
+    placeInInv(world, BOW, 0, 0, 2, 4);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots).toEqual({ weapon1: WAND, weapon2: TOWER });
+    expect(getInv(world).items.map((p) => p.item.baseId)).toEqual(["base.stalker_bow"]);
+    expect(sim.pickupRefusedTick).toBe(0);
   });
 
   it("rolls back entirely when displaced occupant does not fit back in the grid", () => {
@@ -700,6 +743,27 @@ describe("persist — equipment", () => {
     const worn = w2.get<EquipmentC>(sessionE(w2), "equipment")!.slots["helmet"]!;
     expect(worn.unidentified).toBeUndefined();
     expect(worn.affixes).toEqual(affixes);
+  });
+
+  it("a save holding a buckler beside a bow loads with the buckler in the backpack, else the stash", async () => {
+    const kv = new MemoryKv();
+    const { world } = makeWorld();
+    clearInv(world);
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: BOW, weapon2: BUCKLER } });
+    await saveTo(kv, world);
+    const { world: w2 } = makeWorld();
+    expect(await loadInto(kv, w2)).toBe(true);
+    expect(getEquip(w2).slots).toEqual({ weapon1: BOW });
+    expect(getInv(w2).items.map((p) => p.item.baseId)).toContain("base.stalker_buckler");
+
+    const full = new MemoryKv();
+    world.set<InventoryC>(sessionE(world), "inventory", { cols: 1, rows: 1, items: [] });
+    world.set<InventoryC>(sessionE(world), "stash", { cols: 12, rows: 12, items: [] });
+    await saveTo(full, world);
+    const { world: w3 } = makeWorld();
+    expect(await loadInto(full, w3)).toBe(true);
+    expect(getEquip(w3).slots).toEqual({ weapon1: BOW });
+    expect(w3.get<InventoryC>(sessionE(w3), "stash")!.items.map((p) => p.item.baseId)).toEqual(["base.stalker_buckler"]);
   });
 
   it("old save without equipment field loads as empty slots (backwards compat)", async () => {

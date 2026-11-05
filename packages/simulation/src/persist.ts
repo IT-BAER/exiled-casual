@@ -3,10 +3,11 @@ import type { World } from "./ecs";
 import type { SessionC, InventoryC, StashC, VendorC, BuybackC, EquipmentC, ProgressC, ShardsC, SkillsC, FloorItem } from "./components";
 import { hideoutFloor as hideoutFloorOf, layFloor } from "./hideout-floor";
 import { stockMapShop, stockVendor } from "./vendor";
-import { withPermanentWaystone } from "./inventory";
+import { withPermanentWaystone, placeFirstFit } from "./inventory";
+import { isTwoHanded } from "./equipment";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext, classIdOr } from "@exiled/rules";
-import { SKILLS, defaultAttackFor, FREE_ATTACKS, UTILITY_SKILLS } from "@exiled/content-runtime";
+import { SKILLS, defaultAttackFor, FREE_ATTACKS, UTILITY_SKILLS, baseOf } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 
 /**
@@ -244,6 +245,7 @@ export function restore(world: World, state: PersistedState): void {
   world.set<InventoryC>(e, "inventory", withPermanentWaystone(state.inventory));
   world.set<StashC>(e, "stash", state.stash ?? EMPTY_STASH);
   world.set<EquipmentC>(e, "equipment", readWornGear(state.equipment ?? { slots: {} }));
+  freeBowHand(world, e);
   // A save written before gold existed carries a progress with no `gold` key, so
   // the field is defaulted on its own rather than only when progress is missing.
   const progress = state.progress ?? { level: START_LEVEL, xp: 0, gold: 0 };
@@ -296,6 +298,27 @@ function readWornGear(equipment: EquipmentC): EquipmentC {
     slots[slot as keyof EquipmentC["slots"]] = read;
   }
   return { slots };
+}
+
+/**
+ * A save from before the bow took both hands can hold an off-hand piece beside
+ * one: it goes to the backpack, else the stash, else stays worn. Never lost.
+ */
+function freeBowHand(world: World, e: number): void {
+  const equip = world.get<EquipmentC>(e, "equipment")!;
+  const { weapon1: bow, weapon2: off } = equip.slots;
+  if (!bow || !off || !isTwoHanded(baseOf(bow.baseId).itemClass)) return;
+  const b = baseOf(off.baseId);
+  for (const comp of ["inventory", "stash"] as const) {
+    const box = world.get<InventoryC>(e, comp)!;
+    const fit = placeFirstFit(box, b.w, b.h);
+    if (fit === null) continue;
+    world.set<InventoryC>(e, comp, { ...box, items: [...box.items, { x: fit.x, y: fit.y, w: b.w, h: b.h, item: off }] });
+    const slots = { ...equip.slots };
+    delete slots.weapon2;
+    world.set<EquipmentC>(e, "equipment", { slots });
+    return;
+  }
 }
 
 /** Serialize `world`'s durable state to `kv`. No-op if there is no session. */

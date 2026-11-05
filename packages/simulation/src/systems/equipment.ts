@@ -4,7 +4,7 @@ import { SORT_MODES } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { isStaple, recordSale, restockMapShop, unpayShards } from "../vendor";
 import { placeFirstFit, canPlaceAt, sortInventory } from "../inventory";
-import { canEquip } from "../equipment";
+import { canEquip, isTwoHanded } from "../equipment";
 import { recomputePlayerStats } from "../derived";
 import type { Position, ItemC, InventoryC, VendorC, BuybackC, EquipmentC, ShardsC, ProgressC } from "../components";
 import type { Item } from "@exiled/content-schema";
@@ -46,28 +46,29 @@ export function registerEquipmentSystem(sim: Simulation): void {
 
         const equip = world.get<EquipmentC>(sessionE, "equipment")!;
         const occupant: Item | undefined = equip.slots[slot];
+        // A bow and an off-hand piece cannot be held together: whichever was there goes.
+        const other = slot === "weapon1" ? "weapon2" : slot === "weapon2" ? "weapon1" : undefined;
+        const otherItem = other && equip.slots[other];
+        const clash = otherItem && (isTwoHanded(base.itemClass) || isTwoHanded(baseOf(otherItem.baseId).itemClass))
+          ? other : undefined;
 
-        // Remove the equipping item from the grid.
-        const afterRemoval = inv.items.filter((p) => !(p.x === x && p.y === y));
-
-        if (occupant !== undefined) {
-          // Try to place the displaced occupant back into the (post-removal) grid.
-          const tempInv: InventoryC = { ...inv, items: afterRemoval };
-          const occupantBase = baseOf(occupant.baseId);
-          const fit = placeFirstFit(tempInv, occupantBase.w, occupantBase.h);
-          if (fit === null) { sim.pickupRefusedTick = tick; continue; } // rollback: leave everything unchanged
-
-          world.set<InventoryC>(sessionE, comp, {
-            ...inv,
-            items: [...afterRemoval, { x: fit.x, y: fit.y, w: occupantBase.w, h: occupantBase.h, item: occupant }],
-          });
-        } else {
-          world.set<InventoryC>(sessionE, comp, { ...inv, items: afterRemoval });
+        // Remove the equipping item from the grid, then place every displaced piece
+        // back into it; one that does not fit rolls the whole equip back.
+        let grid: InventoryC = { ...inv, items: inv.items.filter((p) => !(p.x === x && p.y === y)) };
+        let fits = true;
+        for (const piece of [occupant, clash && equip.slots[clash]]) {
+          if (!piece) continue;
+          const b = baseOf(piece.baseId);
+          const fit = placeFirstFit(grid, b.w, b.h);
+          if (fit === null) { fits = false; break; }
+          grid = { ...grid, items: [...grid.items, { x: fit.x, y: fit.y, w: b.w, h: b.h, item: piece }] };
         }
+        if (!fits) { sim.pickupRefusedTick = tick; continue; }
+        world.set<InventoryC>(sessionE, comp, grid);
 
-        world.set<EquipmentC>(sessionE, "equipment", {
-          slots: { ...equip.slots, [slot]: placed.item },
-        });
+        const slots = { ...equip.slots, [slot]: placed.item };
+        if (clash) delete slots[clash];
+        world.set<EquipmentC>(sessionE, "equipment", { slots });
         recomputePlayerStats(world);
         continue;
       }
