@@ -2,17 +2,18 @@
 // the world alone, by returning the same commands the client sends. The headless
 // balance runner (playtest.ts) and the client's ?bot mode both drive it.
 import { fp } from "@exiled/fixed-point";
-import { canAllocate, passivePoints, PASSIVE_TREE } from "@exiled/rules";
+import { canAllocate, passivePoints, PASSIVE_TREE, effectiveSkill } from "@exiled/rules";
 import { SKILLS, DEFAULT_ATTACK_BY_CLASS, MONSTERS, isCurrency } from "@exiled/content-runtime";
 import { PICKUP_RADIUS } from "@exiled/protocol";
 import { hasLineOfSight, type Collision } from "./collision";
 import { bodyRadiusOf } from "./body";
+import { activeBuffs, activeStatuses } from "./status";
 import { telegraphCovers } from "./systems/telegraph-resolve";
 import type { Simulation, Command } from "./loop";
 import type { World, Entity } from "./ecs";
 import type {
   Position, Health, Mana, SessionC, MonsterC, Cooldowns, FlasksC, ProgressC, SkillsC,
-  TelegraphC, GroundAreaC, InteractableC, ContainerC, ItemC, PlayerC,
+  TelegraphC, GroundAreaC, InteractableC, ContainerC, ItemC, PlayerC, CastingC,
 } from "./components";
 
 const HZ = 30;
@@ -32,6 +33,56 @@ export const AREA: Record<string, string> = {
 };
 const GROUND = "skill.cinder_ground.v1";
 const BLINK = "skill.blink.v1";
+
+/** A class's own kit for the `kit` pilot: every skill the class opens, used where it pays. */
+export interface Kit {
+  /** Socket priority: the first six unlocked go in the five numbered sockets and the free mouse one. */
+  bar: readonly string[];
+  /** Tried first on a pack (three within 2.5 of the target) or a rare or boss. */
+  pack: readonly string[];
+  /** Tried on every target, in order; the free attack comes last. */
+  single: readonly string[];
+  /** Auras are kept on; a timed buff or warcry goes up on a rare, a boss or two awake within 5. */
+  buffs: readonly string[];
+  /** A curse or mark for a rare, a boss or a pack that does not carry it yet. */
+  mark?: string;
+  /** Melee: travel onto a target 3 or more units away. */
+  gap?: string;
+  /** Below 60% life with a melee body within 2: aimed at it, the skill carries him off. */
+  escape?: string;
+}
+
+/**
+ * The three balance pilots' kits (4 Nov), one per class: Ironsworn's `kit`, the
+ * Stalker's KIT and early kit, the Emberbound's natural-campaign priority.
+ */
+export const KITS: Record<string, Kit> = {
+  "class.ironsworn": {
+    bar: ["skill.ground_slam.v1", "skill.sunder.v1", "skill.heavy_strike.v1", "skill.infernal_cry.v1",
+      "skill.blood_rage.v1", "skill.determination.v1", "skill.leap_slam.v1", "skill.earthquake.v1", BLINK],
+    pack: ["skill.ground_slam.v1", "skill.earthquake.v1"],
+    single: ["skill.sunder.v1", "skill.heavy_strike.v1"],
+    buffs: ["skill.determination.v1", "skill.blood_rage.v1", "skill.infernal_cry.v1"],
+    gap: "skill.leap_slam.v1",
+  },
+  "class.stalker": {
+    bar: ["skill.lightning_arrow.v1", "skill.piercing_shot.v1", "skill.rain_of_arrows.v1", "skill.snipers_mark.v1",
+      "skill.haste.v1", "skill.escape_shot.v1", "skill.split_arrow.v1", "skill.ice_shot.v1", BLINK],
+    pack: ["skill.rain_of_arrows.v1", "skill.lightning_arrow.v1", "skill.split_arrow.v1", "skill.ice_shot.v1"],
+    single: ["skill.lightning_arrow.v1", "skill.piercing_shot.v1", "skill.ice_shot.v1"],
+    buffs: ["skill.haste.v1"],
+    mark: "skill.snipers_mark.v1",
+    escape: "skill.escape_shot.v1",
+  },
+  "class.emberbound": {
+    bar: ["skill.ember_bolt.v1", GROUND, "skill.firestorm.v1", "skill.solar_orb.v1", "skill.flammability.v1",
+      "skill.herald_of_ash.v1", "skill.ember_nova.v1", BLINK],
+    pack: ["skill.firestorm.v1", "skill.solar_orb.v1", GROUND],
+    single: ["skill.ember_bolt.v1", "skill.ember_nova.v1"],
+    buffs: ["skill.herald_of_ash.v1"],
+    mark: "skill.flammability.v1",
+  },
+};
 /**
  * Bolt radius 0.4 plus margin: the sight line is sampled every 0.25 units, the
  * bolt every 0.4, so a line that grazes a wall corner at 0.4 still eats the bolt.
@@ -53,6 +104,8 @@ export interface BotOptions {
   trace?: (world: World, player: Entity, tick: number) => void;
   /** A first-hour player: reads no tells, drinks no flasks, never blinks or backs off. */
   novice?: boolean;
+  /** Fight with the class's whole kit (`KITS`) instead of its two lead skills; the harness slots it. */
+  kit?: boolean;
 }
 
 export interface BotGame { sim: Simulation; world: World; player: Entity; session: Entity; classId: string }
@@ -65,6 +118,7 @@ export class Bot {
   private readonly melee: boolean;
   private readonly without: ReadonlySet<string>;
   private readonly novice: boolean;
+  private readonly kit: Kit | undefined;
   /** Entities the bot gave up on reaching, until the tick stored. */
   private readonly skip = new Map<Entity, number>();
   private goal: Entity | undefined;
@@ -87,6 +141,7 @@ export class Bot {
     this.melee = isMelee(this.attack);
     this.without = new Set(opts.without ?? []);
     this.novice = opts.novice ?? false;
+    this.kit = opts.kit ? KITS[g.classId] : undefined;
   }
 
   hasLootLeft(): boolean {
@@ -148,6 +203,15 @@ export class Bot {
       return out;
     }
 
+    // 1b. The kit's escape: a melee body on him and life going, the shot carries him off.
+    const esc = this.kit?.escape;
+    if (esc && !this.novice && h.life * 10 < h.maxLife * 6 && this.kitReady(esc)) {
+      const close = this.monsters().filter((x) => x.awake && dist(p, x.p) < fp(2)
+        && !MONSTERS.get(world.get<MonsterC>(x.e, "monster")!.defId)?.ranged)
+        .sort((a, b) => dist(p, a.p) - dist(p, b.p))[0];
+      if (close) { out.push(cmd({ type: "useSkill", skillId: esc, data: { tx: close.p.x, ty: close.p.y } })); return out; }
+    }
+
     // 2. Fight what is in reach.
     const target = this.pickTarget(p, tick, bossDead);
     if (target) {
@@ -156,7 +220,7 @@ export class Bot {
         out.push(cmd({ type: "useSkill", skillId: BLINK, data: this.escape(p, near.p, fp(5)) }));
         return out;
       }
-      const skill = this.pickSkill(p, target);
+      const skill = this.kit ? this.pickKit(p, target) : this.pickSkill(p, target);
       if (skill) out.push(cmd({ type: "useSkill", skillId: skill, data: { tx: target.p.x, ty: target.p.y } }));
       // Already in a swing's reach with every swing cooling down: walking on
       // takes him to the target's centre, where the swing has nothing to aim at.
@@ -195,6 +259,13 @@ export class Bot {
         out.push(cmd({ type: "moveTo", data: away }));
         return out;
       }
+    }
+
+    // 2c. Between fights an aura that dropped (a death, an area change) goes back up.
+    const aura = this.kit?.buffs.find((id) => this.isAura(id) && this.kitReady(id) && !this.buffOn(id));
+    if (aura) {
+      out.push(cmd({ type: "useSkill", skillId: aura, data: { tx: p.x + fp(1), ty: p.y } }));
+      return out;
     }
 
     // 3. Nothing in reach: loot, then chests, then the nearest monster.
@@ -300,7 +371,8 @@ export class Bot {
 
   /** The shortest reach of any swing on the bar: inside it, every swing he has can land. */
   private shortestReach(target: Entity): number {
-    return Math.min(...[this.attack, this.signature, this.area].filter((id) => this.onBar(id)).map((id) => this.reach(id, target)));
+    const swings = this.kit ? [this.attack, ...this.kit.pack, ...this.kit.single] : [this.attack, this.signature, this.area];
+    return Math.min(...swings.filter((id) => this.onBar(id)).map((id) => this.reach(id, target)));
   }
 
   /** Nearest awake monster with a clear line, re-chosen only at human speed. */
@@ -375,6 +447,90 @@ export class Bot {
     if (this.ready(this.signature) && d <= this.reach(this.signature, t.e)) return this.signature;
     // Out of reach of a swing: undefined walks him in.
     return this.onBar(this.attack) && d <= this.reach(this.attack, t.e) ? this.attack : undefined;
+  }
+
+  /**
+   * The kit's pick for target `t`: a buff that is down, the gap closer, the mark,
+   * the pack list on a pack or a big body, the single list, then the free attack.
+   */
+  private pickKit(p: Position, t: { e: Entity; p: Position }): string | undefined {
+    const k = this.kit!;
+    const w = this.g.world;
+    const d = dist(p, t.p);
+    const mons = this.monsters();
+    const packed = mons.filter((x) => dist(t.p, x.p) < fp(2.5)).length >= 3;
+    const big = w.has(t.e, "boss") || w.get<MonsterC>(t.e, "monster")!.rare === 1;
+    const busy = big || mons.filter((x) => x.awake && dist(p, x.p) < fp(5)).length >= 2;
+    const fits = (id: string) => this.kitReady(id) && d <= this.kitReach(id, t.e);
+
+    for (const id of k.buffs) {
+      if (!this.kitReady(id) || this.buffOn(id)) continue;
+      if (this.isAura(id) || (busy && d <= this.kitReach(id, t.e))) return id;
+    }
+    if (k.gap && this.melee && d >= fp(3) && fits(k.gap) && hasLineOfSight(this.collision, p.x, p.y, t.p.x, t.p.y, fp(0.5))) return k.gap;
+    if (k.mark && (big || packed) && fits(k.mark) && !this.carries(t.e, k.mark)) return k.mark;
+    // A second patch of the same ground on a burning target is mana for nothing.
+    const fed = (id: string) => w.query("groundArea", "position").some((e) => {
+      const a = w.get<GroundAreaC>(e, "groundArea")!;
+      return a.team === 0 && a.skillId === id && dist(t.p, w.get<Position>(e, "position")!) < a.radius;
+    });
+    if (packed || big) for (const id of k.pack) if (fits(id) && !fed(id)) return id;
+    for (const id of k.single) if (fits(id) && !fed(id)) return id;
+    return this.onBar(this.attack) && d <= this.reach(this.attack, t.e) ? this.attack : undefined;
+  }
+
+  private gemOf(id: string): number {
+    return this.g.world.get<SkillsC>(this.g.session, "skills")?.gems[id]?.level ?? 1;
+  }
+
+  /** On the bar, off cooldown, no wind-up running, and payable at the gem's cost with an aura's reserve held. */
+  private kitReady(id: string): boolean {
+    if (!this.onBar(id)) return false;
+    const { world, sim, player } = this.g;
+    if ((world.get<Cooldowns>(player, "cooldowns")?.[id] ?? 0) > sim.tick) return false;
+    if ((world.get<CastingC>(player, "casting")?.untilTick ?? 0) > sim.tick) return false;
+    const m = world.get<Mana>(player, "mana")!;
+    const skill = effectiveSkill(SKILLS.get(id)!, this.gemOf(id));
+    const aura = skill.effects.find((e) => e.type === "applyBuff" && e.durationTicks === 0);
+    const hold = aura && aura.type === "applyBuff" ? Math.trunc((m.maxMana * (aura.reserveManaPct ?? 0)) / 100) : 0;
+    return m.mana >= skill.manaCostFixed + hold;
+  }
+
+  private isAura(id: string): boolean {
+    return SKILLS.get(id)!.effects.some((e) => e.type === "applyBuff" && e.durationTicks === 0);
+  }
+
+  private buffOn(id: string): boolean {
+    return activeBuffs(this.g.world, this.g.player, this.g.sim.tick).some((b) => b.skillId === id);
+  }
+
+  /** Whether `e` already carries the status skill `id` puts on. */
+  private carries(e: Entity, id: string): boolean {
+    const fx = SKILLS.get(id)!.effects.find((x) => x.type === "applyStatus");
+    const status = fx && fx.type === "applyStatus" ? fx.statusId : undefined;
+    return activeStatuses(this.g.world, e, this.g.sim.tick).some((s) => s.id === status);
+  }
+
+  /**
+   * How far from the target's centre a skill still lands on it, from its effects at
+   * his gem level: a swing or a hit around him to the target's surface, a bolt most of
+   * its flight, a placed area its range. A pure self buff reaches anywhere.
+   */
+  private kitReach(id: string, target: Entity): number {
+    const r = bodyRadiusOf(this.g.world, target);
+    const reaches = effectiveSkill(SKILLS.get(id)!, this.gemOf(id)).effects.flatMap((e): number[] => {
+      switch (e.type) {
+        case "meleeStrike": return [e.reachFixed + r - REACH_MARGIN];
+        case "spawnProjectile": return [Math.trunc(e.maxRangeFixed * 0.9)];
+        case "areaHit": return [e.at === "self" ? e.radiusFixed + r - REACH_MARGIN
+          : Math.trunc(((e.maxRangeFixed ?? 0) + (e.stepFixed ?? 0) * ((e.count ?? 1) - 1) + e.radiusFixed) * 0.85)];
+        case "spawnGroundArea": return [e.maxRangeFixed ?? fp(14)];
+        case "applyStatus": return [e.at === "self" ? e.radiusFixed + r - REACH_MARGIN : (e.maxRangeFixed ?? e.radiusFixed)];
+        case "travel": return [e.distanceFixed];
+        default: return [];
+      }
+    });
+    return reaches.length > 0 ? Math.max(...reaches) : Infinity;
   }
 
   private loot(): { e: Entity; p: Position }[] {

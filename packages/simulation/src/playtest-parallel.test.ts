@@ -10,8 +10,9 @@ describe("campaigns across child processes", () => {
     const jobs = [
       { classId: CLASS_IDS[0]!, seed: 401, maps: 1, level: 10 },
       { classId: CLASS_IDS[2]!, seed: 7, maps: 1 },
+      { classId: CLASS_IDS[1]!, seed: 9, maps: 1, level: 14, opts: { kit: true } },
     ];
     const forked = await campaigns(jobs, 2);
-    expect(forked).toEqual(jobs.map((j) => campaign(j.classId, j.seed, j.maps, {}, j.level)));
+    expect(forked).toEqual(jobs.map((j) => campaign(j.classId, j.seed, j.maps, j.opts ?? {}, j.level)));
   }, 120_000);
 });

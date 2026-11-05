@@ -1,9 +1,10 @@
 import { fork } from "node:child_process";
 import { availableParallelism } from "node:os";
 import { fileURLToPath } from "node:url";
-import type { MapRun } from "./playtest";
+import type { MapRun, BotOptions } from "./playtest";
 
-export interface CampaignJob { classId: string; seed: number; maps: number; level?: number }
+/** `opts` crosses a process boundary, so only its plain fields (no `trace`). */
+export interface CampaignJob { classId: string; seed: number; maps: number; level?: number; opts?: Omit<BotOptions, "trace"> }
 
 /**
  * Each job's `campaign()`, played across child processes and returned in job order.

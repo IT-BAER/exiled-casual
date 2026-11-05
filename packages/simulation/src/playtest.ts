@@ -6,22 +6,26 @@
 // sends; the two shortcuts are named where they happen (a portal "click" sets
 // pendingArea directly, since walking to the ring measures nothing).
 import {
-  atlasGraph, atlasNodeTier, isNodeReachable, maxGemLevel,
+  atlasGraph, atlasNodeTier, isNodeReachable, maxGemLevel, isUnlocked,
 } from "@exiled/rules";
-import { CONTENT_VERSION, isCurrency, itemStatMods, baseOf } from "@exiled/content-runtime";
+import {
+  CONTENT_VERSION, isCurrency, itemStatMods, baseOf, weaponDamage, ATTACK_WEAPON_CLASSES, CLASSES,
+  SKILLS, DEFAULT_ATTACK_BY_CLASS,
+} from "@exiled/content-runtime";
 import type { Item } from "@exiled/content-schema";
-import type { EquipSlotId } from "@exiled/protocol";
+import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET, type EquipSlotId } from "@exiled/protocol";
 import { generateArea } from "@exiled/mapgen";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { equipStartingGear } from "./characters";
 import { reseedDefaultAttack, grantSkills } from "./persist";
 import { areaCollision } from "./areas";
 import { grammarForNode } from "./systems/area-transition";
-import { Bot, type BotOptions, type BotGame as Game } from "./bot";
-import { EQUIP_SLOTS_BY_CLASS } from "./equipment";
+import { Bot, KITS, type BotOptions, type BotGame as Game } from "./bot";
+import { EQUIP_SLOTS_BY_CLASS, isTwoHanded } from "./equipment";
 import type { Entity } from "./ecs";
 import type {
   SessionC, Cooldowns, FlasksC, ProgressC, SkillsC, ItemC, InventoryC, EquipmentC, Health, MonsterC,
+  GroundAreaC, ProjectileC, SkillAreaC,
 } from "./components";
 
 const HZ = 30;
@@ -56,6 +60,8 @@ export interface MapRun {
   uniques: Record<string, number>;
   /** Each death's killing blow, "Rare " marking a rare: what the death screen names. */
   killers: string[];
+  /** Damage sent to monsters (before their mitigation) by skill id; a pulse or burning tick by the skill that laid it. */
+  dealt: Record<string, number>;
 }
 
 export type { BotOptions };
@@ -83,7 +89,8 @@ export function newCharacter(classId: string, seed: number, level = 1): Game {
 
 /** Enter the next map the character can open, play it to the end, walk home. */
 export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
-  refit(g);
+  refit(g, opts.kit ? "class" : "caster");
+  if (opts.kit) slotKit(g);
   if (!openMap(g)) return null;
   const s = sess(g);
   const layout = generateArea(s.mapSeed, CONTENT_VERSION, grammarForNode(s.activeNodeId));
@@ -96,8 +103,9 @@ export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
     seconds: 0, deaths: 0, kills: 0, combatSeconds: 0,
     drops: { normal: 0, magic: 0, rare: 0, unique: 0, currency: 0, waystone: 0 },
     magicPlusAt: [], levelStart: progress(g).level, levelEnd: 0, casts: {}, flasks: 0,
-    bossId: null, bossSeconds: null, gold: 0, affixes: {}, uniques: {}, killers: [],
+    bossId: null, bossSeconds: null, gold: 0, affixes: {}, uniques: {}, killers: [], dealt: {},
   };
+  const unhook = meterDealt(g, run.dealt);
   const goldStart = progress(g).gold;
   const seenItems = new Set<Entity>(g.world.query("item"));
   const bosses = g.world.query("boss");
@@ -164,6 +172,7 @@ export function playNextMap(g: Game, opts: BotOptions = {}): MapRun | null {
     run.seconds = (g.sim.tick - start) / HZ;
     run.stuck = sess(g).area === "map";
   }
+  unhook();
   run.levelEnd = progress(g).level;
   run.gold = progress(g).gold - goldStart;
   // Walking through the return portal: the same session edit the click makes.
@@ -186,42 +195,126 @@ export function campaign(classId: string, seed: number, maps: number, opts: BotO
 
 // ── Between maps ─────────────────────────────────────────────────────────────
 
-/** What a caster wants from a stat, per point; anything unlisted is worth nothing. */
+/** What a caster wants from a stat, per point; anything unlisted is worth nothing. The stock refit, every class. */
 const STAT_WEIGHT: Record<string, number> = {
   maxLife: 1, energyShield: 1, spellDamagePct: 2, castSpeedPct: 2, critChancePct: 0.5,
   fireResPct: 0.5, coldResPct: 0.5, lightningResPct: 0.5, chaosResPct: 0.3,
   armour: 0.1, armourPct: 0.3, maxMana: 0.3, manaRegenPct: 0.3, strength: 0.3,
   allElementalResPct: 1.5, attackFireDamage: 1, attackColdDamage: 1,
 };
-const score = (item: Item) => itemStatMods(item).reduce((a, m) => a + (STAT_WEIGHT[m.stat] ?? 0) * m.value, 0);
+
+/**
+ * What each class's own kit wants, per point (the three balance pilots' weights,
+ * 4 Nov). A flat point of elemental on every attack is 2/15 to 2/16 of a starter
+ * weapon's hit, so it weighs like 12-13 points of increased damage.
+ */
+const CLASS_WEIGHT: Record<string, Record<string, number>> = {
+  "class.emberbound": { ...STAT_WEIGHT, fireDamage: 2, coldDamage: 1.5, energyShieldPct: 0.5 },
+  "class.stalker": {
+    maxLife: 1, energyShield: 1, spellDamagePct: 1.5, critChancePct: 0.4, strength: 0.6,
+    fireResPct: 0.5, coldResPct: 0.5, lightningResPct: 0.5, chaosResPct: 0.3, allElementalResPct: 1.5,
+    armour: 0.1, armourPct: 0.3, energyShieldPct: 0.3, maxMana: 0.4, manaRegenPct: 0.4, castSpeedPct: 0.1,
+    attackFireDamage: 13, attackColdDamage: 13,
+  },
+  "class.ironsworn": {
+    maxLife: 1, strength: 2, energyShield: 0.8, spellDamagePct: 1, critChancePct: 0.15,
+    fireResPct: 0.4, coldResPct: 0.4, lightningResPct: 0.4, chaosResPct: 0.2, allElementalResPct: 1.2,
+    armour: 0.15, armourPct: 0.4, maxMana: 0.2, manaRegenPct: 0.1, castSpeedPct: 0.3,
+    attackFireDamage: 12, attackColdDamage: 12,
+  },
+};
+/** What each class holds in its hands; any other hand piece scores -Infinity. */
+const HANDS: Record<string, ReadonlySet<string>> = {
+  "class.emberbound": new Set(["wand", "focus", "shield"]),
+  "class.stalker": new Set(["bow"]),
+  "class.ironsworn": new Set(["mace", "sword", "shield"]),
+};
+const HAND_CLASSES = new Set(["wand", "focus", "shield", "mace", "sword", "bow"]);
+/** Local weapon stats: an attack weapon's own damage, counted once through `weaponDamage`. */
+const LOCAL_WEAPON = new Set(["physicalDamage", "physicalDamagePct", "fireDamage", "coldDamage"]);
+
+/** An attack weapon's damage per second over the class's starting weapon's, x100. A bow's beat is its cooldown, so speed is left out. */
+function weaponPoints(classId: string, item: Item): number {
+  const rate = (it: Item) => {
+    const w = weaponDamage(it);
+    return (w.physMin + w.physMax + 2 * (w.fire + w.cold)) * (baseOf(it.baseId).itemClass === "bow" ? 1 : w.aps);
+  };
+  const start = CLASSES[classId]?.startingGear.weapon1;
+  const base = start ? rate({ baseId: start, rarity: "normal", itemLevel: 1, affixes: [] }) : 0;
+  return base > 0 ? (100 * rate(item)) / base : 0;
+}
+
+/**
+ * How much a piece is worth to a class. `caster` is the stock refit's one table for
+ * every class (the parity of record); `class` is the class's own kit's.
+ */
+export function gearScore(classId: string, item: Item, mode: "caster" | "class" = "class"): number {
+  if (mode === "caster") return itemStatMods(item).reduce((a, m) => a + (STAT_WEIGHT[m.stat] ?? 0) * m.value, 0);
+  const cls = baseOf(item.baseId).itemClass;
+  if (HAND_CLASSES.has(cls) && !HANDS[classId]?.has(cls)) return -Infinity;
+  const attack = ATTACK_WEAPON_CLASSES.has(cls);
+  const w = CLASS_WEIGHT[classId] ?? STAT_WEIGHT;
+  const stats = itemStatMods(item).reduce((a, m) => a + (attack && LOCAL_WEAPON.has(m.stat) ? 0 : (w[m.stat] ?? 0) * m.value), 0);
+  return attack ? stats + weaponPoints(classId, item) : stats;
+}
 
 /**
  * The hideout visit: wear every upgrade in the bag (through the real equipItem
  * command), then empty the bag of equipment. Emptying stands in for the vendor
- * and the stash, which change nothing a map run measures.
+ * and the stash, which change nothing a map run measures. A piece that would push
+ * the other hand off counts that hand's loss, and nothing ever empties the main hand.
  */
-function refit(g: Game): void {
+export function refit(g: Game, mode: "caster" | "class" = "caster"): void {
   const inv = () => g.world.get<InventoryC>(g.session, "inventory")!;
+  const score = (it: Item) => gearScore(g.classId, it, mode);
   // equipItem refuses an unread piece; the bot reads every drop for free, standing in for its scrolls.
   const read = inv().items.map((p) => { const { unidentified: _u, ...item } = p.item; return { ...p, item }; });
   g.world.set<InventoryC>(g.session, "inventory", { ...inv(), items: read });
   for (const placed of [...inv().items]) {
     if (placed.item.waystone || isCurrency(placed.item)) continue;
-    const slots = EQUIP_SLOTS_BY_CLASS[baseOf(placed.item.baseId).itemClass] ?? [];
+    const cls = baseOf(placed.item.baseId).itemClass;
     const worn = g.world.get<EquipmentC>(g.session, "equipment")!.slots;
-    const slot = slots.find((sl) => !worn[sl] || score(placed.item) > score(worn[sl]!));
+    const gainAt = (sl: EquipSlotId): number => {
+      const other = sl === "weapon1" ? "weapon2" : sl === "weapon2" ? "weapon1" : undefined;
+      const held = other ? worn[other] : undefined;
+      const clash = held && (isTwoHanded(cls) || isTwoHanded(baseOf(held.baseId).itemClass));
+      if (clash && other === "weapon1") return -Infinity;
+      return score(placed.item) - (worn[sl] ? score(worn[sl]!) : 0) - (clash ? score(held) : 0);
+    };
+    const slots = (EQUIP_SLOTS_BY_CLASS[cls] ?? []) as EquipSlotId[];
+    // The stock refit takes the first slot it beats; a class kit the slot it beats most.
+    const slot = mode === "caster"
+      ? slots.find((sl) => gainAt(sl) > 0)
+      : slots.filter((sl) => gainAt(sl) > 0).sort((a, b) => gainAt(b) - gainAt(a))[0];
     if (!slot) continue;
-    g.sim.step([{ tick: g.sim.tick, entity: g.player, type: "equipItem", slot: slot as EquipSlotId, data: { x: placed.x, y: placed.y } }]);
+    g.sim.step([{ tick: g.sim.tick, entity: g.player, type: "equipItem", slot, data: { x: placed.x, y: placed.y } }]);
   }
   const kept = inv().items.filter((p) => p.item.waystone || isCurrency(p.item));
   g.world.set<InventoryC>(g.session, "inventory", { ...inv(), items: kept });
 }
 
+/**
+ * The kit's bar, as a player re-binds it when a skill opens: the first six unlocked
+ * kit skills in the five numbered sockets and the free mouse one, move on the left
+ * button, the class's free attack on the right.
+ */
+function slotKit(g: Game): void {
+  const level = progress(g).level;
+  const kit = KITS[g.classId]!.bar.filter((id) => isUnlocked(SKILLS.get(id)!, level, g.classId));
+  const bar: (string | null)[] = new Array(SKILL_SLOT_COUNT).fill(null);
+  const sockets = [0, 1, 2, 3, 4, MOUSE_SLOT_BASE + 1];
+  kit.slice(0, sockets.length).forEach((id, i) => { bar[sockets[i]!] = id; });
+  bar[MOUSE_SLOT_BASE] = MOVE_SOCKET;
+  bar[MOUSE_SLOT_BASE + 2] = DEFAULT_ATTACK_BY_CLASS[g.classId]!;
+  g.sim.step([{ tick: g.sim.tick, entity: g.player, type: "setSkillBar", bar }]);
+}
+
 // ── Opening a map ────────────────────────────────────────────────────────────
 
 /**
- * Use the best stone on the lowest-tier node not yet cleared, falling back to a
- * cleared one (PoE1's rule: you can always go back). Returns false when no stone
+ * Use the best stone on the lowest-tier node not yet cleared, falling back to the
+ * highest cleared one the stone opens (PoE1's rule: you can always go back), so one
+ * lost map does not send the climb back to tier 1. Returns false when no stone
  * opens anything.
  */
 function openMap(g: Game): boolean {
@@ -236,7 +329,8 @@ function openMap(g: Game): boolean {
     .sort((a, b) => {
       const ca = s.completedNodes.includes(a.id) ? 1 : 0;
       const cb = s.completedNodes.includes(b.id) ? 1 : 0;
-      return ca - cb || atlasNodeTier(graph, a.id) - atlasNodeTier(graph, b.id);
+      const byTier = atlasNodeTier(graph, a.id) - atlasNodeTier(graph, b.id);
+      return ca - cb || (ca === 1 ? -byTier : byTier);
     });
   const node = open[0];
   if (!node) return false;
@@ -249,6 +343,41 @@ function openMap(g: Game): boolean {
   g.world.set<SessionC>(g.session, "session", { ...sess(g), pendingArea: "map" });
   g.sim.step([]);
   return sess(g).area === "map";
+}
+
+// ── Damage dealt, by skill ──────────────────────────────────────────────────
+
+/**
+ * Wraps the sim's enqueueDamage to name the skill behind every hit on a monster
+ * (the Emberbound pilot's meter, 4 Nov). Read-only: the event goes through as it
+ * came. A bolt is named by his projectile in flight carrying that amount, an impact
+ * by his skill area resolving this tick with it, a pulse by its ground area, a
+ * burning tick by the skill on the ailment. Returns the unhook.
+ */
+function meterDealt(g: Game, dealt: Record<string, number>): () => void {
+  const sim = g.sim;
+  const orig = sim.enqueueDamage;
+  sim.enqueueDamage = (ev) => {
+    const w = g.world;
+    if (w.has(ev.target, "monster")) {
+      let key = "other";
+      if (ev.source === ev.target) key = ev.skillId ?? `dot.${ev.ailment ?? "burning"}`;
+      else if (w.has(ev.source, "groundArea")) key = w.get<GroundAreaC>(ev.source, "groundArea")!.skillId ?? "ground";
+      else if (ev.source === g.player && ev.via === "projectile") {
+        const pr = w.query("projectile").map((e) => w.get<ProjectileC>(e, "projectile")!)
+          .find((x) => x.ownerId === g.player && x.remainingRange > 0
+            && (x.damageAmount === ev.amountFixed || (x.extraDamage ?? []).some((d) => d.amount === ev.amountFixed)));
+        key = pr?.skillId ?? "projectile";
+      } else if (ev.source === g.player) {
+        const area = w.query("skillArea").map((e) => w.get<SkillAreaC>(e, "skillArea")!)
+          .find((a) => a.ownerId === g.player && a.impactTick === sim.tick && a.parts.some((x) => x.amount === ev.amountFixed));
+        key = area?.skillId ?? "hit";
+      }
+      dealt[key] = (dealt[key] ?? 0) + ev.amountFixed / 1000;
+    }
+    orig.call(sim, ev);
+  };
+  return () => { sim.enqueueDamage = orig; };
 }
 
 // ── Small readers ───────────────────────────────────────────────────────────
