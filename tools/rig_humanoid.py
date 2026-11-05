@@ -511,6 +511,54 @@ def cap_runs(bm, edges):
     return caps, failed
 
 
+CAP = "cap"
+# A cut along a fused limb opens where the generated mesh has no surface at all:
+# its cap is shaded as the deep fold it is, or it shows as a bright flat plate.
+CAP_SHADE = 0.35
+
+
+def shade_caps(mesh):
+    """Dress the caps `part` marked in a copy of the hide darkened to CAP_SHADE
+    and without its normal map, then drop the mark. A cap's UVs barely change
+    across it, so the tangent frame the runtime derives from them is degenerate
+    and the normal map turned it into a glossy speckled plate. The shade goes
+    in the material's tint: the exporter writes a white COLOR_0 for a colour
+    layer no shader graph reads."""
+    mark = mesh.data.attributes.get(CAP)
+    if mark is None:
+        return
+    flags = numpy.zeros(len(mesh.data.polygons), dtype=numpy.int32)
+    mark.data.foreach_get("value", flags)
+    base = mesh.data.materials[0]
+    cap = base.copy()
+    cap.name = base.name + "_cap"
+    tree = cap.node_tree
+    for n in [n for n in tree.nodes if n.type == "NORMAL_MAP"]:
+        for link in n.inputs["Color"].links:
+            tree.nodes.remove(link.from_node)
+        tree.nodes.remove(n)
+    tint = next((n for n in tree.nodes if n.type == "MIX" and n.blend_type == "MULTIPLY"), None)
+    if tint is None:
+        bsdf = next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED")
+        colour = bsdf.inputs["Base Color"].links[0].from_socket
+        tint = tree.nodes.new("ShaderNodeMix")
+        tint.data_type, tint.blend_type = "RGBA", "MULTIPLY"
+        tint.inputs[0].default_value = 1.0
+        tint.inputs[7].default_value = (1.0, 1.0, 1.0, 1.0)
+        tree.links.new(tint.inputs[6], colour)
+        tree.links.new(bsdf.inputs["Base Color"], tint.outputs[2])
+        tree.links.new(bsdf.inputs["Emission Color"], tint.outputs[2])
+    r, g, b_, a = tint.inputs[7].default_value
+    tint.inputs[7].default_value = (r * CAP_SHADE, g * CAP_SHADE, b_ * CAP_SHADE, a)
+    # Fully rough: a broad smooth cap mirrored the sky as a blue-grey sheen.
+    next(n for n in tree.nodes if n.type == "BSDF_PRINCIPLED").inputs["Roughness"].default_value = 1.0
+    mesh.data.materials.append(cap)
+    for p in mesh.data.polygons:
+        if flags[p.index]:
+            p.material_index = len(mesh.data.materials) - 1
+    mesh.data.attributes.remove(mark)
+
+
 def part(mesh, held, body, weld):
     """Cut the faces that join `held` vertices to `body` ones and cap both sides,
     or the volume fused between a slab and a shin stretches into a sheet when the
@@ -519,6 +567,8 @@ def part(mesh, held, body, weld):
     bm = bmesh.new()
     bm.from_mesh(mesh.data)
     side = bm.verts.layers.int.new("held")
+    # The caller shades the caps (`shade_caps`): the mesh has no inside to show there.
+    mark = bm.faces.layers.int.get(CAP) or bm.faces.layers.int.new(CAP)
     for b in bm.verts:
         b[side] = int(held[b.index]) + 2 * int(body[b.index])
     cut = lambda f: {b[side] for b in f.verts} >= {1, 2}
@@ -544,6 +594,8 @@ def part(mesh, held, body, weld):
     joined = sum(1 for f in bm.faces if cut(f))
     print("  parted: %d faces cut, %d rim edges, %d caps, %d runs left open, %d still joined"
           % (len(faces), len(rim), len(caps), failed, joined))
+    for f in caps:
+        f[mark] = 1
     bm.verts.layers.int.remove(side)
     bm.to_mesh(mesh.data)
     bm.free()

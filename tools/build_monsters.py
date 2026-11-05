@@ -2134,6 +2134,7 @@ class GeneratedCreature:
         arm = rig.build_armature(self.def_id, rig.landmarks(mesh, self.height, self.carry, self.held))
         mesh.name = mesh.data.name = self.def_id + ".mesh"
         rig.skin(mesh, arm, self.thigh, self.knee, self.carry, self.held, self.fused_arms, self.armpit)
+        rig.shade_caps(mesh)
         # No baked occlusion: white, so the runtime's multiply leaves the sheet alone.
         layer = mesh.data.color_attributes.new("Col", "BYTE_COLOR", "CORNER")
         layer.data.foreach_set("color", numpy.ones(len(mesh.data.loops) * 4, dtype=numpy.float32))
