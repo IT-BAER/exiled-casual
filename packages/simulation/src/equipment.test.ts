@@ -139,6 +139,22 @@ describe("equipment system — equipItem", () => {
     expect(getEquip(world).slots["weapon1"]?.baseId).toBe("base.ember_wand");
   });
 
+  it("refuses an unidentified piece, as PoE does, and wears it once it is read", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    const unread: Item = { ...HELMET, rarity: "magic", affixes: [{ affixId: "affix.life", value: 20 }], unidentified: true };
+    placeInInv(world, unread, 0, 0, 2, 2);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "helmet" }, playerEntity, 0)]);
+    expect(getEquip(world).slots["helmet"]).toBeUndefined();
+    expect(getInv(world).items.map((p) => p.item.unidentified)).toEqual([true]);
+
+    const { unidentified: _, ...read } = unread;
+    world.set<InventoryC>(sessionE(world), "inventory", { ...getInv(world), items: [{ x: 0, y: 0, w: 2, h: 2, item: read }] });
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "helmet" }, playerEntity, 1)]);
+    expect(getEquip(world).slots["helmet"]?.affixes).toEqual(read.affixes);
+  });
+
   it("rejects equipping a helmet into weapon1 (illegal class/slot pair)", () => {
     const { sim, world, playerEntity } = makeWorld();
     clearInv(world);
@@ -670,6 +686,20 @@ describe("persist — equipment", () => {
     expect(await loadInto(kv, w2)).toBe(true);
     expect(w2.get<EquipmentC>(sessionE(w2), "equipment")!.slots["weapon1"]?.baseId)
       .toBe("base.ember_wand");
+  });
+
+  it("a save wearing an unidentified piece loads it read, in its slot", async () => {
+    const kv = new MemoryKv();
+    const { world } = makeWorld();
+    const affixes = [{ affixId: "affix.life", value: 20 }];
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { helmet: { ...HELMET, rarity: "magic", affixes, unidentified: true } } });
+    await saveTo(kv, world);
+
+    const { world: w2 } = makeWorld();
+    expect(await loadInto(kv, w2)).toBe(true);
+    const worn = w2.get<EquipmentC>(sessionE(w2), "equipment")!.slots["helmet"]!;
+    expect(worn.unidentified).toBeUndefined();
+    expect(worn.affixes).toEqual(affixes);
   });
 
   it("old save without equipment field loads as empty slots (backwards compat)", async () => {

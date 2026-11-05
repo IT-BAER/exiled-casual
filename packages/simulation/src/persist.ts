@@ -243,7 +243,7 @@ export function restore(world: World, state: PersistedState): void {
   // stone existed is exactly the save most likely to be out of stones.
   world.set<InventoryC>(e, "inventory", withPermanentWaystone(state.inventory));
   world.set<StashC>(e, "stash", state.stash ?? EMPTY_STASH);
-  world.set<EquipmentC>(e, "equipment", state.equipment ?? { slots: {} });
+  world.set<EquipmentC>(e, "equipment", readWornGear(state.equipment ?? { slots: {} }));
   // A save written before gold existed carries a progress with no `gold` key, so
   // the field is defaulted on its own rather than only when progress is missing.
   const progress = state.progress ?? { level: START_LEVEL, xp: 0, gold: 0 };
@@ -282,6 +282,20 @@ export function restore(world: World, state: PersistedState): void {
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });
+}
+
+/**
+ * Nothing unidentified is worn (equipItem refuses it), but a save from before
+ * that rule can wear one: it loads read, in its slot, so no item moves.
+ */
+function readWornGear(equipment: EquipmentC): EquipmentC {
+  const slots: EquipmentC["slots"] = {};
+  for (const [slot, item] of Object.entries(equipment.slots)) {
+    if (!item) continue;
+    const { unidentified: _read, ...read } = item;
+    slots[slot as keyof EquipmentC["slots"]] = read;
+  }
+  return { slots };
 }
 
 /** Serialize `world`'s durable state to `kv`. No-op if there is no session. */

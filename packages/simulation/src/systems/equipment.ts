@@ -38,6 +38,8 @@ export function registerEquipmentSystem(sim: Simulation): void {
 
         const base = baseOf(placed.item.baseId);
         if (!canEquip(base.itemClass, slot)) continue;
+        // PoE will not equip an unidentified item: it is read before it is worn.
+        if (placed.item.unidentified === true) continue;
         // PoE refuses gear above the character's level. Attribute requirements are
         // shown but cannot be checked: the character has no attribute totals yet.
         if ((base.stats?.reqLevel ?? 1) > (world.get<ProgressC>(sessionE, "progress")?.level ?? 1)) continue;

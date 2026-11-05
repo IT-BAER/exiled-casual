@@ -544,9 +544,10 @@ export const InventoryPanel = React.memo(function InventoryPanel({
   /** A shop cell the click would be refused on: short of gold, or a sale whose orb is spent. */
   const barred = (container: ContainerId, it: GridItem): boolean =>
     isShop(container) && (priceOf(container, it) > gold || (it as ShelfItem).refused === true);
-  /** The slot takes the piece and the character meets its level, the same two checks the sim makes. */
+  /** The slot takes the piece, it is read, and the character meets its level: the sim's checks. */
   const wearable = (it: DisplayItem, slot: EquipSlotId): boolean =>
-    canEquip(it.itemClass ?? "", slot) && (level === undefined || (it.reqLevel ?? 1) <= level);
+    canEquip(it.itemClass ?? "", slot) && it.unidentified !== true &&
+    (level === undefined || (it.reqLevel ?? 1) <= level);
   // Which of the vendor's pages is showing. Every visit opens on his goods.
   const [vendorPage, setVendorPage] = React.useState<"vendor" | "buyback">("vendor");
   React.useEffect(() => { if (!vendorOpen) setVendorPage("vendor"); }, [vendorOpen]);

@@ -202,6 +202,9 @@ const score = (item: Item) => itemStatMods(item).reduce((a, m) => a + (STAT_WEIG
  */
 function refit(g: Game): void {
   const inv = () => g.world.get<InventoryC>(g.session, "inventory")!;
+  // equipItem refuses an unread piece; the bot reads every drop for free, standing in for its scrolls.
+  const read = inv().items.map((p) => { const { unidentified: _u, ...item } = p.item; return { ...p, item }; });
+  g.world.set<InventoryC>(g.session, "inventory", { ...inv(), items: read });
   for (const placed of [...inv().items]) {
     if (placed.item.waystone || isCurrency(placed.item)) continue;
     const slots = EQUIP_SLOTS_BY_CLASS[baseOf(placed.item.baseId).itemClass] ?? [];
