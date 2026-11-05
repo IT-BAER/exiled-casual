@@ -135,7 +135,7 @@ function rig(gemLevel = 1, areaTier = 0): Rig {
     });
     world.set<SkillsC>(sessionE, "skills", {
       gems: { [BOLT]: { level: gemLevel, xp: 0 }, [GROUND]: { level: gemLevel, xp: 0 } },
-      bar: [],
+      bar: [BOLT, GROUND],
     });
   }
   return { sim, world, player: playerEntity };
@@ -266,7 +266,7 @@ describe("stepping out of the portal", () => {
   const TIER = 3;
 
   function mapEntry(seed = 7) {
-    const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: "map", tier: TIER });
+    const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: "map", tier: TIER, classId: "class.emberbound" });
     return { sim, world, player: playerEntity, collision: gridCollision(layout.grid) };
   }
 

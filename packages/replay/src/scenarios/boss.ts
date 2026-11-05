@@ -108,7 +108,8 @@ export interface BossArenaOpts {
 
 /** Build the boss encounter on the area run loop, isolated and optionally near-threshold. */
 export function buildBossArena(seed: number = BOSS_SEED, opts: BossArenaOpts = {}): BossArena {
-  const { sim, world, playerEntity } = createCombatSim(seed, { area: "map", layout: FLAT_LAYOUT });
+  // An Emberbound, so the Ember Bolt the logs cast is on his bar.
+  const { sim, world, playerEntity } = createCombatSim(seed, { area: "map", layout: FLAT_LAYOUT, classId: "class.emberbound" });
   isolateBoss(world);
 
   let bossId = world.query("boss")[0]!;

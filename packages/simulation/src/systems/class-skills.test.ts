@@ -22,7 +22,7 @@ import { registerDeath, reviveVitals } from "./death";
 import { registerExpiry } from "./expiry";
 import type {
   BuffsC, CastingC, Cooldowns, DefensesC, Faction, GroundAreaC, Health, Mana, MonsterC, MoveDir, MoveTarget,
-  PlayerC, Position, SessionC, SkillAreaC,
+  PlayerC, Position, ProgressC, SessionC, SkillAreaC,
 } from "../components";
 
 const IMP = MONSTERS.get("monster.cinder_imp.v1")!;
@@ -112,18 +112,21 @@ describe("buff speed quickens a repeat-beat skill", () => {
 
 describe("buffs across an area transition", () => {
   it("an aura and a timed buff survive hideout -> map -> hideout, and the aura still holds its mana", () => {
-    const { sim, world, playerEntity: p } = createCombatSim(42, { area: "hideout", classId: "class.stalker" });
+    // A level-24 Ironsworn holding both on his bar: Determination (aura), Blood Rage (timed).
+    const { sim, world, playerEntity: p } = createCombatSim(42, { area: "hideout", classId: "class.ironsworn" });
+    const sessionE = world.query("session")[0]!;
+    world.set<ProgressC>(sessionE, "progress", { ...world.get<ProgressC>(sessionE, "progress")!, level: 24 });
+    sim.step([{ tick: sim.tick, entity: p, type: "setSkillBar", bar: ["skill.determination.v1", "skill.blood_rage.v1"] }]);
     const use = (id: string) => {
       sim.step([{ tick: sim.tick, entity: p, type: "useSkill", skillId: id, data: { tx: fp(3), ty: 0 } }]);
       for (let i = 0; i < 12; i++) sim.step([]);
     };
-    use("skill.haste.v1");
+    use("skill.determination.v1");
     use("skill.blood_rage.v1");
     const ids = () => (world.get<BuffsC>(p, "buffs")?.list ?? []).map((b) => b.id).sort();
-    expect(ids()).toEqual(["blood_rage", "haste"]);
+    expect(ids()).toEqual(["blood_rage", "determination"]);
     const until = world.get<BuffsC>(p, "buffs")!.list.find((b) => b.id === "blood_rage")!.untilTick;
 
-    const sessionE = world.query("session")[0]!;
     const go = (area: "map" | "hideout") => {
       const s = world.get<SessionC>(sessionE, "session")!;
       world.set<SessionC>(sessionE, "session", { ...s, pendingArea: area });
@@ -131,16 +134,16 @@ describe("buffs across an area transition", () => {
       expect(world.get<SessionC>(sessionE, "session")!.area).toBe(area);
     };
     go("map");
-    expect(ids()).toEqual(["blood_rage", "haste"]);
+    expect(ids()).toEqual(["blood_rage", "determination"]);
     go("hideout");
-    expect(ids()).toEqual(["blood_rage", "haste"]);
+    expect(ids()).toEqual(["blood_rage", "determination"]);
     expect(world.get<BuffsC>(p, "buffs")!.list.find((b) => b.id === "blood_rage")!.untilTick).toBe(until);
 
     // The aura's quarter is still held back from the pool after the crossing.
     for (let i = 0; i < 300; i++) sim.step([]);
     const m = world.get<Mana>(p, "mana")!;
     expect(m.mana).toBe(m.maxMana - Math.trunc((m.maxMana * 25) / 100));
-    expect(ids()).toEqual(["haste"]);
+    expect(ids()).toEqual(["determination"]);
   });
 
   it("a revive refills only the mana an aura leaves free", () => {

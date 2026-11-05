@@ -2,6 +2,7 @@ import { fp, fpClamp, fpStepToward, isqrt, FP_SCALE, type Fixed } from "@exiled/
 import { createStream } from "../rng";
 import { scalePct, effectiveSkill } from "@exiled/rules";
 import type { EffectNode, SkillDef } from "@exiled/content-schema";
+import { UTILITY_SKILLS } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
 import type { World, Entity } from "../ecs";
 import { WORLD_MIN, WORLD_MAX } from "../movement";
@@ -75,6 +76,18 @@ export function registerSkillCast(
     const e = world.query("session")[0];
     if (e === undefined) return 1;
     return world.get<SkillsC>(e, "skills")?.gems[skillId]?.level ?? 1;
+  };
+
+  /**
+   * Whether the character may cast this at all: it is on his bar, which every
+   * write path filters to his level and class (persist.ts filterUnlockedBar).
+   * A utility (Portal) is never slotted. A world with no session has no character.
+   */
+  const holds = (world: World, skillId: string): boolean => {
+    if (UTILITY_SKILLS.has(skillId)) return true;
+    const e = world.query("session")[0];
+    if (e === undefined) return true;
+    return world.get<SkillsC>(e, "skills")?.bar.includes(skillId) ?? false;
   };
 
   const actionFor = (skill: SkillDef): "spell" | "melee" | "bow" =>
@@ -454,6 +467,8 @@ export function registerSkillCast(
       const caster = cmd.entity;
       const base = skills.get(cmd.skillId);
       if (!base) continue;
+      // A skill he does not hold is refused like an unknown id: no hold, no cost.
+      if (!holds(world, cmd.skillId)) continue;
       // A corpse does not cast, same rule movement follows. Absent health reads
       // as alive so the health-less test casters are untouched.
       if ((world.get<Health>(caster, "health")?.life ?? 1) <= 0) continue;

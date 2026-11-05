@@ -100,14 +100,14 @@ function makeCaster(sim: Simulation, mana = fp(60)) {
   return e;
 }
 
-/** A session entity carrying one gem at the given level, the fold's real input. */
+/** A session entity carrying one gem at the given level, slotted, the fold's real input. */
 function makeSessionWithGem(sim: Simulation, skillId: string, level: number) {
   const e = sim.world.create();
   sim.world.set<SessionC>(e, "session", {
     area: "hideout", atlasSeed: 0, mapSeed: 0, waystoneSeed: 0, areaTier: 0,
     activeNodeId: "", completedNodes: [], portalsLeft: 0, mapOpen: 0, pendingArea: "",
   });
-  sim.world.set<SkillsC>(e, "skills", { gems: { [skillId]: { level, xp: 0 } }, bar: [] });
+  sim.world.set<SkillsC>(e, "skills", { gems: { [skillId]: { level, xp: 0 } }, bar: [skillId] });
   return e;
 }
 
@@ -824,5 +824,51 @@ describe("registerSkillCast", () => {
       sim.step();
       expect(sim.world.query("projectile")).toHaveLength(1);
     });
+  });
+});
+
+describe("a useSkill names only a skill this character holds", () => {
+  // A level-1 Emberbound on a map (the hideout refills mana): Ember Bolt is granted and slotted.
+  const character = () => {
+    const { sim, world, playerEntity } = createCombatSim(11, { area: "map", classId: "class.emberbound" });
+    const sessionE = world.query("session")[0]!;
+    return { sim, world, player: playerEntity, sessionE };
+  };
+  const press = (player: number, skillId: string, tick: number) =>
+    ({ tick, entity: player, type: "useSkill", skillId, data: { tx: fp(5), ty: 0 } });
+
+  it.each([
+    ["skill.firestorm.v1", "own class, unlocked at 18"],
+    ["skill.herald_of_ash.v1", "own class aura, unlocked at 24"],
+    ["skill.heavy_strike.v1", "another class"],
+  ])("refuses %s (%s): no cast, no mana, no cooldown", (skillId) => {
+    const { sim, world, player } = character();
+    const before = world.get<Mana>(player, "mana")!.mana;
+    sim.step([press(player, skillId, sim.tick)]);
+    expect(world.get<Mana>(player, "mana")!.mana).toBe(before);
+    expect(world.get<Cooldowns>(player, "cooldowns")![skillId]).toBeUndefined();
+    expect(world.has(player, "casting")).toBe(false);
+    expect(world.has(player, "buffs")).toBe(false);
+  });
+
+  it("refuses an unlocked skill that is not on the bar", () => {
+    const { sim, world, player, sessionE } = character();
+    const skills = world.get<SkillsC>(sessionE, "skills")!;
+    expect(skills.bar).toContain("skill.ember_bolt.v1");
+    world.set<SkillsC>(sessionE, "skills", { ...skills, bar: skills.bar.map((id) => (id === "skill.ember_bolt.v1" ? null : id)) });
+    const before = world.get<Mana>(player, "mana")!.mana;
+    sim.step([press(player, "skill.ember_bolt.v1", sim.tick)]);
+    expect(world.get<Mana>(player, "mana")!.mana).toBe(before);
+    expect(world.get<Cooldowns>(player, "cooldowns")!["skill.ember_bolt.v1"]).toBeUndefined();
+    expect(world.has(player, "casting")).toBe(false);
+  });
+
+  it("still casts a skill on the bar", () => {
+    const { sim, world, player } = character();
+    const before = world.get<Mana>(player, "mana")!.mana;
+    sim.step([press(player, "skill.ember_bolt.v1", sim.tick)]);
+    expect(world.get<Mana>(player, "mana")!.mana).toBeLessThan(before);
+    expect(world.get<Cooldowns>(player, "cooldowns")!["skill.ember_bolt.v1"]).toBeGreaterThan(0);
+    expect(world.has(player, "casting")).toBe(true);
   });
 });
