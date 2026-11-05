@@ -109,6 +109,8 @@ export type EffectNode =
       type: "spawnGroundArea";
       radiusFixed: Fixed;
       durationTicks: number;
+      /** Target clamp; absent, the patch lands wherever he aimed. */
+      maxRangeFixed?: Fixed;
       /** At least one of ailment and pulse. */
       ailment?: AilmentSpec;
       /** A hit on everything inside, at once and then every `everyTicks`. */
@@ -665,6 +667,10 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
     }
     if (v["slowPct"] !== undefined && !isPctRange(v["slowPct"], 0, 100)) {
       errors.push(`${path}.slowPct: must be an integer in 0..100`);
+      ok = false;
+    }
+    if (v["maxRangeFixed"] !== undefined && !isNonNegInt(v["maxRangeFixed"])) {
+      errors.push(`${path}.maxRangeFixed: must be a non-negative integer when present`);
       ok = false;
     }
   } else if (type === "areaHit") {

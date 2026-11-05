@@ -189,7 +189,7 @@ export function registerSkillCast(
         // Aimed past a wall, the patch lands on the wall instead of in the room
         // behind it. The centre is swept as a point, so the circle may lick over
         // the rock but cannot be placed through it.
-        const at = placed(pos.x, pos.y, tx - pos.x, ty - pos.y);
+        const at = centreOf("target", effect.maxRangeFixed);
         const area = world.create();
         world.set<Position>(area, "position", at);
         const a = effect.ailment;

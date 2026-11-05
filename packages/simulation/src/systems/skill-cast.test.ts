@@ -872,3 +872,16 @@ describe("a useSkill names only a skill this character holds", () => {
     expect(world.has(player, "casting")).toBe(true);
   });
 });
+
+describe("a ground area cast lands within its range", () => {
+  it.each(["skill.cinder_ground.v1", "skill.solar_orb.v1"])("%s aimed 40 units away lands 16 units out", (skillId) => {
+    const sim = new Simulation();
+    registerSkillCast(sim, SKILLS);
+    const caster = makeCaster(sim, fp(60));
+    sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId, data: { tx: fp(40), ty: 0 } }]);
+    for (let t = 1; t < 30; t++) sim.step();
+    const areas = sim.world.query("groundArea");
+    expect(areas).toHaveLength(1);
+    expect(sim.world.get<Position>(areas[0]!, "position")).toEqual({ x: fp(16), y: 0 });
+  });
+});

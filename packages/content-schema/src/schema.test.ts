@@ -812,4 +812,10 @@ describe("validateSkillDef: class skill expansion effects", () => {
     expect(ok({ ...ground, pulse: { damage: { type: "fire", amountFixed: fp(6) }, everyTicks: 0 } })
       .errors.some((e) => e.includes("everyTicks"))).toBe(true);
   });
+
+  it("takes a range on a ground area, never a negative one", () => {
+    const ground = { type: "spawnGroundArea", radiusFixed: fp(2), durationTicks: 120, ailment: burning };
+    expect(ok({ ...ground, maxRangeFixed: fp(16) }).errors).toEqual([]);
+    expect(ok({ ...ground, maxRangeFixed: -1 }).errors.some((e) => e.includes("maxRangeFixed"))).toBe(true);
+  });
 });

@@ -79,6 +79,8 @@ const SKILL_DEFS: SkillDef[] = [
         type: "spawnGroundArea",
         radiusFixed: fp(2.5),
         durationTicks: 90,
+        // Skyfire's reach: a patch is placed where he can see, not across the map.
+        maxRangeFixed: fp(16),
         ailment: {
           kind: "burning",
           stacksPerApply: 1,
@@ -909,6 +911,7 @@ const SKILL_DEFS: SkillDef[] = [
         radiusFixed: fp(2.5),
         // The spec's 4 s (PoE2's orb lasts 10).
         durationTicks: 120,
+        maxRangeFixed: fp(16),
         // Our own: nine pulses of 12 is 108 per body over four seconds, 27/s.
         pulse: { damage: { type: "fire", amountFixed: fp(12) }, everyTicks: 15 },
         ailment: { kind: "burning", stacksPerApply: 1, dpsFixed: fp(4), durationTicks: 30, maxStacks: 2 },
