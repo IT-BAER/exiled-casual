@@ -40,6 +40,7 @@ export function registerGroundAreaTick(sim: Simulation): void {
             stacks: next.stacks,
             dps: next.dpsFixed,
             expiryTick: next.expiryTick,
+            ...(ga.skillId ? { skillId: ga.skillId } : {}),
           });
         }
         if (due && ga.slowPct) {

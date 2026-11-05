@@ -23,6 +23,7 @@ export function registerAilmentTick(sim: Simulation): void {
           source: e,
           amountFixed: burningTickDamage({ kind: "burning", stacks: a.stacks, dpsFixed: a.dps, expiryTick: a.expiryTick }),
           type: 0,
+          ...(a.skillId ? { skillId: a.skillId } : {}),
         });
       }
     }

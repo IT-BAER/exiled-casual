@@ -532,6 +532,8 @@ export interface AilmentC {
   stacks: number;
   dps: Fixed;
   expiryTick: number;
+  /** The skill whose ground last fed it; the stacks merge, so earlier sources are not kept. */
+  skillId?: string;
 }
 export interface DamageEvent {
   target: Entity;
@@ -545,6 +547,8 @@ export interface DamageEvent {
   ailment?: "poison" | "bleeding";
   /** A lightning hit from a skill that builds electrocute (PoE2: none does by default). */
   electrocutes?: true;
+  /** A burning tick's source skill (`AilmentC.skillId`); nothing in the sim reads it. */
+  skillId?: string;
 }
 
 /** Two utility flasks: life on Q, mana on E. Charges are plain integers, not Fixed. */

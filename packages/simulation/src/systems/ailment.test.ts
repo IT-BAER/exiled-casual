@@ -3,7 +3,8 @@ import { fp } from "@exiled/fixed-point";
 import { AILMENT_TICK_INTERVAL, burningTickDamage, dotTickDamage } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { registerAilmentTick } from "./ailment";
-import type { AilmentC, DamageEvent } from "../components";
+import { registerGroundAreaTick } from "./ground-area";
+import type { AilmentC, DamageEvent, Position, GroundAreaC, Health, Faction } from "../components";
 
 function makeEntityWithAilment(sim: Simulation, stacks: number, expiryTick: number) {
   const e = sim.world.create();
@@ -70,6 +71,27 @@ describe("registerAilmentTick", () => {
       if (sim.damageQueue.length > 0) enqueuedCount++;
     }
     expect(enqueuedCount).toBe(2); // ticks 0 and 6
+  });
+
+  it("a burning tick names the skill whose ground lit it", () => {
+    const sim = new Simulation();
+    registerGroundAreaTick(sim);
+    registerAilmentTick(sim);
+    const area = sim.world.create();
+    sim.world.set<Position>(area, "position", { x: 0, y: 0 });
+    sim.world.set<GroundAreaC>(area, "groundArea", {
+      radius: fp(2), expiryTick: 300, nextTick: 0, team: 0, skillId: "skill.cinder_ground.v1",
+      ailmentKind: "burning", stacksPerApply: 1, dps: fp(8), ailmentDuration: 60, maxStacks: 5,
+    });
+    const foe = sim.world.create();
+    sim.world.set<Position>(foe, "position", { x: 0, y: 0 });
+    sim.world.set<Health>(foe, "health", { life: fp(100), maxLife: fp(100) });
+    sim.world.set<Faction>(foe, "faction", { team: 1 });
+
+    sim.step();
+
+    const burn = sim.damageQueue.find((ev) => ev.target === foe && ev.source === foe);
+    expect(burn?.skillId).toBe("skill.cinder_ground.v1");
   });
 });
 
