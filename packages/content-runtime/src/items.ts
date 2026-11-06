@@ -375,6 +375,8 @@ export const UNIQUE_MODS: readonly UniqueMod[] = [
   { id: "unique.culling_strike", stat: "cullingStrikePct", text: "Culling Strike: hits kill enemies left at or under #% of their Life" },
   // PoE's "+#% to maximum Lightning Resistance".
   { id: "unique.max_lightning_res", stat: "maxLightningResPct", text: "+#% to maximum Lightning Resistance" },
+  // PoE's plate-unique "#% less Physical Damage taken from Hits".
+  { id: "unique.less_phys_hit_taken", stat: "physHitTakenLessPct", text: "#% less Physical Damage taken from Hits" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -452,7 +454,7 @@ const UNIQUES: UniqueItem[] = [
     mods: [
       { affixId: "affix.life", min: 50, max: 75 },
       { affixId: "affix.increased_armour", min: 35, max: 50 },
-      { affixId: "affix.chaos_res", min: 15, max: 25 },
+      { affixId: "unique.less_phys_hit_taken", min: 10, max: 10 },
     ],
   },
   {

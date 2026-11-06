@@ -84,10 +84,15 @@ export function registerDamageResolve(
       const takenPct = damageTakenPct(world, ev.target, ev.type, tick);
       const amount = takenPct === 0 ? ev.amountFixed : Math.trunc((ev.amountFixed * Math.max(10, 100 + takenPct)) / 100);
       // Armour stops hits, never a DoT tick (both PoE games); a DoT names its victim as source.
-      const final = applyDamage(
+      const mitigated = applyDamage(
         { type: damageTypeOf(ev.type), amountFixed: amount },
         { resPct: def.res, armourFixed: ev.source === ev.target ? 0 : def.armour, ...(def.maxResAdd ? { resCapAdd: def.maxResAdd } : {}) },
       );
+      // Anvilheart's "less physical damage taken from hits": after armour, as PoE
+      // orders a damage-taken multiplier.
+      const less = ev.source !== ev.target && damageTypeOf(ev.type) === "physical"
+        ? world.get<GearModsC>(ev.target, "gearMods")?.physHitTakenLessPct ?? 0 : 0;
+      const final = less === 0 ? mitigated : Math.trunc((mitigated * (100 - less)) / 100);
       // Energy shield stands in front of life and pays double for chaos. Every
       // hit that touches the shield — even one it fully stops — pushes the
       // recharge back, which is what makes the pool a reward for disengaging.

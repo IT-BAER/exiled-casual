@@ -98,6 +98,25 @@ it("a raised lightning cap lets overcapped resistance stop more of a lightning h
   expect(lifeAfter(damageCode("fire"), { lightning: 3 })).toBe(fp(75));
 });
 
+it("less physical damage from hits cuts a physical hit after armour, not a bleed or a fire hit", () => {
+  const taken = (ev: Omit<DamageEvent, "target">, worn: boolean): number => {
+    const sim = new Simulation();
+    const { world } = sim;
+    const t = world.create();
+    world.set<Health>(t, "health", { life: fp(200), maxLife: fp(200) });
+    world.set<DefensesC>(t, "defenses", { res: resBlock(), armour: fp(0) });
+    if (worn) world.set<GearModsC>(t, "gearMods", { physHitTakenLessPct: 10 });
+    sim.register("testProducer", () => sim.enqueueDamage({ ...ev, target: t, source: ev.source === -1 ? t : ev.source }));
+    registerDamageResolve(sim);
+    sim.step();
+    return fp(200) - world.get<Health>(t, "health")!.life;
+  };
+  expect(taken({ source: 99, amountFixed: fp(100), type: damageCode("physical") }, true)).toBe(fp(90));
+  expect(taken({ source: 99, amountFixed: fp(100), type: damageCode("physical") }, false)).toBe(fp(100));
+  expect(taken({ source: -1, amountFixed: fp(100), type: damageCode("physical"), ailment: "bleeding" }, true)).toBe(fp(100));
+  expect(taken({ source: 99, amountFixed: fp(100), type: damageCode("fire") }, true)).toBe(fp(100));
+});
+
 it("culling strike never takes a damage-over-time tick's victim", () => {
   const sim = new Simulation();
   const { world } = sim;

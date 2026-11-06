@@ -24,6 +24,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Gravewall gives +3% to maximum Lightning Resistance instead of maximum Life.
   The character sheet and the death screen read lightning resistance against
   the raised cap.
+- Anvilheart takes 10% less Physical Damage from Hits instead of giving Chaos
+  Resistance. It applies after armour; bleeding is not a hit and is not
+  reduced.
 
 - Monsters hit harder from map tier 3 up, and bosses have more life from tier 4
   up. Tiers 1 and 2 are unchanged. A tier 10 monster now hits about three

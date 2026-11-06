@@ -440,6 +440,8 @@ export interface GearModsC {
   cullingStrikePct?: number;
   /** Points on the lightning resistance cap (Gravewall); derived.ts moves it onto DefensesC. */
   maxLightningResPct?: number;
+  /** Percent less physical damage taken from hits, after armour (Anvilheart). */
+  physHitTakenLessPct?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;

@@ -159,6 +159,14 @@ describe("uniques", () => {
     expect(itemStatMods(item)).toContainEqual({ stat: "maxLightningResPct", value: 3 });
   });
 
+  it("Anvilheart takes less physical damage from hits, in place of its chaos resistance", () => {
+    const item = worn("Anvilheart");
+    expect(item.affixes).toHaveLength(3);
+    expect(describeItem(item).lines).toContain("10% less Physical Damage taken from Hits");
+    expect(describeItem(item).lines.some((l) => l.includes("Chaos"))).toBe(false);
+    expect(itemStatMods(item)).toContainEqual({ stat: "physHitTakenLessPct", value: 10 });
+  });
+
   it("gives every class family the same number of uniques", () => {
     const perFamily: Record<string, number> = {};
     for (const f of Object.values(FAMILY_BY_CLASS)) perFamily[f] = 0;
