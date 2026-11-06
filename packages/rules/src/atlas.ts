@@ -56,14 +56,28 @@ export function areaLevel(tier: number): number {
 // ponytail: per-mille scaling is a calibration placeholder (docs/01:780 says
 // monster-vs-level needs empirical tuning); adjust here only. Life is linear, so
 // the top of the Atlas is about ten times a tier-0 monster and the kill-time
-// ladder in balance.test.ts holds. Damage reaches the same seven times on a square
-// curve, soft through tiers 1-4, where the linear one killed a fresh character on
-// his second and third maps (simulation/src/playtest.ts).
+// ladder in balance.test.ts holds. Damage is a square curve, untouched through
+// tiers 1-2, where a fresh character already dies (simulation/src/playtest.ts).
+// From tier 3 a second square term presses: without it a kit bot died 0 times per
+// map at tiers 6-12; 160 gave 0.1-0.25 at maps 6-15. Measured through tier 12
+// only, so the term stops growing there.
+const PRESSURE_PER_TIER_SQ = 160;
+const PRESSURE_FROM_TIER = 2;
+const PRESSURE_MEASURED_TO_TIER = 12;
+
 export function monsterTierScale(tier: number): { lifeMilli: number; dmgMilli: number } {
+  const pressed = Math.max(0, Math.min(tier, PRESSURE_MEASURED_TO_TIER) - PRESSURE_FROM_TIER);
   return {
     lifeMilli: 1000 + 650 * tier,
-    dmgMilli: 1000 + 150 * tier + 20 * tier * tier,
+    dmgMilli: 1000 + 150 * tier + 20 * tier * tier + PRESSURE_PER_TIER_SQ * pressed * pressed,
   };
+}
+
+// A boss's life on top of monsterTierScale, from tier 4 up: without it a kit bot
+// burned a tier 6-12 boss in 4-7 s; 150 per tier gave 17-22 s and that pressure's
+// deaths. Applies to the boss alone, so the kill-time ladder is untouched.
+export function bossLifeMilli(tier: number): number {
+  return 1000 + 150 * Math.max(0, tier - 3);
 }
 
 // Mulberry32 (same family as the sim PRNG, but inlined so this leaf module keeps

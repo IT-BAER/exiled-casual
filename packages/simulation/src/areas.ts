@@ -1,7 +1,7 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { blockerCollision, gridCollision, hasLineOfSight } from "./collision";
 import {
-  makeMagic, makeRare, atlasNodeIndex, mapBaseIdForNode, monsterTierScale, waystoneScaleFor,
+  makeMagic, makeRare, atlasNodeIndex, mapBaseIdForNode, monsterTierScale, waystoneScaleFor, bossLifeMilli,
   areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem, familyForClass,
   MONSTER_ILVL_OFFSET, DROP_POOL,
 } from "@exiled/rules";
@@ -437,7 +437,8 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     const boss = anchor(layout, "boss");
     const bossDef = withMonsterRes(bossFor(biomeId), ws.monsterResAdd);
     const bossAt = fitBody(col, fp(boss.x), fp(boss.y), bossDef.radiusFixed, free);
-    spawnMonster(world, bossDef, bossAt.x, bossAt.y, false, scale);
+    const bossLife = Math.trunc((scale.lifeMilli * bossLifeMilli(session.areaTier)) / 1000);
+    spawnMonster(world, bossDef, bossAt.x, bossAt.y, false, { ...scale, lifeMilli: bossLife });
 
     // Every reward anchor is a CONTAINER now, not loot lying on the floor: a
     // chest, a barrel or a crate the player has to click. The payout math is

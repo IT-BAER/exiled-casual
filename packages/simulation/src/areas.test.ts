@@ -48,6 +48,15 @@ describe("tier scaling on map spawn", () => {
     expect(m.attackDamage).toBe(expectedDmg);
   });
 
+  it("gives the boss 2.05x the tier's life at tier 10, 15.375x its authored life", () => {
+    const world = new World();
+    const session = mapSessionAtTier(10);
+    buildArea(world, "map", session, generateArea(session.mapSeed, CONTENT_VERSION));
+    const boss = world.query("boss", "health")[0]!;
+    const def = MONSTERS.get(world.get<MonsterC>(boss, "monster")!.defId)!;
+    expect(world.get<Health>(boss, "health")!.maxLife / def.maxLifeFixed).toBeCloseTo(15.375, 3);
+  });
+
   it("tier 0 leaves stats unchanged", () => {
     const world = new World();
     const session = mapSessionAtTier(0);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  areaLevel, monsterTierScale, offerWaystones, WAYSTONE_OFFER_COUNT,
+  areaLevel, bossLifeMilli, monsterTierScale, offerWaystones, WAYSTONE_OFFER_COUNT,
   atlasGraph, ATLAS_NODE_COUNT, isNodeReachable, atlasNodeTier, nextNodeTier, WAYSTONE_MAX_TIER,
 } from "./atlas.js";
 import { xpToNext, xpAward } from "./xp.js";
@@ -236,11 +236,24 @@ describe("the Atlas spans a 1-100 character's climb", () => {
     // (e.g. swapping the life and damage per-mille knobs, or a fat-fingered
     // digit) leaves both true. This pins the actual numbers so either knob
     // moving alone fails here.
-    expect(monsterTierScale(7)).toEqual({ lifeMilli: 5550, dmgMilli: 3030 });
-    expect(monsterTierScale(ATLAS_NODE_COUNT - 1)).toEqual({ lifeMilli: 10100, dmgMilli: 7020 });
+    expect(monsterTierScale(7)).toEqual({ lifeMilli: 5550, dmgMilli: 7030 });
+    expect(monsterTierScale(12).dmgMilli).toBe(21680);
+    expect(monsterTierScale(ATLAS_NODE_COUNT - 1)).toEqual({ lifeMilli: 10100, dmgMilli: 23020 });
   });
 
   it("hits softly early: the first stone a character owns adds under a fifth to a hit", () => {
     expect(monsterTierScale(1).dmgMilli).toBe(1170);
+  });
+
+  it("gives a boss more life from tier 4 up, on top of the tier's own", () => {
+    expect(bossLifeMilli(0)).toBe(1000);
+    expect(bossLifeMilli(3)).toBe(1000);
+    expect(bossLifeMilli(4)).toBe(1150);
+    expect(bossLifeMilli(10)).toBe(2050);
+  });
+
+  it("keeps tiers 1-2 where a fresh character already dies, and presses from tier 3", () => {
+    expect(monsterTierScale(2).dmgMilli).toBe(1380);
+    expect(monsterTierScale(3).dmgMilli).toBe(1790);
   });
 });

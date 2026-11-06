@@ -664,12 +664,12 @@ describe("derived player stats", () => {
     placeInInv(world, GEARED_ROBE, 0, 0, 2, 3);
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
 
-    // Level 22 meets tier 4 (area 20): the fp(6) hit x1.92 = 11.52; 50 / (50 + 115.2) = 30%.
+    // Level 22 meets tier 4 (area 20): the fp(6) hit x2.56 = 15.36; 50 / (50 + 153.6) = 25%.
     atLevel(world, 22);
-    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.armourPct).toBe(30);
-    // Level 50 meets tier 9 (area 50): x3.97 = 23.82; 50 / (50 + 238.2) = 17%.
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.armourPct).toBe(25);
+    // Level 50 meets tier 9 (area 50): x11.81 = 70.86; 50 / (50 + 708.6) = 7%.
     atLevel(world, 50);
-    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.armourPct).toBe(17);
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.armourPct).toBe(7);
   });
 
   it("the snapshot carries what a wand or focus adds to spells, and nothing without one", () => {

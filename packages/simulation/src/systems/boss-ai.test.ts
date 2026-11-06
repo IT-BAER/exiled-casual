@@ -656,7 +656,7 @@ describe("a boss's heavy abilities", () => {
     makePlayerEntity(world, fp(4), fp(3));
     makeBossEntity(world, 0, 0);
     sim.step();
-    expect(world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!.damage).toBe(fp(40.5));
+    expect(world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!.damage).toBe(fp(132.66));
   });
 });
 
@@ -771,10 +771,10 @@ describe("boss abilities scale with the map's tier", () => {
     return world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!;
   }
 
-  it("a Tier 10 slam hits 4.5x as hard as a Tier 0 one", () => {
-    // monsterTierScale(10).dmgMilli = 1000 + 150*10 + 20*100 = 4500, i.e. 4.5x.
+  it("a Tier 10 slam hits 14.74x as hard as a Tier 0 one", () => {
+    // monsterTierScale(10).dmgMilli = 1000 + 150*10 + 20*100 + 160*8*8 = 14740.
     expect(slamAt(0).damage).toBe(fp(28));
-    expect(slamAt(10).damage).toBe(fp(126));
+    expect(slamAt(10).damage).toBe(fp(412.72));
   });
 
   it("the phase-2 burning patch scales with the same knob", () => {
@@ -794,7 +794,7 @@ describe("boss abilities scale with the map's tier", () => {
     expect(world.get<BossC>(boss, "boss")!.phase).toBe(2);
     sim.step();
     const tele = world.get<TelegraphC>(world.query("telegraph")[0]!, "telegraph")!;
-    expect(tele.ground!.dps).toBe(fp(40.5)); // fp(9) at 4.5x
+    expect(tele.ground!.dps).toBe(fp(132.66)); // fp(9) at 14.74x
   });
 
   // Adds scale like the map's packs (mapDangerScale): a tier-10 brood is a tier-10 fight.
