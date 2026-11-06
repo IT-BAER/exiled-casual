@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-06
+
 ### Added
 
 - Quivers for the Stalker's off hand: the Stalker Quiver (Fire Damage to
