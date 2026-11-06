@@ -36,6 +36,7 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
  * `full` takes own the legs too (a leap, a dash, a roar) and play over locomotion
  * like the roll; the rest layer over the upper body like the cast. `bow` takes key
  * the weapon hand and draw from the bow hand; `loop` takes run until `endSkillLoop`.
+ * `end` (a fraction of the take) lets go there, where the rest of the take is wrong.
  */
 export interface SkillClipSpec { name: string; full?: boolean; loop?: boolean; bow?: boolean }
 export const SKILL_CLIPS = {
@@ -557,23 +558,6 @@ export function actionRatio(authoredSeconds: number, windowSeconds: number | und
 function clipSeconds(group: AnimationGroup): number {
   const fps = group.targetedAnimations[0]?.animation.framePerSecond ?? 30;
   return fps > 0 ? (group.to - group.from) / fps : 0;
-}
-
-/**
- * Restart a playing group at the frame it is currently on. The restart is the
- * point: `enableBlending` only ramps when a group STARTS, so a group that kept
- * playing underneath a one-shot takes its bones back in a single frame unless
- * it is bounced like this. Keeps phase and speed; only the ease is new.
- */
-export function restartAtCurrentFrame(group: AnimationGroup, loop: boolean): void {
-  if (!group.isPlaying) return;
-  const frame = group.animatables[0]?.masterFrame ?? group.from;
-  const ratio = group.speedRatio;
-  group.stop();
-  // Full range, then jump: passing `frame` as `from` would narrow every later
-  // loop of the cycle to frame..to instead of resuming the whole clip.
-  group.start(loop, ratio);
-  group.goToFrame(frame);
 }
 
 /** Yaw rate (rad/s) under which a standing body only drifts round; above it the feet step. */
@@ -1610,6 +1594,8 @@ export class RigActor {
   private aimObserver: Observer<Scene> | null = null;
   private legsObserver: Observer<Scene> | null = null;
   private legsRestore: Observer<Scene> | null = null;
+  /** The pose an ended take left on its own bones, eased out over `left` seconds; null when settled. */
+  private ease: { rot: Map<TransformNode, Quaternion>; pos: Map<TransformNode, Vector3>; left: number } | null = null;
   /** The swing in flight and the rates it is paced by; null between swings. */
   private strike: { clip: RigClip; group: AnimationGroup; legs: AnimationGroup | null; pace: StrikePace; timing: StrikeTiming } | null = null;
   private trail: ReturnType<typeof swingTrail> | null = null;
@@ -1848,7 +1834,7 @@ export class RigActor {
     // third of a second of cast only ever showed the first third of the swing,
     // so the bolt left a hand that was still lifting.
     group.start(false, ratio);
-    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+    group.onAnimationGroupEndObservable.addOnce((g) => this.easeOutToLocomotion(g));
   }
 
   /**
@@ -1878,7 +1864,7 @@ export class RigActor {
     }
     group.onAnimationGroupEndObservable.addOnce(() => {
       this.stopStrikeLegs();
-      this.easeOutToLocomotion();
+      this.easeOutToLocomotion(group, legs);
     });
     this.strike = { clip, group, legs, pace, timing };
     this.strikeObserver ??= this.scene.onBeforeAnimationsObservable.add(this.paceStrike);
@@ -1901,7 +1887,7 @@ export class RigActor {
     group.speedRatio = ratio;
     group.start(false, ratio);
     this.scene.sortActiveAnimatables();
-    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+    group.onAnimationGroupEndObservable.addOnce((g) => this.easeOutToLocomotion(g));
   }
 
   /**
@@ -1938,7 +1924,7 @@ export class RigActor {
     this.scene.sortActiveAnimatables();
     if (!loop) group.onAnimationGroupEndObservable.addOnce(() => {
       this.skillLegs.get(clip)?.stop();
-      this.easeOutToLocomotion();
+      this.easeOutToLocomotion(group, this.skillLegs.get(clip));
     });
     return true;
   }
@@ -1951,7 +1937,7 @@ export class RigActor {
       if (!group?.isPlaying) continue;
       group.stop();
       this.skillLegs.get(clip)?.stop();
-      this.easeOutToLocomotion();
+      this.easeOutToLocomotion(group, this.skillLegs.get(clip));
     }
   }
 
@@ -2002,7 +1988,7 @@ export class RigActor {
     this.stopReactions();
     group.speedRatio = 1;
     group.start(false, 1);
-    group.onAnimationGroupEndObservable.addOnce(this.easeOutToLocomotion);
+    group.onAnimationGroupEndObservable.addOnce((g) => this.easeOutToLocomotion(g));
   }
 
   private stopReactions(): void {
@@ -2132,15 +2118,6 @@ export class RigActor {
   }
 
   /**
-   * Ease the bones back to locomotion when a one-shot cast or strike lets go.
-   *
-   * enableBlending only ramps at a START: the locomotion group has been playing
-   * underneath the whole time, so when the action clip ends (or is stopped) it
-   * takes the upper body back in one frame — that snap is what this removes.
-   * Restarting the group at the frame it is already on keeps the legs' phase
-   * and buys the blend-in from wherever the action pose left the arms.
-   */
-  /**
    * Pull the pose toward the second direction clip by its weight, sampled in
    * step with the playing clip (`framePhaseMatched`), so the feet stay one step.
    * Under a layered cast or strike, the legs and hips only.
@@ -2163,11 +2140,43 @@ export class RigActor {
     }
   }
 
-  private easeOutToLocomotion = (): void => {
-    const group = this.groups.get(this.locomotion);
-    if (group) restartAtCurrentFrame(group, CLIP_LOOPS[this.locomotion]);
-    this.scene.sortActiveAnimatables();
+  /**
+   * Ease the bones an ended take drove back to whatever plays under them.
+   *
+   * enableBlending only ramps at a START, and the gait under a take never
+   * stopped, so it would take those bones back in one frame. Restarting the gait
+   * instead re-blended EVERY bone from a frozen pose, and legs that were on the
+   * run the whole time lagged the moving clip by up to 29 degrees. Here only the
+   * take's own bones start from the pose it left.
+   */
+  private easeOutToLocomotion = (...ended: (AnimationGroup | null | undefined)[]): void => {
+    const rot = this.ease?.rot ?? new Map<TransformNode, Quaternion>();
+    const pos = this.ease?.pos ?? new Map<TransformNode, Vector3>();
+    for (const group of ended) {
+      for (const { animation, target } of group?.targetedAnimations ?? []) {
+        const node = target as TransformNode;
+        if (animation.targetProperty === ROTATION && node.rotationQuaternion) rot.set(node, node.rotationQuaternion.clone());
+        else if (animation.targetProperty === TRANSLATION) pos.set(node, node.position.clone());
+      }
+    }
+    this.ease = rot.size + pos.size > 0 ? { rot, pos, left: LOCO_BLEND_SEC } : null;
   };
+
+  /** After the clips: pull the eased bones toward the pose their take left. A new take blends in on its own. */
+  private applyEase(dt: number): void {
+    const ease = this.ease;
+    if (!ease) return;
+    const taking = [...this.groups.values()].some((g) => g.playOrder > 0 && g.isPlaying)
+      || [...this.strikeLegs.values(), ...this.skillLegs.values()].some((g) => g.isPlaying);
+    ease.left -= dt;
+    if (taking || ease.left <= 0) {
+      this.ease = null;
+      return;
+    }
+    const w = ease.left / LOCO_BLEND_SEC;
+    for (const [node, from] of ease.rot) if (node.rotationQuaternion) Quaternion.SlerpToRef(node.rotationQuaternion, from, w, node.rotationQuaternion);
+    for (const [node, from] of ease.pos) Vector3.LerpToRef(node.position, from, w, node.position);
+  }
 
   private switchTo(clip: RigClip): void {
     const group = this.groups.get(clip);
@@ -2302,6 +2311,7 @@ export class RigActor {
       const dt = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000;
       this.legs += wrapPi(this.legsTarget - this.legs) * Math.min(1, dt / LEG_EASE_SEC);
       this.blendDirection();
+      this.applyEase(dt);
       const layered = this.overGait();
       this.uprightGain += ((layered ? 0 : 1) - this.uprightGain) * Math.min(1, dt / ACTION_BLEND_SEC);
       // The jog leans its chest into the run; carried sideways, that lean points

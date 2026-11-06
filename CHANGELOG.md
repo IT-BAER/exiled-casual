@@ -76,6 +76,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   matters as much to the Emberbound as a good weapon does to the other two
   classes.
 
+### Fixed
+
+- The legs no longer stumble for a moment when a spell or a shot ends while
+  you run. Only the arms ease back from the attack.
+
 ## [0.7.1] - 2026-11-04
 
 ### Fixed

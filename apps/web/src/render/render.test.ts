@@ -30,7 +30,6 @@ import { fxPools } from "./fx-pool";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
 import { columnHit } from "../input/bindings";
-import { restartAtCurrentFrame } from "./rig";
 import { playSfx, playSfxAt } from "../audio/sfx";
 
 vi.mock("../audio/sfx", async (importOriginal) => ({
@@ -1724,56 +1723,5 @@ describe("hit flash", () => {
       prev = next;
     }
     expect(mesh.renderOverlay).toBe(false);
-  });
-});
-
-describe("restartAtCurrentFrame", () => {
-  it("keeps the clip's phase and full loop window while forcing a blend-in restart", () => {
-    const engine = new NullEngine();
-    const scene = new Scene(engine);
-    try {
-      const node = new TransformNode("bone", scene);
-      const anim = new Animation("sway", "position.x", 30, Animation.ANIMATIONTYPE_FLOAT, Animation.ANIMATIONLOOPMODE_CYCLE);
-      anim.setKeys([{ frame: 0, value: 0 }, { frame: 30, value: 1 }]);
-      const group = new AnimationGroup("cycle", scene);
-      group.addTargetedAnimation(anim, node);
-      group.normalize(0, 30);
-      group.start(true, 1);
-      group.goToFrame(12);
-      scene.animate();
-      const before = group.animatables[0]!.masterFrame;
-
-      restartAtCurrentFrame(group, true);
-      scene.animate();
-
-      expect(group.isPlaying).toBe(true);
-      const animatable = group.animatables[0]!;
-      // Phase survives within a frame of drift.
-      expect(Math.abs(animatable.masterFrame - before)).toBeLessThan(2);
-      // The loop window must stay the whole clip: restarting with `from` set to
-      // the current frame would trap every later loop in frame..to.
-      expect(animatable.fromFrame).toBe(0);
-      expect(animatable.toFrame).toBe(30);
-    } finally {
-      scene.dispose();
-      engine.dispose();
-    }
-  });
-
-  it("does nothing to a group that is not playing", () => {
-    const engine = new NullEngine();
-    const scene = new Scene(engine);
-    try {
-      const node = new TransformNode("bone", scene);
-      const anim = new Animation("sway", "position.x", 30, Animation.ANIMATIONTYPE_FLOAT, Animation.ANIMATIONLOOPMODE_CYCLE);
-      anim.setKeys([{ frame: 0, value: 0 }, { frame: 30, value: 1 }]);
-      const group = new AnimationGroup("cycle", scene);
-      group.addTargetedAnimation(anim, node);
-      restartAtCurrentFrame(group, true);
-      expect(group.isPlaying).toBeFalsy();
-    } finally {
-      scene.dispose();
-      engine.dispose();
-    }
   });
 });

@@ -2395,6 +2395,32 @@ describe("a sword strike moves the legs only while standing", () => {
     expect(slid, "takes whose legs leave the run").toEqual([]);
   }), 120_000);
 
+  // The 1.5 s takes above are cancelled before they end. A short one ends on its
+  // own mid-run, and its ease back to the gait must not move the legs.
+  it("keeps the legs on the run when a short layered take ends mid-run", () => withFiles(async () => {
+    const { scene, rig, off } = await rigged();
+    const frame = () => { rig.setMoveAngle(0); rig.setLocomotion(3.5); scene.render(); };
+    for (let i = 0; i < 40; i++) frame();
+    const hitch: string[] = [];
+    for (const clip of ["bow", "cast"] as RigClip[]) {
+      expect(rig.playSkill(clip, 0.4), clip).toBe(true);
+      const take = scene.animationGroups.find((g) => g.name === `hero-${clip}`)!;
+      let worst = 0;
+      const armAfter: number[] = [];
+      for (let i = 0; i < 60; i++) {
+        frame();
+        worst = Math.max(worst, off("run", "thigh_l"), off("run", "thigh_r"), off("run", "calf_l"));
+        if (!take.isPlaying) armAfter.push(off("run", "upperarm_r"));
+      }
+      if (worst >= 2) hitch.push(`${clip} ${worst.toFixed(1)}`);
+      // The arm eases off the take instead of snapping, and is on the run soon after.
+      // [0] is the take's own last frame; a snap shows as [1] already on the run.
+      expect(armAfter[1], `${clip} arm on the second frame after the take`).toBeGreaterThan(2);
+      expect(armAfter[15], `${clip} arm a quarter second after`).toBeLessThan(2);
+    }
+    expect(hitch, "takes whose end moves the legs off the run").toEqual([]);
+  }), 60_000);
+
   it("gives a whole-body take's legs to the gait when he starts moving mid-take", () => withFiles(async () => {
     const { scene, rig, off } = await rigged();
     rig.standSettled();
