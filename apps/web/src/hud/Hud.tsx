@@ -1026,6 +1026,13 @@ export function Hud({
   // the banner stayed up for the rest of the run.
   const [banner, setBanner] = React.useState<{ text: string; seq: number } | null>(null);
   const [flashing, setFlashing] = React.useState<ReadonlySet<string>>(new Set());
+  // Gems unlocked with no socket to go to. Outlives the banner: the reminder
+  // stays on the bar until the player opens a socket's picker or slots the skill.
+  const [unslotted, setUnslotted] = React.useState<readonly string[]>([]);
+  React.useEffect(() => {
+    if (assigning !== null) setUnslotted([]);
+  }, [assigning]);
+  const waiting = unslotted.filter((id) => !bar.includes(id));
   // A class buff carries its skill's id stem: `haste` is `skill.haste.v1`'s.
   const buffSkills = new Set(
     (snapshot?.player.buffs ?? []).filter((b) => b.kind === "buff").map((b) => `skill.${b.id}.v1`),
@@ -1064,8 +1071,15 @@ export function Hud({
         // moment when every skill unlocked at once: the worker starts its clock
         // before the save has loaded, so the restore reads as a burst of unlocks.
         if (Object.keys(was.gems).length === 0) continue;
-        lines.push(`${name} Unlocked`);
-        levelledIds.push(id);
+        // The sim gives a new gem any empty socket it may use, so one that is
+        // not on the bar found none, and only the player can make room for it.
+        if (bar.includes(id)) {
+          lines.push(`${name} Unlocked`);
+          levelledIds.push(id);
+        } else {
+          lines.push(`${name} Unlocked: no free socket`);
+          setUnslotted((prev) => [...prev, id]);
+        }
         continue;
       }
       // Every breakpoint reached since the last snapshot, not just the last:
@@ -1097,7 +1111,7 @@ export function Hud({
     }));
     // A breakpoint or a character level rings the level-up cue; a bare gem level, "rare".
     playDropSound(crossed || level > was.level ? "level-up" : "rare");
-  }, [level, stones, gems, snapshot?.skills, skillNames]);
+  }, [level, stones, gems, snapshot?.skills, skillNames, bar]);
 
   React.useEffect(() => {
     if (!banner) return;
@@ -1690,6 +1704,28 @@ export function Hud({
           a tooltip nested inside it can never rise above the inventory panel it opens
           into. Out here it is a plain sibling and its own zIndex settles the order. */}
       <SkillTooltip skills={snapshot.skills} id={hoveredSkill} right={BAR_PAD} bottom={`calc(${BAR_H} + 8px)`} />
+      {/* Where the tooltip opens, so it steps aside for one: a reward with no socket is still a reward (docs/09 rule 1). */}
+      {waiting.length > 0 && hoveredSkill === null && assigning === null && (
+        <div
+          data-testid="skill-unslotted"
+          style={{
+            position: "absolute",
+            right: BAR_PAD,
+            bottom: `calc(${BAR_H} + 8px)`,
+            padding: "4px 10px",
+            fontFamily: DISPLAY,
+            fontSize: 13,
+            letterSpacing: 1,
+            color: "#f2d79a",
+            background: "rgba(16,16,19,0.82)",
+            border: "1px solid #9b7751",
+            textShadow: "0 1px 3px #000",
+            pointerEvents: "none",
+          }}
+        >
+          New skill: {waiting.map((id) => skillNames.get(id) ?? id).join(", ")}. Click a socket to slot it.
+        </div>
+      )}
       {assigning !== null && (
         <SkillPicker
           skills={skillNames}

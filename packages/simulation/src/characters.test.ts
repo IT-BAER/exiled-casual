@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { MemoryKv, ROSTER_VERSION, addCharacter, emptyRoster, findCharacter, saveRoster } from "@exiled/persistence";
 import { CLASS_IDS, DEFAULT_CLASS_ID, START_LEVEL, familyForClass, familyOf } from "@exiled/rules";
 import { CLASSES, STARTER_BASE_IDS, baseOf, defaultAttackFor } from "@exiled/content-runtime";
-import { MOUSE_SLOT_BASE } from "@exiled/protocol";
+import { MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
 import { createCombatSim } from "./combat-sim";
 import { saveTo } from "./persist";
 import { equipStartingGear, loadCharacterInto, saveCharacterTo } from "./characters";
@@ -316,6 +316,39 @@ describe("loadCharacterInto / saveCharacterTo", () => {
     const reboot = fresh();
     await loadCharacterInto(kv, reboot, "vess");
     expect(get<SkillsC>(reboot, "skills").bar[MOUSE_SLOT_BASE + 2]).toBeNull();
+  });
+
+  // A save written before a grant could use the mouse row: the skills of level
+  // 12, 14 and 18 hold a gem and no socket.
+  it("gives an old save's unslotted class skills the empty mouse sockets, once", async () => {
+    const kv = await withOneCharacter("class.emberbound");
+    const world = fresh();
+    await loadCharacterInto(kv, world, "vess");
+    set<ProgressC>(world, "progress", { ...get<ProgressC>(world, "progress"), level: 18 });
+    const gems = Object.fromEntries([
+      "skill.ember_bolt.v1", "skill.ember_spark.v1", "skill.flame_dash.v1", "skill.blink.v1", "skill.ember_nova.v1",
+      "skill.cinder_ground.v1", "skill.flammability.v1", "skill.solar_orb.v1", "skill.firestorm.v1",
+    ].map((id) => [id, { level: 1, xp: 0 }]));
+    const oldBar = [
+      "skill.ember_bolt.v1", "skill.flame_dash.v1", "skill.blink.v1", "skill.ember_nova.v1", "skill.cinder_ground.v1",
+      MOVE_SOCKET, null, "skill.ember_spark.v1",
+    ];
+    set<SkillsC>(world, "skills", { gems, bar: oldBar, attackReseeded: true });
+    await saveCharacterTo(kv, world, "vess");
+
+    const reboot = fresh();
+    await loadCharacterInto(kv, reboot, "vess");
+    const healed = get<SkillsC>(reboot, "skills");
+    expect(healed.bar).toEqual([...oldBar.slice(0, 6), "skill.flammability.v1", "skill.ember_spark.v1"]);
+
+    // The player empties the socket: the next load leaves it empty.
+    const cleared = [...healed.bar];
+    cleared[MOUSE_SLOT_BASE + 1] = null;
+    set<SkillsC>(reboot, "skills", { ...healed, bar: cleared });
+    await saveCharacterTo(kv, reboot, "vess");
+    const again = fresh();
+    await loadCharacterInto(kv, again, "vess");
+    expect(get<SkillsC>(again, "skills").bar[MOUSE_SLOT_BASE + 1]).toBeNull();
   });
 
   it("round-trips one character's progress", async () => {

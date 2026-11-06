@@ -200,17 +200,20 @@ describe("skills persistence", () => {
   });
 
   it("a newly opened skill lands in the first empty socket, so the level-up is visible", () => {
-    // Level 3 to level 4 opens Blink. defaultBar fills socket 0 with Ember Bolt,
-    // so the first empty numbered socket is 1.
+    // Level 3 to level 4 opens Blink. Ember Bolt holds socket 0 and level 3's
+    // Blaze Step socket 1, so the first empty numbered socket is 2.
     const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionEntity(world);
+    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 3 });
+    grantSkills(world);
     world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
 
     grantSkills(world);
 
     const bar = world.get<SkillsC>(e, "skills")!.bar;
     expect(bar[0]).toBe("skill.ember_bolt.v1");
-    expect(bar[1]).toBe("skill.blink.v1");
+    expect(bar[1]).toBe("skill.flame_dash.v1");
+    expect(bar[2]).toBe("skill.blink.v1");
   });
 
   it("never slots the same skill twice, however many times it grants", () => {
@@ -225,23 +228,115 @@ describe("skills persistence", () => {
     expect(bar.filter((id) => id === "skill.ember_bolt.v1")).toHaveLength(1);
   });
 
-  it("leaves a full bar alone rather than evicting a skill the player chose", () => {
+  /** An Emberbound holding every skill up to level 11: the five numbered sockets are full. */
+  function fullRow() {
     const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
     const e = sessionEntity(world);
-    const full: (string | null)[] = [
-      "skill.ember_bolt.v1", "skill.strike.v1", "skill.snap_shot.v1", "skill.ember_spark.v1",
-      "skill.heavy_strike.v1", MOVE_SOCKET, null, null,
-    ];
-    world.set<SkillsC>(e, "skills", { ...world.get<SkillsC>(e, "skills")!, bar: full });
-    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 4 });
+    const level = (n: number) => world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: n });
+    const skills = () => world.get<SkillsC>(e, "skills")!;
+    const setBar = (bar: (string | null)[]) => world.set<SkillsC>(e, "skills", { ...skills(), bar });
+    level(11);
+    grantSkills(world);
+    return { world, level, skills, setBar };
+  }
+  const MIDDLE = MOUSE_SLOT_BASE + 1;
+  const RIGHT = MOUSE_SLOT_BASE + 2;
+
+  it("with the numbered row full, a newly opened skill takes middle click", () => {
+    const { world, level, skills } = fullRow();
+    const before = skills().bar;
+    expect(before.slice(0, MOUSE_SLOT_BASE)).not.toContain(null);
+
+    level(12);
+    grantSkills(world);
+
+    const bar = skills().bar;
+    expect(bar[MIDDLE]).toBe("skill.flammability.v1");
+    expect(bar.slice(0, MOUSE_SLOT_BASE)).toEqual(before.slice(0, MOUSE_SLOT_BASE));
+    expect(bar[MOUSE_SLOT_BASE]).toBe(MOVE_SOCKET);
+    expect(bar[RIGHT]).toBe("skill.ember_spark.v1");
+  });
+
+  it("takes right click when middle click is taken too", () => {
+    const { world, level, skills, setBar } = fullRow();
+    const bar = [...skills().bar];
+    bar[MIDDLE] = "skill.ember_spark.v1";
+    bar[RIGHT] = null;
+    setBar(bar);
+
+    level(12);
+    grantSkills(world);
+
+    expect(skills().bar[RIGHT]).toBe("skill.flammability.v1");
+    expect(skills().bar[MIDDLE]).toBe("skill.ember_spark.v1");
+  });
+
+  it("leaves a full bar alone rather than evicting a skill the player chose", () => {
+    const { world, level, skills, setBar } = fullRow();
+    const full = [...skills().bar];
+    full[MIDDLE] = "skill.snap_shot.v1";
+    setBar(full);
+
+    level(12);
+    grantSkills(world);
+
+    // Kindling Hex got its gem and no socket: all eight are taken.
+    expect(skills().gems["skill.flammability.v1"]).toEqual({ level: 1, xp: 0 });
+    expect(skills().bar).toEqual(full);
+  });
+
+  it("never puts a skill on left click, even when it is the only empty socket", () => {
+    const { world, level, skills, setBar } = fullRow();
+    const bar = [...skills().bar];
+    bar[MOUSE_SLOT_BASE] = null;
+    bar[MIDDLE] = "skill.snap_shot.v1";
+    setBar(bar);
+
+    level(12);
+    grantSkills(world);
+
+    expect(skills().bar).toEqual(bar);
+  });
+
+  it("two skills opened by one grant take sockets in unlock order", () => {
+    const { world, level, skills } = fullRow();
+
+    // 11 to 18 opens Kindling Hex (12), Captive Sun (14) and Skyfire (18) for two free sockets.
+    const bar = [...skills().bar];
+    bar[RIGHT] = null;
+    world.set<SkillsC>(sessionEntity(world), "skills", { ...skills(), bar });
+    level(18);
+    grantSkills(world);
+
+    expect(skills().bar[MIDDLE]).toBe("skill.flammability.v1");
+    expect(skills().bar[RIGHT]).toBe("skill.solar_orb.v1");
+    expect(skills().bar).not.toContain("skill.firestorm.v1");
+  });
+
+  it("lays several levels' skills out in the order the levels opened them", () => {
+    const { world } = createCombatSim(7, { area: "hideout", classId: "class.emberbound" });
+    const e = sessionEntity(world);
+    world.set<ProgressC>(e, "progress", { ...world.get<ProgressC>(e, "progress")!, level: 8 });
 
     grantSkills(world);
 
-    // Blink got its gem but no socket: the five numbered ones are taken, and the
-    // mouse row is not somewhere a grant may write.
-    const skills = world.get<SkillsC>(e, "skills")!;
-    expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
-    expect(skills.bar).toEqual(full);
+    expect(world.get<SkillsC>(e, "skills")!.bar.slice(0, MOUSE_SLOT_BASE)).toEqual([
+      "skill.ember_bolt.v1", "skill.flame_dash.v1", "skill.blink.v1", "skill.ember_nova.v1", "skill.cinder_ground.v1",
+    ]);
+  });
+
+  it("does not put back a skill the player took off the bar", () => {
+    const { world, level, skills, setBar } = fullRow();
+    level(12);
+    grantSkills(world);
+    const bar = [...skills().bar];
+    bar[MIDDLE] = null;
+    setBar(bar);
+
+    level(13);
+    grantSkills(world);
+
+    expect(skills().bar[MIDDLE]).toBeNull();
   });
 
   it("snapshot round-trips gems and the bar", () => {

@@ -4,7 +4,7 @@ import { Simulation } from "../loop";
 import { registerDeath } from "./death";
 import { gridCollision, type Collision } from "../collision";
 import { makeGrid } from "../test-grid";
-import { START_LEVEL, waystoneMods, atlasGraph } from "@exiled/rules";
+import { START_LEVEL, waystoneMods, atlasGraph, xpToNext } from "@exiled/rules";
 import { WISDOM_SCROLL_BASE_ID, isCurrency } from "@exiled/content-runtime";
 import { MOVE_SOCKET } from "@exiled/protocol";
 import type { World } from "../ecs";
@@ -713,6 +713,23 @@ describe("registerDeath", () => {
     const skills = world.get<SkillsC>(sessionE, "skills")!;
     expect(skills.gems["skill.ember_bolt.v1"]).toEqual({ level: 5, xp: 17 });
     expect(skills.gems["skill.blink.v1"]).toEqual({ level: 1, xp: 0 });
+  });
+
+  it("the kill that reaches level 12 puts the level's skill on middle click in the same tick", () => {
+    const row = ["skill.ember_bolt.v1", "skill.flame_dash.v1", "skill.blink.v1", "skill.ember_nova.v1", "skill.cinder_ground.v1"];
+    const { sim, world, sessionE } = makeGemKill({
+      area: "map", areaTier: 2, level: 11, xp: xpToNext(11) - 1,
+      skills: {
+        gems: Object.fromEntries([...row, "skill.ember_spark.v1"].map((id) => [id, { level: 1, xp: 0 }])),
+        bar: [...row, MOVE_SOCKET, null, "skill.ember_spark.v1"],
+      },
+    });
+    world.set<SessionC>(sessionE, "session", { ...world.get<SessionC>(sessionE, "session")!, classId: "class.emberbound" });
+
+    sim.step([]);
+
+    expect(world.get<ProgressC>(sessionE, "progress")!.level).toBe(12);
+    expect(world.get<SkillsC>(sessionE, "skills")!.bar).toEqual([...row, MOVE_SOCKET, "skill.flammability.v1", "skill.ember_spark.v1"]);
   });
 
   it("pays no gem experience in the hideout, exactly as it pays no character experience", () => {

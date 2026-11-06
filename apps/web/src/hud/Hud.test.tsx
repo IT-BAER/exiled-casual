@@ -925,6 +925,24 @@ describe("Hud gem levels and breakpoints", () => {
     expect(screen.getByTestId("skill-slot-2")).toHaveAttribute("data-flash", "1");
   });
 
+  it("says so when a newly unlocked gem found no socket, and marks the bar until a picker opens", async () => {
+    // The sim gives a fresh unlock any empty socket it may use, so a gem that is
+    // not on the bar found none: the player has to choose what it replaces.
+    const bar = ["skill.ember_bolt.v1", null, null, null, null];
+    const { rerender } = render(<Hud snapshot={makeSnap({ skills: [emberBolt] })} skillBar={bar} />);
+    expect(screen.queryByTestId("skill-unslotted")).toBeNull();
+
+    rerender(<Hud snapshot={makeSnap({ skills: [emberBolt, blink] })} skillBar={bar} />);
+
+    expect(screen.getByTestId("reward-banner")).toHaveTextContent("Blink Unlocked: no free socket");
+    expect(screen.getByTestId("skill-unslotted")).toHaveTextContent("Blink");
+    expect(screen.getByTestId("skill-slot-1")).not.toHaveAttribute("data-flash");
+
+    fireEvent.click(screen.getByTestId("skill-slot-2"));
+    expect(await screen.findByTestId("skill-picker")).toBeTruthy();
+    expect(screen.queryByTestId("skill-unslotted")).toBeNull();
+  });
+
   it("frames the socket of a running buff in both rows, and only while it runs", () => {
     const bar = ["skill.determination.v1", "skill.haste.v1", null, null, null, "skill.blood_rage.v1", null, null];
     const withBuffs = (buffs: Snapshot["player"]["buffs"]) => {

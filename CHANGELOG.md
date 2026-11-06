@@ -10,6 +10,14 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Changed
+
+- A newly unlocked skill now takes middle or right click when the five numbered
+  sockets are full. When no socket is free at all, the game says so and marks
+  the skill bar until you pick a socket for it. A character that already holds
+  skills without a socket gets them placed on empty mouse sockets once, the
+  next time it is loaded.
+
 ## [0.7.1] - 2026-11-04
 
 ### Fixed

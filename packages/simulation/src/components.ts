@@ -116,6 +116,12 @@ export interface SkillsC {
    * cross-class basic attack.
    */
   attackReseeded?: boolean;
+  /**
+   * Provenance for the one-time mouse-socket repair (`slotLateSkills` in
+   * persist.ts), like `attackReseeded`. True once a load has checked this
+   * character; after that an empty mouse socket is the player's own choice.
+   */
+  lateSlotted?: boolean;
 }
 
 /** Something the player can activate with the `interact` intent. */

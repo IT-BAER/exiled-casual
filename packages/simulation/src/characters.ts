@@ -21,7 +21,7 @@ import { START_LEVEL, classIdOr } from "@exiled/rules";
 import type { Item } from "@exiled/content-schema";
 import type { World } from "./ecs";
 import type { EquipmentC, ProgressC, SessionC, SkillsC, StashC } from "./components";
-import { EMPTY_STASH, VERSION, grantSkills, restore, reseedDefaultAttack, snapshot, type PersistedState } from "./persist";
+import { EMPTY_STASH, VERSION, grantSkills, restore, reseedDefaultAttack, slotLateSkills, snapshot, type PersistedState } from "./persist";
 import { recomputePlayerStats } from "./derived";
 import { openRoster } from "./roster-io";
 
@@ -90,7 +90,8 @@ export async function loadCharacterInto(
       // classIdOr, same laundering equipStartingGear already applies above: a
       // bogus roster classId must not get the Stalker fallback attack while
       // its gear came out of the default class.
-      world.set<SkillsC>(sessionE, "skills", reseedDefaultAttack(skills, classIdOr(record.classId)));
+      // Then the other one-shot: skills an older save holds without a socket.
+      world.set<SkillsC>(sessionE, "skills", slotLateSkills(reseedDefaultAttack(skills, classIdOr(record.classId))));
     }
     // A never-played character was granted before it had a class, so without
     // this it would open its first map with no class skill at all.

@@ -180,6 +180,33 @@ export function reseedDefaultAttack(skills: SkillsC, classId: string): SkillsC {
   return { ...skills, bar, attackReseeded: true };
 }
 
+/** Middle and right click. Never left click: Move or the free attack lives there, and a skill on it would fire on every click. */
+const MOUSE_GRANT_SOCKETS: readonly number[] = [MOUSE_SLOT_BASE + 1, MOUSE_SLOT_BASE + 2];
+/** Where a grant may put a skill, in order: the numbered row, then the mouse sockets. */
+const GRANT_SOCKETS: readonly number[] = [
+  ...Array.from({ length: MOUSE_SLOT_BASE }, (_, i) => i), ...MOUSE_GRANT_SOCKETS,
+];
+
+/**
+ * Gives held class skills that have no socket the empty mouse sockets, in
+ * unlock order, once, gated on `SkillsC.lateSlotted`. A save written while a
+ * grant used only the numbered row holds its later skills unslotted, and
+ * nothing structural tells that from a skill the player took off the bar.
+ */
+export function slotLateSkills(skills: SkillsC): SkillsC {
+  if (skills.lateSlotted) return skills;
+  const bar = [...skills.bar];
+  const unslotted = [...SKILLS.values()]
+    .filter((d) => d.classId !== undefined && !FREE_ATTACKS.has(d.id) && skills.gems[d.id] !== undefined && !bar.includes(d.id))
+    .sort((a, b) => a.unlockLevel - b.unlockLevel);
+  for (const def of unslotted) {
+    const free = MOUSE_GRANT_SOCKETS.find((i) => bar[i] === null);
+    if (free === undefined) break;
+    bar[free] = def.id;
+  }
+  return { ...skills, bar, lateSlotted: true };
+}
+
 /**
  * Bring the gem list level with the character. Idempotent and additive: a skill
  * the level now opens gets a gem at 1, a skill already held is left exactly as
@@ -197,18 +224,20 @@ export function grantSkills(world: World, classStart = 1): void {
   const current = world.get<SkillsC>(e, "skills");
   const gems = { ...(current?.gems ?? {}) };
   const bar = [...(current?.bar ?? defaultBar(classId))];
-  for (const def of SKILLS.values()) {
+  // In unlock order (a stable sort, so ties keep content order): a grant that
+  // spans several levels hands out sockets the way one level at a time would.
+  for (const def of [...SKILLS.values()].sort((a, b) => a.unlockLevel - b.unlockLevel)) {
     if (UTILITY_SKILLS.has(def.id)) continue;
     if (!isUnlocked(def, level, classId)) continue;
     if (gems[def.id] !== undefined) continue;
     gems[def.id] = { level: def.classId ? classStart : 1, xp: 0 };
     // A skill nobody can see was not a reward (docs/09 rule 1), so the one the
-    // level just opened takes the first free numbered socket. Never the mouse
-    // row, never an occupied one (a full bar is a choice the player made), and
-    // never a free attack, which is unlocked for every class and earns nothing.
+    // level just opened takes the first free socket (GRANT_SOCKETS). Never an
+    // occupied one (a full bar is a choice the player made), and never a free
+    // attack, which is unlocked for every class and earns nothing.
     if (FREE_ATTACKS.has(def.id) || bar.includes(def.id)) continue;
-    const free = bar.findIndex((id, i) => id === null && i < MOUSE_SLOT_BASE);
-    if (free !== -1) bar[free] = def.id;
+    const free = GRANT_SOCKETS.find((i) => bar[i] === null);
+    if (free !== undefined) bar[free] = def.id;
   }
   world.set<SkillsC>(e, "skills", {
     gems,
@@ -217,6 +246,7 @@ export function grantSkills(world: World, classStart = 1): void {
     // resetting it would let a legitimate cross-class basic attack the player
     // already set get stomped back to the class default on the next grant.
     ...(current?.attackReseeded ? { attackReseeded: true } : {}),
+    ...(current?.lateSlotted ? { lateSlotted: true } : {}),
   });
 }
 
@@ -269,6 +299,7 @@ export function restore(world: World, state: PersistedState): void {
       // Absent on every save written before this flag existed, which is
       // exactly the save `reseedDefaultAttack` still has a bug left to fix.
       ...(saved.attackReseeded ? { attackReseeded: true } : {}),
+      ...(saved.lateSlotted ? { lateSlotted: true } : {}),
     });
   }
   grantSkills(world, stripped);
