@@ -683,6 +683,21 @@ describe("derived player stats", () => {
     expect(world.get<DefensesC>(playerEntity, "defenses")!.maxResAdd).toBeUndefined();
   });
 
+  it.each([
+    ["Anvilheart", "base.ironsworn_plate", "unique.less_phys_hit_taken", 10, { physHitTakenLessPct: 10 }],
+    ["Cinderveil", "base.ember_robe", "unique.unaffected_burning_ground", 1, { unaffectedByBurningGround: 1 }],
+  ] as const)("%s worn on the body hands its unique mod to the hit and ground systems", (name, baseId, affixId, value, mods) => {
+    const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
+    atLevel(world, 70);
+    const item: Item = { baseId, rarity: "unique", itemLevel: 70, name, affixes: [{ affixId, value }] };
+    placeInInv(world, item, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "body" }, playerEntity, 0)]);
+    expect(world.get<GearModsC>(playerEntity, "gearMods")).toEqual(mods);
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "body" }, playerEntity, 1)]);
+    expect(world.has(playerEntity, "gearMods")).toBe(false);
+  });
+
   it("unequipping takes the mods back off", () => {
     const { world, sim, playerEntity } = makeWorld();
     clearInv(world);
