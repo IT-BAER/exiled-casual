@@ -86,7 +86,7 @@ export function registerDamageResolve(
       // Armour stops hits, never a DoT tick (both PoE games); a DoT names its victim as source.
       const final = applyDamage(
         { type: damageTypeOf(ev.type), amountFixed: amount },
-        { resPct: def.res, armourFixed: ev.source === ev.target ? 0 : def.armour },
+        { resPct: def.res, armourFixed: ev.source === ev.target ? 0 : def.armour, ...(def.maxResAdd ? { resCapAdd: def.maxResAdd } : {}) },
       );
       // Energy shield stands in front of life and pays double for chaos. Every
       // hit that touches the shield — even one it fully stops — pushes the

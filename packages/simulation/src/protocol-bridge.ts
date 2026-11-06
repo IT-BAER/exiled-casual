@@ -798,6 +798,7 @@ export function buildSnapshot(
           armour: toNumber(armour),
           armourPct: physicalMitigationPct(armour, sheetReferenceHit(progress.level)),
           res: d?.res ?? resBlock(),
+          ...(d?.maxResAdd ? { resCapAdd: d.maxResAdd } : {}),
           manaRegenPerSec: toNumber(pm.regen * 30),
           spellDamagePct: world.get<OffenseC>(playerEntity, "offense")?.spellDamagePct ?? 0,
           castSpeedPct: world.get<OffenseC>(playerEntity, "offense")?.castSpeedPct ?? 0,

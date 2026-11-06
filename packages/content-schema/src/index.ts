@@ -29,6 +29,8 @@ export function resBlock(partial: Partial<ResBlock> = {}): ResBlock {
 export interface Defenses {
   resPct: ResBlock;
   armourFixed: Fixed;
+  /** Points added to RES_CAP per element ("+3% to maximum Lightning Resistance"). */
+  resCapAdd?: Partial<ResBlock>;
 }
 
 export interface DamageSpec {

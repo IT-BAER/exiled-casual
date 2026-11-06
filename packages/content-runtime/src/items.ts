@@ -373,6 +373,8 @@ export const UNIQUE_MODS: readonly UniqueMod[] = [
   { id: "unique.unaffected_burning_ground", stat: "unaffectedByBurningGround", text: "Unaffected by Burning Ground" },
   // PoE1's Culling Strike: 10% for every rarity there (PoE2 scales it by rarity, 5% on a unique).
   { id: "unique.culling_strike", stat: "cullingStrikePct", text: "Culling Strike: hits kill enemies left at or under #% of their Life" },
+  // PoE's "+#% to maximum Lightning Resistance".
+  { id: "unique.max_lightning_res", stat: "maxLightningResPct", text: "+#% to maximum Lightning Resistance" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -436,7 +438,7 @@ const UNIQUES: UniqueItem[] = [
     flavour: "They buried the town behind it. The wall held.",
     icon: "/textures/items/unique_gravewall.webp",
     mods: [
-      { affixId: "affix.life", min: 40, max: 60 },
+      { affixId: "unique.max_lightning_res", min: 3, max: 3 },
       { affixId: "affix.armour", min: 70, max: 110 },
       { affixId: "affix.lightning_res", min: 25, max: 35 },
     ],

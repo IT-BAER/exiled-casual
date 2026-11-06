@@ -10,7 +10,7 @@ import { RES_CAP, ARMOUR_DMG_MULT, PDR_CAP } from "./stats.js";
 export function applyDamage(pkt: DamageSpec, def: Defenses): Fixed {
   const pct = pkt.type === "physical"
     ? physicalMitigationPct(def.armourFixed, pkt.amountFixed)
-    : Math.min(def.resPct[pkt.type], RES_CAP);
+    : Math.min(def.resPct[pkt.type], RES_CAP + (def.resCapAdd?.[pkt.type] ?? 0));
   const result = Math.trunc(pkt.amountFixed * (100 - pct) / 100);
   return result < 0 ? 0 : result;
 }

@@ -21,6 +21,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   a boss's burning ground no longer sets you on fire.
 - Oathbreaker has Culling Strike instead of Strength: a hit that leaves an
   enemy at or under 10% of its Life kills it, bosses included.
+- Gravewall gives +3% to maximum Lightning Resistance instead of maximum Life.
+  The character sheet and the death screen read lightning resistance against
+  the raised cap.
 
 - Monsters hit harder from map tier 3 up, and bosses have more life from tier 4
   up. Tiers 1 and 2 are unchanged. A tier 10 monster now hits about three

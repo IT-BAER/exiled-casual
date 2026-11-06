@@ -620,6 +620,21 @@ describe("derived player stats", () => {
     expect(world.has(playerEntity, "gearMods")).toBe(false);
   });
 
+  it("a raised resistance cap reaches the defences and the sheet while worn", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    clearInv(world);
+    const gravewall: Item = {
+      baseId: "base.ironsworn_tower_shield", rarity: "unique", itemLevel: 65, name: "Gravewall",
+      affixes: [{ affixId: "unique.max_lightning_res", value: 3 }],
+    };
+    placeInInv(world, gravewall, 0, 0, 2, 3);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon2" }, playerEntity, 0)]);
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.maxResAdd).toEqual({ lightning: 3 });
+    expect(buildSnapshot(world, sim, 1, CONTENT_VERSION).player.stats.resCapAdd).toEqual({ lightning: 3 });
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon2" }, playerEntity, 1)]);
+    expect(world.get<DefensesC>(playerEntity, "defenses")!.maxResAdd).toBeUndefined();
+  });
+
   it("unequipping takes the mods back off", () => {
     const { world, sim, playerEntity } = makeWorld();
     clearInv(world);

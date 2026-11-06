@@ -120,7 +120,7 @@ function ShieldGlyph({ size = 34 }: { size?: number | string }) {
   );
 }
 
-function ResPill({ id, label, pct, icon }: { id: string; label: string; pct: number; icon: React.ReactNode }) {
+function ResPill({ id, label, pct, cap, icon }: { id: string; label: string; pct: number; cap: number; icon: React.ReactNode }) {
   return (
     <div
       data-testid={`char-res-${id}`}
@@ -148,7 +148,7 @@ function ResPill({ id, label, pct, icon }: { id: string; label: string; pct: num
       {/* "Lightning" is the longest label; without nowrap its value breaks onto a second line. */}
       <span style={{ color: PARCHMENT, fontSize: 13, letterSpacing: 0.5, flex: 1, minWidth: 0, whiteSpace: "nowrap" }}>{label}</span>
       <span style={{ color: "#fff", fontSize: 14, whiteSpace: "nowrap" }}>
-        {Math.min(pct, RES_CAP)}%{" "}
+        {Math.min(pct, cap)}%{" "}
         <span style={{ color: "#7d7360", fontSize: 13 }}>({pct}%)</span>
       </span>
     </div>
@@ -156,8 +156,8 @@ function ResPill({ id, label, pct, icon }: { id: string; label: string; pct: num
 }
 
 /** "45% (60%)" — what applies, then the uncapped total, as the reference does. */
-function resRow(pct: number): string {
-  return `${Math.min(pct, RES_CAP)}% (${pct}%)`;
+function resRow(pct: number, cap: number): string {
+  return `${Math.min(pct, cap)}% (${pct}%)`;
 }
 
 function DetailSection({ title, rows }: { title: string; rows: [string, string][] }) {
@@ -192,6 +192,7 @@ function BandLabel({ children }: { children: React.ReactNode }) {
 
 export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]; onClose: () => void }) {
   const s = player.stats;
+  const capOf = (el: keyof typeof s.res) => RES_CAP + (s.resCapAdd?.[el] ?? 0);
   const hasES = player.maxEnergyShield > 0;
   const nicheW = BAND_VW / (hasES ? 4 : 3);
   const glyph = `${(nicheW * 0.24).toFixed(3)}vw`;
@@ -264,10 +265,10 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
               (reference-screenshots/character-stats.png). */}
           {/* One column once a pill (Lightning, 172px) no longer fits in half the pane. */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(max(180px, calc(50% - 3px)), 1fr))", gap: 6 }}>
-            <ResPill id="fire" label="Fire" pct={s.res.fire} icon={<ElementIcon of="fire" />} />
-            <ResPill id="cold" label="Cold" pct={s.res.cold} icon={<ElementIcon of="cold" />} />
-            <ResPill id="lightning" label="Lightning" pct={s.res.lightning} icon={<ElementIcon of="lightning" />} />
-            <ResPill id="chaos" label="Chaos" pct={s.res.chaos} icon={<ElementIcon of="chaos" />} />
+            <ResPill id="fire" label="Fire" pct={s.res.fire} cap={capOf("fire")} icon={<ElementIcon of="fire" />} />
+            <ResPill id="cold" label="Cold" pct={s.res.cold} cap={capOf("cold")} icon={<ElementIcon of="cold" />} />
+            <ResPill id="lightning" label="Lightning" pct={s.res.lightning} cap={capOf("lightning")} icon={<ElementIcon of="lightning" />} />
+            <ResPill id="chaos" label="Chaos" pct={s.res.chaos} cap={capOf("chaos")} icon={<ElementIcon of="chaos" />} />
           </div>
 
           {/* The reference drops the stone for a flat dark list at the bottom. */}
@@ -305,10 +306,10 @@ export function CharacterPanel({ player, onClose }: { player: Snapshot["player"]
               rows={[
                 ["Armour", String(Math.round(s.armour))],
                 ["Physical Damage Reduction", `${s.armourPct}%`],
-                ["Fire Resistance", resRow(s.res.fire)],
-                ["Cold Resistance", resRow(s.res.cold)],
-                ["Lightning Resistance", resRow(s.res.lightning)],
-                ["Chaos Resistance", resRow(s.res.chaos)],
+                ["Fire Resistance", resRow(s.res.fire, capOf("fire"))],
+                ["Cold Resistance", resRow(s.res.cold, capOf("cold"))],
+                ["Lightning Resistance", resRow(s.res.lightning, capOf("lightning"))],
+                ["Chaos Resistance", resRow(s.res.chaos, capOf("chaos"))],
               ]}
             />
             {s.attack && (

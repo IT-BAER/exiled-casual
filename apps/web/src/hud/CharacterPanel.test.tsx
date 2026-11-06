@@ -41,6 +41,13 @@ describe("CharacterPanel", () => {
     expect(screen.getByTestId("char-res-fire").textContent).toContain("75% (90%)");
   });
 
+  it("caps a resistance at its raised maximum when gear raises one", () => {
+    render(<CharacterPanel player={player({ res: { fire: 90, cold: 0, lightning: 90, chaos: 0 }, resCapAdd: { lightning: 3 } })} onClose={() => {}} />);
+    expect(screen.getByTestId("char-res-lightning").textContent).toContain("78% (90%)");
+    expect(screen.getByTestId("char-res-fire").textContent).toContain("75% (90%)");
+    expect(screen.getByTestId("char-detail").textContent).toContain("78% (90%)");
+  });
+
   it("shows all four resistances, as the reference's 2x2 grid does", () => {
     render(
       <CharacterPanel

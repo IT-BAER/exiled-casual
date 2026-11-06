@@ -411,6 +411,8 @@ export interface PlayerStats {
   armourPct: number;
   /** UNCAPPED totals, one per element. The sheet renders them against RES_CAP so overcapping stays visible. */
   res: Resistances;
+  /** Points worn gear adds to RES_CAP per element; absent when none. */
+  resCapAdd?: Partial<Resistances>;
   /** What the player actually regenerates: the per-tick amount times 30, not the pre-truncation ideal. */
   manaRegenPerSec: number;
   /** Increased damage of every skill (the stat id keeps its historical spell name). */

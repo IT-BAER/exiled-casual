@@ -48,9 +48,10 @@ function tip(recap: Recap, stats: PlayerStats): string {
   }
   const { label } = ELEMENT[el];
   const res = stats.res[el];
+  const cap = RES_CAP + (stats.resCapAdd?.[el] ?? 0);
   const shield = el === "chaos" ? " Energy shield takes double from chaos." : "";
-  return res < RES_CAP
-    ? `${label} did the most. ${label} resistance is ${res}% of a ${RES_CAP}% cap: raise it on gear.${shield}`
+  return res < cap
+    ? `${label} did the most. ${label} resistance is ${res}% of a ${cap}% cap: raise it on gear.${shield}`
     : `${label} did the most, and your ${label.toLowerCase()} resistance is capped: more life or energy shield.${shield}`;
 }
 

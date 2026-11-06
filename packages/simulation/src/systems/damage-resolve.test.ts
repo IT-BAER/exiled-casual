@@ -78,6 +78,26 @@ it("culling strike kills a monster a hit leaves at or under the threshold, a bos
   expect(lifeAfter(10, true, true)).toBe(0);
 });
 
+it("a raised lightning cap lets overcapped resistance stop more of a lightning hit, and nothing else", () => {
+  const lifeAfter = (type: number, maxResAdd?: { lightning: number }): number => {
+    const sim = new Simulation();
+    const { world } = sim;
+    const t = world.create();
+    world.set<Health>(t, "health", { life: fp(100), maxLife: fp(100) });
+    world.set<DefensesC>(t, "defenses", { res: resBlock({ fire: 90, lightning: 90 }), armour: fp(0), ...(maxResAdd ? { maxResAdd } : {}) });
+    sim.register("testProducer", () => {
+      sim.enqueueDamage({ target: t, source: 99, amountFixed: fp(100), type });
+    });
+    registerDamageResolve(sim);
+    sim.step();
+    return world.get<Health>(t, "health")!.life;
+  };
+  const lightning = damageCode("lightning");
+  expect(lifeAfter(lightning)).toBe(fp(75)); // capped at 75: 25 taken
+  expect(lifeAfter(lightning, { lightning: 3 })).toBe(fp(78)); // capped at 78: 22 taken
+  expect(lifeAfter(damageCode("fire"), { lightning: 3 })).toBe(fp(75));
+});
+
 it("culling strike never takes a damage-over-time tick's victim", () => {
   const sim = new Simulation();
   const { world } = sim;

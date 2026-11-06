@@ -151,6 +151,14 @@ describe("uniques", () => {
     expect(itemStatMods(item)).toContainEqual({ stat: "cullingStrikePct", value: 10 });
   });
 
+  it("Gravewall raises the lightning resistance cap, in place of its life", () => {
+    const item = worn("Gravewall");
+    expect(item.affixes).toHaveLength(3);
+    expect(describeItem(item).lines).toContain("+3% to maximum Lightning Resistance");
+    expect(describeItem(item).lines.some((l) => l.includes("Life"))).toBe(false);
+    expect(itemStatMods(item)).toContainEqual({ stat: "maxLightningResPct", value: 3 });
+  });
+
   it("gives every class family the same number of uniques", () => {
     const perFamily: Record<string, number> = {};
     for (const f of Object.values(FAMILY_BY_CLASS)) perFamily[f] = 0;

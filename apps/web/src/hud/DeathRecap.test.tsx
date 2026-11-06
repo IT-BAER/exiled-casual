@@ -102,6 +102,11 @@ describe("DeathRecap", () => {
     expect(tip).toContain("75%");
   });
 
+  it("reads a resistance against the cap worn gear raised", () => {
+    render(<DeathRecap recap={recap()} stats={stats({ res: { fire: 76, cold: 0, lightning: 0, chaos: 0 }, resCapAdd: { fire: 3 } })} />);
+    expect(screen.getByTestId("recap-tip").textContent).toContain("Fire resistance is 76% of a 78% cap");
+  });
+
   it("a capped resistance points at life and energy shield instead", () => {
     render(<DeathRecap recap={recap()} stats={stats({ res: { fire: 80, cold: 0, lightning: 0, chaos: 0 } })} />);
     expect(screen.getByTestId("recap-tip").textContent).toMatch(/life or energy shield/i);

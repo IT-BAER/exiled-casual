@@ -411,7 +411,8 @@ export interface SkillAreaC {
    */
   marker?: 1;
 }
-export interface DefensesC  { res: ResBlock; armour: Fixed }
+/** `maxResAdd` raises RES_CAP per element; present only while gear raises one. */
+export interface DefensesC  { res: ResBlock; armour: Fixed; maxResAdd?: Partial<ResBlock> }
 /**
  * The pool in front of life. Present only while some equipped mod grants it, so
  * an ungeared world serializes exactly as it did before energy shield existed —
@@ -437,6 +438,8 @@ export interface GearModsC {
   unaffectedByBurningGround?: number;
   /** A hit that leaves a monster at or under this percent of its life kills it (Oathbreaker). */
   cullingStrikePct?: number;
+  /** Points on the lightning resistance cap (Gravewall); derived.ts moves it onto DefensesC. */
+  maxLightningResPct?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;
