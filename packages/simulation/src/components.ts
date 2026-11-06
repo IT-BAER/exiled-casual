@@ -442,6 +442,8 @@ export interface GearModsC {
   maxLightningResPct?: number;
   /** Percent less physical damage taken from hits, after armour (Anvilheart). */
   physHitTakenLessPct?: number;
+  /** Extra enemies a bow's arrows pierce (Quietus). */
+  extraPierce?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;

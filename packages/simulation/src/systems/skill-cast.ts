@@ -160,6 +160,9 @@ export function registerSkillCast(
 
         const n = effect.count ?? 1;
         const [main, ...extra] = partsOf(effect.damage);
+        // Quietus's "Arrows Pierce an additional Target": a bow's arrows only.
+        const pierce = (effect.pierceCount ?? 0)
+          + (skill.bow ? world.get<GearModsC>(caster, "gearMods")?.extraPierce ?? 0 : 0);
         for (let i = 0; i < n; i++) {
           const off = n > 1 ? ((effect.spreadDegrees ?? 0) * (2 * i - (n - 1))) / (2 * (n - 1)) : 0;
           const [dirx, diry] = off === 0 ? [step.dx, step.dy] : rotate(step.dx, step.dy, off);
@@ -174,7 +177,7 @@ export function registerSkillCast(
             damageAmount: main!.amount,
             ownerId: caster,
             team: casterTeam,
-            ...(effect.pierceCount ? { pierceLeft: effect.pierceCount, hitIds: [] } : {}),
+            ...(pierce ? { pierceLeft: pierce, hitIds: [] } : {}),
             ...(n > 1 ? { volley: tick } : {}),
             skillId: skill.id,
             ...(extra.length > 0 ? { extraDamage: extra } : {}),

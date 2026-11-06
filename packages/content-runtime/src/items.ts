@@ -377,6 +377,8 @@ export const UNIQUE_MODS: readonly UniqueMod[] = [
   { id: "unique.max_lightning_res", stat: "maxLightningResPct", text: "+#% to maximum Lightning Resistance" },
   // PoE's plate-unique "#% less Physical Damage taken from Hits".
   { id: "unique.less_phys_hit_taken", stat: "physHitTakenLessPct", text: "#% less Physical Damage taken from Hits" },
+  // PoE's "Arrows Pierce an additional Target". At 1 the text names no number.
+  { id: "unique.extra_pierce", stat: "extraPierce", text: "Arrows Pierce an additional enemy" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -466,7 +468,7 @@ const UNIQUES: UniqueItem[] = [
     mods: [
       { affixId: "affix.phys_dmg_pct", min: 40, max: 55 },
       { affixId: "affix.crit_chance", min: 28, max: 40 },
-      { affixId: "affix.cold_dmg", min: 14, max: 22 },
+      { affixId: "unique.extra_pierce", min: 1, max: 1 },
     ],
   },
   {

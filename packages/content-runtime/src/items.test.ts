@@ -167,6 +167,14 @@ describe("uniques", () => {
     expect(itemStatMods(item)).toContainEqual({ stat: "physHitTakenLessPct", value: 10 });
   });
 
+  it("Quietus's arrows pierce another enemy, in place of its cold damage", () => {
+    const item = worn("Quietus");
+    expect(item.affixes).toHaveLength(3);
+    expect(describeItem(item).lines).toContain("Arrows Pierce an additional enemy");
+    expect(describeItem(item).lines.some((l) => l.includes("Cold"))).toBe(false);
+    expect(itemStatMods(item)).toContainEqual({ stat: "extraPierce", value: 1 });
+  });
+
   it("gives every class family the same number of uniques", () => {
     const perFamily: Record<string, number> = {};
     for (const f of Object.values(FAMILY_BY_CLASS)) perFamily[f] = 0;

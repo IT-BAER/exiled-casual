@@ -744,6 +744,27 @@ describe("registerSkillCast", () => {
       expect(boltAt(ATTACK, 9, 1)).toBe(boltAt(ATTACK, 9, 0));
     });
 
+    it("worn extra pierce adds to a bow's arrows, and to nothing else", () => {
+      const ARROW: SkillDef = { ...EMBER_BOLT, id: "skill.test_arrow.v1", kind: "attack", bow: true };
+      const PIERCING: SkillDef = {
+        ...ARROW, id: "skill.test_piercing_arrow.v1",
+        effects: [{ ...EMBER_BOLT.effects[0]!, pierceCount: 2 } as SkillDef["effects"][0]],
+      };
+      const pierceOf = (skill: SkillDef, extraPierce: number): number | undefined => {
+        const sim = new Simulation();
+        registerSkillCast(sim, new Map([[skill.id, skill]]));
+        makeSessionWithGem(sim, skill.id, 1);
+        const caster = makeCaster(sim, fp(60));
+        if (extraPierce) sim.world.set<GearModsC>(caster, "gearMods", { extraPierce });
+        sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: skill.id, data: { tx: fp(10), ty: 0 } }]);
+        return sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!.pierceLeft;
+      };
+      expect(pierceOf(ARROW, 1)).toBe(1);
+      expect(pierceOf(PIERCING, 1)).toBe(3);
+      expect(pierceOf(ARROW, 0)).toBeUndefined();
+      expect(pierceOf(EMBER_BOLT, 1)).toBeUndefined();
+    });
+
     it("a gem 5 caster's bolt pierces, a gem 4 caster's does not", () => {
       // Assert ProjectileC.pierceLeft is 1 at gem 5 and undefined at gem 4. This is
       // the breakpoint reaching the sim, which no rules-level test can prove.
