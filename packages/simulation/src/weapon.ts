@@ -1,4 +1,4 @@
-import { fp, type Fixed } from "@exiled/fixed-point";
+import type { Fixed } from "@exiled/fixed-point";
 import { classIdOr } from "@exiled/rules";
 import { attackAddedDamage, characterClass, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { SkillDef } from "@exiled/content-schema";
@@ -28,11 +28,19 @@ export interface WeaponHit {
 const hundredths = (v: number): number => Math.round(v * 100);
 
 /**
+ * What a point of a wand's or focus's fire or cold is worth to a spell: 2/16 of the
+ * spell's own hit, the weight that point has on the starter hammer (6 + 10). A flat
+ * add left the Emberbound's wand at +30% while an attack weapon reached x3.1.
+ */
+const SPELL_HIT_DEN = 16;
+
+/**
  * What the weapon does to this cast. Attacks are measured against the class's
  * STARTER weapon, so the starting kit hits, crits and recovers exactly as authored
  * and every number in content stays the one balance was tuned on. A spell takes a
- * wand's or focus's flat fire and cold at its own effectiveness. A world with no
- * session or no equipment (the golden replays, the bare test rigs) is untouched.
+ * wand's or focus's fire and cold as a share of its hit, at its own effectiveness.
+ * A world with no session or no equipment (the golden replays, the bare test rigs)
+ * is untouched.
  */
 export function weaponHit(world: World, skill: SkillDef): WeaponHit {
   const plain: WeaponHit = { critPct100: (skill.critChancePct ?? 0) * 100, cooldownTicks: skill.cooldownTicks };
@@ -46,8 +54,9 @@ export function weaponHit(world: World, skill: SkillDef): WeaponHit {
     const added = spellAddedDamage([slots["weapon1"], slots["weapon2"]]);
     const extra = ([["fire", added.fire], ["cold", added.cold]] as const)
       .filter(([, v]) => v > 0 && eff > 0)
-      .map(([type, v]) => ({ type: damageCode(type), num: 0, flat: Math.trunc((fp(v) * eff) / 100) }));
-    return extra.length > 0 ? { ...plain, mod: { num: 1, den: 1, extra } } : plain;
+      .map(([type, v]) => ({ type: damageCode(type), num: 2 * v * eff, flat: 0 }));
+    const den = SPELL_HIT_DEN * 100;
+    return extra.length > 0 ? { ...plain, mod: { num: den, den, extra } } : plain;
   }
   if (skill.kind !== "attack") return plain;
 

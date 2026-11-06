@@ -33,6 +33,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Cast speed now also shortens how often a spell repeats, not only its
   wind-up. The skill tooltip shows the shorter cooldown and the higher damage
   per second.
+- Fire and cold on a wand or focus now count as a share of the spell's own
+  hit, the way they already did on an attack weapon: each point adds up to an
+  eighth of the hit, so the bonus grows with the gem. A good wand drop now
+  matters as much to the Emberbound as a good weapon does to the other two
+  classes.
 
 ## [0.7.1] - 2026-11-04
 

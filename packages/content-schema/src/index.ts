@@ -285,7 +285,7 @@ export interface SkillDef {
    * (Portal, Blink): no hit, nothing reads the weapon.
    */
   kind?: "attack" | "spell";
-  /** A spell's damage effectiveness: the share of added flat damage its hit takes, whole percent. */
+  /** A spell's damage effectiveness: the share of a wand's or focus's fire and cold its hit takes, whole percent. */
   addedDamageEffectivenessPct?: number;
   effects: EffectNode[];
 }

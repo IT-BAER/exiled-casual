@@ -180,7 +180,10 @@ describe("weapon damage reaches the attack", () => {
     expect(g.world.get<Cooldowns>(g.player, "cooldowns")![STRIKE]).toBe(tick + 20);
   });
 
-  it("an Emberbound wand's fire adds to Ember Bolt at 100% and to Ember Spark at 60%", () => {
+  // A point of "to Fire Damage" weighs on a wand what it weighs on the starter hammer:
+  // 2/16 of the skill's own hit, so it grows with the gem (balance plan 6 Nov, D7). A
+  // flat add left the Emberbound's best wand at +30% while a hammer reached x3.1.
+  it("an Emberbound wand's fire adds 2/16 of the spell's hit per point, at the spell's effectiveness", () => {
     const wand = (fire: number): Item => ({ baseId: "base.ember_kindling_wand", rarity: "magic", itemLevel: 1,
       affixes: fire ? [{ affixId: "affix.fire_dmg", value: fire }] : [] });
     for (const [skill, eff] of [[BOLT, 100], [SPARK, 60]] as const) {
@@ -191,7 +194,7 @@ describe("weapon damage reaches the attack", () => {
       const { events } = castAt(g, skill, imp);
       expect(events).toHaveLength(1);
       expect(events[0]!.type).toBe(damageCode("fire"));
-      const expected = scalePct(amount(skill) + Math.trunc((fp(20) * eff) / 100), inc);
+      const expected = scalePct(amount(skill) + Math.trunc((amount(skill) * 2 * 20 * eff) / 1600), inc);
       expect(hitOrCrit(expected), skill).toContain(events[0]!.amountFixed);
     }
   });
