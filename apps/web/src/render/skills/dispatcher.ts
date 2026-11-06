@@ -68,6 +68,8 @@ export class SkillLookDispatcher {
   private travel: { skillId: string; handle?: FxHandle<{ body: ActorRef; travel: TravelState }>; last: TravelState } | null = null;
   private readonly bursts: BurstHandle[] = [];
   private readonly fading: Fading[] = [];
+  /** Spent areas `observe` saw in a snapshot that a newer one may replace before any frame draws it. */
+  private readonly missed = new Map<number, AreaState>();
 
   /** Tick of the last release drawn, so one release fires once however many frames show it. */
   private releasedAt = -1;
@@ -137,6 +139,17 @@ export class SkillLookDispatcher {
     entry.handle.dispose();
   }
 
+  /**
+   * Every snapshot as it arrives, drawn or not. An instant impact lives in ONE
+   * snapshot, and frames draw only the newest: two snapshots between two frames
+   * would otherwise drop it unseen (a hitch on a slam's own tick is the usual case).
+   */
+  observe(s: Snapshot): void {
+    for (const e of s.entities) {
+      if (e.kind === "skillArea" && e.spent && !this.areas.has(e.id)) this.missed.set(e.id, areaState(e, 0));
+    }
+  }
+
   /** Everything else, once per drawn frame after the meshes are synced. */
   frame(f: FrameInput): void {
     const { next, alpha } = f;
@@ -160,6 +173,8 @@ export class SkillLookDispatcher {
         else this.grounds.set(e.id, { handle: this.looks.skills[e.skillId!]!.ground!.create(ctx, state), born, ...(caster ? { caster } : {}) });
       }
     }
+    for (const [id, state] of this.missed) if (!this.areas.has(id)) this.fireArea(state);
+    this.missed.clear();
     for (const [id, a] of this.areas) {
       if (seen.has(id)) continue;
       // A player's area always lands (a dead owner does not cancel it): one that
@@ -197,6 +212,7 @@ export class SkillLookDispatcher {
   clear(): void {
     for (const a of this.areas.values()) a.warn?.dispose();
     this.areas.clear();
+    this.missed.clear();
     for (const g of this.grounds.values()) g.handle.dispose();
     this.grounds.clear();
     for (const p of this.projectiles.values()) p.handle.dispose();

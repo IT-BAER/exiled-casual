@@ -2826,6 +2826,14 @@ describe("a class skill plays its own take", () => {
       // A shared take still goes through its own path.
       expect(rig.playSkill("cast", 0.6, 0.3)).toBe(true);
       expect(rig.clipGroups.get("cast")!.isPlaying).toBe(true);
+      // A shared bow or cast after a skill's own take replaces it (Lightning Arrow after Sniper's Mark).
+      for (const shared of ["bow", "cast"] as const) {
+        expect(rig.playSkill("bowAimNeutral", 1, 0.3, 0.3)).toBe(true);
+        for (let i = 0; i < 3; i++) { rig.setLocomotion(0); scene.render(); }
+        expect(rig.playSkill(shared, 0.6, 0.3)).toBe(true);
+        expect(rig.clipGroups.get("bowAimNeutral")!.isPlaying, shared).toBe(false);
+        expect(rig.clipGroups.get(shared)!.isPlaying, shared).toBe(true);
+      }
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }

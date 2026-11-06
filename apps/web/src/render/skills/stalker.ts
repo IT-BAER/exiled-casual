@@ -851,7 +851,46 @@ const HASTE_BUFF: BuffLook = {
   },
 };
 
-const HASTE_CAST: CastLook = { clip: "surprise", release: 0.15, playback: 1.4 };
+const HASTE_CAST: CastLook = {
+  clip: "surprise",
+  release: 0.15,
+  playback: 1.4,
+  // The wind gathers before the buff takes hold: streaks curling IN round his legs.
+  start(ctx, body) {
+    const pool = kitPools(ctx.scene).motes;
+    let last = body;
+    let owed = 0;
+    const fx = new Fx((f, dt) => {
+      owed += 45 * dt * f.fade;
+      for (; owed >= 1; owed--) {
+        const a = Math.random() * TAU;
+        const r = rand(0.9, 1.4);
+        const life = rand(0.18, 0.28);
+        const pull = (r * 0.6) / life;
+        // Along the turn and inward: each streak is a short arc of a closing spiral.
+        pool.emit({
+          x: last.x + Math.sin(a) * r, y: rand(0.15, 1.2), z: last.z + Math.cos(a) * r,
+          vx: Math.cos(a) * 3 - Math.sin(a) * pull, vy: rand(0, 0.4), vz: -Math.sin(a) * 3 - Math.cos(a) * pull,
+          drag: 1, life, size: 0.26, thick: 0.012, stretch: 0.06,
+          r: 0.8, g: 1, b: 0.95, a: 0.75, r1: HASTE[0] * 0.6, g1: HASTE[1] * 0.6, b1: HASTE[2] * 0.6,
+        });
+      }
+      return true;
+    }, 0.05);
+    return {
+      update(c, b) {
+        last = b;
+        fx.update(c.dt);
+      },
+      fade(c) {
+        fx.stop();
+        fx.update(c.dt);
+        return !fx.done;
+      },
+      dispose: () => fx.dispose(),
+    };
+  },
+};
 
 // ── Bow casts ───────────────────────────────────────────────────────────────────
 

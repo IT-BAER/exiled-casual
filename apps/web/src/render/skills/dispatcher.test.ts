@@ -77,6 +77,30 @@ describe("skill look dispatcher", () => {
     expect(made.impact).toBe(1);
   });
 
+  it("lands an instant area that lived only in a snapshot no frame drew, once, and never after an area change", () => {
+    const { scene, player, monster } = world();
+    const { made, looks } = counted();
+    const d = new SkillLookDispatcher(scene, looks);
+    const run = (s: Snapshot) => d.frame({ prev: null, next: s, alpha: 0, player, bodyOf: () => monster });
+    const instant = (id: number) => ({ id, kind: "skillArea" as const, x: 2, y: 2, radius: 2, skillId: SKILL, impactIn: 0, spent: true });
+    run(snap(1, []));
+    // Two snapshots between two drawn frames: the one holding the spent area is replaced unseen.
+    d.observe(snap(2, [instant(9)]));
+    d.observe(snap(3, []));
+    run(snap(3, []));
+    expect(made.impact).toBe(1);
+    // Observed AND drawn: still one impact.
+    d.observe(snap(4, [instant(10)]));
+    run(snap(4, [instant(10)]));
+    run(snap(5, []));
+    expect(made.impact).toBe(2);
+    // Observed, then the player left the area before a frame: nothing lands in the new place.
+    d.observe(snap(6, [instant(11)]));
+    d.clear();
+    run(snap(7, []));
+    expect(made.impact).toBe(2);
+  });
+
   it("owns a registered ground, a buff and a status for exactly as long as the snapshot holds them", () => {
     const { scene, player, monster } = world();
     const { made, gone, looks } = counted();

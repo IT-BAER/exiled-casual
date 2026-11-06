@@ -3,6 +3,7 @@ import {
   Camera,
   Color3,
   Color4,
+  Constants,
   DirectionalLight,
   Effect,
   GlowLayer,
@@ -10,6 +11,7 @@ import {
   Light,
   PointLight,
   ImageProcessingConfiguration,
+  PostProcess,
   MeshBuilder,
   PBRMaterial,
   SSAO2RenderingPipeline,
@@ -221,6 +223,27 @@ export function applyAtmosphere(scene: Scene, preset: AtmospherePreset): void {
  * `engine` is nullable so a caller that has settings before it has a renderer
  * can still apply the rest.
  */
+/** The post process that resolves blended light past 1.0; it must stay last on the camera. */
+export const HOT_CLIP = "hot-clip";
+/**
+ * A pixel over 1.0 keeps its hue at full brightness and goes toward white as far as it
+ * overshot, each channel at a pace set by its own share, so the weakest lifts last: fire
+ * runs orange, amber, pale gold, white ((2, 0.9, 0.2) -> (1, 0.81, 0.38)), never 8-bit's
+ * lemon (1, 1, 0.2) nor an even mix's salmon (1, 0.73, 0.49). At or under 1.0 nothing changes.
+ */
+const HOT_CLIP_GLSL = `
+varying vec2 vUV;
+uniform sampler2D textureSampler;
+void main(void) {
+  vec4 c = texture2D(textureSampler, vUV);
+  float m = max(c.r, max(c.g, c.b));
+  if (m > 1.0) {
+    vec3 h = c.rgb / m;
+    c.rgb = mix(h, vec3(1.0), pow(vec3(1.0 - 1.0 / m), max(vec3(0.5), 2.0 - 3.1 * h)));
+  }
+  gl_FragColor = c;
+}`;
+
 export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSettings): void {
   applyAtmosphere(scene, g.atmosphere);
 
@@ -270,6 +293,16 @@ export function applyGraphics(scene: Scene, engine: Engine | null, g: GraphicsSe
     if (g.ambientOcclusion) {
       scene.postProcessRenderPipelineManager.attachCamerasToRenderPipeline("ssao", scene.activeCamera);
     }
+  }
+  const clip = scene.postProcesses.find((p) => p.name === HOT_CLIP);
+  const camera = scene.activeCamera;
+  if (clip && camera) {
+    // Attaching appends: put the clip back after SSAO. Alone on the camera the scene
+    // renders straight into it, so it carries the multisampling the canvas would have had.
+    camera.detachPostProcess(clip);
+    camera.attachPostProcess(clip);
+    // Detached passes leave empty slots in the camera's list.
+    clip.samples = camera._postProcesses.find((p) => p) === clip ? 4 : 1;
   }
 
   const glow = scene.effectLayers?.find((l) => l.name === "glow");
@@ -676,6 +709,8 @@ export function createScene(engine: Engine): SceneHandle {
   // generated area's walkable grid, built by buildLevel() when the worker sends
   // the "area" message. The ground plane above stays as the floor + pick target.
 
+  // Blend in half float where the GPU can render it, so stacked light can pass 1.0 (`HOT_CLIP`).
+  const hdr = engine.getCaps().textureHalfFloatRender === true;
   try {
     // Filmic tone map, not a straight clamp. PBR outputs real radiance and the
     // sun's lit faces run well past 1.0; clipped, they flatten into flat white
@@ -697,9 +732,10 @@ export function createScene(engine: Engine): SceneHandle {
     // which is why the boulders read as stickers laid on the ground rather than
     // as stone resting on it. The sun's shadow map cannot do this — it is one
     // direction, and a rock's own underside never faces it.
+    // Half float: the scene renders into this pipeline, and light past 1.0 is resolved after it (`HOT_CLIP`).
     const ssao = new SSAO2RenderingPipeline("ssao", scene, { ssaoRatio: 0.75, blurRatio: 1 }, [
       camera,
-    ]);
+    ], false, hdr ? Constants.TEXTURETYPE_HALF_FLOAT : Constants.TEXTURETYPE_UNSIGNED_BYTE);
     ssao.radius = 0.9; // world units: about half a rock, so it reads at the base
     ssao.totalStrength = 1.1;
     ssao.expensiveBlur = true;
@@ -718,6 +754,19 @@ export function createScene(engine: Engine): SceneHandle {
     glowFollowsErosion(gl);
   } catch {
     /* GlowLayer needs a render target; silently skipped under NullEngine in tests */
+  }
+
+  if (hdr) {
+    try {
+      // Stacked fire must go to white, never lemon. Each additive layer is tone-mapped in its
+      // own shader; summed in 8 bits, red clipped first, then green, while blue stayed low.
+      // Summed in half float instead, this pass resolves what passed 1.0 (`HOT_CLIP_GLSL`).
+      Effect.ShadersStore[`${HOT_CLIP}FragmentShader`] = HOT_CLIP_GLSL;
+      new PostProcess(HOT_CLIP, HOT_CLIP, null, null, 1, camera, Texture.BILINEAR_SAMPLINGMODE, engine, false,
+        null, Constants.TEXTURETYPE_HALF_FLOAT);
+    } catch {
+      /* no post processes under NullEngine */
+    }
   }
 
   try {

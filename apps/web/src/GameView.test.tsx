@@ -82,6 +82,7 @@ vi.mock("./render/environment", () => ({
 vi.mock("./render/renderer", () => ({
   SnapshotRenderer: class {
     apply = vi.fn();
+    observe = vi.fn();
     setHoveredEntity = vi.fn();
     setAim = vi.fn();
     setPet = vi.fn();

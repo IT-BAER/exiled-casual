@@ -263,7 +263,8 @@ function starsTpl(scene: Scene): Mesh {
 function wardTpl(scene: Scene): Mesh {
   return template(scene, "iron-ward", () => {
     const m = MeshBuilder.CreateSphere("iron-ward", { diameter: 2, segments: 12 }, scene);
-    return fxMesh(scene, m, addMat(scene, GOLD, true));
+    // Out of the bloom: the glow pass ignores its fade, and bloomed it is a white ball with no man in it.
+    return fxMesh(scene, m, addMat(scene, GOLD, true), false);
   });
 }
 
@@ -468,10 +469,11 @@ const infernalWindup: Windup = (ctx, body, cast) => {
   let pulse = 0;
   const knot = new Fx((f, dt) => {
     pulse += dt;
+    // Capped at the torso's width: at 1.05 the overlapped, bloomed cores hid him in a ball.
     if (pulse >= 0.045) {
       pulse = 0;
       const k = clamp01(f.age / Math.max(0.1, cast.windup ?? 0.4));
-      core(scene, chest(), 0.35 + 0.7 * k, [1, 0.78, 0.42], FIRE, 0.1);
+      core(scene, chest(), 0.25 + 0.5 * k, [1, 0.78, 0.42], FIRE, 0.1);
     }
     return true;
   }, 0.05);
@@ -787,7 +789,8 @@ const determinationBuff = {
     const floor = floorOf(s.body.node);
     const sigil = auraSigil(scene, floor, { radius: 1.8, colour: GOLD_CALM, runes: 12, motes: 2, spin: 0.15 });
     const ward = cloneOf(scene, wardTpl(scene), "iron-ward");
-    const ring = shockRing(scene, floor().clone(), { radius: 2.1, duration: 0.5, colour: GOLD, lip: 0.4, width: 0.25, dust: 6, flash: 0.35 });
+    // No floor flash: under the ward it whited him out from the knees down. An aura rings in; it is not a hit.
+    const ring = shockRing(scene, floor().clone(), { radius: 2.1, duration: 0.5, colour: GOLD, lip: 0.4, width: 0.25, dust: 6, flash: 0.35, floorFlash: false });
     const breath = cloneOf(scene, edgeTpl(scene, GOLD), "iron-breath");
     const fx = new Fx((f) => {
       const p = floor();
@@ -796,7 +799,7 @@ const determinationBuff = {
       ward.position.set(p.x, 0.9, p.z);
       const r = 0.5 + 0.7 * easeOut(t);
       ward.scaling.set(r, r * 1.05, r);
-      ward.visibility = 0.5 * (1 - t);
+      ward.visibility = 0.4 * (1 - t);
       // A slow breath out to the ring's edge every BREATH_S: steady, never busy.
       const b = clamp01(((f.age + BREATH_S - 1) % BREATH_S) / 1.4);
       const br = 0.6 + 1.35 * easeOut(b);

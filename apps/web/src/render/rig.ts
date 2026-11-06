@@ -1815,8 +1815,6 @@ export class RigActor {
    * running, arm outstretched, instead of freezing mid-stride.
    */
   playCast(seconds?: number, releaseSeconds?: number): void {
-    // A bow tail still playing would keep castPoint() on the bow hand.
-    this.groups.get("bow")?.stop();
     const group = this.groups.get("cast");
     const ratio = group && releaseSeconds !== undefined
       ? actionRatio(clipSeconds(group) * CAST_RELEASE, releaseSeconds)
@@ -1841,7 +1839,9 @@ export class RigActor {
     const group = this.groups.get(clip);
     if (!group) return;
     this.stopReactions();
-    group.stop();
+    // Every other action too: a bow tail keeps castPoint() on the bow hand, and a
+    // skill's own take (Sniper's Mark's aim) outweighs the shared draw it is under.
+    this.cancelAction();
     const ratio = paced ?? actionRatio(clipSeconds(group), seconds);
     group.speedRatio = ratio;
     // Played ONCE, paced to the wind-up: looping it at a fixed rate meant a

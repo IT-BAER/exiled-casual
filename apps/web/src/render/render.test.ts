@@ -1040,6 +1040,27 @@ describe("SnapshotRenderer", () => {
     expect(renderer.shakeTrauma).toBeGreaterThan(0);
   });
 
+  it("a swing that landed in a snapshot no frame drew still sparks, once", () => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const monster = (life: number) => ({ id: 7, kind: "monster" as const, x: 1.2, y: 0, radius: 0.5, life, maxLife: 50 });
+    const at = (tick: number, life: number, strikeTick?: number, strikeHits?: number) => {
+      const s = makeSnapshot({ tick, entities: [monster(life)] });
+      return { ...s, player: { ...s.player, strikeTick, strikeHits } };
+    };
+    const sparks = () => fxPools(scene).shards.emitted / STRIKE_IMPACT.sparks;
+    const a = at(1, 50, 0, 1);
+    renderer.apply(null, a, 1);
+    // A hitch: b (the swing's tick) and c arrive before the next frame, which draws c against b.
+    const b = at(2, 30, 2, 1);
+    const c = at(3, 30, 2, 1);
+    renderer.apply(b, c, 1);
+    expect(sparks()).toBe(1);
+    renderer.apply(c, at(4, 30, 2, 1), 1);
+    expect(sparks()).toBe(1);
+  });
+
   it("a swing that kills outright still sparks on the body it took", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

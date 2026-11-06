@@ -508,12 +508,20 @@ export class SnapshotRenderer {
     this.outlinedId = now ? id : null;
   }
 
+  /** Every snapshot as the worker posts it, before any frame draws it (`SkillLookDispatcher.observe`). */
+  observe(snapshot: Snapshot): void {
+    this.skillLooks.observe(snapshot);
+  }
+
   apply(prev: Snapshot | null, next: Snapshot, alpha: number): void {
     // Collect the full set of ids that should exist after this call
     const liveIds = new Set<number>();
     // apply() runs several times per snapshot while interpolating, so anything
     // that reacts to a CHANGE has to know which of those frames is the first.
     const newTick = next.tick !== this.lastTick;
+    // One-tick events (a swing's tick, a life drop) diff against the snapshot last DRAWN, not
+    // prev: two snapshots between two frames leave the event in a prev no frame drew.
+    const edge = newTick ? this.lastSnapshot ?? prev : prev;
     this.now = next.tick + alpha;
     this.lastSnapshot = next;
     const ms = performance.now();
@@ -528,8 +536,8 @@ export class SnapshotRenderer {
     }
     // The swing that landed this tick, if any: a new strikeTick is the only edge a
     // held button leaves, since the next cast starts on the tick this one resolves.
-    const strikeHits = newTick && prev !== null && next.player.strikeTick !== undefined
-      && next.player.strikeTick !== prev.player.strikeTick ? next.player.strikeHits ?? 0 : 0;
+    const strikeHits = newTick && edge !== null && next.player.strikeTick !== undefined
+      && next.player.strikeTick !== edge.player.strikeTick ? next.player.strikeHits ?? 0 : 0;
     let meleeBursts = 0;
     this.freePicks = MAX_MELEE_BURSTS;
     /** Largest share of max life one body lost to this tick's swing: how hard the camera jolts. */
@@ -778,8 +786,10 @@ export class SnapshotRenderer {
       }
       // Struck: life is the only report of a hit the client gets, and it is the
       // honest one — a swing that missed or was absorbed never moves it.
-      if (newTick && e.life !== undefined && prevE?.life !== undefined && e.life < prevE.life) {
-        const share = (prevE.life - Math.max(0, e.life)) / (e.maxLife ?? prevE.life);
+      const drawnE = edge === prev ? prevE : edge?.entities.find((p) => p.id === e.id);
+      if (newTick && e.life !== undefined && drawnE?.life !== undefined && e.life < drawnE.life) {
+        const lost = drawnE.life - e.life;
+        const share = (drawnE.life - Math.max(0, e.life)) / (e.maxLife ?? drawnE.life);
         const strength = hitStrength(share, e.life <= 0);
         this.hit.set(e.id, { tick: next.tick, peak: flashPeak(strength) });
         const meleeHit = strikeHits > 0 && e.kind === "monster"
@@ -800,7 +810,7 @@ export class SnapshotRenderer {
           const from = blowFrom(e.x, e.y, prev, next);
           const was = this.flinch.get(e.id);
           const tier = e.boss ? "boss" : e.rare ? "rare" : "monster";
-          const strength = flinchStrength(prevE.life - e.life, e.maxLife ?? prevE.life, tier) * (meleeHit ? MELEE_KICK : 1);
+          const strength = flinchStrength(lost, e.maxLife ?? drawnE.life, tier) * (meleeHit ? MELEE_KICK : 1);
           this.flinch.set(e.id, {
             f: kick(was?.f, this.now, e.x - from.x, e.y - from.z, strength),
             base: was?.base ?? mesh.scaling.y,
@@ -1041,8 +1051,8 @@ export class SnapshotRenderer {
     }
 
     // Ground Slam breaks the floor whether or not anything stood in the cone.
-    if (newTick && prev !== null && next.player.strikeTick !== undefined
-      && next.player.strikeTick !== prev.player.strikeTick && strikesTheFloor(next.player.strikeSkill)) {
+    if (newTick && edge !== null && next.player.strikeTick !== undefined
+      && next.player.strikeTick !== edge.player.strikeTick && strikesTheFloor(next.player.strikeSkill)) {
       const face = next.player.facing ?? next.player.heading ?? { x: 0, y: 1 };
       groundSlam(this.scene, new Vector3(next.player.x + face.x * SLAM_FORWARD, 0, next.player.y + face.y * SLAM_FORWARD), face.x, face.y);
       // The floor itself was struck: a slam into nothing still thumps the camera.

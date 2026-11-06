@@ -697,6 +697,7 @@ export function GameView({
       if (msg.type === "snapshot") {
         prevSnap = curSnap;
         curSnap = msg.snapshot;
+        renderer.observe(msg.snapshot);
         // DEV: the only handle on sim state from the devtools console. The
         // renderer can be read through `__scene`; without this the sim cannot,
         // and "why did the harness not enter the map" has no answer.
