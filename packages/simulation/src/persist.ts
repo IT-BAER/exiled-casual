@@ -4,11 +4,13 @@ import type { SessionC, InventoryC, StashC, VendorC, BuybackC, EquipmentC, Progr
 import { hideoutFloor as hideoutFloorOf, layFloor } from "./hideout-floor";
 import { stockMapShop, stockVendor } from "./vendor";
 import { withPermanentWaystone, placeFirstFit } from "./inventory";
-import { handsClash } from "./equipment";
+import { handsClash, canEquip } from "./equipment";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext, classIdOr } from "@exiled/rules";
-import { SKILLS, defaultAttackFor, FREE_ATTACKS, UTILITY_SKILLS, baseOf } from "@exiled/content-runtime";
+import { SKILLS, defaultAttackFor, FREE_ATTACKS, UTILITY_SKILLS, baseOf, canonicalBaseId, uniqueBaseId } from "@exiled/content-runtime";
 import { SKILL_SLOT_COUNT, MOUSE_SLOT_BASE, MOVE_SOCKET } from "@exiled/protocol";
+import type { EquipSlotId } from "@exiled/protocol";
+import type { Item } from "@exiled/content-schema";
 
 /**
  * Run-transaction persistence. The whole durable state (session + inventory) is
@@ -274,7 +276,7 @@ export function restore(world: World, state: PersistedState): void {
   // stone existed is exactly the save most likely to be out of stones.
   world.set<InventoryC>(e, "inventory", withPermanentWaystone(state.inventory));
   world.set<StashC>(e, "stash", state.stash ?? EMPTY_STASH);
-  world.set<EquipmentC>(e, "equipment", readWornGear(state.equipment ?? { slots: {} }));
+  world.set<EquipmentC>(e, "equipment", rebaseWorn(readWornGear(state.equipment ?? { slots: {} })));
   freeBowHand(world, e);
   // A save written before gold existed carries a progress with no `gold` key, so
   // the field is defaulted on its own rather than only when progress is missing.
@@ -309,9 +311,10 @@ export function restore(world: World, state: PersistedState): void {
   world.set<VendorC>(e, "mapShop", state.mapShop ?? stockMapShop(state.session.atlasSeed, progress.level, 0));
   if (state.buyback) world.set<BuybackC>(e, "buyback", state.buyback);
   else world.remove(e, "buyback");
+  rebaseGrids(world, e);
   // A restore always lands in the hideout, so the floor goes straight onto it.
   world.remove(e, "hideoutFloor");
-  if (Array.isArray(state.hideoutFloor)) layFloor(world, state.hideoutFloor);
+  if (Array.isArray(state.hideoutFloor)) layFloor(world, state.hideoutFloor.map(rebaseFloor));
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });
@@ -329,6 +332,61 @@ function readWornGear(equipment: EquipmentC): EquipmentC {
     slots[slot as keyof EquipmentC["slots"]] = read;
   }
   return { slots };
+}
+
+/**
+ * A unique on the base content defines it on today, or null when it already is
+ * (or is no unique). A save outlives a unique moving base: Thornward was a buckler.
+ */
+function rebasedUnique(item: Item): Item | null {
+  const now = uniqueBaseId(item);
+  return now === undefined || now === canonicalBaseId(item.baseId) ? null : { ...item, baseId: now };
+}
+
+/** Worn uniques take their current base where that base may sit in the same slot. */
+function rebaseWorn(equipment: EquipmentC): EquipmentC {
+  const slots = { ...equipment.slots };
+  for (const [slot, item] of Object.entries(slots)) {
+    const now = item && rebasedUnique(item);
+    if (now && canEquip(baseOf(now.baseId).itemClass, slot as EquipSlotId)) slots[slot] = now;
+  }
+  return { slots };
+}
+
+/** A floor item has no grid, so it only takes the new base and footprint. */
+function rebaseFloor(f: FloorItem): FloorItem {
+  const now = f?.item && typeof f.item.baseId === "string" ? rebasedUnique(f.item) : null;
+  if (!now) return f;
+  const b = baseOf(now.baseId);
+  return { ...f, item: now, w: b.w, h: b.h };
+}
+
+/**
+ * Grid uniques take their current base, and its footprint can differ. Each is
+ * re-placed in its own container, else the next one listed; with no room anywhere
+ * it stays exactly as saved. Never lost. One at a time, so a piece that cannot
+ * move always finds its own cells still free.
+ */
+function rebaseGrids(world: World, e: number): void {
+  const routes = [["inventory", "stash"], ["stash", "inventory"], ["buyback"]] as const;
+  for (const route of routes) {
+    const from = route[0];
+    const stale = world.get<InventoryC>(e, from)?.items.filter((p) => rebasedUnique(p.item)) ?? [];
+    for (const p of stale) {
+      const now = rebasedUnique(p.item)!;
+      const b = baseOf(now.baseId);
+      const src = world.get<InventoryC>(e, from)!;
+      world.set<InventoryC>(e, from, { ...src, items: src.items.filter((q) => q !== p) });
+      const into = route.find((c) => {
+        const box = world.get<InventoryC>(e, c);
+        return box !== undefined && placeFirstFit(box, b.w, b.h) !== null;
+      });
+      const dst = world.get<InventoryC>(e, into ?? from)!;
+      const fit = into === undefined ? null : placeFirstFit(dst, b.w, b.h)!;
+      const placed = fit === null ? p : { ...p, x: fit.x, y: fit.y, w: b.w, h: b.h, item: now };
+      world.set<InventoryC>(e, into ?? from, { ...dst, items: [...dst.items, placed] });
+    }
+  }
 }
 
 /**

@@ -6,7 +6,7 @@ export { CLASSES, CLASS_LIST, characterClass } from "./classes.js";
 export { HIDEOUT_DECOR, HIDEOUT_FLOOR, SCREEN_SQUARE, hideoutFootprints, type Decor, type DecorKind } from "./hideout.js";
 export {
   ITEM_POOLS, UNIQUE_MODS, type UniqueMod, baseOf, describeItem, itemStatMods, wisdomScroll, currencyItem, isCurrency,
-  WISDOM_SCROLL_BASE_ID, PORTAL_SCROLL_BASE_ID, isPortalScroll, CURRENCY_DROPS, currencyForRoll, canonicalBaseId,
+  WISDOM_SCROLL_BASE_ID, PORTAL_SCROLL_BASE_ID, isPortalScroll, CURRENCY_DROPS, currencyForRoll, canonicalBaseId, uniqueBaseId,
   WAYSTONE_BASE_ID, waystoneItem, isWaystone, permanentWaystone, isPermanentWaystone, STARTER_BASE_IDS,
   weaponDamage, spellAddedDamage, attackAddedDamage, UNARMED, ATTACK_WEAPON_CLASSES, type WeaponDamage,
 } from "./items.js";

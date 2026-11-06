@@ -20,7 +20,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 ### Changed
 
 - Thornward is now a quiver instead of a buckler, so the Stalker can wear it
-  with his bow. Its mods are unchanged.
+  with his bow. Its mods are unchanged. A Thornward you already own becomes a
+  quiver when the character loads, and moves to the stash if the backpack has
+  no room for the taller piece.
 
 - Ashmaw gives +1 to Level of all Fire Spell Skills instead of maximum Mana.
   The skill tooltip shows the raised level, for example "Level 8 (+1)", and a

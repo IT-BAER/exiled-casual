@@ -558,6 +558,14 @@ const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
 const UNIQUE_MOD_BY_ID = new Map(UNIQUE_MODS.map((m) => [m.id, m]));
 const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 
+/**
+ * The base a unique is defined on today, by its name. A save written before the
+ * unique moved base still carries the old id. Undefined for anything not a unique.
+ */
+export function uniqueBaseId(item: Item): string | undefined {
+  return item.rarity === "unique" ? UNIQUE_BY_NAME.get(item.name ?? "")?.baseId : undefined;
+}
+
 /** The id a base is known by today, so a save written before a rename still matches. */
 export function canonicalBaseId(baseId: string): string {
   return RENAMED_BASES[baseId] ?? baseId;

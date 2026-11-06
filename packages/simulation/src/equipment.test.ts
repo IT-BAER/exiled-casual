@@ -8,7 +8,8 @@ import { saveTo, loadInto, VERSION } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 import { recomputePlayerStats } from "./derived";
 import { CONTENT_VERSION, wisdomScroll, currencyItem } from "@exiled/content-runtime";
-import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC, ProgressC, GearModsC } from "./components";
+import { layFloor, floorOf } from "./hideout-floor";
+import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC, ProgressC, GearModsC, BuybackC } from "./components";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -842,6 +843,72 @@ describe("persist — equipment", () => {
     expect(await loadInto(full, w3)).toBe(true);
     expect(getEquip(w3).slots).toEqual({ weapon1: BOW });
     expect(w3.get<InventoryC>(sessionE(w3), "stash")!.items.map((p) => p.item.baseId)).toEqual(["base.stalker_buckler"]);
+  });
+
+  describe("a Thornward saved while it was a buckler", () => {
+    // Thornward moved from base.stalker_buckler (2x2) to base.stalker_quiver (2x3).
+    const OLD: Item = {
+      baseId: "base.stalker_buckler", rarity: "unique", itemLevel: 65, name: "Thornward",
+      affixes: [{ affixId: "affix.life", value: 40 }, { affixId: "unique.chill_attackers", value: 1 }],
+    };
+    const NEW: Item = { ...OLD, baseId: "base.stalker_quiver" };
+    const stashOf = (w: ReturnType<typeof makeWorld>["world"]) => w.get<InventoryC>(sessionE(w), "stash")!;
+    const thornwards = (box: InventoryC) => box.items.filter((p) => p.item.name === "Thornward");
+
+    async function reload(world: ReturnType<typeof makeWorld>["world"]) {
+      const kv = new MemoryKv();
+      await saveTo(kv, world);
+      const { world: w2 } = makeWorld();
+      expect(await loadInto(kv, w2)).toBe(true);
+      return w2;
+    }
+
+    it("worn beside a bow, loads as a quiver still worn beside it", async () => {
+      const { world } = makeWorld();
+      world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: BOW, weapon2: OLD } });
+      const w2 = await reload(world);
+      expect(getEquip(w2).slots).toEqual({ weapon1: BOW, weapon2: NEW });
+    });
+
+    it("in the backpack or the stash, loads as a 2x3 quiver in the same container", async () => {
+      const { world } = makeWorld();
+      clearInv(world);
+      placeInInv(world, OLD, 0, 0, 2, 2);
+      world.set<InventoryC>(sessionE(world), "stash", { cols: 12, rows: 12, items: [{ x: 4, y: 4, w: 2, h: 2, item: OLD }] });
+      const w2 = await reload(world);
+      for (const box of [getInv(w2), stashOf(w2)]) {
+        const t = thornwards(box);
+        expect(t.map((p) => [p.item, p.w, p.h])).toEqual([[NEW, 2, 3]]);
+        expect(t[0]!.y + 3).toBeLessThanOrEqual(box.rows);
+      }
+    });
+
+    it("in a backpack with no 2x3 hole, moves to the stash", async () => {
+      const { world } = makeWorld();
+      // A 2x2 backpack holds the old 2x2 piece and nothing taller.
+      world.set<InventoryC>(sessionE(world), "inventory", { cols: 2, rows: 2, items: [{ x: 0, y: 0, w: 2, h: 2, item: OLD }] });
+      world.set<InventoryC>(sessionE(world), "stash", { cols: 12, rows: 12, items: [] });
+      const w2 = await reload(world);
+      expect(thornwards(getInv(w2))).toEqual([]);
+      expect(thornwards(stashOf(w2)).map((p) => [p.item, p.w, p.h])).toEqual([[NEW, 2, 3]]);
+    });
+
+    it("on the hideout floor or the buyback page, loads as a quiver there", async () => {
+      const { world } = makeWorld();
+      layFloor(world, [{ x: fp(3), y: fp(3), w: 2, h: 2, item: OLD }]);
+      world.set<BuybackC>(sessionE(world), "buyback", { cols: 12, rows: 12, items: [{ x: 0, y: 0, w: 2, h: 2, item: OLD, gold: 5 }] });
+      const w2 = await reload(world);
+      expect(floorOf(w2).filter((f) => f.item.name === "Thornward").map((f) => [f.item, f.w, f.h])).toEqual([[NEW, 2, 3]]);
+      expect(w2.get<BuybackC>(sessionE(w2), "buyback")!.items.map((p) => [p.item, p.w, p.h, p.gold])).toEqual([[NEW, 2, 3, 5]]);
+    });
+
+    it("with no 2x3 hole anywhere, stays where it was, unchanged", async () => {
+      const { world } = makeWorld();
+      world.set<InventoryC>(sessionE(world), "inventory", { cols: 2, rows: 2, items: [{ x: 0, y: 0, w: 2, h: 2, item: OLD }] });
+      world.set<InventoryC>(sessionE(world), "stash", { cols: 1, rows: 1, items: [] });
+      const w2 = await reload(world);
+      expect(thornwards(getInv(w2))).toEqual([{ x: 0, y: 0, w: 2, h: 2, item: OLD }]);
+    });
   });
 
   it("old save without equipment field loads as empty slots (backwards compat)", async () => {
