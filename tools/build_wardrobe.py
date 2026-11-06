@@ -717,7 +717,7 @@ TOWER_FACE = (0.99, -0.1, 0.0)
 # his right shoulder where the right hand draws. Lengths are of body height,
 # across of the shoulder half-width (upper arm's head off the midline).
 QUIVER_LEN_RATIO = 0.37    # tube and arrows, foot to the highest nock
-QUIVER_TILT = 30.0         # degrees off vertical, mouth toward his right
+QUIVER_TILT = 30.0        # degrees off vertical, mouth toward his right
 QUIVER_FOOT_ACROSS = 0.45  # the foot's x, toward his left
 # The foot rides level with spine_02's head, clear of the waist (spine_01): below
 # it the coat's skirt belongs to the cloth solver, and a lower foot only reaches
@@ -726,6 +726,12 @@ QUIVER_GAP = 0.004         # air between the quiver and any chest, hood or skin
 # Lean of the mouth toward (+) or away from (-) the back, swept for the snuggest
 # lie; the back is not flat, so a quiver held upright touches one blade and floats.
 QUIVER_LEANS = [math.radians(d) for d in range(-16, 17, 2)]
+# A straight tube touches the back at its proudest point (coat between the blades,
+# hood capelet) and floats 3-4 cm off the rest, a gap the side view shows. The
+# tube is bent toward the back slice by slice, down to this much air under it,
+# and the bend changes by at most QUIVER_BEND_SLOPE metres per metre of tube.
+QUIVER_BEND_GAP = 0.008
+QUIVER_BEND_SLOPE = 0.35
 
 # A rigid piece is measured in the idle and carried back through the clip's own
 # transform, because it rides one joint and the mesh must be authored in the
@@ -3353,6 +3359,75 @@ def fit_back_quiver(donor, body, rig):
     final = gaps(rot, at)
     if final and min(d for d, _, _ in final) < QUIVER_GAP:
         raise SystemExit("no lean clears the quiver off his back within the search")
+    straight_lie = lie
+
+    # Air under each slice of the strap side: from every nearby point back along
+    # the strap normal to the tube. Bins of 2 cm along the tube.
+    inv = rot.transposed()
+    room = {}
+    for p, _ in near:
+        q = inv @ (p - at)
+        if not 0.0 <= q.z <= length or q.y <= 0.0:
+            continue
+        d = bvh.ray_cast(q, Vector((0.0, -1.0, 0.0)), 0.15)[3]
+        if d is not None:
+            k = int(q.z / 0.02)
+            room[k] = min(room.get(k, 1.0), d - QUIVER_BEND_GAP)
+    # Slope-limited lower envelope of the room, smoothed, then lowered by its
+    # worst excess so the smooth curve never asks for more than a slice allows.
+    grid = [i * 0.01 for i in range(int(length / 0.01) + 2)]
+    env = [min([max(0.0, r) + QUIVER_BEND_SLOPE * abs(z - (k + 0.5) * 0.02) for k, r in room.items()] or [0.0])
+           for z in grid]
+    s = list(env)
+    for _ in range(8):
+        s = [(s[max(i - 1, 0)] + s[i] + s[min(i + 1, len(s) - 1)]) / 3 for i in range(len(s))]
+    excess = max(a - b for a, b in zip(s, env))
+    s = [max(0.0, v - max(0.0, excess)) for v in s]
+
+    def bend(z):
+        # The arrows above the rim ride the mouth straight, never curved.
+        x = min(max(min(z, rim) / 0.01, 0.0), len(s) - 1.0)
+        i = min(int(x), len(s) - 2)
+        return s[i] + (s[i + 1] - s[i]) * (x - i)
+
+    # A tube face can run the whole length with vertices only at its ends, and
+    # bending those drags the face's middle with them. Split along the tube first.
+    bm = bmesh.new()
+    bm.from_mesh(donor.data)
+    for _ in range(8):
+        long = [e for e in bm.edges if abs(e.verts[0].co.z - e.verts[1].co.z) * scale > 0.02
+                and (min(e.verts[0].co.z, e.verts[1].co.z) - foot.z) * scale < rim]
+        if not long:
+            break
+        bmesh.ops.subdivide_edges(bm, edges=long, cuts=1, use_grid_fill=True)
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
+    bm.to_mesh(donor.data)
+    bm.free()
+    for v in donor.data.vertices:
+        v.co.y += bend((v.co.z - foot.z) * scale) / scale
+    bent = mathutils.bvhtree.BVHTree.FromPolygons(
+        [(v.co - foot) * scale for v in donor.data.vertices],
+        [(p.vertices[0], p.vertices[i], p.vertices[i + 1])
+         for p in donor.data.polygons for i in range(1, len(p.vertices) - 1)])
+    strap = [Vector((q.x, q.y + bend(q.z), q.z)) for q in strap]
+
+    def unbent(q):
+        return Vector((q.x, q.y - bend(q.z), q.z))
+
+    # Re-measured against the bent tube. Inside is asked of the straight tube
+    # the bend came from, which is exact: the bend only slides slices along y.
+    final = []
+    for p, name in near:
+        q = inv @ (p - at)
+        hit, _, _, d = bent.find_nearest(q, 0.08)
+        sunk = inside(unbent(q))
+        if hit is not None or sunk:
+            d = 0.08 if hit is None else d
+            final.append((-d if sunk else d, q, name))
+    if final and min(d for d, _, _ in final) < QUIVER_GAP:
+        worst = min(final, key=lambda f: f[0])
+        raise SystemExit(f"bent quiver comes within {worst[0] * 1000:.1f} mm of {worst[2]}")
+    lie = stand_off(rot, at)
     by_piece = {}
     for d, _, name in final:
         by_piece[name] = min(by_piece.get(name, 1.0), d)
@@ -3366,6 +3441,9 @@ def fit_back_quiver(donor, body, rig):
         "foot_m": [round(c, 4) for c in at],
         "top_m": [round(c, 4) for c in top],
         "idle_strap_stand_off_mean_mm": round(lie * 1000, 2),
+        "straight_strap_stand_off_mean_mm": round(straight_lie * 1000, 2),
+        "bend_max_mm": round(max(bend(z) for z in grid) * 1000, 2),
+        "triangles_bent": sum(len(p.vertices) - 2 for p in donor.data.polygons),
         "min_gap_mm": {k: round(v * 1000, 2) for k, v in sorted(by_piece.items())},
     }
 

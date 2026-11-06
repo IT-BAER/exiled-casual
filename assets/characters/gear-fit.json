@@ -903,24 +903,27 @@
    0.3021,
    1.7605
   ],
-  "idle_strap_stand_off_mean_mm": 31.04,
+  "idle_strap_stand_off_mean_mm": 24.18,
+  "straight_strap_stand_off_mean_mm": 31.04,
+  "bend_max_mm": 35.09,
+  "triangles_bent": 3804,
   "min_gap_mm": {
    "base.male.body@idle": 71.64,
    "base.male.body@rest": 71.99,
-   "chest.ember.robe@idle": 37.12,
-   "chest.ember.robe@rest": 38.08,
-   "chest.ironsworn.cuirass@idle": 45.57,
-   "chest.ironsworn.cuirass@rest": 45.8,
+   "chest.ember.robe@idle": 36.66,
+   "chest.ember.robe@rest": 37.61,
+   "chest.ironsworn.cuirass@idle": 38.0,
+   "chest.ironsworn.cuirass@rest": 41.25,
    "chest.stalker.coat@idle": 4.33,
    "chest.stalker.coat@rest": 4.01,
-   "helmet.ember.cowl@idle": 18.4,
+   "helmet.ember.cowl@idle": 18.38,
    "helmet.ember.cowl@rest": 18.13,
    "helmet.stalker.hood@idle": 8.41,
-   "helmet.stalker.hood@rest": 8.28
+   "helmet.stalker.hood@rest": 8.27
   },
   "bone": "spine_03",
   "fit": "back_quiver",
-  "triangles": 1148,
+  "triangles": 3804,
   "source": "quiver-3000-v1.glb"
  },
  "chest.ironsworn.gorget": {
