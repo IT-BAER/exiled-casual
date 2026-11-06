@@ -17,6 +17,7 @@ export const EQUIP_SLOTS_BY_CLASS: Record<string, EquipSlotId[]> = {
   bow:    ["weapon1"],
   focus:  ["weapon2"],
   shield: ["weapon2"],
+  quiver: ["weapon2"],
   helmet: ["helmet"],
   body:   ["body"],
   gloves: ["gloves"],
@@ -26,11 +27,18 @@ export const EQUIP_SLOTS_BY_CLASS: Record<string, EquipSlotId[]> = {
   ring:   ["ring1", "ring2"],
 };
 
-/** PoE's bow takes both hands, so nothing is held in `weapon2` beside it (no quiver slot yet). */
-const TWO_HANDED = new Set(["bow"]);
+/**
+ * Whether the two hands' item classes cannot be held together. PoE's bow takes both
+ * hands and allows only a quiver beside it; a quiver goes with no other weapon.
+ */
+export function handsClash(main: string | undefined, off: string | undefined): boolean {
+  if (main === undefined || off === undefined) return false;
+  return main === "bow" ? off !== "quiver" : off === "quiver";
+}
 
-export function isTwoHanded(itemClass: string): boolean {
-  return TWO_HANDED.has(itemClass);
+/** PoE1: a quiver held without a bow is disabled, so it grants nothing. */
+export function isDisabledQuiver(main: string | undefined, off: string | undefined): boolean {
+  return off === "quiver" && main !== "bow";
 }
 
 /** True when itemClass can legally go into slot. Classes absent from the map are not equippable. */

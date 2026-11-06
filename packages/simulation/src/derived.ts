@@ -1,5 +1,6 @@
 import { baseCasterStats, applyItemMods, levelBonus, passiveStatMods, START_LEVEL, waystoneScaleFor } from "@exiled/rules";
-import { itemStatMods, UNIQUE_MODS } from "@exiled/content-runtime";
+import { itemStatMods, UNIQUE_MODS, baseOf } from "@exiled/content-runtime";
+import { isDisabledQuiver } from "./equipment";
 import { ELEMENTS } from "@exiled/content-schema";
 import type { World } from "./ecs";
 import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC, EnergyShieldC, SessionC, GearModsC } from "./components";
@@ -28,10 +29,15 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
   // Slots in sorted order. Every fold here is integer addition, so the result is
   // order-independent anyway; sorting makes that true by construction rather
   // than by argument, whatever order the slots happen to have been filled in.
+  const classOf = (slot: string) => {
+    const it = equip?.slots[slot];
+    return it ? baseOf(it.baseId).itemClass : undefined;
+  };
+  const quiverOff = isDisabledQuiver(classOf("weapon1"), classOf("weapon2"));
   const mods = Object.keys(equip?.slots ?? {}).sort()
     .flatMap((slot) => {
       const item = equip!.slots[slot];
-      return item ? itemStatMods(item) : [];
+      return item && !(quiverOff && slot === "weapon2") ? itemStatMods(item) : [];
     });
 
   // What levelling grants enters as two flat mods rather than as a second base

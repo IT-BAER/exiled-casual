@@ -4,7 +4,7 @@ import type { SessionC, InventoryC, StashC, VendorC, BuybackC, EquipmentC, Progr
 import { hideoutFloor as hideoutFloorOf, layFloor } from "./hideout-floor";
 import { stockMapShop, stockVendor } from "./vendor";
 import { withPermanentWaystone, placeFirstFit } from "./inventory";
-import { isTwoHanded } from "./equipment";
+import { handsClash } from "./equipment";
 import { recomputePlayerStats } from "./derived";
 import { START_LEVEL, isUnlocked, maxGemLevel, MAX_GEM_LEVEL, gemXpToNext, classIdOr } from "@exiled/rules";
 import { SKILLS, defaultAttackFor, FREE_ATTACKS, UTILITY_SKILLS, baseOf } from "@exiled/content-runtime";
@@ -338,7 +338,7 @@ function readWornGear(equipment: EquipmentC): EquipmentC {
 function freeBowHand(world: World, e: number): void {
   const equip = world.get<EquipmentC>(e, "equipment")!;
   const { weapon1: bow, weapon2: off } = equip.slots;
-  if (!bow || !off || !isTwoHanded(baseOf(bow.baseId).itemClass)) return;
+  if (!bow || !off || !handsClash(baseOf(bow.baseId).itemClass, baseOf(off.baseId).itemClass)) return;
   const b = baseOf(off.baseId);
   for (const comp of ["inventory", "stash"] as const) {
     const box = world.get<InventoryC>(e, comp)!;

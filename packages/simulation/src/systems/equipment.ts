@@ -4,7 +4,7 @@ import { SORT_MODES } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { isStaple, recordSale, restockMapShop, unpayShards } from "../vendor";
 import { placeFirstFit, canPlaceAt, sortInventory } from "../inventory";
-import { canEquip, isTwoHanded } from "../equipment";
+import { canEquip, handsClash } from "../equipment";
 import { recomputePlayerStats } from "../derived";
 import type { Position, ItemC, InventoryC, VendorC, BuybackC, EquipmentC, ShardsC, ProgressC } from "../components";
 import type { Item } from "@exiled/content-schema";
@@ -46,10 +46,12 @@ export function registerEquipmentSystem(sim: Simulation): void {
 
         const equip = world.get<EquipmentC>(sessionE, "equipment")!;
         const occupant: Item | undefined = equip.slots[slot];
-        // A bow and an off-hand piece cannot be held together: whichever was there goes.
+        // Hands that cannot be held together (a bow and a shield): whichever was there goes.
         const other = slot === "weapon1" ? "weapon2" : slot === "weapon2" ? "weapon1" : undefined;
         const otherItem = other && equip.slots[other];
-        const clash = otherItem && (isTwoHanded(base.itemClass) || isTwoHanded(baseOf(otherItem.baseId).itemClass))
+        const otherClass = otherItem ? baseOf(otherItem.baseId).itemClass : undefined;
+        const clash = otherItem && (slot === "weapon1"
+          ? handsClash(base.itemClass, otherClass) : handsClash(otherClass, base.itemClass))
           ? other : undefined;
 
         // Remove the equipping item from the grid, then place every displaced piece

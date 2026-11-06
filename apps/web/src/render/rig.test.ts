@@ -635,7 +635,7 @@ describe.each(WARDROBES)("wardrobe asset $file", ({ file, body, root }) => {
       ...["body", "brows", "eyes", "hair", "torso", "hand_l", "hand_r", "foot_l", "foot_r",
         "arm_l", "arm_r", "collar", "neck", "leg_l", "leg_r", "shin_l", "shin_r"].map((p) => `base.${body}.${p}`),
       "helmet.ironsworn.helm", "helmet.stalker.hood", "helmet.ember.cowl", "helmet.ember.locks", "weapon1.emberwand.mesh", "weapon2.buckler.mesh",
-      "weapon1.ironswornhammer.mesh", "weapon1.stalkerbow.mesh", "weapon1.broadsword.mesh", "weapon2.towershield.mesh",
+      "weapon1.ironswornhammer.mesh", "weapon1.stalkerbow.mesh", "weapon1.broadsword.mesh", "weapon2.towershield.mesh", "weapon2.quiver.mesh",
       "chest.ironsworn.cuirass", "chest.ironsworn.gorget", "chest.ironsworn.backing",
       "chest.ironsworn.backing_arm_l", "chest.ironsworn.backing_arm_r",
       "chest.stalker.coat", "chest.stalker.gorget", "chest.stalker.backing",

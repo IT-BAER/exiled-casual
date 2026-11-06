@@ -6,6 +6,7 @@ import { createCombatSim } from "./combat-sim";
 import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { saveTo, loadInto, VERSION } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
+import { recomputePlayerStats } from "./derived";
 import { CONTENT_VERSION, wisdomScroll, currencyItem } from "@exiled/content-runtime";
 import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC, ProgressC, GearModsC } from "./components";
 
@@ -23,6 +24,8 @@ const FOCUS: Item = { baseId: "base.ember_focus", rarity: "normal", itemLevel: 6
 const BOW: Item = { baseId: "base.stalker_bow", rarity: "normal", itemLevel: 65, affixes: [] };
 // base.stalker_buckler: itemClass="shield", w=2, h=2
 const BUCKLER: Item = { baseId: "base.stalker_buckler", rarity: "normal", itemLevel: 65, affixes: [] };
+// base.stalker_quiver: itemClass="quiver", w=2, h=3, the one off-hand piece a bow allows
+const QUIVER: Item = { baseId: "base.stalker_quiver", rarity: "normal", itemLevel: 65, affixes: [] };
 
 function makeWorld() {
   return createCombatSim(7, { area: "hideout" });
@@ -234,6 +237,50 @@ describe("equipment system — equipItem", () => {
 
     expect(getEquip(world).slots).toEqual({ weapon2: BUCKLER });
     expect(getInv(world).items.map((p) => p.item.baseId)).toEqual(["base.stalker_bow"]);
+  });
+
+  it("a quiver goes on beside a bow and both stay worn", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: BOW } });
+    placeInInv(world, QUIVER, 0, 0, 2, 3);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon2" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots).toEqual({ weapon1: BOW, weapon2: QUIVER });
+    expect(getInv(world).items).toHaveLength(0);
+  });
+
+  it("a one-hand weapon put on beside a quiver sends the quiver to the backpack", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    atLevel(world, 8);
+    clearInv(world);
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: { weapon1: BOW, weapon2: QUIVER } });
+    placeInInv(world, WAND, 0, 0, 1, 2);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+
+    expect(getEquip(world).slots).toEqual({ weapon1: WAND });
+    expect(getInv(world).items.map((p) => p.item.baseId).sort()).toEqual(["base.stalker_bow", "base.stalker_quiver"]);
+  });
+
+  it("a quiver without a bow is worn but grants nothing until a bow is held", () => {
+    const { sim, world, playerEntity } = makeWorld();
+    clearInv(world);
+    const lifeQuiver: Item = { ...QUIVER, rarity: "magic", affixes: [{ affixId: "affix.life", value: 30 }] };
+    world.set<EquipmentC>(sessionE(world), "equipment", { slots: {} });
+    recomputePlayerStats(world);
+    const bare = world.get<Health>(playerEntity, "health")!.maxLife;
+    placeInInv(world, lifeQuiver, 0, 0, 2, 3);
+
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon2" }, playerEntity, 0)]);
+    expect(getEquip(world).slots).toEqual({ weapon2: lifeQuiver });
+    expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(bare);
+
+    placeInInv(world, BOW, 0, 0, 2, 4);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 1)]);
+    expect(getEquip(world).slots).toEqual({ weapon1: BOW, weapon2: lifeQuiver });
+    expect(world.get<Health>(playerEntity, "health")!.maxLife).toBe(bare + fp(30));
   });
 
   it("refuses the bow, changing nothing, when both hands' pieces have no room to go", () => {

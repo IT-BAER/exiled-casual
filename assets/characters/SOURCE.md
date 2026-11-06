@@ -197,3 +197,18 @@ rolled in the idle clip's fist).
   `assets/props/source/stylized_sword.blend`. Its twisted grip is thinned to 0.45 and
   lengthened 1.3 to take a fist, the pommel thinned to 0.6; it keeps its own UV and its
   1K colour, metallic and roughness are baked to the 512 atlas.
+
+## Back quiver (`weapon2.quiver.mesh`)
+
+No donor mesh: BlenderKit has no free quiver (searched "quiver", "quiver arrows", "arrow",
+"archery" on 2026-11-06; every quiver hit is the quiver tree). The donor
+`assets/props/source/trellis_local/quiver-3000-v1.glb` (1148 tris, one mesh, one material,
+512 colour + metal/roughness atlas) is built headless with the `prep_held_weapons.py`
+helpers: a leather tube lathed off a profile with a band at the mouth and the foot, a strap
+down the side that lies on the wearer, and eight fletched arrows standing out of the mouth.
+Leather is the BlenderKit "Aged Dark Leather" above (`d583c044-b586-4ecf-b3a1-12de1d032b3f`,
+royalty free), the shafts the "Wood Grain" above (`8903140f-d18e-4536-a2f6-19e8d329e83e`,
+CC0, PBRPX); the feathers and nocks are flat colours. Fitted by `fit_back_quiver` in
+`tools/build_wardrobe.py`: rigid on `spine_03`, foot over the left kidney level with
+`spine_02`, mouth behind the right shoulder, cleared against every chest and helmet in both
+the rest pose and the idle clip.

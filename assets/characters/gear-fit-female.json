@@ -1042,6 +1042,42 @@
   "source": "wrap-hand-v1-female.glb",
   "mirrored_from": "gloves.ember.wrap_r"
  },
+ "weapon2.quiver.mesh": {
+  "scale": 0.98757,
+  "length_m": 0.6568,
+  "tilt_deg": 30.0,
+  "lean_deg": 0.0,
+  "foot_m": [
+   0.0682,
+   0.2447,
+   1.1642
+  ],
+  "top_m": [
+   -0.2602,
+   0.2447,
+   1.733
+  ],
+  "idle_strap_stand_off_mean_mm": 38.3,
+  "min_gap_mm": {
+   "base.female.body@idle": 62.94,
+   "base.female.body@rest": 62.93,
+   "chest.ember.robe@idle": 44.34,
+   "chest.ember.robe@rest": 45.19,
+   "chest.ironsworn.cuirass@idle": 43.05,
+   "chest.ironsworn.cuirass@rest": 46.75,
+   "chest.stalker.coat@idle": 19.54,
+   "chest.stalker.coat@rest": 19.48,
+   "helmet.ember.cowl@idle": 25.34,
+   "helmet.ember.cowl@rest": 25.9,
+   "helmet.ironsworn.helm@idle": 78.5,
+   "helmet.stalker.hood@idle": 4.13,
+   "helmet.stalker.hood@rest": 4.01
+  },
+  "bone": "spine_03",
+  "fit": "back_quiver",
+  "triangles": 1148,
+  "source": "quiver-3000-v1.glb"
+ },
  "chest.ironsworn.gorget": {
   "built_from": "base.female.body collar region, offset along its own normals",
   "source": "body",

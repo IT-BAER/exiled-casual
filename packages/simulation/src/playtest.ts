@@ -21,7 +21,7 @@ import { reseedDefaultAttack, grantSkills } from "./persist";
 import { areaCollision } from "./areas";
 import { grammarForNode } from "./systems/area-transition";
 import { Bot, KITS, type BotOptions, type BotGame as Game } from "./bot";
-import { EQUIP_SLOTS_BY_CLASS, isTwoHanded } from "./equipment";
+import { EQUIP_SLOTS_BY_CLASS, handsClash } from "./equipment";
 import type { Entity } from "./ecs";
 import type {
   SessionC, Cooldowns, FlasksC, ProgressC, SkillsC, ItemC, InventoryC, EquipmentC, Health, MonsterC,
@@ -226,10 +226,10 @@ const CLASS_WEIGHT: Record<string, Record<string, number>> = {
 /** What each class holds in its hands; any other hand piece scores -Infinity. */
 const HANDS: Record<string, ReadonlySet<string>> = {
   "class.emberbound": new Set(["wand", "focus", "shield"]),
-  "class.stalker": new Set(["bow"]),
+  "class.stalker": new Set(["bow", "quiver"]),
   "class.ironsworn": new Set(["mace", "sword", "shield"]),
 };
-const HAND_CLASSES = new Set(["wand", "focus", "shield", "mace", "sword", "bow"]);
+const HAND_CLASSES = new Set(["wand", "focus", "shield", "quiver", "mace", "sword", "bow"]);
 /** Local weapon stats: an attack weapon's own damage, counted once through `weaponDamage`. */
 const LOCAL_WEAPON = new Set(["physicalDamage", "physicalDamagePct", "fireDamage", "coldDamage"]);
 
@@ -277,7 +277,8 @@ export function refit(g: Game, mode: "caster" | "class" = "caster"): void {
     const gainAt = (sl: EquipSlotId): number => {
       const other = sl === "weapon1" ? "weapon2" : sl === "weapon2" ? "weapon1" : undefined;
       const held = other ? worn[other] : undefined;
-      const clash = held && (isTwoHanded(cls) || isTwoHanded(baseOf(held.baseId).itemClass));
+      const heldCls = held ? baseOf(held.baseId).itemClass : undefined;
+      const clash = held && (sl === "weapon1" ? handsClash(cls, heldCls) : handsClash(heldCls, cls));
       if (clash && other === "weapon1") return -Infinity;
       return score(placed.item) - (worn[sl] ? score(worn[sl]!) : 0) - (clash ? score(held) : 0);
     };

@@ -59,6 +59,9 @@ ICONS: list[tuple[str, str, int, int]] = [
     ("ashen_quarterstaff_v2", "ashen_quarterstaff", 2, 4),
     ("stalker_buckler_v1", "stalker_buckler", 2, 2),
     ("ironsworn_tower_shield_v1", "ironsworn_tower_shield", 2, 3),
+    # Stalker quivers, plain and barbed, drawn on the diagonal to fill a 2x3.
+    ("stalker_quiver_v1", "stalker_quiver", 2, 3),
+    ("stalker_barbed_quiver_v1", "stalker_barbed_quiver", 2, 3),
     # Starter weapons: plain, worn, no glow -- level 1 gear for each class.
     ("ironsworn_hammer_v1", "ironsworn_hammer", 2, 3),
     ("stalker_bow_v1", "stalker_bow", 2, 4),
@@ -87,7 +90,8 @@ ICONS: list[tuple[str, str, int, int]] = [
     ("unique_gravewall_v1", "unique_gravewall", 2, 3),
     ("unique_anvilheart_v1", "unique_anvilheart", 2, 3),
     ("unique_quietus_v1", "unique_quietus", 2, 4),
-    ("unique_thornward_v1", "unique_thornward", 2, 2),
+    # v2: Thornward became a quiver; v1 is the buckler it used to be.
+    ("unique_thornward_v2", "unique_thornward", 2, 3),
     ("unique_mossback_v1", "unique_mossback", 2, 3),
     # Jewellery, one amulet and one ring per family, all 1x1 as in PoE.
     ("ironsworn_torc_v1", "ironsworn_torc", 1, 1),

@@ -103,6 +103,8 @@ export const WORLD_ART: readonly string[] = [
   "/textures/items/ironsworn_tower_shield.webp",
   "/textures/items/stalker_boots.webp",
   "/textures/items/stalker_buckler.webp",
+  "/textures/items/stalker_quiver.webp",
+  "/textures/items/stalker_barbed_quiver.webp",
   "/textures/items/stalker_gloves.webp",
   "/textures/items/stalker_hood.webp",
   "/textures/items/stalker_leathers.webp",

@@ -41,6 +41,9 @@ export const GEAR_LOOKS: Readonly<Record<string, GearLook>> = {
   "base.ironsworn_broadsword": { slot: "weapon1", look: "broadsword" },
   "base.stalker_bow": { slot: "weapon1", look: "stalkerbow" },
   "base.stalker_buckler": { slot: "weapon2", look: "buckler" },
+  // Both quivers are `weapon2` in the sim but worn on the back (`spine_03`), never in a hand.
+  "base.stalker_quiver": { slot: "weapon2", look: "quiver" },
+  "base.stalker_barbed_quiver": { slot: "weapon2", look: "quiver" },
   "base.ironsworn_tower_shield": { slot: "weapon2", look: "towershield" },
 };
 

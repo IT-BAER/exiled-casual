@@ -10,7 +10,17 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Quivers for the Stalker's off hand: the Stalker Quiver (Fire Damage to
+  Attacks) and, from level 16, the Stalker Barbed Quiver (increased Critical
+  Strike Chance). A bow allows only a quiver beside it, a quiver is worn on the
+  back, and without a bow it is disabled and gives nothing, as in PoE1.
+
 ### Changed
+
+- Thornward is now a quiver instead of a buckler, so the Stalker can wear it
+  with his bow. Its mods are unchanged.
 
 - Ashmaw gives +1 to Level of all Fire Spell Skills instead of maximum Mana.
   The skill tooltip shows the raised level, for example "Level 8 (+1)", and a

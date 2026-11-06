@@ -94,6 +94,16 @@ const ITEM_BASES: ItemBase[] = [
     stats: { physMin: 6, physMax: 9, critPct: 5, aps: 1.2, reqLevel: 1 },
     icon: "/textures/items/stalker_bow.webp",
   },
+  // The bow's off hand (PoE1 and PoE2: a quiver works only beside a bow). Implicits
+  // after PoE2's Fire Quiver and Visceral Quiver, on stats the pool already has.
+  {
+    id: "base.stalker_quiver", name: "Stalker Quiver", itemClass: "quiver", w: 2, h: 3, stats: { reqLevel: 1 },
+    implicit: { stat: "attackFireDamage", label: "Fire Damage to Attacks", value: 3 }, icon: "/textures/items/stalker_quiver.webp",
+  },
+  {
+    id: "base.stalker_barbed_quiver", name: "Stalker Barbed Quiver", itemClass: "quiver", w: 2, h: 3, stats: { reqLevel: 16 },
+    implicit: { stat: "critChancePct", label: "% increased Critical Strike Chance", value: 15 }, icon: "/textures/items/stalker_barbed_quiver.webp",
+  },
 
   // Ember, the cloth set, and the only family that carries the two hands: a
   // wand and a focus.
@@ -332,8 +342,8 @@ export function isCurrency(item: Item): boolean {
 // 8-10, and so on, `areaLevel` plus the monster's offset): 2 is a first-map mod, 6
 // and 9 open on the second and third tier.
 const AFFIXES: Affix[] = [
-  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring"] },
-  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["shield", "wand", "focus", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring"] },
+  { id: "affix.life", kind: "prefix", nameWord: "Hale", stat: "maxLife", label: "to maximum Life", minItemLevel: 1, min: 5, max: 40, itemClasses: ["shield", "quiver", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring"] },
+  { id: "affix.mana", kind: "prefix", nameWord: "Beryl", stat: "maxMana", label: "to maximum Mana", minItemLevel: 1, min: 4, max: 30, itemClasses: ["shield", "quiver", "wand", "focus", "helmet", "body", "gloves", "boots", "belt", "amulet", "ring"] },
   { id: "affix.energy_shield", kind: "prefix", nameWord: "Ghostly", stat: "energyShield", label: "to maximum Energy Shield", minItemLevel: 1, min: 5, max: 35, itemClasses: ["shield", "focus", "helmet", "body", "gloves", "boots", "amulet"] },
   { id: "affix.increased_armour", kind: "prefix", nameWord: "Reinforced", stat: "armourPct", label: "% increased Armour", minItemLevel: 1, min: 10, max: 30, itemClasses: ["shield", "helmet", "body", "gloves", "boots", "belt", "amulet"] },
   { id: "affix.spell_damage", kind: "prefix", nameWord: "Runic", stat: "spellDamagePct", label: "% increased Damage", minItemLevel: 1, min: 10, max: 25, itemClasses: ["wand", "focus", "amulet"] },
@@ -346,15 +356,15 @@ const AFFIXES: Affix[] = [
   { id: "affix.lightning_res", kind: "suffix", nameWord: "of the Squall", stat: "lightningResPct", label: "% to Lightning Resistance", minItemLevel: 1, min: 5, max: 25 },
   { id: "affix.strength", kind: "suffix", nameWord: "of the Brute", stat: "strength", label: "to Strength", minItemLevel: 1, min: 5, max: 20 },
   { id: "affix.mana_regen", kind: "suffix", nameWord: "of the Spring", stat: "manaRegenPct", label: "% increased Mana Regeneration Rate", minItemLevel: 1, min: 10, max: 35 },
-  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 2, min: 8, max: 25, itemClasses: ["wand", "focus", "mace", "sword", "bow", "amulet"] },
+  { id: "affix.crit_chance", kind: "suffix", nameWord: "of Menace", stat: "critChancePct", label: "% increased Critical Strike Chance", minItemLevel: 2, min: 8, max: 25, itemClasses: ["wand", "focus", "mace", "sword", "bow", "quiver", "amulet"] },
   { id: "affix.cast_speed", kind: "suffix", nameWord: "of Casting", stat: "castSpeedPct", label: "% increased Cast Speed", minItemLevel: 6, min: 3, max: 12, itemClasses: ["wand", "focus", "amulet", "ring"] },
   { id: "affix.chaos_res", kind: "suffix", nameWord: "of the Outcast", stat: "chaosResPct", label: "% to Chaos Resistance", minItemLevel: 9, min: 4, max: 15 },
   // The attack weapons' own prefixes, appended so no earlier roll moves.
   { id: "affix.added_phys", kind: "prefix", nameWord: "Honed", stat: "physicalDamage", label: "to Physical Damage", minItemLevel: 1, min: 1, max: 12, itemClasses: ["mace", "sword", "bow"] },
   { id: "affix.phys_dmg_pct", kind: "prefix", nameWord: "Weighted", stat: "physicalDamagePct", label: "% increased Physical Damage", minItemLevel: 1, min: 15, max: 40, itemClasses: ["mace", "sword", "bow"] },
   // PoE2's ring prefixes, global: every attack takes them, whatever is in hand.
-  { id: "affix.attack_fire", kind: "prefix", nameWord: "Heated", stat: "attackFireDamage", label: "Fire Damage to Attacks", minItemLevel: 1, min: 1, max: 9, itemClasses: ["ring"] },
-  { id: "affix.attack_cold", kind: "prefix", nameWord: "Frosted", stat: "attackColdDamage", label: "Cold Damage to Attacks", minItemLevel: 1, min: 1, max: 8, itemClasses: ["ring"] },
+  { id: "affix.attack_fire", kind: "prefix", nameWord: "Heated", stat: "attackFireDamage", label: "Fire Damage to Attacks", minItemLevel: 1, min: 1, max: 9, itemClasses: ["ring", "quiver"] },
+  { id: "affix.attack_cold", kind: "prefix", nameWord: "Frosted", stat: "attackColdDamage", label: "Cold Damage to Attacks", minItemLevel: 1, min: 1, max: 8, itemClasses: ["ring", "quiver"] },
 ];
 
 /**
@@ -478,7 +488,7 @@ const UNIQUES: UniqueItem[] = [
   {
     id: "unique.thornward",
     name: "Thornward",
-    baseId: "base.stalker_buckler",
+    baseId: "base.stalker_quiver",
     flavour: "A hunter's second skin is patience.",
     icon: "/textures/items/unique_thornward.webp",
     mods: [

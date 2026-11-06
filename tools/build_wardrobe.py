@@ -600,6 +600,12 @@ RIGID_GEAR = (
         "src": "wrap-hand-v1.glb", "bone": "hand_r", "fit": "hand_authored",
         "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
     },
+    # Off hand, but worn on the back: last, because it is laid on whatever chest
+    # and hood are already fitted. Donor provenance in `assets/characters/SOURCE.md`.
+    {
+        "slot": "weapon2", "look": "quiver", "part": "mesh",
+        "src": "quiver-3000-v1.glb", "bone": "spine_03", "fit": "back_quiver",
+    },
 )
 
 # The long lame skirt the fauld donor made. The plate suit carries its own short
@@ -706,6 +712,20 @@ TOWER_HANG_FROM_BOTTOM = 0.58  # strap height up the shield's own span, 0 at its
 # toed a little toward him (owner's top-down mark, 16 October 2026). Facing
 # ahead, it lay across his front like a door.
 TOWER_FACE = (0.99, -0.1, 0.0)
+
+# A back quiver, slung diagonally: the foot over his left kidney, the mouth behind
+# his right shoulder where the right hand draws. Lengths are of body height,
+# across of the shoulder half-width (upper arm's head off the midline).
+QUIVER_LEN_RATIO = 0.37    # tube and arrows, foot to the highest nock
+QUIVER_TILT = 30.0         # degrees off vertical, mouth toward his right
+QUIVER_FOOT_ACROSS = 0.45  # the foot's x, toward his left
+# The foot rides level with spine_02's head, clear of the waist (spine_01): below
+# it the coat's skirt belongs to the cloth solver, and a lower foot only reaches
+# further into the hollow of the lower back.
+QUIVER_GAP = 0.004         # air between the quiver and any chest, hood or skin
+# Lean of the mouth toward (+) or away from (-) the back, swept for the snuggest
+# lie; the back is not flat, so a quiver held upright touches one blade and floats.
+QUIVER_LEANS = [math.radians(d) for d in range(-16, 17, 2)]
 
 # A rigid piece is measured in the idle and carried back through the clip's own
 # transform, because it rides one joint and the mesh must be authored in the
@@ -1262,14 +1282,15 @@ def fit_head_shell(donor, body, rig, coverage=HELM_COVERAGE, max_median=HELM_MAX
     raise SystemExit(f"no helm size both clears the skull and stays a helmet; {tries}")
 
 
-def idle_pose(rig, bone, probes):
+def idle_pose(rig, bone, probes, meshes=()):
     """How the idle clip turns one bone, and where it puts a set of joints.
 
     Borrowed from `anim-library.glb` and handed straight back: the clip is
     imported, read at one frame and deleted again, and the rig leaves in its
     rest pose. A piece aimed in the rest pose is aimed at nothing anybody sees -
     the character is never in it - so the clip he stands in is the only frame
-    that can say where a weapon points.
+    that can say where a weapon points. Given `meshes`, it also hands back each
+    one's skinned vertices in that frame, world space, by name.
     """
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=ANIMS)
@@ -1290,6 +1311,15 @@ def idle_pose(rig, bone, probes):
     posed = {n: (rig.matrix_world @ rig.pose.bones[n].head).copy() for n in probes}
     mats = {n: (rig.matrix_world @ rig.pose.bones[n].matrix
                 @ rig.data.bones[n].matrix_local.inverted()) for n in probes}
+    shapes = {}
+    dg = bpy.context.evaluated_depsgraph_get()
+    for o in meshes:
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        if len(me.vertices) != len(o.data.vertices):
+            raise SystemExit(f"{o.name}: its modifiers change the vertex count")
+        shapes[o.name] = [ev.matrix_world @ v.co for v in me.vertices]
+        ev.to_mesh_clear()
 
     # Dropping the action does not undo the pose: every bone keeps whatever the
     # last evaluated frame left on it, and the export would ship a rig frozen
@@ -1308,7 +1338,7 @@ def idle_pose(rig, bone, probes):
     if max(abs(rest[i][j] - rig.matrix_world.to_3x3()[i][j])
            for i in range(3) for j in range(3)) > 1e-4:
         raise SystemExit(f"{bone} did not return to its rest pose after reading {IDLE_CLIP}")
-    return M, posed, mats
+    return (M, posed, mats, shapes) if meshes else (M, posed, mats)
 
 
 def aimed(donor, axis_dir, R, aim):
@@ -3189,6 +3219,157 @@ def fit_tower_strap(donor, body, rig):
     }
 
 
+def fit_back_quiver(donor, body, rig):
+    """A quiver lying across the upper back, rigid on spine_03, mouth over the right shoulder.
+
+    The donor stands mouth up (+Z) with its strap side at +Y. What it lies on is
+    every chest and helmet already fitted plus the skin, so it clears whichever
+    the class wears, and it is cleared against them twice: in the rest pose and
+    in the idle clip, carried back through spine_03's own idle transform. The
+    idle bends the spine and drops the arms, so the coat around spine_03 is not
+    where the rest pose has it, and the rest pose is one he is never seen in.
+    The foot and the tilt are fixed off the bones, each lean is pushed back
+    until nothing in either frame comes within QUIVER_GAP, and the lean whose
+    strap side stands least off the idle back along the tube is the one that
+    lies on it.
+    """
+    _, _, body_dims, _ = bbox([body.matrix_world @ v.co for v in body.data.vertices])
+    d_lo, _, d_dims, d_c = bbox([v.co for v in donor.data.vertices])
+    scale = body_dims.z * QUIVER_LEN_RATIO / d_dims.z
+    foot = Vector((d_c.x, d_c.y, d_lo.z))
+    # The donor sized about its foot, for measuring in its own frame.
+    local = [(v.co - foot) * scale for v in donor.data.vertices]
+    tris = [(p.vertices[0], p.vertices[i], p.vertices[i + 1])
+            for p in donor.data.polygons for i in range(1, len(p.vertices) - 1)]
+    bvh = mathutils.bvhtree.BVHTree.FromPolygons(local, tris)
+    tube = max(max(abs(q.x), abs(q.y)) for q in local)
+
+    bones = rig.data.bones
+    waist = rig.matrix_world @ bones["spine_01"].head_local
+    shoulder = abs((rig.matrix_world @ bones["upperarm_r"].head_local).x)
+    t = math.radians(QUIVER_TILT)
+    aim0 = Vector((-math.sin(t), 0.0, math.cos(t)))
+    face0 = Vector((0.0, -1.0, 0.0))        # strap side onto his back
+    across = aim0.cross(face0)
+    foot_w = Vector((QUIVER_FOOT_ACROSS * shoulder, 0.0,
+                     (rig.matrix_world @ bones["spine_02"].head_local).z))
+    if foot_w.z <= waist.z:
+        raise SystemExit(f"quiver foot at z {foot_w.z:.3f} is not above the waist {waist.z:.3f}")
+    length = d_dims.z * scale
+
+    # What it may touch: skin and every fitted chest and helmet, near its reach,
+    # as it stands at rest and as the idle leaves it relative to spine_03.
+    sources = [body] + [o for o in bpy.data.objects if o.type == "MESH"
+                        and o.name.split(".")[0] in ("chest", "helmet")]
+    M_idle, _, _, shapes = idle_pose(rig, "spine_03", (), sources)
+    back = M_idle.inverted()
+    near, verts, faces = [], [], []
+    for o in sources:
+        rest = [o.matrix_world @ v.co for v in o.data.vertices]
+        idle = [back @ p for p in shapes[o.name]]
+        faces += [tuple(len(verts) + i for i in p.vertices) for p in o.data.polygons]
+        verts += idle
+        for frame_name, pts in (("rest", rest), ("idle", idle)):
+            for p in pts:
+                if (p.y > -0.05 and foot_w.x - length * math.sin(t) - 0.12 < p.x < foot_w.x + 0.12
+                        and foot_w.z - 0.05 < p.z < foot_w.z + length):
+                    near.append((p, f"{o.name}@{frame_name}"))
+
+    outer = mathutils.bvhtree.BVHTree.FromPolygons(verts, faces)
+    # Down the strap side, from the tube's axis: samples that meet the donor's
+    # skin within an arrow's radius are the arrows, not the tube.
+    strap = []
+    for i in range(int(length / 0.02)):
+        hit = bvh.ray_cast(Vector((0.0, 0.0, i * 0.02)), Vector((0.0, 1.0, 0.0)))[3]
+        if hit is not None and hit > 0.5 * tube:
+            strap.append(Vector((0.0, hit, i * 0.02)))
+    if not strap:
+        raise SystemExit("quiver donor has no tube on its strap side (+Y)")
+
+    def stand_off(rot, at):
+        """Mean air under the strap side, out to the layer behind it.
+
+        A sample with nothing behind it is the mouth standing over the shoulder,
+        which is air seen against the sky, not against him, and is left out.
+        """
+        down = rot @ Vector((0.0, 1.0, 0.0))
+        air = [d for d in (outer.ray_cast(at + rot @ q, down, 0.15)[3] for q in strap)
+               if d is not None]
+        return sum(air) / len(air) if air else float("inf")
+
+    def frame(lean):
+        R = Matrix.Rotation(lean, 3, across)
+        aim, face = R @ aim0, R @ face0
+        return Matrix((aim.cross(face) * -1, face, aim)).transposed()
+
+    # Inside is asked of the tube alone, along its own radius. The nearest face's
+    # normal cannot say it: off a vane's rim or a ring's edge that face is as
+    # often the one turned away, and a point 3 cm clear reads 3 cm deep.
+    # The rim is the highest level walled all round; the arrows above it are not.
+    spokes = [Vector((math.cos(a), math.sin(a), 0.0)) for a in (i * math.pi / 4 for i in range(8))]
+
+    def walled(z):
+        hits = [bvh.ray_cast(Vector((0.0, 0.0, z)), d)[3] for d in spokes]
+        return all(h is not None and h > 0.75 * tube for h in hits)
+
+    rim = max(i * 0.005 for i in range(int(length / 0.005)) if walled(i * 0.005))
+
+    def inside(q):
+        r = math.hypot(q.x, q.y)
+        if not 0.0 <= q.z <= rim or r < 1e-6:
+            return 0.0 <= q.z <= rim
+        wall = bvh.ray_cast(Vector((0.0, 0.0, q.z)), Vector((q.x / r, q.y / r, 0.0)))[3]
+        return wall is not None and wall > r
+
+    def gaps(rot, at):
+        """Signed distance of every nearby point to the donor; negative is inside it."""
+        inv = rot.transposed()
+        out = []
+        for p, name in near:
+            q = inv @ (p - at)
+            hit, _, _, d = bvh.find_nearest(q, 0.08)
+            sunk = inside(q)
+            if hit is not None or sunk:
+                d = 0.08 if hit is None else d
+                out.append((-d if sunk else d, q, name))
+        return out
+
+    best = None
+    for lean in QUIVER_LEANS:
+        rot = frame(lean)
+        lo, hi = 0.0, 0.6
+        for _ in range(16):
+            mid = (lo + hi) / 2
+            g = gaps(rot, foot_w + Vector((0.0, mid, 0.0)))
+            if g and min(d for d, _, _ in g) < QUIVER_GAP:
+                lo = mid
+            else:
+                hi = mid
+        at = foot_w + Vector((0.0, hi, 0.0))
+        lie = stand_off(rot, at)
+        if best is None or lie < best[0]:
+            best = (lie, lean, rot, at)
+    lie, lean, rot, at = best
+    final = gaps(rot, at)
+    if final and min(d for d, _, _ in final) < QUIVER_GAP:
+        raise SystemExit("no lean clears the quiver off his back within the search")
+    by_piece = {}
+    for d, _, name in final:
+        by_piece[name] = min(by_piece.get(name, 1.0), d)
+    M = Matrix.Translation(at) @ rot.to_4x4() @ Matrix.Scale(scale, 4) @ Matrix.Translation(-foot)
+    top = M @ Vector((d_c.x, d_c.y, d_lo.z + d_dims.z))
+    return M, {
+        "scale": round(scale, 5),
+        "length_m": round(length, 4),
+        "tilt_deg": QUIVER_TILT,
+        "lean_deg": round(math.degrees(lean), 1),
+        "foot_m": [round(c, 4) for c in at],
+        "top_m": [round(c, 4) for c in top],
+        "idle_strap_stand_off_mean_mm": round(lie * 1000, 2),
+        "min_gap_mm": {k: round(v * 1000, 2) for k, v in sorted(by_piece.items())},
+    }
+
+
 def fit_as_built(donor, body, rig):
     """Place a donor that was built in this body's own frame; its builder gates it."""
     return Matrix.Identity(4), {"placed_as_authored": True}
@@ -3201,6 +3382,7 @@ FITTERS = {
     "held": fit_held,
     "forearm_strap": fit_forearm_strap,
     "tower_strap": fit_tower_strap,
+    "back_quiver": fit_back_quiver,
     "plate_torso": fit_plate_torso,
     "plate_suit": fit_plate_suit,
     "soft_suit": fit_soft_suit,
