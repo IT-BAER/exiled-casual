@@ -38,7 +38,7 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
  * the weapon hand and draw from the bow hand; `loop` takes run until `endSkillLoop`.
  * `end` (a fraction of the take) lets go there, where the rest of the take is wrong.
  */
-export interface SkillClipSpec { name: string; full?: boolean; loop?: boolean; bow?: boolean }
+export interface SkillClipSpec { name: string; full?: boolean; loop?: boolean; bow?: boolean; end?: number }
 export const SKILL_CLIPS = {
   aerialA: { name: "Rig|Sword_Aerial_A", full: true },
   heavyB: { name: "Rig|Sword_Heavy_B" },
@@ -53,7 +53,8 @@ export const SKILL_CLIPS = {
   surprise: { name: "Rig|Surprise" },
   overhandThrow: { name: "Rig|OverhandThrow" },
   bowAimUp: { name: "Rig|Bow_Aim_Up", bow: true },
-  bowAimNeutral: { name: "Rig|Bow_Aim_Neutral", bow: true },
+  // Past the loose the take lifts the bow skyward: Sniper's Mark lets go at the snap.
+  bowAimNeutral: { name: "Rig|Bow_Aim_Neutral", bow: true, end: 0.36 },
   bowNotch: { name: "Rig|Bow_Notch", bow: true },
   bowRapid: { name: "Rig|Bow_RapidShoot_Loop", bow: true, loop: true },
   jogFlip: { name: "Rig|JogToFlip", full: true },
@@ -1915,7 +1916,7 @@ export class RigActor {
       : releaseSeconds !== undefined ? actionRatio(clipSeconds(group) * release, releaseSeconds) : actionRatio(clipSeconds(group), seconds);
     const ratio = paced * playback;
     group.speedRatio = ratio;
-    group.start(loop, ratio);
+    group.start(loop, ratio, group.from, spec.end === undefined ? group.to : group.from + (group.to - group.from) * spec.end);
     const legs = this.skillLegs.get(clip);
     if (legs && (this.travelling || !this.gaitMoving)) {
       legs.speedRatio = ratio;

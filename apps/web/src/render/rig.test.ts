@@ -2864,4 +2864,37 @@ describe("a class skill plays its own take", () => {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
   }, 60_000);
+
+  // Sniper's Mark: past the loose the take lifts the bow skyward, so it ends at the snap.
+  it("lets go of a capped take at its end, never past it", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
+      const rig = attachRig(scene, new Mesh("hero", scene), "male")!;
+      for (let i = 0; i < 3; i++) { rig.setLocomotion(0); scene.render(); }
+      const take = rig.clipGroups.get("bowAimNeutral")!;
+      expect(rig.playSkill("bowAimNeutral", 1, 0.3, 0.3)).toBe(true);
+      let reached = 0;
+      let frames = 0;
+      while (take.isPlaying && frames < 200) {
+        rig.setLocomotion(0);
+        scene.render();
+        frames++;
+        const at = take.animatables[0]?.masterFrame;
+        if (take.isPlaying && at !== undefined) reached = Math.max(reached, (at - take.from) / (take.to - take.from));
+      }
+      expect(take.isPlaying, "the take ended").toBe(false);
+      expect(reached, "furthest point of the take").toBeGreaterThan(0.3);
+      expect(reached, "furthest point of the take").toBeLessThanOrEqual(SKILL_CLIPS.bowAimNeutral.end! + 0.01);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
 });
