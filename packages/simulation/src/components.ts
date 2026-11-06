@@ -446,6 +446,8 @@ export interface GearModsC {
   extraPierce?: number;
   /** Seconds a monster that hits him stays chilled (Thornward). */
   chillAttackersSec?: number;
+  /** Increased movement speed, added to the buffs' (Mossback). */
+  moveSpeedPct?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;

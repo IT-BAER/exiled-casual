@@ -6,7 +6,7 @@ import { WORLD_MIN, WORLD_MAX, ARENA_RADIUS } from "../movement";
 import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type {
-  Position, PlayerC, MoveTarget, MoveDir, Faction, CastingC, SkillHoldC, RollC, Mana, Cooldowns,
+  Position, PlayerC, MoveTarget, MoveDir, Faction, CastingC, SkillHoldC, RollC, Mana, Cooldowns, GearModsC,
 } from "../components";
 
 function makePlayer(sim: Simulation, x = 0, y = 0, moveSpeed = fp(3)) {
@@ -29,6 +29,15 @@ describe("registerPlayerMovement", () => {
     expect(pos.y).toBe(0);
     const mt = sim.world.get<MoveTarget>(p, "moveTarget")!;
     expect(mt.active).toBe(1);
+  });
+
+  it("worn movement speed moves him that much faster", () => {
+    const sim = new Simulation();
+    registerPlayerMovement(sim);
+    const p = makePlayer(sim, 0, 0, fp(3));
+    sim.world.set<GearModsC>(p, "gearMods", { moveSpeedPct: 10 });
+    sim.step([{ tick: 0, entity: p, type: "moveTo", data: { x: fp(10), y: 0 } }]);
+    expect(sim.world.get<Position>(p, "position")!.x).toBe(fp(3.3));
   });
 
   it("snaps to target and deactivates moveTarget on arrival", () => {

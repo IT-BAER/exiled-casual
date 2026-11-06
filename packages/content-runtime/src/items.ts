@@ -381,6 +381,8 @@ export const UNIQUE_MODS: readonly UniqueMod[] = [
   { id: "unique.extra_pierce", stat: "extraPierce", text: "Arrows Pierce an additional enemy" },
   // PoE1's "Chill Enemies for # second on Hit" turned defensive: the attacker is chilled.
   { id: "unique.chill_attackers", stat: "chillAttackersSec", text: "Chill Enemies that Hit you for # second" },
+  // PoE1's Queen of the Forest: movement speed on a leather chest, which no rare rolls here.
+  { id: "unique.move_speed", stat: "moveSpeedPct", text: "#% increased Movement Speed" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -494,7 +496,7 @@ const UNIQUES: UniqueItem[] = [
     mods: [
       { affixId: "affix.life", min: 45, max: 65 },
       { affixId: "affix.cold_res", min: 20, max: 30 },
-      { affixId: "affix.chaos_res", min: 15, max: 25 },
+      { affixId: "unique.move_speed", min: 10, max: 10 },
     ],
   },
 ];

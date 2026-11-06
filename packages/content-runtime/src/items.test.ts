@@ -183,6 +183,23 @@ describe("uniques", () => {
     expect(itemStatMods(item)).toContainEqual({ stat: "chillAttackersSec", value: 1 });
   });
 
+  it("Mossback moves faster, in place of its chaos resistance", () => {
+    const item = worn("Mossback");
+    expect(item.affixes).toHaveLength(3);
+    expect(describeItem(item).lines).toContain("10% increased Movement Speed");
+    expect(describeItem(item).lines.some((l) => l.includes("Chaos"))).toBe(false);
+    expect(itemStatMods(item)).toContainEqual({ stat: "moveSpeedPct", value: 10 });
+  });
+
+  it("every unique has a mod no rare can roll", () => {
+    const rareStats = new Set(ITEM_POOLS.affixes.map((a) => a.stat));
+    for (const u of ITEM_POOLS.uniques ?? []) {
+      const own = UNIQUE_MODS.filter((m) => u.mods.some((x) => x.affixId === m.id));
+      expect(own.length, u.name).toBeGreaterThan(0);
+      for (const m of own) expect(rareStats.has(m.stat), m.id).toBe(false);
+    }
+  });
+
   it("gives every class family the same number of uniques", () => {
     const perFamily: Record<string, number> = {};
     for (const f of Object.values(FAMILY_BY_CLASS)) perFamily[f] = 0;

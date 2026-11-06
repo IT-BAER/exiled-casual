@@ -30,6 +30,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Quietus's arrows pierce an additional enemy instead of adding Cold Damage.
 - Thornward chills a monster that hits you for 1 second instead of giving Cold
   Resistance.
+- Mossback gives 10% increased Movement Speed instead of Chaos Resistance.
+  Every unique now carries one mod that no rare item can roll.
 
 - Monsters hit harder from map tier 3 up, and bosses have more life from tier 4
   up. Tiers 1 and 2 are unchanged. A tier 10 monster now hits about three

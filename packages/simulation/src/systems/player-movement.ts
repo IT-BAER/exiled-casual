@@ -4,7 +4,7 @@ import { WORLD_MIN, WORLD_MAX } from "../movement";
 import { slide, sweep, hasLineOfSight, type Collision, type CollisionRef } from "../collision";
 import type { Command } from "../loop";
 import type {
-  Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC, RollC, RollReadyC, TravelC, SkillAreaC,
+  Position, PlayerC, MoveTarget, MoveDir, CastingC, Health, SkillHoldC, RollC, RollReadyC, TravelC, SkillAreaC, GearModsC,
 } from "../components";
 import { buffSum, spawnGroundPatch } from "../status";
 
@@ -334,8 +334,9 @@ export function registerPlayerMovement(sim: Simulation, collisionRef?: Collision
       // Holding a skill is not casting it: the gap is the player's to run in.
       const casting = world.get<CastingC>(e, "casting");
       const hold = world.get<SkillHoldC>(e, "skillHold");
-      // Buffs move him faster (or slower) before the wind-up's slow is taken.
-      const moveSpeedPct = buffSum(world, e, tick, "moveSpeedPct");
+      // Buffs and worn gear (Mossback) move him faster, summed as PoE sums
+      // increased, before the wind-up's slow is taken.
+      const moveSpeedPct = buffSum(world, e, tick, "moveSpeedPct") + (world.get<GearModsC>(e, "gearMods")?.moveSpeedPct ?? 0);
       const run = moveSpeedPct === 0 ? player.moveSpeed : Math.trunc((player.moveSpeed * Math.max(0, 100 + moveSpeedPct)) / 100);
       const speed = casting && casting.untilTick > tick
         ? Math.trunc(run * CASTING_MOVE_PCT / 100)
