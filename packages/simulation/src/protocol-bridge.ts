@@ -2,7 +2,7 @@ import { fp, toNumber, fpDist2, fpMul } from "@exiled/fixed-point";
 import { PICKUP_RADIUS, SORT_MODES } from "@exiled/protocol";
 import type { DisplaySkill, Intent, Snapshot, SnapshotEntity, MonsterElement } from "@exiled/protocol";
 import { damageCode, damageTypeOf } from "./damage-types";
-import { hitParts, weaponHit } from "./weapon";
+import { beatCooldownTicks, hitParts, weaponHit } from "./weapon";
 import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
 import { cartographerPrice, areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext, FREEZE_DECAY_TICKS } from "@exiled/rules";
@@ -288,6 +288,8 @@ function describeSkills(
     let hitDamage = 0;
     // The same reading of the weapon the cast takes, so the tooltip is the hit.
     const weapon = weaponHit(world, def);
+    // Buffs are left out: the tooltip quotes the build, not a window that ends.
+    const cooldownTicks = beatCooldownTicks(authored, weapon.cooldownTicks, 0, castSpeedPct);
     for (const effect of def.effects) {
       const hitSpec = effect.type === "spawnProjectile" || effect.type === "meleeStrike" || effect.type === "areaHit"
         ? effect.damage
@@ -319,7 +321,7 @@ function describeSkills(
       description: def.description ?? "",
       manaCost: toNumber(def.manaCostFixed),
       castTimeSec,
-      cooldownSec: weapon.cooldownTicks / 30,
+      cooldownSec: cooldownTicks / 30,
       lines,
       gemLevel: gem.level,
       gemXp: gem.xp,
@@ -330,9 +332,8 @@ function describeSkills(
     // No hit damage means no DPS column, the way PoE drops it for a movement skill.
     // Divided by the interval the skill actually REPEATS at, not by its wind-up:
     // a cooldown longer than the cast is what a held button waits on, and dividing
-    // by the cast alone claimed a rate the player never gets. Cast speed shortens
-    // the wind-up only, so a cooldown-bound skill reads the same at any cast speed.
-    const repeatSec = Math.max(castTicks, weapon.cooldownTicks) / 30;
+    // by the cast alone claimed a rate the player never gets.
+    const repeatSec = Math.max(castTicks, cooldownTicks) / 30;
     if (hitDamage > 0 && repeatSec > 0) skill.dps = hitDamage / repeatSec;
     out.push(skill);
   }

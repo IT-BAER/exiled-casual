@@ -78,6 +78,21 @@ export function weaponHit(world: World, skill: SkillDef): WeaponHit {
   return { ...(mod ? { mod } : {}), critPct100, cooldownTicks };
 }
 
+/** A skill cooling down this long or less repeats on its cooldown, so attack/cast speed paces it. */
+const REPEAT_BEAT_MAX_TICKS = 45;
+
+/**
+ * The cooldown a cast sets. A buff's speed (Haste, Blood Rage), and a spell's cast
+ * speed, quicken a skill whose cooldown IS its repeat beat; an attack's beat is
+ * already the weapon's speed, and a long true cooldown stays as authored, as in PoE.
+ */
+export function beatCooldownTicks(skill: SkillDef, weaponCooldownTicks: number, buffSpeedPct: number, castSpeedPct: number): number {
+  const speed = buffSpeedPct + (skill.kind === "spell" ? castSpeedPct : 0);
+  return skill.cooldownTicks > 0 && skill.cooldownTicks <= REPEAT_BEAT_MAX_TICKS && speed !== 0 && 100 + speed > 0
+    ? Math.max(1, Math.trunc((weaponCooldownTicks * 100) / (100 + speed)))
+    : weaponCooldownTicks;
+}
+
 /**
  * The parts of one hit, before increased damage and crit. Parts of the same type
  * fold into one, so a wand's fire on a fire bolt is still one fire hit.

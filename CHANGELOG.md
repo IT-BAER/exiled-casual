@@ -30,6 +30,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   cursing a pack no longer costs more time than it saves.
 - Strike's gem level 15 widens its swing to 240 degrees instead of a full
   circle. The free attack no longer replaces Ground Slam.
+- Cast speed now also shortens how often a spell repeats, not only its
+  wind-up. The skill tooltip shows the shorter cooldown and the higher damage
+  per second.
 
 ## [0.7.1] - 2026-11-04
 

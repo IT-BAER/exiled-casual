@@ -769,6 +769,10 @@ describe("buildSnapshot - skills", () => {
     const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
     // Twice as fast: integer fixed-step timing floors nine ticks to four.
     expect(bolt.castTimeSec).toBeCloseTo(4 / 30, 5);
+    // A spell's 30-tick repeat beat halves too, so the cooldown and DPS the tooltip
+    // quotes are the ones a held button delivers.
+    expect(bolt.cooldownSec).toBeCloseTo(15 / 30, 5);
+    expect(bolt.dps).toBeCloseTo(36 / (15 / 30), 3);
   });
 
   it("omits DPS for a skill that deals no damage", () => {

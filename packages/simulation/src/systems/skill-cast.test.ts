@@ -356,6 +356,25 @@ describe("registerSkillCast", () => {
     expect(sim.world.get<CastingC>(caster, "casting")!.ticks).toBe(6);
   });
 
+  // A spell's repeat beat is its cooldown, so cast speed that only cut the wind-up
+  // changed nothing a player could count (balance report 4 Nov, [S] §5.6; rank D-r9).
+  it("shortens a spell's repeat beat by cast speed, never an attack's or a long cooldown", () => {
+    const spell: SkillDef = { ...EMBER_BOLT, kind: "spell", cooldownTicks: 30, castTicks: 9 };
+    const attack: SkillDef = { ...CLEAVE, kind: "attack", cooldownTicks: 30 };
+    const slow: SkillDef = { ...EMBER_BOLT, id: "skill.test_slow.v1", kind: "spell", cooldownTicks: 150 };
+    const readyAt = (def: SkillDef) => {
+      const sim = new Simulation();
+      registerSkillCast(sim, new Map([[def.id, def]]));
+      const caster = makeCaster(sim, fp(60));
+      sim.world.set<OffenseC>(caster, "offense", { spellDamagePct: 0, castSpeedPct: 15, critChancePct: 0 });
+      sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: def.id, data: { tx: fp(10), ty: 0 } }]);
+      return sim.world.get<Cooldowns>(caster, "cooldowns")![def.id];
+    };
+    expect(readyAt(spell)).toBe(26); // trunc(30 * 100 / 115)
+    expect(readyAt(attack)).toBe(30);
+    expect(readyAt(slow)).toBe(150);
+  });
+
   it("a skill with no crit chance of its own never crits, whatever gear says", () => {
     const sim = new Simulation();
     registerSkillCast(sim, ALL_SKILLS, undefined, 1234);

@@ -14,14 +14,11 @@ import type {
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
 import { canOpenPortal, openPortalAt } from "../areas";
-import { hitParts, weaponHit, type HitMod } from "../weapon";
+import { beatCooldownTicks, hitParts, weaponHit, type HitMod } from "../weapon";
 import { applyStatus, buffSum, groundProfile, reservedMana, spawnGroundPatch, statusOnHit } from "../status";
 
 /** How far in front of the caster the Portal skill opens its doorway, toward the aim. */
 const PORTAL_OFFSET = fp(1.6);
-
-/** A skill cooling down this long or less repeats on its cooldown, so attack/cast speed paces it. */
-const REPEAT_BEAT_MAX_TICKS = 45;
 
 /** sin(5k degrees) x 10000 for k = 0..18. Literal, not trig: the sim never depends on Math.sin rounding. */
 const SIN5 = [
@@ -532,13 +529,8 @@ export function registerSkillCast(
       }
       // What the weapon in hand makes of this cast: its hit, crit and cooldown.
       const weapon = weaponHit(world, skill);
-      // A buff's speed also quickens a skill whose cooldown IS its repeat beat
-      // (Haste, Blood Rage); a long true cooldown stays as authored, as in PoE.
-      const buffSpeed = buffSum(world, caster, tick, "speedPct");
-      const cooldownTicks = base.cooldownTicks > 0 && base.cooldownTicks <= REPEAT_BEAT_MAX_TICKS
-        && buffSpeed !== 0 && 100 + buffSpeed > 0
-        ? Math.max(1, Math.trunc((weapon.cooldownTicks * 100) / (100 + buffSpeed)))
-        : weapon.cooldownTicks;
+      const cooldownTicks = beatCooldownTicks(base, weapon.cooldownTicks,
+        buffSum(world, caster, tick, "speedPct"), offense?.castSpeedPct ?? 0);
 
       // Spend mana and set cooldown.
       world.set<Mana>(caster, "mana", {
