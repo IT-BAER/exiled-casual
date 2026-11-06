@@ -444,6 +444,8 @@ export interface GearModsC {
   physHitTakenLessPct?: number;
   /** Extra enemies a bow's arrows pierce (Quietus). */
   extraPierce?: number;
+  /** Seconds a monster that hits him stays chilled (Thornward). */
+  chillAttackersSec?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;

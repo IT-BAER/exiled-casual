@@ -117,6 +117,28 @@ it("less physical damage from hits cuts a physical hit after armour, not a bleed
   expect(taken({ source: 99, amountFixed: fp(100), type: damageCode("fire") }, true)).toBe(fp(100));
 });
 
+it("a hit on a player who chills attackers chills the monster that landed it", () => {
+  const chilledAfter = (worn: boolean): boolean => {
+    const sim = new Simulation();
+    const { world } = sim;
+    const p = world.create();
+    world.set(p, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    world.set<Health>(p, "health", { life: fp(100), maxLife: fp(100) });
+    world.set<DefensesC>(p, "defenses", { res: resBlock(), armour: fp(0) });
+    if (worn) world.set<GearModsC>(p, "gearMods", { chillAttackersSec: 1 });
+    const m = world.create();
+    world.set(m, "monster", { defId: "d", state: "chase" } as unknown as MonsterC);
+    world.set<Health>(m, "health", { life: fp(50), maxLife: fp(50) });
+    sim.register("testProducer", () => sim.enqueueDamage({ target: p, source: m, amountFixed: fp(5), type: damageCode("physical") }));
+    registerDamageResolve(sim);
+    sim.step();
+    return activeStatuses(world, m, 29).some((s) => s.id === "chilled" && s.slowPct === 30)
+      && !activeStatuses(world, m, 31).some((s) => s.id === "chilled");
+  };
+  expect(chilledAfter(true)).toBe(true);
+  expect(chilledAfter(false)).toBe(false);
+});
+
 it("culling strike never takes a damage-over-time tick's victim", () => {
   const sim = new Simulation();
   const { world } = sim;

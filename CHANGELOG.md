@@ -28,6 +28,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   Resistance. It applies after armour; bleeding is not a hit and is not
   reduced.
 - Quietus's arrows pierce an additional enemy instead of adding Cold Damage.
+- Thornward chills a monster that hits you for 1 second instead of giving Cold
+  Resistance.
 
 - Monsters hit harder from map tier 3 up, and bosses have more life from tier 4
   up. Tiers 1 and 2 are unchanged. A tier 10 monster now hits about three

@@ -19,6 +19,9 @@ import { alertPack } from "./monster-ai";
 import { createStream, type RandomStream } from "../rng";
 import { activeStatuses, applyStatus, damageTakenPct, stun } from "../status";
 
+/** The slow of a chill worn gear puts on an attacker: the cold skills' own 30%. */
+const ATTACKER_CHILL_SLOW_PCT = 30;
+
 /** Spawn grace: 10 seconds at 30 Hz, or until the player moves or casts. */
 export const SPAWN_GRACE_TICKS = 300;
 
@@ -114,6 +117,11 @@ export function registerDamageResolve(
       if (health.life > 0 && final > 0 && world.has(ev.target, "player")) recordHit(sim, world, ev, final, tick);
       if (health.life > 0 && ev.source !== ev.target && world.has(ev.target, "player")) {
         applyOnHit(world, monsters, ailmentRolls, ev, tick);
+        // Thornward's "Chill Enemies that Hit you", at the skills' own chill.
+        const chillSec = world.get<GearModsC>(ev.target, "gearMods")?.chillAttackersSec ?? 0;
+        if (chillSec > 0 && world.has(ev.source, "monster")) {
+          applyStatus(world, ev.source, { statusId: "chilled", durationTicks: chillSec * 30, slowPct: ATTACKER_CHILL_SLOW_PCT }, tick);
+        }
       }
 
       const hitLeft = Math.max(0, health.life - toLife);

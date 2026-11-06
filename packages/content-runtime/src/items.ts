@@ -379,6 +379,8 @@ export const UNIQUE_MODS: readonly UniqueMod[] = [
   { id: "unique.less_phys_hit_taken", stat: "physHitTakenLessPct", text: "#% less Physical Damage taken from Hits" },
   // PoE's "Arrows Pierce an additional Target". At 1 the text names no number.
   { id: "unique.extra_pierce", stat: "extraPierce", text: "Arrows Pierce an additional enemy" },
+  // PoE1's "Chill Enemies for # second on Hit" turned defensive: the attacker is chilled.
+  { id: "unique.chill_attackers", stat: "chillAttackersSec", text: "Chill Enemies that Hit you for # second" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -479,7 +481,7 @@ const UNIQUES: UniqueItem[] = [
     icon: "/textures/items/unique_thornward.webp",
     mods: [
       { affixId: "affix.life", min: 30, max: 45 },
-      { affixId: "affix.cold_res", min: 30, max: 40 },
+      { affixId: "unique.chill_attackers", min: 1, max: 1 },
       { affixId: "affix.lightning_res", min: 20, max: 30 },
     ],
   },
