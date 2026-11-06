@@ -282,8 +282,12 @@ export function registerSkillCast(
         const { dirX, dirY } = aim();
         const centre = centreOf(effect.at, effect.maxRangeFixed);
         const n = effect.count ?? 1;
-        const parts = effect.damage ? partsOf(effect.damage) : [];
+        const first = effect.damage ? partsOf(effect.damage) : [];
+        const later = effect.repeatDamagePct === undefined
+          ? first
+          : first.map((p) => ({ ...p, amount: Math.trunc((p.amount * effect.repeatDamagePct!) / 100) }));
         for (let i = 0; i < n; i++) {
+          const parts = i === 0 ? first : later;
           let at = centre;
           if (effect.stepFixed && i > 0) {
             const run = effect.stepFixed * i;

@@ -19,6 +19,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   next time it is loaded.
 - Split Arrow costs 14 mana instead of 20, so the Stalker no longer drinks its
   mana flask dry in the first maps.
+- Skyfall Volley drops fourteen arrows from gem level 5 and sixteen from gem
+  level 15 (was sixteen and twenty). It is still the Stalker's best pack skill.
+- Faultline's second aftershock at gem level 15 now hits for 15% of the first.
+  It still erupts and stuns, but the gem no longer more than doubles its damage
+  in its last six levels.
 
 ## [0.7.1] - 2026-11-04
 

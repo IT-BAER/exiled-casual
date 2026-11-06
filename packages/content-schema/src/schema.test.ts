@@ -744,6 +744,7 @@ describe("validateSkillDef: class skill expansion effects", () => {
       type: "areaHit", at: "target", radiusFixed: fp(1.2), damage: { type: "physical", amountFixed: fp(20) },
       maxRangeFixed: fp(8), delayTicks: 30, count: 5, intervalTicks: 4, stepFixed: fp(1.5), scatterFixed: fp(2),
       knockbackFixed: fp(1), stunTicks: 15, onHit: { statusId: "chilled", durationTicks: 30, slowPct: 20 },
+      repeatDamagePct: 10,
     };
     expect(ok(area).errors).toEqual([]);
     expect(ok({ ...area, shape: "cone", arcDegrees: 90 }).errors).toEqual([]);
@@ -752,6 +753,8 @@ describe("validateSkillDef: class skill expansion effects", () => {
     expect(ok({ ...area, at: "floor" }).errors.some((e) => e.includes(".at"))).toBe(true);
     expect(ok({ ...area, count: 0 }).errors.some((e) => e.includes(".count"))).toBe(true);
     expect(ok({ ...area, scatterFixed: -1 }).errors.some((e) => e.includes("scatterFixed"))).toBe(true);
+    expect(ok({ ...area, repeatDamagePct: 0 }).errors.some((e) => e.includes("repeatDamagePct"))).toBe(true);
+    expect(ok({ ...area, repeatDamagePct: 101 }).errors.some((e) => e.includes("repeatDamagePct"))).toBe(true);
   });
 
   it("accepts a timed buff and an aura, and keeps reservation to auras", () => {

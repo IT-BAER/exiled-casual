@@ -212,6 +212,9 @@ export function effectLines(effect: EffectNode): string[] {
       out.push(`${shape} radius is ${metres(effect.radiusFixed)}`);
       if (effect.delayTicks) out.push(`Lands after ${secs(effect.delayTicks)}`);
       if (n > 1) out.push(`${n} impacts${effect.intervalTicks ? `, one every ${secs(effect.intervalTicks)}` : ""}`);
+      if (n > 1 && effect.repeatDamagePct !== undefined) {
+        out.push(`Every impact after the first deals ${effect.repeatDamagePct}% of the damage`);
+      }
       if (effect.stepFixed) out.push(`Each impact lands ${metres(effect.stepFixed)} further along`);
       if (effect.scatterFixed) out.push(`Impacts scatter within ${metres(effect.scatterFixed)}`);
       if (effect.knockbackFixed) out.push(`Knocks enemies back ${metres(effect.knockbackFixed)}`);

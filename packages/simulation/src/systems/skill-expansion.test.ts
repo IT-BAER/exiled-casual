@@ -3,7 +3,8 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { resBlock, type SkillDef, type EffectNode } from "@exiled/content-schema";
-import { MONSTERS } from "@exiled/content-runtime";
+import { MONSTERS, SKILLS } from "@exiled/content-runtime";
+import { effectiveSkill } from "@exiled/rules";
 import { isToWorker } from "@exiled/protocol";
 import { Simulation } from "../loop";
 import { gridCollision, type CollisionRef } from "../collision";
@@ -115,6 +116,40 @@ describe("areaHit", () => {
     expect(r.life(imp)).toBe(fp(40));
     r.sim.step(); // tick 5: the second impact
     expect(r.life(imp)).toBe(fp(35));
+  });
+
+  it("hits with repeatDamagePct of its damage on every impact after the first", () => {
+    const r = rig([skill("quake", [{
+      type: "areaHit", at: "target", radiusFixed: fp(1), damage: FIRE(20), count: 3, intervalTicks: 2, repeatDamagePct: 25,
+    }])]);
+    const imp = r.mob(2, 0);
+    r.cast("quake", 2, 0);
+    expect(r.life(imp)).toBe(fp(20));
+    r.sim.step();
+    r.sim.step();
+    expect(r.life(imp)).toBe(fp(15));
+    r.sim.step();
+    r.sim.step();
+    expect(r.life(imp)).toBe(fp(10));
+  });
+
+  it("Faultline at gem 15: the second aftershock lands for 15% of the first", () => {
+    const quake = effectiveSkill(SKILLS.get("skill.earthquake.v1")!, 15);
+    const r = rig([{ ...quake, castTicks: 0 }]);
+    const dummy = r.mob(1.5, 0);
+    r.w.set<Health>(dummy, "health", { life: fp(10000), maxLife: fp(10000) });
+    r.w.set<DefensesC>(dummy, "defenses", { res: resBlock(), armour: 0 });
+    r.cast("earthquake", 1.5, 0);
+    const afterSlam = r.life(dummy)!;
+    for (let i = 0; i < 30; i++) r.sim.step();
+    const afterFirst = r.life(dummy)!;
+    for (let i = 0; i < 15; i++) r.sim.step();
+    const afterSecond = r.life(dummy)!;
+    const first = afterSlam - afterFirst;
+    const second = afterFirst - afterSecond;
+    expect(first).toBeGreaterThan(0);
+    expect(second / first).toBeGreaterThan(0.14);
+    expect(second / first).toBeLessThan(0.16);
   });
 
   it("scatters impacts inside the disc, the same way on the same seed", () => {
@@ -578,6 +613,11 @@ describe("describeSkills lines", () => {
       "Area radius is 1.5 metres", "Lands after 1 seconds", "5 impacts, one every 0.1 seconds", "Stuns for 0.5 seconds",
       "Inflicts Chilled for 2 seconds", "Chilled enemies are 30% slower",
     ]);
+    expect(effectLines({
+      type: "areaHit", at: "target", radiusFixed: fp(3), count: 2, intervalTicks: 15, repeatDamagePct: 10,
+    })).toEqual(["Area radius is 3 metres", "2 impacts, one every 0.5 seconds", "Every impact after the first deals 10% of the damage"]);
+    expect(effectLines({ type: "areaHit", at: "target", radiusFixed: fp(3), repeatDamagePct: 10 }))
+      .toEqual(["Area radius is 3 metres"]);
     expect(effectLines({ type: "applyBuff", buffId: "haste", durationTicks: 0, reserveManaPct: 25, speedPct: 20 }))
       .toEqual(["Aura: reserves 25% of maximum Mana", "20% increased Attack and Cast Speed"]);
     expect(effectLines({

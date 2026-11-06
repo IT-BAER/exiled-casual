@@ -568,7 +568,7 @@ describe("skill unlocks and growth", () => {
       own: { field: "radiusFixed", perMille: 15 },
       breakpoints: [
         { atLevel: 5, patch: { stunTicks: 45 } },
-        { atLevel: 15, patch: { count: 2 } },
+        { atLevel: 15, patch: { count: 2, repeatDamagePct: 15 } },
       ],
     },
     "skill.determination.v1": {
@@ -612,8 +612,8 @@ describe("skill unlocks and growth", () => {
     "skill.rain_of_arrows.v1": {
       own: { field: "radiusFixed", perMille: 15 },
       breakpoints: [
-        { atLevel: 5, patch: { count: 16 } },
-        { atLevel: 15, patch: { count: 20 } },
+        { atLevel: 5, patch: { count: 14 } },
+        { atLevel: 15, patch: { count: 16 } },
       ],
     },
     "skill.haste.v1": {

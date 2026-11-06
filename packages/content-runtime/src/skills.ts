@@ -476,7 +476,9 @@ const SKILL_DEFS: SkillDef[] = [
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "radiusFixed", perMille: 15 } },
       breakpoints: [
         { atLevel: 5, text: "The aftershock stuns for a second and a half", patch: { stunTicks: 45 } },
-        { atLevel: 15, text: "A second aftershock erupts half a second later", patch: { count: 2 } },
+        // A second aftershock at full damage made gem 14->20 2.36x (other attacks 1.42x);
+        // at 15% it is 1.56x and the second eruption and stun still land.
+        { atLevel: 15, text: "A second aftershock erupts half a second later", patch: { count: 2, repeatDamagePct: 15 } },
       ],
     },
     effects: [
@@ -494,6 +496,8 @@ const SKILL_DEFS: SkillDef[] = [
         delayTicks: 30,
         count: 1,
         intervalTicks: 15,
+        // Full while there is one aftershock; gem 15's patch sets the second one's share.
+        repeatDamagePct: 100,
         // Our own: one second of stun, the aftershock's promise.
         stunTicks: 30,
       },
@@ -751,8 +755,9 @@ const SKILL_DEFS: SkillDef[] = [
     growth: {
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "radiusFixed", perMille: 15 } },
       breakpoints: [
-        { atLevel: 5, text: "Sixteen arrows fall", patch: { count: 16 } },
-        { atLevel: 15, text: "Twenty arrows fall", patch: { count: 20 } },
+        // 16/20 made Skyfall the Stalker's runaway (boss 7.7 s vs 19.6+ for the rest).
+        { atLevel: 5, text: "Fourteen arrows fall", patch: { count: 14 } },
+        { atLevel: 15, text: "Sixteen arrows fall", patch: { count: 16 } },
       ],
     },
     effects: [

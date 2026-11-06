@@ -134,6 +134,8 @@ export type EffectNode =
       /** Impacts, default 1. */
       count?: number;
       intervalTicks?: number;
+      /** Every impact after the first deals this % of the damage; absent, all deal 100. */
+      repeatDamagePct?: number;
       stepFixed?: Fixed;
       scatterFixed?: Fixed;
       /** A cone opens along the aim from the centre; needs arcDegrees. */
@@ -679,6 +681,9 @@ function validateEffectNode(v: unknown, idx: number, errors: string[]): boolean 
     validateAreaHitBody(v, path, errors);
     optNonNegInts(v, path, ["maxRangeFixed", "delayTicks", "intervalTicks", "stepFixed", "scatterFixed"], errors);
     if (v["count"] !== undefined && !isPosInt(v["count"])) errors.push(`${path}.count: must be a positive integer when present`);
+    if (v["repeatDamagePct"] !== undefined && !isPctRange(v["repeatDamagePct"], 1, 100)) {
+      errors.push(`${path}.repeatDamagePct: must be an integer in 1..100 when present`);
+    }
     const shape = v["shape"];
     if (shape !== undefined && shape !== "disc" && shape !== "cone") {
       errors.push(`${path}.shape: must be "disc" or "cone"`);
