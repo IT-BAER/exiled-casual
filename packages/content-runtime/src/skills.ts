@@ -853,6 +853,8 @@ const SKILL_DEFS: SkillDef[] = [
         at: "self",
         radiusFixed: fp(3),
         damage: { type: "fire", amountFixed: fp(30) },
+        // Not halved: at 0.75 / 1.25 the kit Emberbound cleared maps 11-15 about 25 s
+        // slower (6 Nov); in play the push is protection, not lost damage.
         knockbackFixed: fp(1.5),
       },
     ],
@@ -864,8 +866,9 @@ const SKILL_DEFS: SkillDef[] = [
     classId: "class.emberbound",
     manaCostFixed: fp(15),
     cooldownTicks: 30,
-    // PoE2's is 0.7 s (poe2db.tw); half a second so a curse is not a stall.
-    castTicks: 15,
+    // PoE2's is 0.7 s (poe2db.tw); Ember Bolt's nine ticks here, because at fifteen
+    // Bolt + Hex cleared slower than Bolt alone (balance report 4 Nov, [E] W3).
+    castTicks: 9,
     kind: "spell",
     unlockLevel: 12,
     growth: {

@@ -26,6 +26,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   in its last six levels.
 - Ember Bolt crits on 10% and Ember Spark on 8% before gear (were 7% and 5%),
   so critical strike chance on Emberbound gear and passives pays off.
+- Kindling Hex winds up as fast as Ember Bolt (0.3 seconds, was 0.5), so
+  cursing a pack no longer costs more time than it saves.
 
 ## [0.7.1] - 2026-11-04
 

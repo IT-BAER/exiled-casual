@@ -107,6 +107,11 @@ describe("SKILLS", () => {
     expect(SKILLS.get("skill.ember_bolt.v1")!.critChancePct).toBe(10);
     expect(SKILLS.get("skill.ember_spark.v1")!.critChancePct).toBe(8);
   });
+  // At 15 ticks Bolt + Hex cleared slower than Bolt alone (balance report 4 Nov, [E] W3;
+  // rank D-r6): a curse costs no more wind-up than the bolt it sets up.
+  it("flammability winds up in Ember Bolt's nine ticks", () => {
+    expect(SKILLS.get("skill.flammability.v1")!.castTicks).toBe(SKILLS.get("skill.ember_bolt.v1")!.castTicks);
+  });
 
   /**
    * A held button re-issues the cast every tick, so the cooldown is what decides
