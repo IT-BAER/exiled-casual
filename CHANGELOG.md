@@ -17,6 +17,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   the skill bar until you pick a socket for it. A character that already holds
   skills without a socket gets them placed on empty mouse sockets once, the
   next time it is loaded.
+- Split Arrow costs 14 mana instead of 20, so the Stalker no longer drinks its
+  mana flask dry in the first maps.
 
 ## [0.7.1] - 2026-11-04
 

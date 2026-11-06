@@ -203,7 +203,9 @@ const SKILL_DEFS: SkillDef[] = [
     name: "Split Arrow",
     description: "Looses a fan of arrows at once.",
     classId: "class.stalker",
-    manaCostFixed: fp(20),
+    // Our own: under the other two pack skills' 20, because it fires every beat
+    // where they wait two or three seconds. At 20 it emptied the mana flask.
+    manaCostFixed: fp(14),
     cooldownTicks: 30,
     castTicks: 9,
     critChancePct: 7,

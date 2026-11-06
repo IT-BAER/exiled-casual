@@ -95,6 +95,12 @@ describe("SKILLS", () => {
     expect(def.cooldownTicks).toBe(30);
   });
 
+  // At 20 the Stalker's kit drank 26 flasks a map in its first five maps, the
+  // other two classes 5 to 6 (balance plan 5 Nov, rank D-r4).
+  it("split_arrow manaCostFixed === fp(14)", () => {
+    expect(SKILLS.get("skill.split_arrow.v1")!.manaCostFixed).toBe(fp(14));
+  });
+
   /**
    * A held button re-issues the cast every tick, so the cooldown is what decides
    * whether one cast is separable from the next. Under the wind-up it never
