@@ -371,6 +371,8 @@ export const UNIQUE_MODS: readonly UniqueMod[] = [
   { id: "unique.mana_on_kill", stat: "manaOnKillPct", text: "Recover #% of maximum Mana on Kill" },
   // PoE1's "Unaffected by Burning Ground". A flag: rolled at 1, the text carries no number.
   { id: "unique.unaffected_burning_ground", stat: "unaffectedByBurningGround", text: "Unaffected by Burning Ground" },
+  // PoE1's Culling Strike: 10% for every rarity there (PoE2 scales it by rarity, 5% on a unique).
+  { id: "unique.culling_strike", stat: "cullingStrikePct", text: "Culling Strike: hits kill enemies left at or under #% of their Life" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -424,7 +426,7 @@ const UNIQUES: UniqueItem[] = [
     mods: [
       { affixId: "affix.added_phys", min: 12, max: 18 },
       { affixId: "affix.phys_dmg_pct", min: 45, max: 60 },
-      { affixId: "affix.strength", min: 20, max: 30 },
+      { affixId: "unique.culling_strike", min: 10, max: 10 },
     ],
   },
   {

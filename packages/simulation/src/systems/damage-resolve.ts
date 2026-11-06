@@ -7,7 +7,7 @@ import { MONSTERS } from "@exiled/content-runtime";
 import type { MonsterDef } from "@exiled/content-schema";
 import { Simulation } from "../loop";
 import type {
-  Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC, RollC, AilmentC,
+  Health, DefensesC, FlasksC, EnergyShieldC, MonsterC, SessionC, Position, CastingC, RollC, AilmentC, GearModsC,
 } from "../components";
 import { ROLL_AVOID_TICKS } from "./player-movement";
 import { damageTypeOf } from "../damage-types";
@@ -111,7 +111,12 @@ export function registerDamageResolve(
         applyOnHit(world, monsters, ailmentRolls, ev, tick);
       }
 
-      const after = Math.max(0, health.life - toLife);
+      const hitLeft = Math.max(0, health.life - toLife);
+      // PoE1's Culling Strike (Oathbreaker): a hit that leaves a monster at or under
+      // the threshold kills it, a boss included. A DoT tick names its victim as source.
+      const cull = ev.source !== ev.target && hitLeft > 0 && world.has(ev.target, "monster")
+        ? world.get<GearModsC>(ev.source, "gearMods")?.cullingStrikePct ?? 0 : 0;
+      const after = cull > 0 && hitLeft * 100 <= health.maxLife * cull ? 0 : hitLeft;
       world.set<Health>(ev.target, "health", { ...health, life: after });
       if (after > 0 && final > 0 && ev.source !== ev.target) elementalAilments(world, shockRolls, ev, final, health.maxLife, tick);
 

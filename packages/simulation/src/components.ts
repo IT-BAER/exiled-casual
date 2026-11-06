@@ -435,6 +435,8 @@ export interface GearModsC {
   manaOnKillPct?: number;
   /** Non-zero: a burning ground patch does not ignite him (Cinderveil). */
   unaffectedByBurningGround?: number;
+  /** A hit that leaves a monster at or under this percent of its life kills it (Oathbreaker). */
+  cullingStrikePct?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;

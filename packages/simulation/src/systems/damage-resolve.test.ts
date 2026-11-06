@@ -7,7 +7,7 @@ import { ES_RECHARGE_DELAY_TICKS, ELECTROCUTE_TICKS, FREEZE_TICKS, SHOCK_TICKS }
 import { damageCode } from "../damage-types";
 import { activeStatuses, isStunned } from "../status";
 import { ROLL_AVOID_TICKS, ROLL_TICKS } from "./player-movement";
-import type { Health, DefensesC, FlasksC, EnergyShieldC, SessionC, RollC, DamageEvent, AilmentC, MonsterC } from "../components";
+import type { Health, DefensesC, FlasksC, EnergyShieldC, SessionC, RollC, DamageEvent, AilmentC, MonsterC, GearModsC } from "../components";
 
 it("applies two enqueued events, floored at 0", () => {
   const sim = new Simulation();
@@ -52,6 +52,46 @@ it("armour stops part of a physical hit but none of a bleeding tick", () => {
   registerDamageResolve(hit);
   hit.step();
   expect(hit.world.get<Health>(h, "health")!.life).toBeGreaterThan(fp(40) - fp(0.5));
+});
+
+it("culling strike kills a monster a hit leaves at or under the threshold, a boss too", () => {
+  const lifeAfter = (hit: number, culls: boolean, boss = false): number => {
+    const sim = new Simulation();
+    const { world } = sim;
+    const striker = world.create();
+    if (culls) world.set<GearModsC>(striker, "gearMods", { cullingStrikePct: 10 });
+    const t = world.create();
+    world.set<Health>(t, "health", { life: fp(20), maxLife: fp(100) });
+    world.set<DefensesC>(t, "defenses", { res: resBlock(), armour: fp(0) });
+    world.set(t, "monster", { defId: "d", state: "chase" } as unknown as MonsterC);
+    if (boss) world.set(t, "boss", {});
+    sim.register("testProducer", () => {
+      sim.enqueueDamage({ target: t, source: striker, amountFixed: fp(hit), type: 1 });
+    });
+    registerDamageResolve(sim);
+    sim.step();
+    return world.get<Health>(t, "health")!.life;
+  };
+  expect(lifeAfter(10, true)).toBe(0); // 10 of 100 left: culled
+  expect(lifeAfter(9, true)).toBe(fp(11)); // 11 left: above the threshold
+  expect(lifeAfter(10, false)).toBe(fp(10));
+  expect(lifeAfter(10, true, true)).toBe(0);
+});
+
+it("culling strike never takes a damage-over-time tick's victim", () => {
+  const sim = new Simulation();
+  const { world } = sim;
+  const t = world.create();
+  world.set<GearModsC>(t, "gearMods", { cullingStrikePct: 10 });
+  world.set<Health>(t, "health", { life: fp(20), maxLife: fp(100) });
+  world.set<DefensesC>(t, "defenses", { res: resBlock(), armour: fp(0) });
+  world.set(t, "monster", { defId: "d", state: "chase" } as unknown as MonsterC);
+  sim.register("testProducer", () => {
+    sim.enqueueDamage({ target: t, source: t, amountFixed: fp(10), type: 0 });
+  });
+  registerDamageResolve(sim);
+  sim.step();
+  expect(world.get<Health>(t, "health")!.life).toBe(fp(10));
 });
 
 it("life floors at 0, never negative", () => {
