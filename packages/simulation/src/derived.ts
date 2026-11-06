@@ -1,11 +1,11 @@
 import { baseCasterStats, applyItemMods, levelBonus, passiveStatMods, START_LEVEL, waystoneScaleFor } from "@exiled/rules";
-import { itemStatMods } from "@exiled/content-runtime";
+import { itemStatMods, UNIQUE_MODS } from "@exiled/content-runtime";
 import { ELEMENTS } from "@exiled/content-schema";
 import type { World } from "./ecs";
 import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC, EnergyShieldC, SessionC, GearModsC } from "./components";
 
-/** The stat ids a unique-only mod carries, each a GearModsC field. */
-const GEAR_MOD_STATS: readonly (keyof GearModsC)[] = ["fireSpellLevels"];
+/** Every unique-only mod's stat is a GearModsC field of the same name. */
+const GEAR_MOD_STATS: ReadonlySet<string> = new Set(UNIQUE_MODS.map((m) => m.stat));
 
 /**
  * Recompute the player's gear-derived stats from scratch: base block + every
@@ -100,7 +100,7 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
   // Unique-only mechanics, summed per stat; absent unless something worn grants one.
   const gear: GearModsC = {};
   for (const m of mods) {
-    if ((GEAR_MOD_STATS as readonly string[]).includes(m.stat)) {
+    if (GEAR_MOD_STATS.has(m.stat)) {
       const k = m.stat as keyof GearModsC;
       gear[k] = (gear[k] ?? 0) + m.value;
     }

@@ -367,6 +367,8 @@ export interface UniqueMod { id: string; stat: string; text: string }
 export const UNIQUE_MODS: readonly UniqueMod[] = [
   // PoE2's wand suffix "+# to Level of all Fire Spell Skills".
   { id: "unique.fire_spell_levels", stat: "fireSpellLevels", text: "+# to Level of all Fire Spell Skills" },
+  // PoE1's "Recover #% of Mana on Kill".
+  { id: "unique.mana_on_kill", stat: "manaOnKillPct", text: "Recover #% of maximum Mana on Kill" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -394,7 +396,7 @@ const UNIQUES: UniqueItem[] = [
     mods: [
       { affixId: "affix.fire_res", min: 30, max: 45 },
       { affixId: "affix.mana", min: 35, max: 50 },
-      { affixId: "affix.life", min: 10, max: 20 },
+      { affixId: "unique.mana_on_kill", min: 3, max: 3 },
     ],
   },
   {

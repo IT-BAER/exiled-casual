@@ -789,6 +789,36 @@ describe("registerDeath", () => {
     expect((w.get(full, "health") as { life: number }).life).toBe(fp(100));
   });
 
+  it("a kill gives back the mana worn gear recovers on kill, never past the pool", () => {
+    const sim = new Simulation();
+    registerDeath(sim);
+    const w = sim.world;
+    const worn = w.create();
+    w.set(worn, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set(worn, "health", { life: fp(100), maxLife: fp(100) });
+    w.set(worn, "mana", { mana: fp(10), maxMana: fp(200), regen: 0 });
+    w.set(worn, "gearMods", { manaOnKillPct: 3 });
+    const bare = w.create();
+    w.set(bare, "player", { moveSpeed: 0, bodyRadius: fp(0.5) });
+    w.set(bare, "health", { life: fp(100), maxLife: fp(100) });
+    w.set(bare, "mana", { mana: fp(10), maxMana: fp(200), regen: 0 });
+    for (let i = 0; i < 2; i++) {
+      const m = w.create();
+      w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0 });
+      w.set(m, "health", { life: 0, maxLife: fp(10) });
+    }
+
+    sim.step([]);
+    expect((w.get(worn, "mana") as { mana: number }).mana).toBe(fp(22)); // 10 + 2 x 3% of 200
+    expect((w.get(bare, "mana") as { mana: number }).mana).toBe(fp(10));
+    w.set(worn, "mana", { mana: fp(199), maxMana: fp(200), regen: 0 });
+    const m = w.create();
+    w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: 0, summoned: 0 });
+    w.set(m, "health", { life: 0, maxLife: fp(10) });
+    sim.step([]);
+    expect((w.get(worn, "mana") as { mana: number }).mana).toBe(fp(200));
+  });
+
   it("does not drop when an ordinary (non-rare, non-boss) monster dies", () => {
     const sim = new Simulation();
     registerDeath(sim);

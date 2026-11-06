@@ -1,6 +1,6 @@
 import { Simulation } from "../loop";
 import type { World } from "../ecs";
-import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, SkillsC } from "../components";
+import type { Health, Mana, MoveTarget, MoveDir, SessionC, MonsterC, Position, ItemC, FlasksC, ProgressC, EnergyShieldC, SkillsC, GearModsC } from "../components";
 import { restockMapShop, restockVendor } from "../vendor";
 import { openReturnPortal } from "../areas";
 import { fp } from "@exiled/fixed-point";
@@ -236,6 +236,14 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
         if (h.life <= 0) continue;
         const heal = Math.trunc((h.maxLife * LIFE_ON_KILL_PCT) / 100);
         world.set<Health>(pe, "health", { ...h, life: Math.min(h.maxLife, h.life + heal) });
+      }
+      // PoE1's "Recover #% of Mana on Kill" (Emberchoir), on the same act.
+      for (const pe of world.query("player", "gearMods", "mana")) {
+        const pct = world.get<GearModsC>(pe, "gearMods")!.manaOnKillPct ?? 0;
+        if (pct === 0) continue;
+        const m = world.get<Mana>(pe, "mana")!;
+        const cap = m.maxMana - reservedMana(world, pe, m.maxMana);
+        world.set<Mana>(pe, "mana", { ...m, mana: Math.max(m.mana, Math.min(cap, m.mana + Math.trunc((m.maxMana * pct) / 100))) });
       }
 
       // Grant flask charges to every player entity with flasks before destroy.

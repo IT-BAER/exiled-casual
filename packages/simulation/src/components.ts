@@ -431,6 +431,8 @@ export interface OffenseC   { spellDamagePct: number; castSpeedPct: number; crit
 export interface GearModsC {
   /** +N to the level of every fire spell (Ashmaw). */
   fireSpellLevels?: number;
+  /** Percent of maximum mana recovered on each kill (Emberchoir). */
+  manaOnKillPct?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;

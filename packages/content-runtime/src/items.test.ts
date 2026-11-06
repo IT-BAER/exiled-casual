@@ -127,6 +127,14 @@ describe("uniques", () => {
     expect(itemStatMods(item)).toContainEqual({ stat: "fireSpellLevels", value: 1 });
   });
 
+  it("Emberchoir recovers mana on kill, in place of its life", () => {
+    const item = worn("Emberchoir");
+    expect(item.affixes).toHaveLength(3);
+    expect(describeItem(item).lines).toContain("Recover 3% of maximum Mana on Kill");
+    expect(describeItem(item).lines.some((l) => l.includes("Life"))).toBe(false);
+    expect(itemStatMods(item)).toContainEqual({ stat: "manaOnKillPct", value: 3 });
+  });
+
   it("gives every class family the same number of uniques", () => {
     const perFamily: Record<string, number> = {};
     for (const f of Object.values(FAMILY_BY_CLASS)) perFamily[f] = 0;
