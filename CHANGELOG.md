@@ -23,7 +23,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   with his bow. Its mods are unchanged. A Thornward you already own becomes a
   quiver when the character loads, and moves to the stash if the backpack has
   no room for the taller piece.
-
+- Every unique now carries one mod that no rare item can roll. The uniques that
+  changed for it are listed below.
 - Ashmaw gives +1 to Level of all Fire Spell Skills instead of maximum Mana.
   The skill tooltip shows the raised level, for example "Level 8 (+1)", and a
   gem at level 20 casts as level 21.
@@ -43,8 +44,10 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Thornward chills a monster that hits you for 1 second instead of giving Cold
   Resistance.
 - Mossback gives 10% increased Movement Speed instead of Chaos Resistance.
-  Every unique now carries one mod that no rare item can roll.
-
+- An unidentified item can no longer be equipped, as in PoE: identify it first.
+  A piece you already wear unidentified stays on and loads identified.
+- Cinder Ground and Captive Sun land at most 16 units away, like Skyfire,
+  instead of anywhere the cursor points.
 - Monsters hit harder from map tier 3 up, and bosses have more life from tier 4
   up. Tiers 1 and 2 are unchanged. A tier 10 monster now hits about three
   times as hard as before, and a tier 10 boss has about twice its old life, so
@@ -81,6 +84,16 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The legs no longer stumble for a moment when a spell or a shot ends while
   you run. Only the arms ease back from the attack.
 - Sniper's Mark no longer swings the bow up at the sky after the shot.
+- Hit flashes, melee sparks, instant skill areas and the Ground Slam crack no
+  longer go missing when the game hitches for a frame.
+- Stacked fire glows orange to white instead of lemon yellow.
+- Lightning Arrow cast right after Sniper's Mark draws and looses the bow
+  instead of holding it still.
+- Infernal Cry and Determination no longer hide the character's body, and
+  Haste gathers wind before the buff starts.
+- Mother Vhal's tendrils no longer tear while she walks, the Cinder Warden's
+  shield no longer shreds, and the Grubling's inner arm no longer shows a grey
+  plate.
 - The Stalker's hood lies smooth over the upper back, so a quiver sits closer
   to the back instead of resting on the hood's folds.
 
