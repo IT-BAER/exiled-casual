@@ -24,6 +24,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Faultline's second aftershock at gem level 15 now hits for 15% of the first.
   It still erupts and stuns, but the gem no longer more than doubles its damage
   in its last six levels.
+- Ember Bolt crits on 10% and Ember Spark on 8% before gear (were 7% and 5%),
+  so critical strike chance on Emberbound gear and passives pays off.
 
 ## [0.7.1] - 2026-11-04
 

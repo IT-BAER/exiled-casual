@@ -101,6 +101,13 @@ describe("SKILLS", () => {
     expect(SKILLS.get("skill.split_arrow.v1")!.manaCostFixed).toBe(fp(14));
   });
 
+  // At 7 and 5 a crit build cleared no faster than no points at all (balance report
+  // 4 Nov, [E] W1; rank D-r8).
+  it("ember_bolt crits on 10% and ember_spark on 8% before gear", () => {
+    expect(SKILLS.get("skill.ember_bolt.v1")!.critChancePct).toBe(10);
+    expect(SKILLS.get("skill.ember_spark.v1")!.critChancePct).toBe(8);
+  });
+
   /**
    * A held button re-issues the cast every tick, so the cooldown is what decides
    * whether one cast is separable from the next. Under the wind-up it never
