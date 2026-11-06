@@ -28,6 +28,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   so critical strike chance on Emberbound gear and passives pays off.
 - Kindling Hex winds up as fast as Ember Bolt (0.3 seconds, was 0.5), so
   cursing a pack no longer costs more time than it saves.
+- Strike's gem level 15 widens its swing to 240 degrees instead of a full
+  circle. The free attack no longer replaces Ground Slam.
 
 ## [0.7.1] - 2026-11-04
 

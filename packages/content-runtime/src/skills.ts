@@ -267,7 +267,8 @@ const SKILL_DEFS: SkillDef[] = [
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "reachFixed", perMille: 15 } },
       breakpoints: [
         { atLevel: 5, text: "Swings a wider arc", patch: { arcDegrees: 200 } },
-        { atLevel: 15, text: "Swings all the way around you", patch: { arcDegrees: 360 } },
+        // Not all round: at 360 a free swing replaced Ground Slam (balance report 4 Nov, rank 7).
+        { atLevel: 15, text: "Swings a wider arc still", patch: { arcDegrees: 240 } },
       ],
     },
     effects: [

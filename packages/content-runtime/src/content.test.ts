@@ -20,7 +20,7 @@ import {
   DEFAULT_ATTACK_BY_CLASS,
   UTILITY_SKILLS,
 } from "./index.js";
-import { CLASS_IDS } from "@exiled/rules";
+import { CLASS_IDS, effectiveSkill } from "@exiled/rules";
 
 describe("CONTENT_VERSION", () => {
   it('=== "slice1.v1"', () => {
@@ -348,6 +348,16 @@ describe("DEFAULT_ATTACK_BY_CLASS", () => {
     }
   });
 
+  // One rule for all three (balance report 4 Nov, rank 7): the gem-15 step adds about
+  // one more body, as Snap Shot's and Ember Spark's second pierce do. At 360 Strike
+  // took over Ground Slam's area role for no mana.
+  it("never hits all the way round, even at gem 20", () => {
+    for (const id of Object.values(DEFAULT_ATTACK_BY_CLASS)) {
+      const eff = effectiveSkill(SKILLS.get(id)!, 20).effects[0]!;
+      if (eff.type === "meleeStrike") expect(eff.arcDegrees, id).toBeLessThan(360);
+    }
+  });
+
   it("gives the three classes three different attacks", () => {
     const ids = Object.values(DEFAULT_ATTACK_BY_CLASS);
     expect(new Set(ids).size).toBe(ids.length);
@@ -502,7 +512,7 @@ describe("skill unlocks and growth", () => {
       own: { field: "reachFixed", perMille: 15 },
       breakpoints: [
         { atLevel: 5, patch: { arcDegrees: 200 } },
-        { atLevel: 15, patch: { arcDegrees: 360 } },
+        { atLevel: 15, patch: { arcDegrees: 240 } },
       ],
     },
     "skill.snap_shot.v1": {
