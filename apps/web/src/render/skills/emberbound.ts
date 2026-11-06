@@ -960,7 +960,7 @@ function heraldCast(ctx: LookContext, body: ActorRef): FxHandle<ActorRef> {
   const scene = ctx.scene;
   let b = body;
   const pools = kitPools(scene);
-  let owed = 0;
+  let owed = 0, glowing = 0;
   const fx = new Fx((f, dt) => {
     const p = posOf(b);
     owed += dt * 30 * f.fade;
@@ -970,6 +970,17 @@ function heraldCast(ctx: LookContext, body: ActorRef): FxHandle<ActorRef> {
         x: p.x + Math.sin(a) * d, y: p.y + rand(0.2, 1.4), z: p.z + Math.cos(a) * d,
         vx: -Math.sin(a) * 3 + Math.cos(a) * 2, vy: 0.4, vz: -Math.cos(a) * 3 - Math.sin(a) * 2, drag: 2,
         life: 0.35, size: 0.18, sizeEnd: 0.08, r: ASH[0], g: ASH[1], b: ASH[2], a: 0.55, r1: 0.2, g1: 0.19, b1: 0.18,
+      });
+    }
+    // Grey ash alone vanishes on a dark floor; live embers ride the same spiral in.
+    glowing += dt * 20 * f.fade;
+    for (; glowing >= 1; glowing--) {
+      const a = Math.random() * TAU, d = rand(1.2, 1.8);
+      pools.motes.emit({
+        x: p.x + Math.sin(a) * d, y: p.y + rand(0.2, 1.4), z: p.z + Math.cos(a) * d,
+        vx: -Math.sin(a) * 3 + Math.cos(a) * 2, vy: 0.4, vz: -Math.cos(a) * 3 - Math.sin(a) * 2, drag: 2,
+        life: 0.35, size: 0.08, thick: 0.018, stretch: 0.05,
+        r: 1, g: 0.75, b: 0.35, a: 0.95, r1: DEEP[0], g1: DEEP[1], b1: DEEP[2],
       });
     }
     return true;

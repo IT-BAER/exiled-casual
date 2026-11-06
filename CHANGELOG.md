@@ -89,6 +89,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Stacked fire glows orange to white instead of lemon yellow.
 - Lightning Arrow cast right after Sniper's Mark draws and looses the bow
   instead of holding it still.
+- Herald of Ash's wind-up draws glowing embers in with the ash, so it shows on
+  dark floors.
+- Ember Spark's bolt and impact are a little larger and easier to follow.
 - Infernal Cry and Determination no longer hide the character's body, and
   Haste gathers wind before the buff starts.
 - Mother Vhal's tendrils no longer tear while she walks, the Cinder Warden's
