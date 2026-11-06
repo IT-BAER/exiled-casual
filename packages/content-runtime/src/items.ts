@@ -357,6 +357,18 @@ const AFFIXES: Affix[] = [
   { id: "affix.attack_cold", kind: "prefix", nameWord: "Frosted", stat: "attackColdDamage", label: "Cold Damage to Attacks", minItemLevel: 1, min: 1, max: 8, itemClasses: ["ring"] },
 ];
 
+/**
+ * A mod only a unique carries. Its stat is one no AFFIXES entry has, so no rare can
+ * roll it: the unique brings a mechanic, not a bigger number (PoE Wiki: uniques are
+ * "less powerful overall" than rares but "offer unique gameplay"). `#` is the roll.
+ */
+export interface UniqueMod { id: string; stat: string; text: string }
+
+export const UNIQUE_MODS: readonly UniqueMod[] = [
+  // PoE2's wand suffix "+# to Level of all Fire Spell Skills".
+  { id: "unique.fire_spell_levels", stat: "fireSpellLevels", text: "+# to Level of all Fire Spell Skills" },
+];
+
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
 // beat the shared affix pool's ranges; flavour is the italic orange line in the tooltip
 // (reference-screenshots/item-unique.png).
@@ -370,7 +382,7 @@ const UNIQUES: UniqueItem[] = [
     mods: [
       { affixId: "affix.fire_dmg", min: 22, max: 34 },
       { affixId: "affix.cast_speed", min: 14, max: 20 },
-      { affixId: "affix.mana", min: 20, max: 30 },
+      { affixId: "unique.fire_spell_levels", min: 1, max: 1 },
     ],
   },
   {
@@ -495,7 +507,10 @@ for (const b of [...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE]) {
 // an inverted range, or two uniques sharing the display name describeItem looks them up by.
 {
   const baseIds = new Set(ITEM_BASES.map((b) => b.id));
-  const affixIds = new Set(AFFIXES.map((a) => a.id));
+  const affixIds = new Set([...AFFIXES, ...UNIQUE_MODS].map((a) => a.id));
+  for (const m of UNIQUE_MODS) {
+    if (AFFIXES.some((a) => a.stat === m.stat)) throw new Error(`[content-runtime] Unique mod "${m.id}": a rare can roll stat "${m.stat}"`);
+  }
   const names = new Set<string>();
   for (const u of UNIQUES) {
     const bad = (msg: string) => { throw new Error(`[content-runtime] Invalid unique "${u.id}": ${msg}`); };
@@ -514,6 +529,7 @@ export const ITEM_POOLS: ItemPools = { bases: ITEM_BASES, affixes: AFFIXES, uniq
 
 const BASE_BY_ID = new Map([...ITEM_BASES, ...CURRENCY_BASES, WAYSTONE_BASE].map((b) => [b.id, b]));
 const AFFIX_BY_ID = new Map(AFFIXES.map((a) => [a.id, a]));
+const UNIQUE_MOD_BY_ID = new Map(UNIQUE_MODS.map((m) => [m.id, m]));
 const UNIQUE_BY_NAME = new Map(UNIQUES.map((u) => [u.name, u]));
 
 /** The id a base is known by today, so a save written before a rename still matches. */
@@ -540,7 +556,7 @@ export function itemStatMods(item: Item): { stat: string; value: number }[] {
   if (base.stats?.armour) mods.push({ stat: "armour", value: base.stats.armour });
   if (base.implicit) mods.push({ stat: base.implicit.stat, value: base.implicit.value });
   for (const ia of item.affixes) {
-    const a = AFFIX_BY_ID.get(ia.affixId);
+    const a = AFFIX_BY_ID.get(ia.affixId) ?? UNIQUE_MOD_BY_ID.get(ia.affixId);
     if (a) mods.push({ stat: a.stat, value: ia.value });
   }
   return mods;
@@ -738,7 +754,8 @@ export function describeItem(item: Item): ItemDescription {
   const lines = currency ? [currency.line]
     : (item.unidentified === true ? [] : item.affixes.map((ia) => {
       const a = AFFIX_BY_ID.get(ia.affixId);
-      return a ? affixLine(ia.value, a.label) : `+${ia.value} ${ia.affixId}`;
+      const u = UNIQUE_MOD_BY_ID.get(ia.affixId);
+      return a ? affixLine(ia.value, a.label) : u ? u.text.replace("#", String(ia.value)) : `+${ia.value} ${ia.affixId}`;
     }));
   const d: ItemDescription = {
     name: item.unidentified === true ? base.name : item.name ?? base.name,

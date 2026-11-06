@@ -2,7 +2,10 @@ import { baseCasterStats, applyItemMods, levelBonus, passiveStatMods, START_LEVE
 import { itemStatMods } from "@exiled/content-runtime";
 import { ELEMENTS } from "@exiled/content-schema";
 import type { World } from "./ecs";
-import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC, EnergyShieldC, SessionC } from "./components";
+import type { Health, Mana, DefensesC, OffenseC, EquipmentC, ProgressC, EnergyShieldC, SessionC, GearModsC } from "./components";
+
+/** The stat ids a unique-only mod carries, each a GearModsC field. */
+const GEAR_MOD_STATS: readonly (keyof GearModsC)[] = ["fireSpellLevels"];
 
 /**
  * Recompute the player's gear-derived stats from scratch: base block + every
@@ -94,6 +97,20 @@ export function recomputePlayerStats(world: World, opts: { refill?: boolean } = 
   // Removing at zero keeps the component out of a bare world entirely. The store
   // itself is only created once something grants spell damage, which is what
   // holds the golden replays' serialized state byte-identical to before.
+  // Unique-only mechanics, summed per stat; absent unless something worn grants one.
+  const gear: GearModsC = {};
+  for (const m of mods) {
+    if ((GEAR_MOD_STATS as readonly string[]).includes(m.stat)) {
+      const k = m.stat as keyof GearModsC;
+      gear[k] = (gear[k] ?? 0) + m.value;
+    }
+  }
+  if (Object.keys(gear).length === 0) {
+    if (world.has(player, "gearMods")) world.remove(player, "gearMods");
+  } else {
+    world.set<GearModsC>(player, "gearMods", gear);
+  }
+
   if (s.spellDamagePct === 0 && s.castSpeedPct === 0 && s.critChancePct === 0) {
     if (world.has(player, "offense")) world.remove(player, "offense");
   } else {

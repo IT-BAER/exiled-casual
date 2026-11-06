@@ -13,6 +13,7 @@ import { grantSkills } from "./persist";
 import type {
   AilmentC,
   Position, Health, Mana, MonsterC, BossC, TelegraphC, SessionC, InteractableC, SkillsC, ProgressC, StrikeC,
+  GearModsC,
 } from "./components";
 
 /**
@@ -845,6 +846,18 @@ describe("buildSnapshot - skills", () => {
     const bolt = snap.skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
     expect(bolt.breakpoints).toEqual(["Pierces one enemy"]);
     expect(bolt.nextBreakpoint).toEqual({ atLevel: 15, text: "Pierces three enemies" });
+  });
+
+  it("quotes a fire spell at the level worn gear raises it to, and says by how much", () => {
+    const { world, sim, sessionE } = setupSkillsWorld(42, 10, 0);
+    setGem(world, sessionE, "skill.ember_bolt.v1", 4);
+    const player = world.query("player")[0]!;
+    world.set<GearModsC>(player, "gearMods", { fireSpellLevels: 1 });
+    const bolt = buildSnapshot(world, sim, 0, CONTENT_VERSION).skills!.find((s) => s.id === "skill.ember_bolt.v1")!;
+    // Gem 4 + 1 reaches the gem 5 breakpoint, as the cast does.
+    expect(bolt.gemLevel).toBe(4);
+    expect(bolt.gemLevelBonus).toBe(1);
+    expect(bolt.breakpoints).toEqual(["Pierces one enemy"]);
   });
 
   it("drops nextBreakpoint once the last one is reached", () => {

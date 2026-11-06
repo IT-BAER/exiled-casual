@@ -1,6 +1,6 @@
 import { fp, fpClamp, fpStepToward, isqrt, FP_SCALE, type Fixed } from "@exiled/fixed-point";
 import { createStream } from "../rng";
-import { scalePct, effectiveSkill } from "@exiled/rules";
+import { scalePct, effectiveSkill, isFireSpell } from "@exiled/rules";
 import type { EffectNode, SkillDef } from "@exiled/content-schema";
 import { UTILITY_SKILLS } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
@@ -10,6 +10,7 @@ import { sweep, type Collision, type CollisionRef } from "../collision";
 import type {
   Position, PlayerC, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SkillHoldC,
   SkillsC, StrikeC, RollC, BuffsC, BuffEntry, HitPart, MoveDir, MoveTarget, SkillAreaC, TravelC, MonsterC, CastReleaseC,
+  GearModsC,
 } from "../components";
 import { damageCode } from "../damage-types";
 import { bodyRadiusOf } from "../body";
@@ -65,14 +66,15 @@ export function registerSkillCast(
   const SKILL_HOLD_TICKS = 3;
 
   /**
-   * The gem level this caster has in this skill, or 1. One lookup per cast: the
-   * fold is a handful of integer ops, and caching it would need an invalidation
-   * rule for every character level, every load and every respec.
+   * The gem level this caster has in this skill, or 1, plus what worn gear adds
+   * to a fire spell. One lookup per cast: the fold is a handful of integer ops, and
+   * caching it would need an invalidation rule for every level, load and respec.
    */
-  const gemLevelFor = (world: World, skillId: string): number => {
+  const gemLevelFor = (world: World, caster: Entity, skill: SkillDef): number => {
     const e = world.query("session")[0];
-    if (e === undefined) return 1;
-    return world.get<SkillsC>(e, "skills")?.gems[skillId]?.level ?? 1;
+    const gem = e === undefined ? 1 : world.get<SkillsC>(e, "skills")?.gems[skill.id]?.level ?? 1;
+    const worn = isFireSpell(skill) ? world.get<GearModsC>(caster, "gearMods")?.fireSpellLevels ?? 0 : 0;
+    return gem + worn;
   };
 
   /**
@@ -515,7 +517,7 @@ export function registerSkillCast(
       const scroll = cmd.data?.["scroll"] === 1;
       if (base.effects.some((e) => e.type === "openPortal") && !canOpenPortal(world, caster, scroll)) continue;
 
-      const gemLevel = gemLevelFor(world, cmd.skillId);
+      const gemLevel = gemLevelFor(world, caster, base);
       const skill = effectiveSkill(base, gemLevel);
 
       const offense = world.get<OffenseC>(caster, "offense");

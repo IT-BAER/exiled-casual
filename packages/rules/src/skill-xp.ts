@@ -122,7 +122,8 @@ function scaleDamage(effect: EffectNode, pct: number, times: number): EffectNode
  * why the schema refuses a patch of the same field the growth grows.
  */
 export function effectiveSkill(def: SkillDef, gemLevel: number): SkillDef {
-  const level = maxGemLevel(gemLevel);
+  // Not capped at MAX_GEM_LEVEL: worn +levels take a gem 20 to 21, as in PoE.
+  const level = Math.max(1, Math.trunc(gemLevel));
   const steps = level - 1;
   const { damagePct, manaPct, own } = def.growth.perLevel;
 
@@ -151,6 +152,14 @@ export function effectiveSkill(def: SkillDef, gemLevel: number): SkillDef {
   }
 
   return { ...def, manaCostFixed: compound(def.manaCostFixed, manaPct, steps), effects };
+}
+
+/**
+ * A spell that deals fire: a fire hit, or a burning it lays. PoE tags it Fire and
+ * Spell, which is what "+1 to Level of all Fire Spell Skills" reads.
+ */
+export function isFireSpell(def: SkillDef): boolean {
+  return def.kind === "spell" && /"type":"fire"|"kind":"burning"/.test(JSON.stringify(def.effects));
 }
 
 /** Every breakpoint this gem has already crossed, in authored order. */

@@ -5,7 +5,7 @@ import { damageCode, damageTypeOf } from "./damage-types";
 import { beatCooldownTicks, hitParts, weaponHit } from "./weapon";
 import { summarizeHits } from "./death-recap";
 import { VENDOR_COLS, VENDOR_ROWS, unpayShards } from "./vendor";
-import { cartographerPrice, areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, reachedBreakpoints, nextBreakpoint, gemXpToNext, FREEZE_DECAY_TICKS } from "@exiled/rules";
+import { cartographerPrice, areaLevel, monsterTierScale, physicalMitigationPct, scalePct, xpToNext, START_LEVEL, vendorBuyPrice, passivePoints, DEFAULT_CLASS_ID, effectiveSkill, isFireSpell, reachedBreakpoints, nextBreakpoint, gemXpToNext, FREEZE_DECAY_TICKS } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { attackAddedDamage, describeItem, SKILLS, TOWN_PORTAL_SKILL, defaultAttackFor, spellAddedDamage, weaponDamage } from "@exiled/content-runtime";
 import type { Command, Simulation } from "./loop";
@@ -13,7 +13,7 @@ import type { World, Entity } from "./ecs";
 import type {
   Health, Mana, Position, Cooldowns, CastingC, StrikeC, CastReleaseC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
-  SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC,
+  SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC, GearModsC,
   EnergyShieldC, ShardsC, BuybackC, MoveDir, SkillsC, SkillHoldC, RollC, SkillAreaC, TravelC, BuffsC,
 } from "./components";
 import { activeStatuses, isStunned, reservedMana } from "./status";
@@ -273,10 +273,15 @@ function describeSkills(
   const out: DisplaySkill[] = [];
   // Driven off the GEMS, not off SKILLS: a locked skill must not reach the client
   // at all, or the bar offers a socket the sim will refuse.
+  const player = world.query("player")[0];
+  const fireSpellLevels = player === undefined ? 0 : world.get<GearModsC>(player, "gearMods")?.fireSpellLevels ?? 0;
   for (const [id, gem] of Object.entries(skills?.gems ?? {})) {
     const authored = SKILLS.get(id);
     if (!authored) continue;
-    const def = effectiveSkill(authored, gem.level);
+    // The level the cast reads (skillCast's gemLevelFor), so the tooltip is the cast.
+    const bonus = isFireSpell(authored) ? fireSpellLevels : 0;
+    const level = gem.level + bonus;
+    const def = effectiveSkill(authored, level);
     // Same floor skillCast applies: a cast never drops below one tick.
     const castTicks = def.castTicks
       ? timingScale > 0
@@ -314,7 +319,7 @@ function describeSkills(
       }
       lines.push(...effectLines(effect));
     }
-    const nb = nextBreakpoint(authored, gem.level);
+    const nb = nextBreakpoint(authored, level);
     const skill: DisplaySkill = {
       id: def.id,
       name: def.name,
@@ -324,9 +329,10 @@ function describeSkills(
       cooldownSec: cooldownTicks / 30,
       lines,
       gemLevel: gem.level,
+      ...(bonus ? { gemLevelBonus: bonus } : {}),
       gemXp: gem.xp,
       gemXpToNext: gemXpToNext(gem.level),
-      breakpoints: reachedBreakpoints(authored, gem.level).map((b) => b.text),
+      breakpoints: reachedBreakpoints(authored, level).map((b) => b.text),
       ...(nb ? { nextBreakpoint: { atLevel: nb.atLevel, text: nb.text } } : {}),
     };
     // No hit damage means no DPS column, the way PoE drops it for a movement skill.

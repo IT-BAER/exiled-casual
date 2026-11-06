@@ -604,6 +604,8 @@ export interface DisplaySkill {
   lines: string[];
   /** The gem's level, 1..20. */
   gemLevel: number;
+  /** Levels worn gear adds on top (Ashmaw); every number above is quoted at gemLevel + this. */
+  gemLevelBonus?: number;
   /** Experience banked toward the next gem level, and what it costs. 0 at the cap. */
   gemXp: number;
   gemXpToNext: number;

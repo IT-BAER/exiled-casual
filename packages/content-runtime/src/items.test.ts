@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { FAMILY_BY_CLASS, areaLevel, familyOf, rollItem } from "@exiled/rules";
-import { ITEM_POOLS, UNARMED, baseOf, describeItem, itemStatMods, spellAddedDamage, waystoneItem, weaponDamage } from "./items.js";
+import { ITEM_POOLS, UNIQUE_MODS, UNARMED, baseOf, describeItem, itemStatMods, spellAddedDamage, waystoneItem, weaponDamage } from "./items.js";
 
 describe("ITEM_POOLS", () => {
   it("has bases and affixes with positive base dimensions", () => {
@@ -107,10 +107,24 @@ describe("uniques", () => {
       expect(() => baseOf(u.baseId)).not.toThrow();
       expect(u.flavour.length).toBeGreaterThan(0);
       for (const m of u.mods) {
-        expect(ITEM_POOLS.affixes.some((a) => a.id === m.affixId)).toBe(true);
+        expect([...ITEM_POOLS.affixes, ...UNIQUE_MODS].some((a) => a.id === m.affixId), m.affixId).toBe(true);
         expect(m.min).toBeLessThanOrEqual(m.max);
       }
     }
+  });
+
+  /** A unique as it reads once identified, every mod at its lowest roll. */
+  const worn = (name: string) => {
+    const u = ITEM_POOLS.uniques!.find((x) => x.name === name)!;
+    return { baseId: u.baseId, rarity: "unique" as const, itemLevel: 82, name, affixes: u.mods.map((m) => ({ affixId: m.affixId, value: m.min })) };
+  };
+
+  it("Ashmaw raises every fire spell a level, in place of its mana", () => {
+    const item = worn("Ashmaw");
+    expect(item.affixes).toHaveLength(3);
+    expect(describeItem(item).lines).toContain("+1 to Level of all Fire Spell Skills");
+    expect(describeItem(item).lines.some((l) => l.includes("Mana"))).toBe(false);
+    expect(itemStatMods(item)).toContainEqual({ stat: "fireSpellLevels", value: 1 });
   });
 
   it("gives every class family the same number of uniques", () => {

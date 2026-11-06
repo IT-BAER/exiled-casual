@@ -9,7 +9,7 @@ import { gridCollision } from "../collision";
 import { makeGrid } from "../test-grid";
 import type { SkillDef } from "@exiled/content-schema";
 import { SKILLS } from "@exiled/content-runtime";
-import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC, StrikeC, PlayerC } from "../components";
+import type { Position, Mana, Faction, Cooldowns, ProjectileC, GroundAreaC, CastingC, OffenseC, Health, SessionC, SkillsC, StrikeC, PlayerC, GearModsC } from "../components";
 
 // Authored skill defs matching the contract tables exactly.
 const EMBER_BOLT: SkillDef = {
@@ -719,6 +719,29 @@ describe("registerSkillCast", () => {
       // Damage's ratio to base (42233/25000) beats mana's ratio to base
       // (11381/8000), checked by cross-multiplication to stay integer.
       expect(proj.damageAmount * fp(8)).toBeGreaterThan(manaSpent * fp(25));
+    });
+
+    it("worn fire spell levels raise a fire spell's gem, past 20, and nothing else's", () => {
+      const FIRE: SkillDef = { ...EMBER_BOLT, id: "skill.test_fire_spell.v1", kind: "spell" };
+      const COLD: SkillDef = {
+        ...FIRE, id: "skill.test_cold_spell.v1",
+        effects: [{ ...EMBER_BOLT.effects[0]!, damage: { type: "cold", amountFixed: fp(25) } } as SkillDef["effects"][0]],
+      };
+      const ATTACK: SkillDef = { ...EMBER_BOLT, id: "skill.test_fire_attack.v1", kind: "attack" };
+      const boltAt = (skill: SkillDef, level: number, fireSpellLevels: number): number => {
+        const sim = new Simulation();
+        registerSkillCast(sim, new Map([[skill.id, skill]]));
+        makeSessionWithGem(sim, skill.id, level);
+        const caster = makeCaster(sim, fp(60));
+        if (fireSpellLevels) sim.world.set<GearModsC>(caster, "gearMods", { fireSpellLevels });
+        sim.step([{ tick: 0, entity: caster, type: "useSkill", skillId: skill.id, data: { tx: fp(10), ty: 0 } }]);
+        return sim.world.get<ProjectileC>(sim.world.query("projectile")[0]!, "projectile")!.damageAmount;
+      };
+      // The gem 10 bolt pinned above: trunc(25000 * 1.06^9).
+      expect(boltAt(FIRE, 9, 1)).toBe(42233);
+      expect(boltAt(FIRE, 20, 1)).toBeGreaterThan(boltAt(FIRE, 20, 0));
+      expect(boltAt(COLD, 9, 1)).toBe(boltAt(COLD, 9, 0));
+      expect(boltAt(ATTACK, 9, 1)).toBe(boltAt(ATTACK, 9, 0));
     });
 
     it("a gem 5 caster's bolt pierces, a gem 4 caster's does not", () => {

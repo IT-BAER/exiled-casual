@@ -12,6 +12,10 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ### Changed
 
+- Ashmaw gives +1 to Level of all Fire Spell Skills instead of maximum Mana.
+  The skill tooltip shows the raised level, for example "Level 8 (+1)", and a
+  gem at level 20 casts as level 21.
+
 - Monsters hit harder from map tier 3 up, and bosses have more life from tier 4
   up. Tiers 1 and 2 are unchanged. A tier 10 monster now hits about three
   times as hard as before, and a tier 10 boss has about twice its old life, so

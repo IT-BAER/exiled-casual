@@ -54,7 +54,10 @@ export function SkillTooltip(
               so the level rides the name line instead, dim rather than gold so
               it reads as metadata. The header grows past its 430px minimum
               rather than clipping a column, since every value is nowrap. */}
-          <span style={{ marginLeft: 8, fontSize: 12, color: GOLD_DIM }}>{`Level ${skill.gemLevel}`}</span>
+          <span style={{ marginLeft: 8, fontSize: 12, color: GOLD_DIM }}>
+            {`Level ${skill.gemLevel + (skill.gemLevelBonus ?? 0)}`}
+            {skill.gemLevelBonus ? <span style={{ color: MODIFIER }}>{` (+${skill.gemLevelBonus})`}</span> : null}
+          </span>
         </div>
         {skill.dps !== undefined && <Stat label="DPS" value={String(Math.round(skill.dps))} />}
         <Stat label="Cost" value={`${skill.manaCost} Mana`} />

@@ -36,6 +36,12 @@ describe("SkillTooltip gem level", () => {
     expect(screen.getByTestId("skill-tooltip")).toHaveTextContent("Level 7");
   });
 
+  it("shows the level worn gear adds, in modifier blue", () => {
+    renderTip(makeSkill({ gemLevel: 7, gemLevelBonus: 1 }));
+    expect(screen.getByTestId("skill-tooltip")).toHaveTextContent("Level 8 (+1)");
+    expect(screen.getByText("(+1)").style.color).toBe("rgb(136, 136, 255)");
+  });
+
   // jsdom does no layout, so the clip is only reachable through the rule that
   // caused it: a fixed width the four stat columns cannot fit in.
   it("sizes the header to its columns rather than clipping the last one", () => {

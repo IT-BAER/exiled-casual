@@ -7,7 +7,7 @@ import { intentToCommand, buildSnapshot } from "./protocol-bridge";
 import { saveTo, loadInto, VERSION } from "./persist";
 import { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 import { CONTENT_VERSION, wisdomScroll, currencyItem } from "@exiled/content-runtime";
-import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC, ProgressC } from "./components";
+import type { InventoryC, EquipmentC, Position, Health, Mana, DefensesC, OffenseC, ProgressC, GearModsC } from "./components";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -602,6 +602,22 @@ describe("derived player stats", () => {
     sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
 
     expect(world.get<OffenseC>(playerEntity, "offense")!.spellDamagePct).toBe(12);
+  });
+
+  it("a unique-only mod lands on the player while worn and leaves with the piece", () => {
+    const { world, sim, playerEntity } = makeWorld();
+    atLevel(world, 8);
+    clearInv(world);
+    const ashmaw: Item = {
+      baseId: "base.ember_wand", rarity: "unique", itemLevel: 65, name: "Ashmaw",
+      affixes: [{ affixId: "unique.fire_spell_levels", value: 1 }],
+    };
+    placeInInv(world, ashmaw, 0, 0, 1, 2);
+    expect(world.has(playerEntity, "gearMods")).toBe(false);
+    sim.step([intentToCommand({ kind: "equipItem", x: 0, y: 0, slot: "weapon1" }, playerEntity, 0)]);
+    expect(world.get<GearModsC>(playerEntity, "gearMods")).toEqual({ fireSpellLevels: 1 });
+    sim.step([intentToCommand({ kind: "unequipItem", slot: "weapon1" }, playerEntity, 1)]);
+    expect(world.has(playerEntity, "gearMods")).toBe(false);
   });
 
   it("unequipping takes the mods back off", () => {

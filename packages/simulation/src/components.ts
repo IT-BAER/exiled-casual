@@ -424,6 +424,14 @@ export interface EnergyShieldC { es: Fixed; maxEs: Fixed; rechargeAtTick: number
  * ungeared world serializes exactly as it did before gear existed.
  */
 export interface OffenseC   { spellDamagePct: number; castSpeedPct: number; critChancePct: number }
+/**
+ * What worn uniques grant that no rare can roll. Only present while one is worn,
+ * so an ungeared world serializes exactly as it did before, like OffenseC.
+ */
+export interface GearModsC {
+  /** +N to the level of every fire spell (Ashmaw). */
+  fireSpellLevels?: number;
+}
 export interface ProjectileC {
   dirx: Fixed;
   diry: Fixed;
