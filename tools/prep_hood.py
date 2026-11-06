@@ -46,7 +46,8 @@ SKIN_SKIP = ("eyes", "brows", "hair")   # body parts that are not a surface to l
 # `-- female` drapes them over her wardrobe instead (`W.BODY`), into her own files.
 REVIEW += W.SUFFIX
 LOOKS = {
-    "stalker": {"stem": "hood-stalker-v2" + W.SUFFIX, "worn": ("chest.stalker.coat", "chest.stalker.gorget")},
+    "stalker": {"stem": "hood-stalker-v2" + W.SUFFIX, "worn": ("chest.stalker.coat", "chest.stalker.gorget"),
+                "flat_back": True},
     "ember": {"stem": "hood-ember-v2" + W.SUFFIX, "worn": ("chest.ember.robe", "chest.ember.gorget")},
 }
 BONES = W.HOOD_BONES
@@ -80,6 +81,10 @@ SMOOTH_PASSES = 3         # across columns, row by row
 HEM_PASSES = 12           # the hem line's own low-pass round the neck
 FOLDS = 13                # soft folds round the capelet, outward only
 FOLD_AMP = 0.008
+# A look with `flat_back` lies smooth over the upper back, where the quiver rests:
+# no folds within BACK_FLAT of the spine, easing back in over BACK_FADE.
+BACK_FLAT = math.radians(50)
+BACK_FADE = math.radians(30)
 # Below the cut everything rides what it lies on; the pack's own weights take
 # back over by RIDE_TOP above it, under the jaw. A band on the pack's weights
 # alone let a raised shoulder come up through it.
@@ -473,7 +478,16 @@ def surface_weights(surf, hit, tri):
     return {g: w / total for g, w in mix.items()} if total > 0 else {}
 
 
-def capelet(bm, surf, ring, deform, groups):
+def fold_share(theta, flat_back):
+    """How much of the fold a column at theta carries: none over a flat back."""
+    if not flat_back:
+        return 1.0
+    off_spine = abs(math.remainder(theta - math.pi, 2 * math.pi))
+    t = min(1.0, max(0.0, (off_spine - BACK_FLAT) / BACK_FADE))
+    return t * t * (3 - 2 * t)
+
+
+def capelet(bm, surf, ring, deform, groups, flat_back=False):
     """Columns down from every ring vertex and every throat vertex, closed round the
     neck; each row's weights run from its top's into the surface's under it."""
     c = surf["centre"]
@@ -509,7 +523,8 @@ def capelet(bm, surf, ring, deform, groups):
         out = Vector((math.sin(thetas[i]), -math.cos(thetas[i]), 0.0))
         col = [top[i]]
         for k in range(1, ROWS + 1):
-            fold = FOLD_AMP * (k / ROWS) ** 1.5 * (1 + math.sin(FOLDS * thetas[i])) / 2
+            fold = (FOLD_AMP * (k / ROWS) ** 1.5 * (1 + math.sin(FOLDS * thetas[i])) / 2
+                    * fold_share(thetas[i], flat_back))
             col.append(bm.verts.new(pts[i][k] + out * fold))
         grid.append(col)
     for i in range(n):
@@ -728,7 +743,7 @@ def build(look, spec):
     # The band settles before the capelet hangs from it, or moving the ring after
     # would drag the capelet's top rows up through each other.
     nudged = nudge_clear(bm, surf)
-    made, cap = capelet(bm, surf, ring, deform, groups)
+    made, cap = capelet(bm, surf, ring, deform, groups, spec.get("flat_back", False))
     # Again over the throat, whose top row the capelet only just made.
     throat_collar, _ = over_collar(bm, surf, only=made)
     nudged += nudge_clear(bm, surf, only=made)
@@ -819,7 +834,9 @@ def build(look, spec):
             "throat_over_collar": throat_collar, "nudges": nudged,
             "ride_top_m": RIDE_TOP, "ridden": ridden,
             "capelet": cap, "gap_mm": GAP * 1000, "wall_mm": WALL * 1000, "hem_radius_m": HEM_RADIUS,
-            "fold": {"count": FOLDS, "amp_mm": FOLD_AMP * 1000},
+            "fold": {"count": FOLDS, "amp_mm": FOLD_AMP * 1000,
+                     "flat_back_deg": [round(math.degrees(BACK_FLAT)), round(math.degrees(BACK_FADE))]
+                     if spec.get("flat_back") else None},
             "vertices": verts_back, "triangles": tris, "triangles_reloaded": tris_back,
             "self_crossings": crossings, "shell_through_worn": shell_through,
             "lining_through_worn": through,

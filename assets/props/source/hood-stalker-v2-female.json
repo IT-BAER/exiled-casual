@@ -34,16 +34,20 @@
  "hem_radius_m": 0.2,
  "fold": {
   "count": 13,
-  "amp_mm": 8.0
+  "amp_mm": 8.0,
+  "flat_back_deg": [
+   50,
+   30
+  ]
  },
- "vertices": 4791,
+ "vertices": 4804,
  "triangles": 7648,
  "triangles_reloaded": 7648,
  "self_crossings": 0,
  "shell_through_worn": 0,
- "lining_through_worn": 27,
- "clearance_p01_mm": 5.81,
- "clearance_median_mm": 24.22,
+ "lining_through_worn": 33,
+ "clearance_p01_mm": 5.77,
+ "clearance_median_mm": 23.97,
  "paint_faces": [
   3688,
   3688,

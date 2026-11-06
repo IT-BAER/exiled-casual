@@ -3375,8 +3375,10 @@ def fit_back_quiver(donor, body, rig):
             room[k] = min(room.get(k, 1.0), d - QUIVER_BEND_GAP)
     # Slope-limited lower envelope of the room, smoothed, then lowered by its
     # worst excess so the smooth curve never asks for more than a slice allows.
+    # A slice's room may lie anywhere in it, so the slope runs from its nearer edge.
     grid = [i * 0.01 for i in range(int(length / 0.01) + 2)]
-    env = [min([max(0.0, r) + QUIVER_BEND_SLOPE * abs(z - (k + 0.5) * 0.02) for k, r in room.items()] or [0.0])
+    env = [min([max(0.0, r) + QUIVER_BEND_SLOPE * max(0.0, abs(z - (k + 0.5) * 0.02) - 0.01)
+                for k, r in room.items()] or [0.0])
            for z in grid]
     s = list(env)
     for _ in range(8):

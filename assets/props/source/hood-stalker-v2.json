@@ -4,6 +4,8 @@
   "chest.stalker.coat",
   "chest.stalker.gorget"
  ],
+ "body": "male",
+ "retarget_max_mm": 0.0,
  "cut_z": 1.545,
  "lining_and_trim_faces_dropped": 1112,
  "over_collar": 170,
@@ -32,16 +34,20 @@
  "hem_radius_m": 0.2,
  "fold": {
   "count": 13,
-  "amp_mm": 8.0
+  "amp_mm": 8.0,
+  "flat_back_deg": [
+   50,
+   30
+  ]
  },
- "vertices": 4652,
+ "vertices": 4643,
  "triangles": 7152,
  "triangles_reloaded": 7152,
  "self_crossings": 0,
  "shell_through_worn": 0,
  "lining_through_worn": 10,
- "clearance_p01_mm": 5.9,
- "clearance_median_mm": 14.79,
+ "clearance_p01_mm": 5.48,
+ "clearance_median_mm": 13.98,
  "paint_faces": [
   3451,
   3451,

@@ -81,6 +81,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The legs no longer stumble for a moment when a spell or a shot ends while
   you run. Only the arms ease back from the attack.
 - Sniper's Mark no longer swings the bow up at the sky after the shot.
+- The Stalker's hood lies smooth over the upper back, so a quiver sits closer
+  to the back instead of resting on the hood's folds.
 
 ## [0.7.1] - 2026-11-04
 
