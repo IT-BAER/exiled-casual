@@ -135,6 +135,14 @@ describe("uniques", () => {
     expect(itemStatMods(item)).toContainEqual({ stat: "manaOnKillPct", value: 3 });
   });
 
+  it("Cinderveil is unaffected by burning ground, in place of its armour", () => {
+    const item = worn("Cinderveil");
+    expect(item.affixes).toHaveLength(3);
+    expect(describeItem(item).lines).toContain("Unaffected by Burning Ground");
+    expect(describeItem(item).lines.some((l) => l.includes("Armour"))).toBe(false);
+    expect(itemStatMods(item)).toContainEqual({ stat: "unaffectedByBurningGround", value: 1 });
+  });
+
   it("gives every class family the same number of uniques", () => {
     const perFamily: Record<string, number> = {};
     for (const f of Object.values(FAMILY_BY_CLASS)) perFamily[f] = 0;

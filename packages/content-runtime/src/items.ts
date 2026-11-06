@@ -369,6 +369,8 @@ export const UNIQUE_MODS: readonly UniqueMod[] = [
   { id: "unique.fire_spell_levels", stat: "fireSpellLevels", text: "+# to Level of all Fire Spell Skills" },
   // PoE1's "Recover #% of Mana on Kill".
   { id: "unique.mana_on_kill", stat: "manaOnKillPct", text: "Recover #% of maximum Mana on Kill" },
+  // PoE1's "Unaffected by Burning Ground". A flag: rolled at 1, the text carries no number.
+  { id: "unique.unaffected_burning_ground", stat: "unaffectedByBurningGround", text: "Unaffected by Burning Ground" },
 ];
 
 // Named items bound to one base each. Mod ranges are the unique's own and deliberately
@@ -407,7 +409,7 @@ const UNIQUES: UniqueItem[] = [
     icon: "/textures/items/unique_cinderveil.webp",
     mods: [
       { affixId: "affix.life", min: 45, max: 70 },
-      { affixId: "affix.armour", min: 70, max: 110 },
+      { affixId: "unique.unaffected_burning_ground", min: 1, max: 1 },
       { affixId: "affix.fire_res", min: 20, max: 30 },
     ],
   },

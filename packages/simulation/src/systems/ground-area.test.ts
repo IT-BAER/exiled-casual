@@ -3,7 +3,7 @@ import { fp } from "@exiled/fixed-point";
 import { AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { registerGroundAreaTick } from "./ground-area";
-import type { Position, Health, MonsterC, PlayerC, Faction, GroundAreaC, AilmentC } from "../components";
+import type { Position, Health, MonsterC, PlayerC, Faction, GroundAreaC, AilmentC, GearModsC } from "../components";
 
 function makeArea(sim: Simulation, tick = 0, team = 0) {
   const e = sim.world.create();
@@ -108,6 +108,18 @@ describe("registerGroundAreaTick", () => {
     expect(ailment).toBeDefined();
     expect(ailment.stacks).toBe(1);
     expect(ailment.kind).toBe("burning");
+  });
+
+  it("a player unaffected by burning ground stands in it and does not burn", () => {
+    const sim = new Simulation();
+    registerGroundAreaTick(sim);
+    makeArea(sim, 0, 1);
+    const worn = makePlayer(sim, fp(1), 0, 0);
+    sim.world.set<GearModsC>(worn, "gearMods", { unaffectedByBurningGround: 1 });
+    const bare = makePlayer(sim, fp(-1), 0, 0);
+    sim.step();
+    expect(sim.world.has(worn, "ailment")).toBe(false);
+    expect(sim.world.get<AilmentC>(bare, "ailment")?.kind).toBe("burning");
   });
 
   it("same-team entity inside area gains no ailment", () => {

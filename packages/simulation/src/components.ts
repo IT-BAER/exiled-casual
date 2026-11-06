@@ -433,6 +433,8 @@ export interface GearModsC {
   fireSpellLevels?: number;
   /** Percent of maximum mana recovered on each kill (Emberchoir). */
   manaOnKillPct?: number;
+  /** Non-zero: a burning ground patch does not ignite him (Cinderveil). */
+  unaffectedByBurningGround?: number;
 }
 export interface ProjectileC {
   dirx: Fixed;

@@ -2,7 +2,7 @@ import { fpDist2 } from "@exiled/fixed-point";
 import { refreshBurning, AILMENT_TICK_INTERVAL } from "@exiled/rules";
 import { Simulation } from "../loop";
 import { bodyRadiusOf } from "../body";
-import type { Position, Faction, GroundAreaC, AilmentC } from "../components";
+import type { Position, Faction, GroundAreaC, AilmentC, GearModsC } from "../components";
 import { applyStatus } from "../status";
 
 /** What a slowing patch leaves on whoever stands in it, refreshed every ailment tick. */
@@ -27,7 +27,10 @@ export function registerGroundAreaTick(sim: Simulation): void {
         const threshold = ga.radius + mRadius;
         if (fpDist2(aPos.x, aPos.y, mPos.x, mPos.y) > threshold * threshold) continue;
 
-        if (due && ga.ailmentKind !== undefined) {
+        // PoE1's "Unaffected by Burning Ground" (Cinderveil): the patch's burning skips him.
+        const unaffected = ga.ailmentKind === "burning"
+          && (world.get<GearModsC>(m, "gearMods")?.unaffectedByBurningGround ?? 0) > 0;
+        if (due && ga.ailmentKind !== undefined && !unaffected) {
           const prev = world.get<AilmentC>(m, "ailment");
           const prevState = prev
             ? { kind: "burning" as const, stacks: prev.stacks, dpsFixed: prev.dps, expiryTick: prev.expiryTick }

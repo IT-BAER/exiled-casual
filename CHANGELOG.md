@@ -17,6 +17,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   gem at level 20 casts as level 21.
 - Emberchoir recovers 3% of maximum Mana on each kill instead of giving
   maximum Life.
+- Cinderveil makes you unaffected by burning ground instead of giving Armour:
+  a boss's burning ground no longer sets you on fire.
 
 - Monsters hit harder from map tier 3 up, and bosses have more life from tier 4
   up. Tiers 1 and 2 are unchanged. A tier 10 monster now hits about three
