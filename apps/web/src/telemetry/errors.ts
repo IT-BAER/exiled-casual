@@ -28,12 +28,31 @@ export function createErrorReporter(t: Telemetry, clock: () => number = () => Da
 
 export const reportError = createErrorReporter(telemetry);
 
+/**
+ * A thrown value that is not an Error, as "[type] text". Only an Error carries a
+ * message; for anything else Chrome's event reads "Uncaught " and nothing more.
+ */
+export function thrownText(v: unknown): string {
+  const type = typeof v === "object" && v !== null ? (v.constructor?.name || "Object") : typeof v;
+  let text = "";
+  try {
+    text = typeof v === "string" ? v : v instanceof Event ? v.type : JSON.stringify(v) ?? String(v);
+  } catch {
+    try { text = String(v); } catch { /* an object without a prototype has no toString */ }
+  }
+  return `[${type}] ${text}`;
+}
+
 /** `window` error and unhandledrejection. Returns the remover. */
 export function installErrorCapture(report = reportError): () => void {
-  const onError = (e: ErrorEvent) => report("window", e.message || String(e.error), (e.error as Error | undefined)?.stack, e.filename);
+  const onError = (e: ErrorEvent) => {
+    const v = e.error as unknown;
+    const msg = v instanceof Error || v == null ? e.message || String(v) : `Uncaught ${thrownText(v)}`;
+    report("window", msg, v instanceof Error ? v.stack : undefined, e.filename);
+  };
   const onRejection = (e: PromiseRejectionEvent) => {
     const r = e.reason as unknown;
-    report("promise", r instanceof Error ? r.message : String(r), r instanceof Error ? r.stack : undefined);
+    report("promise", r instanceof Error ? r.message : r == null ? String(r) : thrownText(r), r instanceof Error ? r.stack : undefined);
   };
   window.addEventListener("error", onError);
   window.addEventListener("unhandledrejection", onRejection);
