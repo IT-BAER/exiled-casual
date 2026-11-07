@@ -5,6 +5,7 @@ import { MainMenu } from "./MainMenu";
 import { ModeDialog } from "./ModeDialog";
 import { _setLiveConfig } from "../telemetry/liveops";
 import { DEFAULT_LIVE_CONFIG } from "@exiled/telemetry";
+import { NEWS_HISTORY } from "../news.generated";
 
 const gpu = vi.hoisted(() => ({ renderer: "" }));
 vi.mock("../gpu", async (actual) => ({ ...(await actual<typeof import("../gpu")>()), gpuRenderer: () => gpu.renderer }));
@@ -99,6 +100,21 @@ describe("MainMenu live ops", () => {
     const link = screen.getByRole("link", { name: /privacy/i }) as HTMLAnchorElement;
     expect(link.getAttribute("href")).toBe("/privacy.html");
     expect(link.target).toBe("_blank");
+  });
+});
+
+describe("MainMenu patch notes", () => {
+  const props = { characterCount: 0, onPlay: vi.fn(), onOptions: vi.fn(), onAbout: vi.fn() };
+  afterEach(cleanup);
+
+  it("lists the last five releases, newest first, each with its short notes", () => {
+    render(<MainMenu {...props} />);
+    const panel = screen.getByTestId("patch-notes");
+    const heads = [...panel.querySelectorAll("[data-version]")].map((h) => h.getAttribute("data-version"));
+    expect(heads).toEqual(NEWS_HISTORY.map((r) => r.version));
+    expect(panel.textContent).toContain(NEWS_HISTORY[0]!.entries[0]!);
+    // "2026-11-07" reads as a day and a month.
+    expect(panel.querySelector("[data-version]")!.textContent).toMatch(/\d{1,2} [A-Z][a-z]{2}/);
   });
 });
 

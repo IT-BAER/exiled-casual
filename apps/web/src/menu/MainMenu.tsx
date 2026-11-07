@@ -20,7 +20,7 @@
  */
 import React from "react";
 import { GAME_VERSION } from "../version";
-import { NEWS_ENTRIES } from "../news.generated";
+import { NEWS_ENTRIES, NEWS_HISTORY } from "../news.generated";
 import { Atmosphere } from "./atmos";
 import { BRAZIERS } from "./braziers";
 import { Divider, EMBER, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
@@ -96,6 +96,8 @@ export function MainMenu({
         </div>
       </FramedPanel>
 
+      <PatchNotes />
+
       <BootLog characterCount={characterCount} />
 
       <div
@@ -160,6 +162,75 @@ function LatestPanel(): React.ReactElement {
         </div>
       ))}
     </div>
+  );
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-11-07" as "7 Nov"; anything else as it came. */
+const shortDate = (iso: string) => {
+  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${Number(m[2])} ${MONTHS[Number(m[1]) - 1]}` : iso;
+};
+
+/** Narrower than this, the window would be a sliver beside the centre panel. */
+const PATCH_NOTES_MIN = "(min-width: 900px)";
+
+function useWide(): boolean {
+  const query = typeof window !== "undefined" ? window.matchMedia?.(PATCH_NOTES_MIN) : undefined;
+  const [wide, setWide] = React.useState(query?.matches ?? true);
+  React.useEffect(() => {
+    if (!query) return;
+    const on = () => setWide(query.matches);
+    query.addEventListener?.("change", on);
+    return () => query.removeEventListener?.("change", on);
+  }, [query]);
+  return wide;
+}
+
+/**
+ * Where PoE1 hangs its sale banner, left of centre: the last five releases in
+ * short, straight out of CHANGELOG.md (tools/changelog_to_news.mjs).
+ */
+function PatchNotes(): React.ReactElement | null {
+  if (!useWide()) return null;
+  return (
+    <FramedPanel
+      data-testid="patch-notes"
+      style={{
+        position: "absolute",
+        left: "1.5vw",
+        top: "50%",
+        transform: "translateY(-50%)",
+        width: "min(20vw, 320px)",
+        padding: "14px 16px",
+        zIndex: 2,
+      }}
+    >
+      <div style={{ fontFamily: DISPLAY, fontSize: 13, letterSpacing: 3, textTransform: "uppercase", color: GOLD }}>
+        Patch Notes
+      </div>
+      <Divider style={{ margin: "6px 0 8px" }} />
+      {/* The list scrolls, not the panel: the gilt is drawn outside the panel's
+          padding box, and overflow on the panel itself clips it away. */}
+      <div style={{ maxHeight: "40vh", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${GOLD_DIM} transparent`, paddingRight: 6 }}>
+      {NEWS_HISTORY.map((r) => (
+        <div key={r.version} style={{ marginBottom: 10 }}>
+          <div
+            data-version={r.version}
+            style={{ fontFamily: DISPLAY, fontSize: 12, letterSpacing: 1.5, color: GOLD, marginBottom: 3 }}
+          >
+            {r.version}
+            <span style={{ color: GOLD_DIM }}>{"  ·  "}{shortDate(r.date)}</span>
+          </div>
+          {r.entries.map((line) => (
+            <div key={line} style={{ fontFamily: SERIF, fontSize: 12, color: PARCHMENT, lineHeight: 1.4, opacity: 0.9 }}>
+              {line}
+            </div>
+          ))}
+        </div>
+      ))}
+      </div>
+    </FramedPanel>
   );
 }
 

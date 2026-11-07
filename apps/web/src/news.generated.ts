@@ -6,3 +6,10 @@ export const NEWS_ENTRIES: readonly string[] = [
   "After you kill a map's boss, the objective names the place its Waystone opens.",
   "The game no longer crashes when the browser translates the page.",
 ];
+export const NEWS_HISTORY: readonly { version: string; date: string; entries: string[] }[] = [
+  {"version":"0.7.3","date":"2026-11-07","entries":["Hard rares: a rare monster with a second modifier (Hulking, Relentless or Savage) that always drops a rare item.","After you kill a map's boss, the objective names the place its Waystone opens.","The game no longer crashes when the browser translates the page."]},
+  {"version":"0.7.2","date":"2026-11-06","entries":["Quivers for the Stalker's off hand: the Stalker Quiver (Fire Damage to Attacks) and, from level 16, the Stalker Barbed Quiver (increased Critical Strike Chance).","Thornward is now a quiver instead of a buckler, so the Stalker can wear it with his bow.","Every unique now carries one mod that no rare item can roll."]},
+  {"version":"0.7.1","date":"2026-11-04","entries":["Entering a map can no longer leave you stuck on the loading screen.","Your characters no longer go missing from character select when the browser is slow to read your save."]},
+  {"version":"0.7.0","date":"2026-11-04","entries":["Six new skills for every class, each with its own animation, effect, sound and icon.","Ailments show on the monster itself.","Arcing Arrow electrocutes: its lightning builds a charge on what it strikes, down the whole chain, and a full charge holds the monster in place for 3 seconds inside a crackling shell of arcs."]},
+  {"version":"0.6.0","date":"2026-10-31","entries":["Orbs craft waystones.","Every map boss has new attacks and a third phase.","Heavy boss attacks are easier to read: the boss glows red and coils its swing while it winds up, the marking on the ground shows when the hit lands as well as where, and every hit lands with its own effect and sound."]},
+];

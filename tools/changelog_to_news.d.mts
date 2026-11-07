@@ -4,5 +4,11 @@ export interface ChangelogHead {
   date: string;
   entries: string[];
 }
+export interface Release {
+  version: string;
+  date: string;
+  entries: string[];
+}
 export function parseChangelog(text: string): ChangelogHead;
-export function render(head: ChangelogHead): string;
+export function parseHistory(text: string, count?: number): Release[];
+export function render(head: ChangelogHead, history?: Release[]): string;
