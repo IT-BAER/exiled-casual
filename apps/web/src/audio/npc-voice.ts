@@ -3,7 +3,8 @@ import { playSfx, playSfxAt } from "./sfx";
 
 /**
  * The hideout's people talking: a greeting on the first approach of a hideout
- * visit, a line when their window opens and another when it closes.
+ * visit, a line when their window opens and another when it closes. Nothing else
+ * unprompted, except an aside now and then to a player who has stood idle a while.
  *
  * One line at a time per speaker, so a new one is dropped (not queued) while the
  * last still sounds: a man talking over himself is two men. The window is React
@@ -23,7 +24,7 @@ export interface Npc {
   readonly id: string;
   /** The snapshot entity that is this speaker. */
   readonly kind: SnapshotEntity["kind"];
-  /** Asides said now and then to nobody in particular; 0 = none. */
+  /** Asides said to nobody in particular while the player stands idle; 0 = none. */
   readonly idle: number;
 }
 
@@ -41,10 +42,14 @@ export const MAREN_SFX: readonly string[] = cues(MAREN);
 
 /** Inside this many units of a speaker counts as walking up to them; the hideout spawn is 5.4 from Varkis. */
 const GREET_RADIUS = 3.5;
-/** Asides: none in the first seconds of a visit, then one per random gap, heard within about a screen. */
-export const IDLE_FIRST_S = 40;
-export const IDLE_GAP_S: readonly [number, number] = [60, 150];
+/**
+ * Asides: one after the player has stood still (and her window shut) for a random
+ * three to five minutes, heard within about a screen. Any step starts the wait over.
+ */
+export const IDLE_GAP_S: readonly [number, number] = [180, 300];
 export const IDLE_RADIUS = 9;
+/** Less than this between two snapshots is standing still (soundscape.ts STEP_MIN_MOVE). */
+const STILL = 0.02;
 
 export interface NpcVoice {
   observe(snap: Snapshot): void;
@@ -70,8 +75,10 @@ export function createNpcVoice(npc: Npc, opts: Options = {}): NpcVoice {
   const now = opts.now ?? (() => performance.now() / 1000);
   const random = opts.random ?? Math.random;
   let busyUntil = -Infinity;
-  /** When the next aside is due; null outside the hideout, so every visit waits IDLE_FIRST_S again. */
+  /** When the next aside is due; null outside the hideout, so every visit starts the wait over. */
   let asideAt: number | null = null;
+  /** Where the player stood in the last hideout snapshot. */
+  let stood: At | null = null;
   /** True until they have greeted this hideout visit. */
   let armed = true;
   let open = false;
@@ -90,9 +97,12 @@ export function createNpcVoice(npc: Npc, opts: Options = {}): NpcVoice {
 
   return {
     observe(snap) {
-      if (snap.area !== "hideout") { armed = true; asideAt = null; return; }
+      if (snap.area !== "hideout") { armed = true; asideAt = null; stood = null; return; }
       const t = now();
-      asideAt ??= t + IDLE_FIRST_S;
+      const gap = () => t + IDLE_GAP_S[0] + random() * (IDLE_GAP_S[1] - IDLE_GAP_S[0]);
+      const moved = !stood || Math.hypot(snap.player.x - stood.x, snap.player.y - stood.y) > STILL;
+      stood = { x: snap.player.x, y: snap.player.y };
+      if (asideAt === null || moved || open) asideAt = gap();
       const self = snap.entities.find((e) => e.kind === npc.kind);
       if (!self) return;
       at = { x: self.x, y: self.y };
@@ -103,9 +113,9 @@ export function createNpcVoice(npc: Npc, opts: Options = {}): NpcVoice {
         return;
       }
       // Due and spoken or not, the next one is a fresh gap away: an aside cut off is spent.
-      if (npc.idle > 0 && !open && t >= asideAt && d <= IDLE_RADIUS) {
+      if (npc.idle > 0 && t >= asideAt && d <= IDLE_RADIUS) {
         say("idle");
-        asideAt = t + IDLE_GAP_S[0] + random() * (IDLE_GAP_S[1] - IDLE_GAP_S[0]);
+        asideAt = gap();
       }
     },
     window(next) {

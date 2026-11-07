@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
 import {
-  createNpcVoice, IDLE_FIRST_S, IDLE_GAP_S, IDLE_RADIUS, MAREN, MAREN_SFX, VARKIS, VARKIS_SFX, type Npc,
+  createNpcVoice, IDLE_GAP_S, IDLE_RADIUS, MAREN, MAREN_SFX, VARKIS, VARKIS_SFX, type Npc,
 } from "./npc-voice";
 
 function snap(area: "hideout" | "map", x: number, entities: SnapshotEntity[]): Snapshot {
@@ -143,27 +143,48 @@ describe("Maren's asides", () => {
     expect(VARKIS_SFX.some((n) => n.includes("idle"))).toBe(false);
   });
 
-  it("says one now and then while the player is near, never straight after arriving", () => {
+  it("waits minutes, not seconds", () => {
+    expect(IDLE_GAP_S[0]).toBeGreaterThanOrEqual(180);
+    expect(IDLE_GAP_S[1]).toBeGreaterThan(IDLE_GAP_S[0]);
+  });
+
+  it("never talks to herself while the player walks about near her, however long", () => {
+    const { asides, step } = rig();
+    for (let t = 0; t <= 3 * IDLE_GAP_S[1]; t += 5) step(t % 10 === 0 ? 4 : 5, t);
+    expect(asides()).toHaveLength(0);
+  });
+
+  it("says one once the player has stood still for the gap, and the next a fresh gap later", () => {
     const { asides, step } = rig();
     step(5, 0);
-    step(5, IDLE_FIRST_S - 1);
+    step(5, IDLE_GAP_S[0] - 1);
     expect(asides()).toHaveLength(0);
-    step(5, IDLE_FIRST_S);
+    step(5, IDLE_GAP_S[0]);
     expect(asides()).toHaveLength(1);
-    step(5, IDLE_FIRST_S + IDLE_GAP_S[0] - 1);
+    step(5, 2 * IDLE_GAP_S[0] - 1);
     expect(asides()).toHaveLength(1);
-    step(5, IDLE_FIRST_S + IDLE_GAP_S[0]);
+    step(5, 2 * IDLE_GAP_S[0]);
     expect(asides()).toHaveLength(2);
+  });
+
+  it("starts the wait over when the player moves", () => {
+    const { asides, step } = rig();
+    step(5, 0);
+    step(5, IDLE_GAP_S[0] - 10);
+    step(6, IDLE_GAP_S[0] - 5);
+    step(6, IDLE_GAP_S[0] + 1);
+    expect(asides()).toHaveLength(0);
+    step(6, 2 * IDLE_GAP_S[0] - 5);
+    expect(asides()).toHaveLength(1);
   });
 
   it("spaces them by a random gap inside the bounds", () => {
     const { asides, step } = rig(() => 0.999);
     step(5, 0);
-    step(5, IDLE_FIRST_S);
-    step(5, IDLE_FIRST_S + IDLE_GAP_S[1] - 1);
+    step(5, IDLE_GAP_S[1] - 1);
+    expect(asides()).toHaveLength(0);
+    step(5, IDLE_GAP_S[1]);
     expect(asides()).toHaveLength(1);
-    step(5, IDLE_FIRST_S + IDLE_GAP_S[1]);
-    expect(asides()).toHaveLength(2);
   });
 
   it("keeps quiet across the room, and while her table is open", () => {
@@ -183,7 +204,7 @@ describe("Maren's asides", () => {
     step(5, 0);
     voice.observe(snap("map", 5, []));
     step(5, 500);
-    step(5, 500 + IDLE_FIRST_S - 1);
+    step(5, 500 + IDLE_GAP_S[0] - 1);
     expect(asides()).toHaveLength(0);
   });
 
