@@ -247,6 +247,18 @@ describe("cursor picker", () => {
     openUi();
     expect(screen.getByRole("button", { name: /cursor/i }).textContent).toMatch(/gilt blade/i);
   });
+
+  it("offers four sizes with Medium on, and picking one reports it", () => {
+    const { onChange } = setup();
+    openUi();
+    const sizes = within(screen.getByRole("radiogroup", { name: /cursor size/i })).getAllByRole("radio");
+    expect(sizes.map((s) => s.textContent)).toEqual(["Small", "Medium", "Large", "Huge"]);
+    expect(sizes[1]!.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(sizes[3]!);
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.ui.cursorSize).toBe("huge");
+    expect(next.ui.cursor).toBe(DEFAULT_SETTINGS.ui.cursor);
+  });
 });
 
 describe("the Options route", () => {

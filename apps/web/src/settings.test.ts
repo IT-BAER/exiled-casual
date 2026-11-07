@@ -283,4 +283,11 @@ describe("the cursor rides in the settings", () => {
     const saved = JSON.parse(JSON.stringify({ ...DEFAULT_SETTINGS, ui: { ...DEFAULT_SETTINGS.ui, cursor: "gilt" } }));
     expect(sanitize(saved).ui.cursor).toBe("gilt");
   });
+
+  it("sizes it medium by default, keeps a known size and drops an unknown one", () => {
+    expect(sanitize(null).ui.cursorSize).toBe("medium");
+    expect(sanitize({ ui: { cursor: "gilt" } }).ui.cursorSize).toBe("medium");
+    expect(sanitize({ ui: { cursorSize: "huge" } }).ui.cursorSize).toBe("huge");
+    expect(sanitize({ ui: { cursorSize: 32 } }).ui.cursorSize).toBe("medium");
+  });
 });

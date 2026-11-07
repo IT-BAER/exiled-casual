@@ -84,6 +84,8 @@ export interface UiSettings {
   compareKey: CompareKey;
   /** Which pointer art the page draws everywhere (index.html, cursor.ts). */
   cursor: CursorStyle;
+  /** How big that pointer is drawn (cursor.ts maps it to CSS px). */
+  cursorSize: CursorSize;
   /**
    * Print what the sim is doing to the browser console (see debug.ts). Default
    * OFF: it is a firehose, and it is here for the session where something needs
@@ -106,6 +108,10 @@ export const COMPARE_KEYS: readonly CompareKey[] = ["ctrl", "shift"];
 /** The pointer's art: PoE2's plain arrow, or the gilt blade the game shipped with. */
 export type CursorStyle = "plain" | "gilt";
 export const CURSOR_STYLES: readonly CursorStyle[] = ["plain", "gilt"];
+
+/** The pointer's size; Huge is 32 CSS px, the most Chromium keeps over native UI. */
+export type CursorSize = "small" | "medium" | "large" | "huge";
+export const CURSOR_SIZES: readonly CursorSize[] = ["small", "medium", "large", "huge"];
 
 /** Everything a key can be told to do. Escape stays fixed. */
 export const KEYBIND_ACTIONS = [
@@ -262,6 +268,7 @@ export const DEFAULT_SETTINGS: Settings = {
     mapEntered: [],
     compareKey: "ctrl",
     cursor: "plain",
+    cursorSize: "medium",
     debugLogging: false,
   },
 };
@@ -391,6 +398,7 @@ export function sanitize(raw: unknown, renderer?: string): Settings {
       mapEntered: characterIds(u["mapEntered"]),
       compareKey: member(u["compareKey"], COMPARE_KEYS, d.ui.compareKey),
       cursor: member(u["cursor"], CURSOR_STYLES, d.ui.cursor),
+      cursorSize: member(u["cursorSize"], CURSOR_SIZES, d.ui.cursorSize),
       debugLogging: bool(u["debugLogging"], d.ui.debugLogging),
     },
   };

@@ -48,7 +48,7 @@ const AssetViewer = import.meta.env.DEV
 import { DEFAULT_SETTINGS, type ControlMode, type Settings } from "./settings";
 import { setTitle } from "./title";
 import { setDebugLogging } from "./debug";
-import { applyCursor } from "./cursor";
+import { applyCursor, trackCursorPress } from "./cursor";
 import { setSoundMix } from "./audio/drop-sound";
 import { preloadSfx } from "./audio/sfx";
 import { MENU_MUSIC, setMusic } from "./audio/music";
@@ -250,8 +250,9 @@ export function App(): React.ReactElement {
 
   // On the page root, so one change repaints the pointer over the menus and the game.
   React.useEffect(() => {
-    applyCursor(settings.ui.cursor);
-  }, [settings.ui.cursor]);
+    applyCursor(settings.ui.cursor, settings.ui.cursorSize);
+  }, [settings.ui.cursor, settings.ui.cursorSize]);
+  React.useEffect(() => trackCursorPress(), []);
 
   // The menu's own cues, fetched before the first press rather than by it: playSfx
   // starts the load and returns silent, so without this the first click of a fresh

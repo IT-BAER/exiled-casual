@@ -104,20 +104,17 @@
       /* One cursor, ours, everywhere. PoE never shows a Windows pointer: the arrow
          is a piece of the art, so an OS hand or I-beam appearing over a button
          breaks the frame instantly. The !important is what retires the panels'
-         inline pointer / grab / crosshair. Two looks, picked in Options (cursor.ts
-         sets <html data-cursor-style>): PoE2's plain arrow by default, or the gilt
-         blade. Hotspot on the tip: 0 0 for the arrow, which touches the corner,
-         1 1 for the blade, whose tip sits one pixel in.
+         inline pointer / grab / crosshair. These rules are only the first paint:
+         PoE2's plain arrow at Medium (24 CSS px). cursor.ts replaces them with the
+         look, size and click tilt picked in Options. Hotspot on the tip, 0 0.
 
-         32 CSS px, and not a pixel more, however much better 40 looked. Chromium
-         drops any custom cursor larger than 32 DIP the moment its bitmap touches
-         native UI, falling back to the Windows arrow. With the hotspot at the top
-         left the bitmap hangs down and to the right of the pointer, so at 40 it
-         crossed the bottom edge of the viewport about 50px early and the blade
-         vanished over the flask row. Only the bottom and right edges showed it —
-         towards the top the bitmap extends into the page and touches nothing. */
-      * { cursor: url(/textures/ui/cursor_plain_32.png) 0 0, default !important; }
-      :root[data-cursor-style="gilt"], :root[data-cursor-style="gilt"] * { cursor: url(/textures/ui/cursor_32.png) 1 1, default !important; }
+         Never more than 32 CSS px, at any size or tilt. Chromium drops any custom
+         cursor larger than 32 DIP the moment its bitmap touches native UI, falling
+         back to the Windows arrow. With the hotspot at the top left the bitmap
+         hangs down and to the right of the pointer, so a 40 px cursor crossed the
+         bottom edge of the viewport about 50px early and vanished over the flask
+         row. Only the bottom and right edges showed it. */
+      * { cursor: url(/textures/ui/cursor_plain_24.png) 0 0, default !important; }
 
       /* Chrome draws its own focus ring as a WHITE inner line with a dark outer
          one, whatever colour the page asks for, and on gilt plates over a dark
@@ -132,14 +129,11 @@
       :focus { outline: none; }
       :focus-visible { outline: none; }
       body[data-kbd] :focus-visible { outline: 2px solid #c8a44d; outline-offset: 3px; }
-      * { cursor: image-set(url(/textures/ui/cursor_plain_32.png) 1x, url(/textures/ui/cursor_plain_64.png) 2x) 0 0, default !important; }
-      :root[data-cursor-style="gilt"], :root[data-cursor-style="gilt"] * { cursor: image-set(url(/textures/ui/cursor_32.png) 1x, url(/textures/ui/cursor_64.png) 2x) 1 1, default !important; }
+      * { cursor: image-set(url(/textures/ui/cursor_plain_24.png) 1x, url(/textures/ui/cursor_plain_48.png) 2x) 0 0, default !important; }
       /* Illegal target for whatever is armed on the cursor: the same arrow, cooled
          to red iron, so the refusal is legible without leaving the art. */
-      [data-cursor="deny"] { cursor: url(/textures/ui/cursor_plain_deny_32.png) 0 0, not-allowed !important; }
-      [data-cursor="deny"] { cursor: image-set(url(/textures/ui/cursor_plain_deny_32.png) 1x, url(/textures/ui/cursor_plain_deny_64.png) 2x) 0 0, not-allowed !important; }
-      :root[data-cursor-style="gilt"] [data-cursor="deny"] { cursor: url(/textures/ui/cursor_deny_32.png) 1 1, not-allowed !important; }
-      :root[data-cursor-style="gilt"] [data-cursor="deny"] { cursor: image-set(url(/textures/ui/cursor_deny_32.png) 1x, url(/textures/ui/cursor_deny_64.png) 2x) 1 1, not-allowed !important; }
+      [data-cursor="deny"] { cursor: url(/textures/ui/cursor_plain_deny_24.png) 0 0, not-allowed !important; }
+      [data-cursor="deny"] { cursor: image-set(url(/textures/ui/cursor_plain_deny_24.png) 1x, url(/textures/ui/cursor_plain_deny_48.png) 2x) 0 0, not-allowed !important; }
       #root { width: 100%; height: 100%; }
 
       /* The first-boot cover.

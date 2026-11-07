@@ -259,47 +259,47 @@ function useWide(): boolean {
 function PatchNotes(): React.ReactElement | null {
   if (!useWide()) return null;
   return (
-    <FramedPanel
+    <div
       data-testid="patch-notes"
-      // A thinner gilt than the PLAY panel's: the composition's weight stays there.
-      border={12}
+      // PoE1 hangs its banner here with no frame at all, a dark patch on the scene:
+      // a hairline and a thin fill, so the composition's weight stays on PLAY.
       style={{
         position: "absolute",
         left: "1.2vw",
         top: "50%",
         transform: "translateY(-50%)",
-        width: "min(16vw, 260px)",
-        padding: "10px 12px",
+        width: "min(19vw, 310px)",
+        padding: "12px 14px",
         zIndex: 2,
+        border: "1px solid rgba(200,164,77,0.2)",
+        background: "linear-gradient(180deg, rgba(8,9,11,0.55), rgba(6,7,9,0.62))",
       }}
     >
-      <div style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", color: GOLD_DIM }}>
+      <div style={{ fontFamily: DISPLAY, fontSize: 13, letterSpacing: 2.5, textTransform: "uppercase", color: GOLD_DIM }}>
         Patch Notes
       </div>
-      <Divider style={{ margin: "5px 0 7px" }} />
-      {/* The list scrolls, not the panel: the gilt is drawn outside the panel's
-          padding box, and overflow on the panel itself clips it away. */}
-      <div style={{ maxHeight: "36vh", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${GOLD_DIM} transparent`, paddingRight: 6 }}>
+      <Divider style={{ margin: "5px 0 8px", opacity: 0.5 }} />
+      <div style={{ maxHeight: "40vh", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${GOLD_DIM} transparent`, paddingRight: 6 }}>
       {NEWS_HISTORY.map((r) => (
-        <div key={r.version} style={{ marginBottom: 9 }}>
+        <div key={r.version} style={{ marginBottom: 10 }}>
           <div
             data-version={r.version}
-            style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 1.2, color: GOLD_DIM, marginBottom: 2 }}
+            style={{ fontFamily: DISPLAY, fontSize: 12, letterSpacing: 1.2, color: GOLD_DIM, marginBottom: 3 }}
           >
             {r.version}
             <span>{"  ·  "}{shortDate(r.date)}</span>
           </div>
           {r.entries.map((line) => (
-            <div key={line} style={{ display: "flex", gap: 7, fontFamily: SERIF, fontSize: 11, color: PARCHMENT, lineHeight: 1.35, marginBottom: 2 }}>
+            <div key={line} style={{ display: "flex", gap: 8, fontFamily: SERIF, fontSize: 13, color: PARCHMENT, lineHeight: 1.4, marginBottom: 3 }}>
               {/* The HUD tracker's gilt diamond, one per note. */}
-              <span style={{ width: 4, height: 4, marginTop: 5, transform: "rotate(45deg)", border: `1px solid ${GOLD}`, flex: "0 0 auto" }} />
+              <span style={{ width: 4, height: 4, marginTop: 7, transform: "rotate(45deg)", border: `1px solid ${GOLD}`, flex: "0 0 auto" }} />
               <span style={{ opacity: 0.85 }}>{line}</span>
             </div>
           ))}
         </div>
       ))}
       </div>
-    </FramedPanel>
+    </div>
   );
 }
 

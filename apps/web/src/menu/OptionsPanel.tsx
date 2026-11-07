@@ -18,7 +18,7 @@ import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
 import { GUARD_FLOOR_FPS } from "../fps-guard";
 import { CURSORS } from "../cursor";
-import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, keyCap, type CompareKey, type ControlMode, type CursorStyle, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
+import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, keyCap, type CompareKey, type ControlMode, type CursorSize, type CursorStyle, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
 import { gpuRenderer } from "../gpu";
 import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
@@ -414,6 +414,19 @@ export function OptionsPanel({
               </Row>
               <Row label="Cursor" note="The pointer, in the menus and the game.">
                 <CursorPicker value={settings.ui.cursor} onPick={(cursor) => setUi({ cursor })} />
+              </Row>
+              <Row label="Cursor Size">
+                <Choice<CursorSize>
+                  label="Cursor Size"
+                  value={settings.ui.cursorSize}
+                  options={[
+                    { value: "small", label: "Small" },
+                    { value: "medium", label: "Medium" },
+                    { value: "large", label: "Large" },
+                    { value: "huge", label: "Huge" },
+                  ]}
+                  onPick={(cursorSize) => setUi({ cursorSize })}
+                />
               </Row>
               <Group>Troubleshooting</Group>
               <Row
