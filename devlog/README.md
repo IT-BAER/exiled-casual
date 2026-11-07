@@ -663,3 +663,17 @@ ten minutes, and the hideout gained candles, a bookshelf, grain sacks and a caul
 the body: cold builds frost until a monster freezes and shatters when killed, lightning shocks, and
 Arcing Arrow electrocutes. Six new skills per class arrived with their own clips, effects and sounds,
 and the first load into the hideout is about a third faster.
+
+## 2026-11-07 · Quivers, hard rares and a harder Atlas
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-11-07-ember-nova-kiln-boss.jpeg" alt="An Emberbound in Emberfall inside the burning ring of Ember Nova, scarabs caught in it, with Sirrath, Sun-Priest of the Kiln, at the lower edge" width="100%"><br><sub>Ember Nova under the Kiln's Sun-Priest.</sub></td>
+<td width="50%"><img src="screenshots/2026-11-07-split-arrow-strand.jpeg" alt="A Stalker on the Strand's sand loosing Split Arrow, five glowing arrows fanning out toward a pack of shell crabs" width="100%"><br><sub>Split Arrow fans out across the Strand.</sub></td>
+</tr>
+</table>
+
+The Stalker wears a quiver on the back now, and every unique carries one mod no rare can roll. Hard
+rares glow hotter and always drop a rare item; the first rare of a new map is one. After a boss the
+objective names the next map, and the Map Device glows until it is opened. Monsters hit harder from
+tier 3 and bosses carry more life from tier 4, so defences and flasks matter in the later maps.
