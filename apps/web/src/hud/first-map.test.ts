@@ -80,7 +80,7 @@ describe("the objective after a cleared map", () => {
 
   it("names the next node and tier in the hideout and beckons the device", () => {
     const o = objectiveFor(entered, ID, snap({ activeNodeId: start.id, mapOpen: true }), false);
-    expect(o).toMatchObject({ quest: "Next Map", beckon: true, install: true });
+    expect(o).toMatchObject({ quest: "Next Map", beckon: true });
     const named = opened.find((n) => o?.steps[0] === `${n.name}, Tier ${atlasNodeTier(graph, n.id)}`);
     expect(named).toBeDefined();
     expect(atlasNodeTier(graph, named!.id)).toBe(cheapest);
@@ -95,7 +95,7 @@ describe("the objective after a cleared map", () => {
 
   it("says in the map, once its boss fell this visit, what the stone opens", () => {
     const o = objectiveFor(entered, ID, snap({ area: "map", activeNodeId: start.id, mapOpen: true }), true);
-    expect(o).toMatchObject({ quest: "Map Complete", beckon: false, install: true });
+    expect(o).toMatchObject({ quest: "Map Complete", beckon: false });
     expect(o?.steps[0]).toMatch(/^The Waystone opens .+, Tier \d+$/);
     // A re-run of a cleared node says nothing until its boss falls again.
     expect(objectiveFor(entered, ID, snap({ area: "map", activeNodeId: start.id, mapOpen: true }), false)).toBeNull();

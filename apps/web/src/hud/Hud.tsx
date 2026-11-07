@@ -8,7 +8,6 @@ import { flaskTooltip } from "./flask-tooltip";
 import { manaTooltip } from "./mana-tooltip";
 import { PANEL_W } from "./layout";
 import type { Objective } from "./first-map";
-import { installPrompt, useInstallOffer } from "../menu/install-prompt";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
 import { MAP_INSET_VW, MAP_VW } from "./Minimap";
@@ -977,7 +976,6 @@ export function Hud({
   objective = null,
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
-  const canInstall = useInstallOffer();
   // Length-normalised here rather than trusted: the bar rides in the save, and a
   // row drawn from a short array would silently lose its last sockets.
   const bar = React.useMemo(() => {
@@ -1448,20 +1446,6 @@ export function Hud({
               {step}
             </div>
           ))}
-          {objective.install && canInstall && (
-            <button
-              type="button"
-              title="Install Exiled Casual as an app, one click from your desktop or home screen."
-              onClick={() => { void installPrompt()?.().catch(() => undefined); }}
-              style={{
-                pointerEvents: "auto", marginTop: 6, padding: "2px 10px", cursor: "pointer",
-                fontFamily: DISPLAY, fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase",
-                color: "#c9a84c", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(201,168,76,0.6)",
-              }}
-            >
-              Install
-            </button>
-          )}
         </div>
       )}
 

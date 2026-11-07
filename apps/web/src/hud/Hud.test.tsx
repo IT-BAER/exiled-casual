@@ -379,17 +379,16 @@ describe("Hud", () => {
     expect(screen.getByTestId("objective-tracker")).toHaveTextContent(/Next Map.*Sunken Hollow, Tier 2/);
   });
 
-  it("offers Install under the tracker after a clear, never on the first map", () => {
+  it("renders no Install control in the tracker, even while the browser offers one", () => {
     captureInstallPrompt(window);
     const e = new Event("beforeinstallprompt", { cancelable: true }) as Event & { prompt: () => Promise<void> };
     e.prompt = vi.fn(() => Promise.resolve());
     act(() => { window.dispatchEvent(e); });
-    const first = render(<Hud snapshot={makeSnap({ area: "hideout" })} objective={{ quest: "First Map", steps: ["Open the Map Device"], beckon: true }} />);
+    const hideout = render(<Hud snapshot={makeSnap({ area: "hideout" })} objective={{ quest: "Next Map", steps: ["Sunken Hollow, Tier 2"], beckon: true }} />);
+    expect(screen.getByTestId("objective-tracker")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
-    first.unmount();
-    render(<Hud snapshot={makeSnap({ area: "map" })} objective={{ quest: "Map Complete", steps: ["The Waystone opens X, Tier 2"], beckon: false, install: true }} />);
-    fireEvent.click(screen.getByRole("button", { name: /install/i }));
-    expect(e.prompt).toHaveBeenCalledTimes(1);
+    hideout.unmount();
+    render(<Hud snapshot={makeSnap({ area: "map" })} objective={{ quest: "Map Complete", steps: ["The Waystone opens X, Tier 2"], beckon: false }} />);
     expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
     _resetInstallPrompt();
   });

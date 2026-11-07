@@ -51,8 +51,6 @@ export interface Objective {
   quest: string;
   steps: string[];
   beckon: boolean;
-  /** After a clear: the browser's install offer rides here, where players actually close the tab. */
-  install?: true;
 }
 
 export interface ObjectiveWhere extends Where {
@@ -87,11 +85,11 @@ export function objectiveFor(
   const place = `${next.name}, Tier ${next.tier}`;
   if (where.area === "map") {
     return clearedHere
-      ? { quest: "Map Complete", steps: [`The Waystone opens ${place}`], beckon: false, install: true }
+      ? { quest: "Map Complete", steps: [`The Waystone opens ${place}`], beckon: false }
       : null;
   }
   const running = where.mapOpen && !!where.activeNodeId && !where.completedNodes.includes(where.activeNodeId);
-  return running ? null : { quest: "Next Map", steps: [place], beckon: true, install: true };
+  return running ? null : { quest: "Next Map", steps: [place], beckon: true };
 }
 
 /** Marks the character on its first map snapshot and answers what the tracker says. */
