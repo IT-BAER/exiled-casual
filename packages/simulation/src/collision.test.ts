@@ -271,6 +271,17 @@ describe("chaseStep out of a cell too tight for the body", () => {
   rows.forEach((row, y) => { for (let x = 0; x < 21; x++) cells[y * 21 + x] = row[x] === "." ? 1 : 0; });
   const c = gridCollision({ cols: 21, rows: 21, cellSize: 0.5, originX: 0, originY: 0, cells });
 
+  it("squares up onto a slot its own width rather than freezing a few milli off its axis", () => {
+    // Rustwater seed 427: a 0.25 grubling 3 milli off a 0.5 slot's centre chased 12
+    // minutes without a step; the leg's 3-milli side truncated to 0 and both walls clipped.
+    const slot = gridCollision({ ...makeGrid(["##.#", "##.#", "##.#", "#..#", "#..#", "#..#"]), cellSize: 0.5 });
+    const r = fp(0.25);
+    let x = fp(1) - 3, y = fp(1.565);
+    expect(slot.isWalkable(x, y, r)).toBe(true);
+    for (let i = 0; i < 30; i++) ({ x, y } = chaseStep(slot, x, y, fp(1), 0, 86, r));
+    expect(y).toBeLessThan(fp(0.5));
+  });
+
   it("steps back onto its own lattice and walks round instead of freezing", () => {
     const r = fp(0.32);
     let x = fp(5.07), y = fp(4.985);

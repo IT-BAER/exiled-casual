@@ -148,7 +148,14 @@ export function chaseStep(
   if (wp === null) return slid;
 
   const leg = fpStepToward(x, y, wp.x, wp.y, speedFixed);
-  return slide(collision, x, y, leg.dx, leg.dy, bodyRadius);
+  const moved = slide(collision, x, y, leg.dx, leg.dy, bodyRadius);
+  if (moved.x !== x || moved.y !== y) return moved;
+  // Pinned a few milli off a slot its own width: the leg's side truncates to 0 and
+  // both walls clip, so square up onto the waypoint's line first. Only a frozen body gets here.
+  const ax = wp.x - x, ay = wp.y - y;
+  if (ax !== 0 && Math.abs(ax) <= speedFixed && collision.isWalkable(wp.x, y, bodyRadius)) return { x: wp.x, y };
+  if (ay !== 0 && Math.abs(ay) <= speedFixed && collision.isWalkable(x, wp.y, bodyRadius)) return { x, y: wp.y };
+  return moved;
 }
 
 /**
