@@ -1150,7 +1150,9 @@ export function GameView({
   return (
     // Clipped: HUD art bleeding past the edge (the mana orb's statue) otherwise
     // leaves the page a few pixels a find-in-page or focus scroll can slide.
-    <div style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
+    // translate="no": Safari and Edge translation swap text nodes React still holds,
+    // and the next insert beside one throws NotFoundError (three crashes, 0.6-0.7).
+    <div translate="no" style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
       <canvas
         ref={canvasRef}
         style={{ width: "100%", height: "100%", display: "block" }}

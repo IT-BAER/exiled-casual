@@ -202,6 +202,11 @@ describe("GameView", () => {
     expect(container.querySelector("canvas")).not.toBeNull();
   });
 
+  it("keeps page translation out of the game, which rewrites text React still owns", () => {
+    const { container } = render(<GameView />);
+    expect((container.firstElementChild as HTMLElement).getAttribute("translate")).toBe("no");
+  });
+
   it("draws the loot plates by default and not when the UI tab turns them off", () => {
     mountWithSnapshot();
     expect(screen.getByTestId(`loot-label-${DROP.id}`)).toBeTruthy();
