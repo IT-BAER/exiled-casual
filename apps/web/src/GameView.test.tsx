@@ -482,6 +482,15 @@ describe("GameView", () => {
     expect(screen.queryByTestId("loading-screen")).toBeNull();
   });
 
+  it("pauses the sim while the plate is up, so the spawn grace is not spent behind it", async () => {
+    await mountGame();
+    sendArea("map.swamp");
+    expect(hoisted.worker?.postMessage).toHaveBeenLastCalledWith({ type: "pause", paused: true });
+    becomeReady();
+    paintSettled();
+    expect(hoisted.worker?.postMessage).toHaveBeenLastCalledWith({ type: "pause", paused: false });
+  });
+
   it("reports each load phase once per entry, and the plate's state for the page's end", async () => {
     const track = vi.spyOn(telemetry, "track");
     const loading = vi.spyOn(telemetry, "setLoading");

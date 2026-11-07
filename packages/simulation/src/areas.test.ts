@@ -9,6 +9,8 @@ import { areaCollision, buildArea, spillContainer, HIDEOUT_SPAWN } from "./areas
 import { gridCollision } from "./collision.js";
 import type { SessionC, Health, MonsterC, Position, ContainerC, ItemC } from "./components.js";
 import { grammarForNode } from "./systems/area-transition.js";
+import { AGGRO_RADIUS, WANDER_RADIUS } from "./systems/monster-ai.js";
+import { createCombatSim } from "./combat-sim.js";
 
 function mapSessionAtTier(tier: number): SessionC {
   return {
@@ -551,6 +553,32 @@ describe("areaCollision", () => {
     }
     expect(near).toEqual([]);
   });
+
+  it("map: the safe radius is wider than a monster's stroll plus its aggro reach", () => {
+    expect(SPAWN_SAFE_RADIUS).toBeGreaterThan((AGGRO_RADIUS + WANDER_RADIUS) / fp(1));
+  });
+
+  it("map: a player standing still on the entrance is never attacked, during the grace or after it", () => {
+    const woke: string[] = [];
+    for (const node of ["node.the_wrackline", "node.emberfall", "node.cinder_vault", "node.the_pale_reach", "node.kiln_of_ash", "node.thornwake"]) {
+      for (const seed of [11, 33]) {
+        const { sim, world, playerEntity } = createCombatSim(seed, { area: "hideout", classId: "class.ironsworn" });
+        const sessionE = world.query("session")[0]!;
+        const s = world.get<SessionC>(sessionE, "session")!;
+        world.set<SessionC>(sessionE, "session", {
+          ...s, mapSeed: seed * 7919, areaTier: 1, mapOpen: 1, portalsLeft: 6, activeNodeId: node, pendingArea: "map",
+        });
+        sim.step();
+        const life = world.get<Health>(playerEntity, "health")!.life;
+        // The grace's 10 s, then 10 s more with nothing to stop a hit.
+        for (let t = 0; t < 600; t++) sim.step();
+        const awake = world.query("monster").filter((m) => world.get<MonsterC>(m, "monster")!.state !== "idle").length;
+        const hurt = world.get<Health>(playerEntity, "health")!.life < life;
+        if (awake > 0 || hurt) woke.push(`${node} ${seed}: ${awake} awake${hurt ? ", hit" : ""}`);
+      }
+    }
+    expect(woke).toEqual([]);
+  }, 60_000);
 
   it("map: a container is solid, and its walls are still walls", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });

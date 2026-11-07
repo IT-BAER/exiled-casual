@@ -196,7 +196,10 @@ export function GameView({
    * so nothing behind it can be watched. The inventory, the Atlas and the
    * character sheet are things PoE leaves the world running behind.
    */
-  const paused = gameMenuOpen || passivesOpen;
+  // The loading plate pauses too: a map that builds for 15 s must not spend the
+  // 10 s spawn grace, or let a pack walk in, before he can see it.
+  const [plateHold, setPlateHold] = useState(false);
+  const paused = gameMenuOpen || passivesOpen || plateHold;
   useEffect(() => {
     dlog("sim", paused ? "paused" : "resumed");
     workerRef.current?.postMessage({ type: "pause", paused } satisfies ToWorker);
@@ -789,6 +792,8 @@ export function GameView({
         const biome = base ? BIOMES[base.biomeId] : null;
         flushSync(() => {
           setLoading(true);
+          // Not under the ?play&map harness's hideout leg: its walk to the portal is the sim's.
+          setPlateHold(harness === "done");
           setLeaving(false);
           setTip(pickTip(Math.random, msg.area === "hideout" && !hasEnteredMap(settingsRef.current, characterId)));
           setArea({
@@ -901,6 +906,7 @@ export function GameView({
       if (settled?.(performance.now()) && harness === "done") {
         settled = null;
         plateUp = false;
+        setPlateHold(false);
         setLoadPart("ready", 1);
         telemetry.setLoading(false);
         releaseWarm?.();

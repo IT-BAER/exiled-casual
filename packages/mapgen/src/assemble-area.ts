@@ -19,8 +19,11 @@ import { AREA_TILES, UNREACHED, generateSkeleton } from "./skeleton";
 
 export const ASSEMBLED_CELLS = AREA_TILES * TILE_CELLS; // 144
 
-/** World units of breathing room the player gets around the start. */
-export const SPAWN_SAFE_RADIUS = 10;
+/**
+ * World units of breathing room the player gets around the start. Must exceed the
+ * sim's AGGRO_RADIUS + WANDER_RADIUS (12), or an idle stroll wakes a pack on him.
+ */
+export const SPAWN_SAFE_RADIUS = 14;
 
 interface Marker {
   ch: string;

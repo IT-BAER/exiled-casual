@@ -23,6 +23,7 @@ import {
   type Shoreline,
   type Socket,
 } from "./grid";
+import { SPAWN_SAFE_RADIUS } from "./assemble-area";
 
 /** A coast is LONGER than an assembled area: 224 cells is 112 world units, and
  *  the camera shows about nineteen across, so the walk is six screens instead of
@@ -90,9 +91,6 @@ const BLOB_SPACING = 13;
  *  waterline the renderer draws does NOT move — only how far the floor runs
  *  under it. */
 const WADE_CELLS = 3;
-
-/** World units of quiet around the portal, matching the assembler's. */
-const SPAWN_SAFE_RADIUS = 10;
 
 /** Caches for one generated area. The shore and the width are pure functions of
  *  x, sampled per column and never recomputed. */
