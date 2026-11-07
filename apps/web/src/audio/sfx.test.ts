@@ -10,7 +10,7 @@ import {
   distanceRolloff, moveSfxLoop, playSfx, playSfxAt, preloadSfx, resetSfx, setAmbient, setSfxListener,
   sfxCategory, startSfxLoop, startSfxLoopAt, stopAmbient, stopSfxLoop, toListenerSpace,
 } from "./sfx";
-import { VARKIS_SFX } from "./varkis-voice";
+import { MAREN_SFX, VARKIS_SFX } from "./npc-voice";
 import { ITEM_MATERIALS, ABILITY_CUES } from "./soundscape";
 
 /** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom.
@@ -239,7 +239,7 @@ describe("sfxCategory", () => {
     ];
     for (const name of [...monster, ...combat]) expect(takes[name], name).toBe(3);
     for (const name of combat) expect(CORE_SFX, name).toContain(name);
-    for (const name of VARKIS_SFX) {
+    for (const name of [...VARKIS_SFX, ...MAREN_SFX]) {
       expect(takes[name], name).toBe(2);
       expect(CORE_SFX, name).not.toContain(name);
     }
@@ -265,6 +265,7 @@ describe("playSfx without WebAudio", () => {
 
   it("gives Varkis the room: an npc cue is a world cue", () => {
     expect(sfxCategory("npc-varkis-greet-1")).toBe("environment");
+    expect(sfxCategory("npc-maren-greet-1")).toBe("environment");
   });
 });
 

@@ -12,7 +12,8 @@ import { bus, send, type Bus, type SoundCategory } from "./bus";
  *
  * The monster cues and Varkis's voice are ElevenLabs-generated masters, a take pool per
  * material so a stone construct and a bog thing never die the same way, and so are the
- * shore's gulls and the swamp's frogs; everything else is a library recording. The library also fixes the
+ * shore's gulls and the swamp's frogs. Maren's voice is Gemini TTS through OpenRouter;
+ * everything else is a library recording. The library also fixes the
  * level problem outright — a 24-bit recording peaking 23 dB down still has 70+ dB
  * under it, so bringing it to the loudness target lifts nothing audible with it.
  *
@@ -201,6 +202,22 @@ const VOICES: Record<string, Voice> = {
   "npc-varkis-bye-1":         { gain: 0.503, wet: 0.06, vary: 0, takes: 2 },
   "npc-varkis-bye-2":         { gain: 0.506, wet: 0.06, vary: 0, takes: 2 },
   "npc-varkis-bye-3":         { gain: 0.518, wet: 0.06, vary: 0, takes: 2 },
+  // Maren (npc-voice.ts), levelled to the same loudness target as Varkis.
+  "npc-maren-greet-1":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-greet-2":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-greet-3":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-greet-4":        { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-shop-1":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-shop-2":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-shop-3":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-shop-4":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-bye-1":          { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-bye-2":          { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-bye-3":          { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-idle-1":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-idle-2":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-idle-3":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
+  "npc-maren-idle-4":         { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
   // Down 3.5 dB from the tonal vortex this replaced. Both masters measure the
   // same integrated loudness; a broadband gust simply reads louder than a
   // narrow pitched band does at that level, and this one lands beside the

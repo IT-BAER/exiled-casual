@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
 import { testPlayer } from "../test-fixtures";
-import { createVarkisVoice, VARKIS_SFX } from "./varkis-voice";
+import {
+  createNpcVoice, IDLE_FIRST_S, IDLE_GAP_S, IDLE_RADIUS, MAREN, MAREN_SFX, VARKIS, VARKIS_SFX, type Npc,
+} from "./npc-voice";
 
-const vendor: SnapshotEntity = { id: 3, kind: "vendor", x: 10, y: 0 };
-
-function snap(area: "hideout" | "map", x: number): Snapshot {
+function snap(area: "hideout" | "map", x: number, entities: SnapshotEntity[]): Snapshot {
   return {
     tick: 1, area, portalsLeft: 6, mapOpen: false, areaTier: 0, atlasSeed: 0, completedNodes: [],
     player: testPlayer({ x, y: 0 }),
-    entities: area === "hideout" ? [vendor] : [],
+    entities: area === "hideout" ? entities : [],
     inventory: { cols: 12, rows: 5, items: [] },
     stash: { cols: 12, rows: 12, items: [] },
     vendor: { cols: 12, rows: 12, items: [] },
@@ -18,39 +18,45 @@ function snap(area: "hideout" | "map", x: number): Snapshot {
   };
 }
 
-/** A voice whose lines each last `seconds`, on a clock the test moves. */
-function rig(seconds = 2) {
-  const heard: string[] = [];
-  let t = 0;
-  const voice = createVarkisVoice({ play: (n) => { heard.push(n); return seconds; }, now: () => t });
-  return { heard, voice, advance: (s: number) => { t += s; } };
-}
+describe.each([
+  { npc: VARKIS, sfx: VARKIS_SFX },
+  { npc: MAREN, sfx: MAREN_SFX },
+])("$npc.id's voice", ({ npc, sfx }: { npc: Npc; sfx: readonly string[] }) => {
+  const self: SnapshotEntity = { id: 3, kind: npc.kind, x: 10, y: 0 };
+  const at = (area: "hideout" | "map", x: number) => snap(area, x, [self]);
 
-describe("Varkis's voice", () => {
+  /** A voice whose lines each last `seconds`, on a clock the test moves. */
+  function rig(seconds = 2) {
+    const heard: string[] = [];
+    let t = 0;
+    const voice = createNpcVoice(npc, { play: (n) => { heard.push(n); return seconds; }, now: () => t });
+    return { heard, voice, advance: (s: number) => { t += s; } };
+  }
+
   it("names every line as a two-take npc cue", () => {
-    expect(VARKIS_SFX.filter((n) => n.startsWith("npc-varkis-greet-"))).toHaveLength(4);
-    expect(VARKIS_SFX.filter((n) => n.startsWith("npc-varkis-shop-"))).toHaveLength(4);
-    expect(VARKIS_SFX.filter((n) => n.startsWith("npc-varkis-bye-"))).toHaveLength(3);
+    expect(sfx.filter((n) => n.startsWith(`npc-${npc.id}-greet-`))).toHaveLength(4);
+    expect(sfx.filter((n) => n.startsWith(`npc-${npc.id}-shop-`))).toHaveLength(4);
+    expect(sfx.filter((n) => n.startsWith(`npc-${npc.id}-bye-`))).toHaveLength(3);
   });
 
   it("greets on the first approach of a hideout visit, and again only after leaving and coming back", () => {
     const { heard, voice, advance } = rig();
-    for (const x of [0, 9, 9, 0, 9]) { voice.observe(snap("hideout", x)); advance(5); }
+    for (const x of [0, 9, 9, 0, 9]) { voice.observe(at("hideout", x)); advance(5); }
     expect(heard.filter((n) => n.includes("greet"))).toHaveLength(1);
-    voice.observe(snap("map", 0)); advance(5);
-    voice.observe(snap("hideout", 0)); advance(5);
-    voice.observe(snap("hideout", 9));
+    voice.observe(at("map", 0)); advance(5);
+    voice.observe(at("hideout", 0)); advance(5);
+    voice.observe(at("hideout", 9));
     expect(heard.filter((n) => n.includes("greet"))).toHaveLength(2);
   });
 
-  it("speaks when his window opens and when it closes, not for a window that was never open", () => {
+  it("speaks when the window opens and when it closes, not for a window that was never open", () => {
     const { heard, voice, advance } = rig();
     voice.window(false);
     expect(heard).toEqual([]);
     voice.window(true); advance(5);
     voice.window(true); advance(5);
     voice.window(false);
-    expect(heard.map((n) => n.replace(/-\d+$/, ""))).toEqual(["npc-varkis-shop", "npc-varkis-bye"]);
+    expect(heard.map((n) => n.replace(/-\d+$/, ""))).toEqual([`npc-${npc.id}-shop`, `npc-${npc.id}-bye`]);
   });
 
   it("never starts a line over one still playing", () => {
@@ -67,9 +73,9 @@ describe("Varkis's voice", () => {
   it("a greeting cut off by a line in progress is spent, not queued", () => {
     const { heard, voice, advance } = rig(2);
     voice.window(true);
-    voice.observe(snap("hideout", 9));
+    voice.observe(at("hideout", 9));
     advance(5);
-    voice.observe(snap("hideout", 9));
+    voice.observe(at("hideout", 9));
     expect(heard.filter((n) => n.includes("greet"))).toHaveLength(0);
   });
 
@@ -87,36 +93,118 @@ describe("Varkis's voice", () => {
     expect(new Set(bye).size).toBe(3);
   });
 
-  it("greets from where he stands, not from the middle of the head", () => {
-    const at: unknown[] = [];
-    const voice = createVarkisVoice({ play: (_n, where) => { at.push(where); return 2; }, now: () => 0 });
-    voice.observe(snap("hideout", 9));
-    expect(at).toEqual([{ x: 10, y: 0 }]);
+  it("greets from where the speaker stands, not from the middle of the head", () => {
+    const where: unknown[] = [];
+    const voice = createNpcVoice(npc, { play: (_n, w) => { where.push(w); return 2; }, now: () => 0 });
+    voice.observe(at("hideout", 9));
+    expect(where).toEqual([{ x: 10, y: 0 }]);
   });
 
-  it("speaks his shop and parting lines from where the last hideout snapshot saw him", () => {
-    const at: unknown[] = [];
+  it("speaks the shop and parting lines from where the last hideout snapshot saw the speaker", () => {
+    const where: unknown[] = [];
     let t = 0;
-    const voice = createVarkisVoice({ play: (_n, where) => { at.push(where); return 1; }, now: () => t });
-    voice.observe(snap("hideout", 0)); // too far to greet
+    const voice = createNpcVoice(npc, { play: (_n, w) => { where.push(w); return 1; }, now: () => t });
+    voice.observe(at("hideout", 0)); // too far to greet
     voice.window(true); t += 5;
-    voice.observe(snap("map", 0)); // leaving the hideout does not move him
+    voice.observe(at("map", 0)); // leaving the hideout does not move them
     voice.window(false);
-    expect(at).toEqual([{ x: 10, y: 0 }, { x: 10, y: 0 }]);
+    expect(where).toEqual([{ x: 10, y: 0 }, { x: 10, y: 0 }]);
   });
 
-  it("with no sight of him yet, a line still plays, on the player", () => {
-    const at: unknown[] = [];
-    const voice = createVarkisVoice({ play: (_n, where) => { at.push(where); return 1; }, now: () => 0 });
+  it("with no sight of the speaker yet, a line still plays, on the player", () => {
+    const where: unknown[] = [];
+    const voice = createNpcVoice(npc, { play: (_n, w) => { where.push(w); return 1; }, now: () => 0 });
     voice.window(true);
-    expect(at).toEqual([null]);
+    expect(where).toEqual([null]);
   });
 
   it("a line that could not play does not hold the voice", () => {
     const heard: string[] = [];
-    const voice = createVarkisVoice({ play: (n) => { heard.push(n); return 0; }, now: () => 0 });
+    const voice = createNpcVoice(npc, { play: (n) => { heard.push(n); return 0; }, now: () => 0 });
     voice.window(true);
     voice.window(false);
     expect(heard).toHaveLength(2);
+  });
+});
+
+describe("Maren's asides", () => {
+  const self: SnapshotEntity = { id: 9, kind: "cartographer", x: 10, y: 0 };
+  /** The player at `x`, Maren at 10; lines last a second; the clock and the dice are the test's. */
+  function rig(random = () => 0) {
+    const heard: string[] = [];
+    let t = 0;
+    const voice = createNpcVoice(MAREN, { play: (n) => { heard.push(n); return 1; }, now: () => t, random });
+    const asides = () => heard.filter((n) => n.includes("idle"));
+    return { voice, asides, step: (x: number, to: number) => { t = to; voice.observe(snap("hideout", x, [self])); } };
+  }
+
+  it("names four aside lines", () => {
+    expect(MAREN_SFX.filter((n) => n.startsWith("npc-maren-idle-"))).toHaveLength(4);
+    expect(VARKIS_SFX.some((n) => n.includes("idle"))).toBe(false);
+  });
+
+  it("says one now and then while the player is near, never straight after arriving", () => {
+    const { asides, step } = rig();
+    step(5, 0);
+    step(5, IDLE_FIRST_S - 1);
+    expect(asides()).toHaveLength(0);
+    step(5, IDLE_FIRST_S);
+    expect(asides()).toHaveLength(1);
+    step(5, IDLE_FIRST_S + IDLE_GAP_S[0] - 1);
+    expect(asides()).toHaveLength(1);
+    step(5, IDLE_FIRST_S + IDLE_GAP_S[0]);
+    expect(asides()).toHaveLength(2);
+  });
+
+  it("spaces them by a random gap inside the bounds", () => {
+    const { asides, step } = rig(() => 0.999);
+    step(5, 0);
+    step(5, IDLE_FIRST_S);
+    step(5, IDLE_FIRST_S + IDLE_GAP_S[1] - 1);
+    expect(asides()).toHaveLength(1);
+    step(5, IDLE_FIRST_S + IDLE_GAP_S[1]);
+    expect(asides()).toHaveLength(2);
+  });
+
+  it("keeps quiet across the room, and while her table is open", () => {
+    const far = rig();
+    far.step(10 - IDLE_RADIUS - 1, 0);
+    far.step(10 - IDLE_RADIUS - 1, 1000);
+    expect(far.asides()).toHaveLength(0);
+    const shopping = rig();
+    shopping.step(5, 0);
+    shopping.voice.window(true);
+    shopping.step(5, 1000);
+    expect(shopping.asides()).toHaveLength(0);
+  });
+
+  it("starts the wait over on every hideout visit", () => {
+    const { asides, step, voice } = rig();
+    step(5, 0);
+    voice.observe(snap("map", 5, []));
+    step(5, 500);
+    step(5, 500 + IDLE_FIRST_S - 1);
+    expect(asides()).toHaveLength(0);
+  });
+
+  it("Varkis has none", () => {
+    const heard: string[] = [];
+    const varkis: SnapshotEntity = { id: 3, kind: "vendor", x: 10, y: 0 };
+    let t = 0;
+    const voice = createNpcVoice(VARKIS, { play: (n) => { heard.push(n); return 1; }, now: () => t, random: () => 0 });
+    for (t = 0; t < 2000; t += 10) voice.observe(snap("hideout", 5, [varkis]));
+    expect(heard.filter((n) => !n.includes("greet"))).toEqual([]);
+  });
+});
+
+describe("two people in one hideout", () => {
+  it("each greets only on an approach to them, from where they stand", () => {
+    const varkis: SnapshotEntity = { id: 3, kind: "vendor", x: 10, y: 0 };
+    const maren: SnapshotEntity = { id: 9, kind: "cartographer", x: -10, y: 0 };
+    const heard: string[] = [];
+    const voices = [VARKIS, MAREN].map((npc) =>
+      createNpcVoice(npc, { play: (n) => { heard.push(n); return 1; }, now: () => 0 }));
+    for (const v of voices) v.observe(snap("hideout", -9, [varkis, maren]));
+    expect(heard.map((n) => n.replace(/-\d+-?\d*$/, ""))).toEqual(["npc-maren-greet"]);
   });
 });

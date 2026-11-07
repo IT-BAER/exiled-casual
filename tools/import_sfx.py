@@ -489,6 +489,15 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
         "../elevenlabs/ambient/gull-4.mp3",
     ],
 
+    # ── Maren (audio/npc-voice.ts) ───────────────────────────────────────────────────
+    # Gemini 3.8 Flash TTS, voice Leda, through OpenRouter; two takes per line, silence
+    # cut off both ends at decode. Provenance: assets/audio/openrouter-provenance.json.
+    **{
+        f"npc-maren-{line}": [f"../openrouter/maren/{line}-{t}.wav" for t in "ab"]
+        for line in [*(f"greet-{i}" for i in range(1, 5)), *(f"shop-{i}" for i in range(1, 5)),
+                     *(f"bye-{i}" for i in range(1, 4)), *(f"idle-{i}" for i in range(1, 5))]
+    },
+
     # ── Class skill expansion: Ironsworn ──────────────────────────────────────────
     # The five buffs come up on the one `_buff_up` sound, lowest for the heaviest:
     # Iron Resolve -3, Furnace Roar -2, Crimson Fury -1, Mantle of Embers 0, Windstride +2.

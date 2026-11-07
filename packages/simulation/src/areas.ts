@@ -57,12 +57,12 @@ const STASH_Y: number = fp(-2.121);
 // on either side of the fire.
 const VENDOR_X: number = fp(2.121);
 const VENDOR_Y: number = fp(4.95);
-// Maren, the cartographer: screen (-2.2, 0.4), down-left of the device on the
-// stash's side, so Varkis keeps the right flank to himself. 4.2 from the device,
-// 3.8 from the nearest portal slot (whose reach is 2.5) and 2.2 off the lane from
-// the arrival spot to the device.
-const CARTOGRAPHER_X: number = fp(-1.838);
-const CARTOGRAPHER_Y: number = fp(-1.273);
+// Maren, the cartographer: screen (-3.0, -0.6), down-left of the device on the
+// stash's side, so Varkis keeps the right flank to himself. 3.1 from the spawn,
+// 5.5 from the device, 4.6 from the nearest portal slot (whose reach is 2.5), 3.3
+// from the stash and 3.0 from the nearest bench at the table.
+const CARTOGRAPHER_X: number = fp(-1.697);
+const CARTOGRAPHER_Y: number = fp(-2.546);
 
 /**
  * Offsets from the map device, plus the render yaw that angles each portal outward.

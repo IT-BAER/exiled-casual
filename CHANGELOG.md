@@ -15,6 +15,13 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - The main menu shows the newest devlog screenshots beside the buttons, one
   large and two small. Click one to see it full size.
 - A Patch Notes window on the main menu lists the last five releases in short.
+- Maren the cartographer talks: she greets you when you walk up, and says a
+  line when her table of Waystones opens and when it closes. Now and then she
+  says something to nobody in particular.
+
+### Changed
+
+- Maren stands further out from the middle of the hideout.
 
 ### Fixed
 

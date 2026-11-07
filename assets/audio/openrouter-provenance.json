@@ -1,0 +1,166 @@
+{
+  "about": "Every OpenRouter generation that ships in Exiled Casual. Generated through the OpenRouter MCP (generate-speech), billed to the owner's OpenRouter account.",
+  "generations": [
+    {
+      "kind": "speech",
+      "what": "Maren NPC lines (apps/web/public/audio/npc-maren-*)",
+      "model": "google/gemini-3.8-flash-tts-20260922",
+      "provider": "Google",
+      "voice": "Leda",
+      "instructions": "A young woman, a travelling cartographer in a dark fantasy world. Warm, curious, a little dry. Speak naturally, not like an announcer.",
+      "takes": [
+        {
+          "take": "bye-1-a",
+          "file": "npc-maren-bye-1-1.webm",
+          "generation_id": "gen-tts-1794056692-buF9Yulne7uWW9wCB3tY"
+        },
+        {
+          "take": "bye-1-b",
+          "file": "npc-maren-bye-1-2.webm",
+          "generation_id": "gen-tts-1794056753-Wo8LYWMtw9IsATBtttmV"
+        },
+        {
+          "take": "bye-2-a",
+          "file": "npc-maren-bye-2-1.webm",
+          "generation_id": "gen-tts-1794056695-z9ZrOhq27ohQJq1sv5yl"
+        },
+        {
+          "take": "bye-2-b",
+          "file": "npc-maren-bye-2-2.webm",
+          "generation_id": "gen-tts-1794056755-TrYU1oPuMFUFHctLstlA"
+        },
+        {
+          "take": "bye-3-a",
+          "file": "npc-maren-bye-3-1.webm",
+          "generation_id": "gen-tts-1794056698-qRa6dIbAXFyzLQMPhypm"
+        },
+        {
+          "take": "bye-3-b",
+          "file": "npc-maren-bye-3-2.webm",
+          "generation_id": "gen-tts-1794056759-bfYAaVmddSpiW09MEZQZ"
+        },
+        {
+          "take": "greet-1-a",
+          "file": "npc-maren-greet-1-1.webm",
+          "generation_id": "gen-tts-1794056663-8fKek61rlnv7aQ8s5ViD"
+        },
+        {
+          "take": "greet-1-b",
+          "file": "npc-maren-greet-1-2.webm",
+          "generation_id": "gen-tts-1794056723-7aHxymC8GtdnILj2WQPK"
+        },
+        {
+          "take": "greet-2-a",
+          "file": "npc-maren-greet-2-1.webm",
+          "generation_id": "gen-tts-1794056667-cwzHioe2jqQJCuVQjkmB"
+        },
+        {
+          "take": "greet-2-b",
+          "file": "npc-maren-greet-2-2.webm",
+          "generation_id": "gen-tts-1794056728-rqXT5jyJqX9hfhwVLwoR"
+        },
+        {
+          "take": "greet-3-a",
+          "file": "npc-maren-greet-3-1.webm",
+          "generation_id": "gen-tts-1794056671-rVw8j2hnV7WeaXdakjHw"
+        },
+        {
+          "take": "greet-3-b",
+          "file": "npc-maren-greet-3-2.webm",
+          "generation_id": "gen-tts-1794056731-L9srmK7deFifZMXdSZOT"
+        },
+        {
+          "take": "greet-4-a",
+          "file": "npc-maren-greet-4-1.webm",
+          "generation_id": "gen-tts-1794056674-6bXXSsyKquZrDEKWPr6w"
+        },
+        {
+          "take": "greet-4-b",
+          "file": "npc-maren-greet-4-2.webm",
+          "generation_id": "gen-tts-1794056735-Gcscuchl2mq0JmgeF0ju"
+        },
+        {
+          "take": "idle-1-a",
+          "file": "npc-maren-idle-1-1.webm",
+          "generation_id": "gen-tts-1794057314-4Key4lGW26hSRCClRxze"
+        },
+        {
+          "take": "idle-1-b",
+          "file": "npc-maren-idle-1-2.webm",
+          "generation_id": "gen-tts-1794057328-bhUpR6BRRdMfO8NPMoYI"
+        },
+        {
+          "take": "idle-2-a",
+          "file": "npc-maren-idle-2-1.webm",
+          "generation_id": "gen-tts-1794057318-UN8LYpf6tPYumxBFPS00"
+        },
+        {
+          "take": "idle-2-b",
+          "file": "npc-maren-idle-2-2.webm",
+          "generation_id": "gen-tts-1794057331-SnpculiS2iFPJHdmJfVw"
+        },
+        {
+          "take": "idle-3-a",
+          "file": "npc-maren-idle-3-1.webm",
+          "generation_id": "gen-tts-1794057321-hfR3U0Zek0uIr3YjdCnL"
+        },
+        {
+          "take": "idle-3-b",
+          "file": "npc-maren-idle-3-2.webm",
+          "generation_id": "gen-tts-1794057334-syW2g3ENXVuFhuddYZM3"
+        },
+        {
+          "take": "idle-4-a",
+          "file": "npc-maren-idle-4-1.webm",
+          "generation_id": "gen-tts-1794057324-lUW4hN7zqY0oCxvIawML"
+        },
+        {
+          "take": "idle-4-b",
+          "file": "npc-maren-idle-4-2.webm",
+          "generation_id": "gen-tts-1794057337-wKlppZHrrEoTHG4nTlYC"
+        },
+        {
+          "take": "shop-1-a",
+          "file": "npc-maren-shop-1-1.webm",
+          "generation_id": "gen-tts-1794056678-NNV4JI3dW6cme4GpBav7"
+        },
+        {
+          "take": "shop-1-b",
+          "file": "npc-maren-shop-1-2.webm",
+          "generation_id": "gen-tts-1794056738-SIxi9v15IDAC6yerqLaG"
+        },
+        {
+          "take": "shop-2-a",
+          "file": "npc-maren-shop-2-1.webm",
+          "generation_id": "gen-tts-1794056681-phWDm9SeO0mngGIWpTcP"
+        },
+        {
+          "take": "shop-2-b",
+          "file": "npc-maren-shop-2-2.webm",
+          "generation_id": "gen-tts-1794056742-HdMSEY4jRqMlVYtwGNpi"
+        },
+        {
+          "take": "shop-3-a",
+          "file": "npc-maren-shop-3-1.webm",
+          "generation_id": "gen-tts-1794056685-5yHZ3TfkipELaEU7hCxK"
+        },
+        {
+          "take": "shop-3-b",
+          "file": "npc-maren-shop-3-2.webm",
+          "generation_id": "gen-tts-1794056746-lHZ4qJWe2nb9NdLIzHj3"
+        },
+        {
+          "take": "shop-4-a",
+          "file": "npc-maren-shop-4-1.webm",
+          "generation_id": "gen-tts-1794056688-w8gnrogWfRikBGlAwb0k"
+        },
+        {
+          "take": "shop-4-b",
+          "file": "npc-maren-shop-4-2.webm",
+          "generation_id": "gen-tts-1794056749-B8N8epIe8zmflFYuXxvV"
+        }
+      ],
+      "instructions_idle": "A young woman, a travelling cartographer in a dark fantasy world. Said half to herself while drawing, wry and a little teasing. Speak naturally, not like an announcer."
+    }
+  ]
+}

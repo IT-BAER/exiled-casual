@@ -37,7 +37,7 @@ import { createSoundscape } from "./audio/soundscape";
 import { telemetry } from "./telemetry/client";
 import { reportError } from "./telemetry/errors";
 import { createGameObserver } from "./telemetry/observe";
-import { createVarkisVoice, VARKIS_SFX } from "./audio/varkis-voice";
+import { createNpcVoice, MAREN, MAREN_SFX, VARKIS, VARKIS_SFX } from "./audio/npc-voice";
 import { createDebugSnapshotLog, dlog } from "./debug";
 import { preloadUiArt } from "./ui-art";
 import { preloadWorldArt } from "./render/world-art";
@@ -169,9 +169,11 @@ export function GameView({
   // pickupRefusedTick cannot carry the Inventory Full note.
   const [refusedSeq, setRefusedSeq] = useState(0);
   const onTransferRefused = useCallback(() => setRefusedSeq((n) => n + 1), []);
-  const [varkis] = useState(createVarkisVoice);
+  const [varkis] = useState(() => createNpcVoice(VARKIS));
+  const [maren] = useState(() => createNpcVoice(MAREN));
   // The window's state, not the click: he speaks only for a window that really opened or closed.
   useEffect(() => { varkis.window(vendorOpen && shop === undefined); }, [varkis, vendorOpen, shop]);
+  useEffect(() => { maren.window(vendorOpen && shop === "maps"); }, [maren, vendorOpen, shop]);
   const [characterOpen, setCharacterOpen] = useState(false);
   // The passive tree (P). Fullscreen, like PoE's own, and render-only until a
   // node is clicked — the sim owns whether that click is allowed.
@@ -709,6 +711,7 @@ export function GameView({
         soundscape.observe(msg.snapshot);
         for (const ev of watch.observe(msg.snapshot)) telemetry.track(ev);
         varkis.observe(msg.snapshot);
+        maren.observe(msg.snapshot);
         debugLog(msg.snapshot);
         // An idle frame moves only `tick`, which nothing in React reads, so it renders nothing.
         const ticked = shownSnap && { ...shownSnap, tick: msg.snapshot.tick };
@@ -801,7 +804,7 @@ export function GameView({
         buildSea(scene, grid, base && BIOMES[base.biomeId].sea === true ? true : grid?.water && !grid.shore ? "fen" : false);
         setMapFill(scene, msg.area === "map");
         // Furniture, and only in the hideout: a map is a place you pass through.
-        if (msg.area === "hideout") { buildHideoutDecor(scene); void preloadSfx(VARKIS_SFX); }
+        if (msg.area === "hideout") { buildHideoutDecor(scene); void preloadSfx([...VARKIS_SFX, ...MAREN_SFX]); }
         else clearHideoutDecor(scene);
         applyTilesetFloor(scene, base?.tilesetId ?? null);
         setGroundPatch(scene, base?.tilesetId ?? null, tilesetDir);

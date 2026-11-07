@@ -28,14 +28,16 @@ const stone = (seed: number, tier: number): Item =>
 const WAND: Item = { baseId: "base.ember_wand", rarity: "magic", itemLevel: 10, affixes: [{ affixId: "mod.fire_dmg_1", value: 1 }] };
 
 describe("Maren stands in the hideout", () => {
-  it("near the map device and clear of every portal the device can open", () => {
+  it("a short walk from the map device and clear of every portal the device can open", () => {
     const { world } = makeWorld();
     spawnPortalRing(world, 6);
     const of = (kind: string) => world.query("interactable").filter((e) => world.get<InteractableC>(e, "interactable")!.kind === kind)
       .map((e) => world.get<Position>(e, "position")!);
     const [maren] = of("cartographer");
     expect(of("cartographer")).toHaveLength(1);
-    expect(dist(maren!, MAP_DEVICE_POS)).toBeLessThanOrEqual(4.5);
+    // Out of the middle of the room, not across it from the device.
+    expect(dist(maren!, MAP_DEVICE_POS)).toBeLessThanOrEqual(5.5);
+    expect(dist(maren!, { x: 0, y: 0 })).toBeGreaterThan(3);
     const portals = of("portal");
     expect(portals).toHaveLength(6);
     for (const p of portals) expect(dist(maren!, p)).toBeGreaterThan(PORTAL_RADIUS / 1000 + 1);
