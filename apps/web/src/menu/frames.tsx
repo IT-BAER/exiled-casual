@@ -69,15 +69,16 @@ export function FramedPanel({
   children,
   style,
   fill = "linear-gradient(180deg, rgba(10,11,13,0.94), rgba(6,7,9,0.97))",
+  border = FRAME_BORDER,
   ...rest
-}: React.HTMLAttributes<HTMLDivElement> & { fill?: string }): React.ReactElement {
+}: React.HTMLAttributes<HTMLDivElement> & { fill?: string; border?: number }): React.ReactElement {
   return (
     <div
       {...rest}
       style={{
         position: "relative",
         borderStyle: "solid",
-        borderWidth: FRAME_BORDER,
+        borderWidth: border,
         borderColor: "transparent",
         // Without this the fill paints under the frame's transparent gaps and
         // the ornament sits on a solid block instead of on the scene.
@@ -94,10 +95,10 @@ export function FramedPanel({
           position: "absolute",
           // Absolute insets are measured from the padding box, so backing out by
           // the border width is what makes this overlay the border box exactly.
-          inset: -FRAME_BORDER,
+          inset: -border,
           pointerEvents: "none",
           borderStyle: "solid",
-          borderWidth: FRAME_BORDER,
+          borderWidth: border,
           borderImageSource: `url(${MENU_ART}/panel_frame.webp)`,
           borderImageSlice: FRAME_SLICE,
           borderImageRepeat: "round",

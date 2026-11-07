@@ -192,15 +192,12 @@ function useWide(): boolean {
  * short, straight out of CHANGELOG.md (tools/changelog_to_news.mjs).
  */
 function PatchNotes(): React.ReactElement | null {
-  // Quiet until looked at: the composition's weight is the logo and the panel
-  // with PLAY, so this sits dimmed and wakes on hover.
-  const [hover, setHover] = React.useState(false);
   if (!useWide()) return null;
   return (
     <FramedPanel
       data-testid="patch-notes"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      // A thinner gilt than the PLAY panel's: the composition's weight stays there.
+      border={12}
       style={{
         position: "absolute",
         left: "1.2vw",
@@ -209,8 +206,6 @@ function PatchNotes(): React.ReactElement | null {
         width: "min(16vw, 260px)",
         padding: "10px 12px",
         zIndex: 2,
-        opacity: hover ? 1 : 0.6,
-        transition: "opacity 200ms ease",
       }}
     >
       <div style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", color: GOLD_DIM }}>
@@ -230,8 +225,10 @@ function PatchNotes(): React.ReactElement | null {
             <span>{"  ·  "}{shortDate(r.date)}</span>
           </div>
           {r.entries.map((line) => (
-            <div key={line} style={{ fontFamily: SERIF, fontSize: 11, color: PARCHMENT, lineHeight: 1.35, opacity: 0.8, marginBottom: 2 }}>
-              {line}
+            <div key={line} style={{ display: "flex", gap: 7, fontFamily: SERIF, fontSize: 11, color: PARCHMENT, lineHeight: 1.35, marginBottom: 2 }}>
+              {/* The HUD tracker's gilt diamond, one per note. */}
+              <span style={{ width: 4, height: 4, marginTop: 5, transform: "rotate(45deg)", border: `1px solid ${GOLD}`, flex: "0 0 auto" }} />
+              <span style={{ opacity: 0.85 }}>{line}</span>
             </div>
           ))}
         </div>
