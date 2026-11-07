@@ -82,6 +82,8 @@ export interface UiSettings {
   mapEntered: string[];
   /** Held over an item, shows what is worn in its slot beside it. */
   compareKey: CompareKey;
+  /** Which pointer art the page draws everywhere (index.html, cursor.ts). */
+  cursor: CursorStyle;
   /**
    * Print what the sim is doing to the browser console (see debug.ts). Default
    * OFF: it is a firehose, and it is here for the session where something needs
@@ -100,6 +102,10 @@ export const CONTROL_MODES: readonly ControlMode[] = ["mouse", "wasd"];
 /** The modifier that compares a hovered item with the equipped one. */
 export type CompareKey = "ctrl" | "shift";
 export const COMPARE_KEYS: readonly CompareKey[] = ["ctrl", "shift"];
+
+/** The pointer's art: PoE2's plain arrow, or the gilt blade the game shipped with. */
+export type CursorStyle = "plain" | "gilt";
+export const CURSOR_STYLES: readonly CursorStyle[] = ["plain", "gilt"];
 
 /** Everything a key can be told to do. Escape stays fixed. */
 export const KEYBIND_ACTIONS = [
@@ -255,6 +261,7 @@ export const DEFAULT_SETTINGS: Settings = {
     controls: {},
     mapEntered: [],
     compareKey: "ctrl",
+    cursor: "plain",
     debugLogging: false,
   },
 };
@@ -383,6 +390,7 @@ export function sanitize(raw: unknown, renderer?: string): Settings {
       controls: controls(u["controls"]),
       mapEntered: characterIds(u["mapEntered"]),
       compareKey: member(u["compareKey"], COMPARE_KEYS, d.ui.compareKey),
+      cursor: member(u["cursor"], CURSOR_STYLES, d.ui.cursor),
       debugLogging: bool(u["debugLogging"], d.ui.debugLogging),
     },
   };

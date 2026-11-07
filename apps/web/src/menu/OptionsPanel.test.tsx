@@ -206,6 +206,49 @@ describe("OptionsPanel", () => {
   });
 });
 
+describe("cursor picker", () => {
+  const openUi = () => fireEvent.click(screen.getByRole("tab", { name: /^ui$/i }));
+
+  it("shows the plain arrow by default, with its picture", () => {
+    setup();
+    openUi();
+    const picker = screen.getByRole("button", { name: /cursor/i });
+    expect(picker.textContent).toMatch(/plain/i);
+    expect(picker.querySelector("img")?.getAttribute("src")).toBe("/textures/ui/cursor_plain_64.png");
+  });
+
+  it("opens a list where every cursor shows its picture beside its name", () => {
+    setup();
+    openUi();
+    fireEvent.click(screen.getByRole("button", { name: /cursor/i }));
+    const options = within(screen.getByRole("listbox", { name: /cursor/i })).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual(["Plain", "Gilt Blade"]);
+    expect(options.map((o) => o.querySelector("img")?.getAttribute("src"))).toEqual([
+      "/textures/ui/cursor_plain_64.png",
+      "/textures/ui/cursor_64.png",
+    ]);
+    expect(options[0]!.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("picking one reports the whole next settings object and closes the list", () => {
+    const { onChange } = setup();
+    openUi();
+    fireEvent.click(screen.getByRole("button", { name: /cursor/i }));
+    fireEvent.click(screen.getByRole("option", { name: /gilt blade/i }));
+    const next = onChange.mock.calls[0]![0] as Settings;
+    expect(next.ui.cursor).toBe("gilt");
+    expect(next.ui.minimap).toBe(DEFAULT_SETTINGS.ui.minimap);
+    expect(next.graphics).toEqual(DEFAULT_SETTINGS.graphics);
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("shows the cursor it was given", () => {
+    setup({ ui: { ...DEFAULT_SETTINGS.ui, cursor: "gilt" } });
+    openUi();
+    expect(screen.getByRole("button", { name: /cursor/i }).textContent).toMatch(/gilt blade/i);
+  });
+});
+
 describe("the Options route", () => {
   it("the main menu opens the panel, not the old prose screen", async () => {
     // Imported here rather than at the top: App pulls in GameView's module

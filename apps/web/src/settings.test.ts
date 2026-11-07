@@ -271,3 +271,16 @@ describe("graphics presets and auto-detect", () => {
     expect(sanitize({ graphics: { shadows: "medium" } }).graphics.shadows).toBe("medium");
   });
 });
+
+describe("the cursor rides in the settings", () => {
+  it("defaults to the plain arrow, keeps a known pick and drops an unknown one", () => {
+    expect(sanitize(null).ui.cursor).toBe("plain");
+    expect(sanitize({ ui: { cursor: "gilt" } }).ui.cursor).toBe("gilt");
+    expect(sanitize({ ui: { cursor: "hand" } }).ui.cursor).toBe("plain");
+  });
+
+  it("survives the trip through the save", () => {
+    const saved = JSON.parse(JSON.stringify({ ...DEFAULT_SETTINGS, ui: { ...DEFAULT_SETTINGS.ui, cursor: "gilt" } }));
+    expect(sanitize(saved).ui.cursor).toBe("gilt");
+  });
+});

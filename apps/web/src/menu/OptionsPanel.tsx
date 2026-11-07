@@ -17,7 +17,8 @@
 import React from "react";
 import { DISPLAY, SERIF, Divider, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT } from "./frames";
 import { GUARD_FLOOR_FPS } from "../fps-guard";
-import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, keyCap, type CompareKey, type ControlMode, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
+import { CURSORS } from "../cursor";
+import { DEFAULT_KEYBINDS_BY_MODE, DEFAULT_SETTINGS, MOVE_ACTIONS, controlModeOf, keyCap, type CompareKey, type ControlMode, type CursorStyle, GRAPHICS_PRESETS, MIN_RESOLUTION_SCALE, presetForRenderer, presetOf, type GraphicsPreset, type KeybindAction, type Keybinds, type Settings, type ShadowQuality } from "../settings";
 import { gpuRenderer } from "../gpu";
 import { playSoundPreview, type SoundPreviewCategory } from "../audio/bus";
 // hud/layout.ts imports nothing, so the menu bundle gains two numbers, not the HUD.
@@ -411,6 +412,9 @@ export function OptionsPanel({
                   onToggle={(monsterHealthBars) => setUi({ monsterHealthBars })}
                 />
               </Row>
+              <Row label="Cursor" note="The pointer, in the menus and the game.">
+                <CursorPicker value={settings.ui.cursor} onPick={(cursor) => setUi({ cursor })} />
+              </Row>
               <Group>Troubleshooting</Group>
               <Row
                 label="Debug Logging"
@@ -655,6 +659,92 @@ function Choice<T extends string>({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * A dropdown whose entries are pictures: a cursor is chosen by how it looks, and
+ * a native select can only show its name. Clicking anywhere else folds it.
+ */
+function CursorPicker({
+  value,
+  onPick,
+}: {
+  value: CursorStyle;
+  onPick: (next: CursorStyle) => void;
+}): React.ReactElement {
+  const [open, setOpen] = React.useState(false);
+  const current = CURSORS.find((c) => c.id === value) ?? CURSORS[0]!;
+
+  React.useEffect(() => {
+    if (!open) return;
+    const fold = () => setOpen(false);
+    window.addEventListener("pointerdown", fold);
+    return () => window.removeEventListener("pointerdown", fold);
+  }, [open]);
+
+  const plate = (on: boolean): React.CSSProperties => ({
+    appearance: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    padding: "4px 12px 4px 6px",
+    border: `1px solid ${on ? GOLD : "#3a352c"}`,
+    background: on ? "rgba(200,164,77,0.16)" : "rgba(0,0,0,0.45)",
+    fontFamily: SERIF,
+    fontSize: 12,
+    letterSpacing: 1.4,
+    color: on ? "#f6e6bd" : "#d8c9a8",
+    cursor: "pointer",
+  });
+  const picture = (src: string) => (
+    <img src={src} alt="" width={26} height={26} style={{ display: "block", objectFit: "contain" }} />
+  );
+
+  return (
+    <div style={{ position: "relative", minWidth: 150 }} onPointerDown={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        aria-label="Cursor"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        style={plate(open)}
+      >
+        {picture(current.src)}
+        <span style={{ flex: 1, textAlign: "left" }}>{current.label}</span>
+        <span aria-hidden style={{ color: GOLD_DIM }}>▾</span>
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Cursor"
+          style={{
+            position: "absolute",
+            top: "100%",
+            right: 0,
+            left: 0,
+            zIndex: 1,
+            background: "rgba(8,7,5,0.96)",
+            border: "1px solid #3a352c",
+          }}
+        >
+          {CURSORS.map((c) => (
+            <div
+              key={c.id}
+              role="option"
+              aria-selected={c.id === value}
+              onClick={() => { onPick(c.id); setOpen(false); }}
+              style={{ ...plate(c.id === value), border: "none" }}
+            >
+              {picture(c.src)}
+              <span>{c.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

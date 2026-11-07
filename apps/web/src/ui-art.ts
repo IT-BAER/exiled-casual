@@ -36,6 +36,9 @@ export const UI_ART: readonly string[] = [
   `${MENU}/slider_handle.webp`,
   `${MENU}/tab_plate.webp`,
   `${MENU}/row_plate.webp`,
+  // The Cursor picker's pictures (cursor.ts).
+  "/textures/ui/cursor_plain_64.png",
+  "/textures/ui/cursor_64.png",
   // Item tooltips: the first hover paints the rarity band, so all four warm.
   `${MENU}/tooltip_header_normal.webp`,
   `${MENU}/tooltip_header_magic.webp`,
