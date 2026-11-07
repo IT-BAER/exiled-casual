@@ -10,6 +10,24 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Hard rares: a rare monster with a second modifier (Hulking, Relentless or
+  Savage) that always drops a rare item. The first rare of every map you clear
+  for the first time is one, and after that about one map in three has one.
+  They glow hotter, and the target frame says "Drops a Rare Item".
+- After you kill a map's boss, the objective names the place its Waystone
+  opens. Back in the hideout it names your next map and tier, and the Map
+  Device glows until you open it.
+
+### Fixed
+
+- The game no longer crashes when the browser translates the page. Translation
+  is now off inside the game view, so the interface stays in English there.
+- Seating a Waystone in the Map Device could crash Safari with page
+  translation on.
+- A dark band showed past the sleeve on the upper arm of every chest piece.
+
 ## [0.7.2] - 2026-11-06
 
 ### Added
