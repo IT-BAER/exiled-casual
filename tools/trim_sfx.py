@@ -168,7 +168,7 @@ MAX_SECONDS: dict[str, float] = {
 # Ambient details keep the region they were cut at: a drip's cave tail, the second hoot
 # of an owl and the rest of a howl are the sound, and the take walk below cuts all three.
 # A spoken line too: the take walk ends it at the next word's attack.
-WHOLE_PREFIXES = ("ambient-", "npc-")
+WHOLE_PREFIXES = ("ambient-", "npc-", "voice-")
 # Their region ends inside a recording's room tone, so the fade is long enough to be a decay.
 WHOLE_FADE_MS = 150
 

@@ -498,6 +498,17 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
                      *(f"bye-{i}" for i in range(1, 4)), *(f"idle-{i}" for i in range(1, 5))]
     },
 
+    # ── The player's voice (audio/player-voice.ts) ───────────────────────────────────
+    # Gemini 3.8 Flash TTS through OpenRouter, one take per line: Ironsworn Charon,
+    # Stalker Iapetus, Emberbound Kore. Provenance: assets/audio/openrouter-provenance.json.
+    **{
+        f"voice-{speaker}-{group}-{i}": f"../openrouter/player/{speaker}/{group}-{i}.wav"
+        for speaker in ("ironsworn-male", "stalker-male", "emberbound-female")
+        for group, n in (("hurt", 6), ("pain", 3), ("low", 3), ("streak", 4), ("boss", 3), ("slain", 3),
+                         ("loot", 3), ("level", 2), ("death", 2), ("enter", 3))
+        for i in range(1, n + 1)
+    },
+
     # ── Class skill expansion: Ironsworn ──────────────────────────────────────────
     # The five buffs come up on the one `_buff_up` sound, lowest for the heaviest:
     # Iron Resolve -3, Furnace Roar -2, Crimson Fury -1, Mantle of Embers 0, Windstride +2.

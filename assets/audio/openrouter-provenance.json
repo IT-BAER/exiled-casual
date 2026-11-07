@@ -161,6 +161,516 @@
         }
       ],
       "instructions_idle": "A young woman, a travelling cartographer in a dark fantasy world. Said half to herself while drawing, wry and a little teasing. Speak naturally, not like an announcer."
+    },
+    {
+      "kind": "speech",
+      "what": "Player voice, ironsworn-male (apps/web/public/audio/voice-ironsworn-male-*)",
+      "model": "google/gemini-3.8-flash-tts-20260922",
+      "provider": "Google",
+      "voice": "Charon",
+      "instructions": "A battle-hardened warrior in a dark fantasy world, sword and tower shield. Deep, steady, gritty. Per line a short delivery note (struck by a blow, badly wounded, facing a huge monster, ...). Not theatrical, not an announcer.",
+      "takes": [
+        {
+          "take": "boss-1",
+          "file": "voice-ironsworn-male-boss-1.webm",
+          "generation_id": "gen-tts-1794058877-KlAm07R6Zt7AZ5Lu5dsA"
+        },
+        {
+          "take": "boss-2",
+          "file": "voice-ironsworn-male-boss-2.webm",
+          "generation_id": "gen-tts-1794058880-lhFVf6rr7QTTrWHwrUHs"
+        },
+        {
+          "take": "boss-3",
+          "file": "voice-ironsworn-male-boss-3.webm",
+          "generation_id": "gen-tts-1794058883-FFqY2dCuHNdrakhN444P"
+        },
+        {
+          "take": "death-1",
+          "file": "voice-ironsworn-male-death-1.webm",
+          "generation_id": "gen-tts-1794058913-Iwn4Rx8D7EjPRECzKsrb"
+        },
+        {
+          "take": "death-2",
+          "file": "voice-ironsworn-male-death-2.webm",
+          "generation_id": "gen-tts-1794058916-NqJP4uIEbtzJNRfWcCES"
+        },
+        {
+          "take": "enter-1",
+          "file": "voice-ironsworn-male-enter-1.webm",
+          "generation_id": "gen-tts-1794058919-PJ2NvtgEuxFJwjzR7thH"
+        },
+        {
+          "take": "enter-2",
+          "file": "voice-ironsworn-male-enter-2.webm",
+          "generation_id": "gen-tts-1794058922-Fs7amHL4ikxsNtE0thYg"
+        },
+        {
+          "take": "enter-3",
+          "file": "voice-ironsworn-male-enter-3.webm",
+          "generation_id": "gen-tts-1794058924-vOkqsVT9iMYggt6EZUDO"
+        },
+        {
+          "take": "hurt-1",
+          "file": "voice-ironsworn-male-hurt-1.webm",
+          "generation_id": "gen-tts-1794058829-VwPPVKpBQEelJaXWSPxm"
+        },
+        {
+          "take": "hurt-2",
+          "file": "voice-ironsworn-male-hurt-2.webm",
+          "generation_id": "gen-tts-1794058832-2W1LMwylp8Sq4muQ45OW"
+        },
+        {
+          "take": "hurt-3",
+          "file": "voice-ironsworn-male-hurt-3.webm",
+          "generation_id": "gen-tts-1794058834-opqA21qZW5XOTzM9b6BP"
+        },
+        {
+          "take": "hurt-4",
+          "file": "voice-ironsworn-male-hurt-4.webm",
+          "generation_id": "gen-tts-1794058837-mGdyOBepyhCvWhAqhp5a"
+        },
+        {
+          "take": "hurt-5",
+          "file": "voice-ironsworn-male-hurt-5.webm",
+          "generation_id": "gen-tts-1794058839-MNUwzMLEVqEEyKQbJKJR"
+        },
+        {
+          "take": "hurt-6",
+          "file": "voice-ironsworn-male-hurt-6.webm",
+          "generation_id": "gen-tts-1794058842-zJvKZyVzU1uFIYzTSgFu"
+        },
+        {
+          "take": "level-1",
+          "file": "voice-ironsworn-male-level-1.webm",
+          "generation_id": "gen-tts-1794058905-aeGzGo9z9pbkQTTGBNJE"
+        },
+        {
+          "take": "level-2",
+          "file": "voice-ironsworn-male-level-2.webm",
+          "generation_id": "gen-tts-1794058909-j38iVJOqjCBCvkuETtdq"
+        },
+        {
+          "take": "loot-1",
+          "file": "voice-ironsworn-male-loot-1.webm",
+          "generation_id": "gen-tts-1794058896-cB2dmetzZApq7eBLkKub"
+        },
+        {
+          "take": "loot-2",
+          "file": "voice-ironsworn-male-loot-2.webm",
+          "generation_id": "gen-tts-1794058899-YFdxsZ9n3xal0lGz8QB3"
+        },
+        {
+          "take": "loot-3",
+          "file": "voice-ironsworn-male-loot-3.webm",
+          "generation_id": "gen-tts-1794058902-qcjlsBDgVSppKxnVnEUv"
+        },
+        {
+          "take": "low-1",
+          "file": "voice-ironsworn-male-low-1.webm",
+          "generation_id": "gen-tts-1794058854-JZruF3DTtFbEjpWCuza7"
+        },
+        {
+          "take": "low-2",
+          "file": "voice-ironsworn-male-low-2.webm",
+          "generation_id": "gen-tts-1794058858-DMctLjs4bNqlvbfl66nC"
+        },
+        {
+          "take": "low-3",
+          "file": "voice-ironsworn-male-low-3.webm",
+          "generation_id": "gen-tts-1794058862-yFVVJJxhjaGjnPnPbxYG"
+        },
+        {
+          "take": "pain-1",
+          "file": "voice-ironsworn-male-pain-1.webm",
+          "generation_id": "gen-tts-1794058845-hHakzyB22VUmexCqJOEf"
+        },
+        {
+          "take": "pain-2",
+          "file": "voice-ironsworn-male-pain-2.webm",
+          "generation_id": "gen-tts-1794058849-JlUIsN0XUszM2RnOlQ1h"
+        },
+        {
+          "take": "pain-3",
+          "file": "voice-ironsworn-male-pain-3.webm",
+          "generation_id": "gen-tts-1794058852-XUB8ZJqN9pERu682eWba"
+        },
+        {
+          "take": "slain-1",
+          "file": "voice-ironsworn-male-slain-1.webm",
+          "generation_id": "gen-tts-1794058886-Wvxj21DaPJ2heyQ1HUnt"
+        },
+        {
+          "take": "slain-2",
+          "file": "voice-ironsworn-male-slain-2.webm",
+          "generation_id": "gen-tts-1794058889-Uup9dfh7iGG1GAUPZIe6"
+        },
+        {
+          "take": "slain-3",
+          "file": "voice-ironsworn-male-slain-3.webm",
+          "generation_id": "gen-tts-1794058893-4LCuYqQ1Og3FJJGyWS6I"
+        },
+        {
+          "take": "streak-1",
+          "file": "voice-ironsworn-male-streak-1.webm",
+          "generation_id": "gen-tts-1794058865-zdpeICKMkLqLt4iGxvSq"
+        },
+        {
+          "take": "streak-2",
+          "file": "voice-ironsworn-male-streak-2.webm",
+          "generation_id": "gen-tts-1794058868-Hcw0pBSfa9vVJD4JwvgU"
+        },
+        {
+          "take": "streak-3",
+          "file": "voice-ironsworn-male-streak-3.webm",
+          "generation_id": "gen-tts-1794058871-ElJyJDffNdmJxnQJqu4g"
+        },
+        {
+          "take": "streak-4",
+          "file": "voice-ironsworn-male-streak-4.webm",
+          "generation_id": "gen-tts-1794058874-O2BFEKUpPs90g7uGvYyG"
+        }
+      ]
+    },
+    {
+      "kind": "speech",
+      "what": "Player voice, stalker-male (apps/web/public/audio/voice-stalker-male-*)",
+      "model": "google/gemini-3.8-flash-tts-20260922",
+      "provider": "Google",
+      "voice": "Iapetus",
+      "instructions": "A lean, quick hunter with a bow in a dark fantasy world. Dry, cocky, quiet intensity. Per line a short delivery note (struck by a blow, badly wounded, facing a huge monster, ...). Not theatrical, not an announcer.",
+      "takes": [
+        {
+          "take": "boss-1",
+          "file": "voice-stalker-male-boss-1.webm",
+          "generation_id": "gen-tts-1794059063-6p8UIXp7Me8JeRhHZGbz"
+        },
+        {
+          "take": "boss-2",
+          "file": "voice-stalker-male-boss-2.webm",
+          "generation_id": "gen-tts-1794059066-TaNxD59AUalzAMoyXrdB"
+        },
+        {
+          "take": "boss-3",
+          "file": "voice-stalker-male-boss-3.webm",
+          "generation_id": "gen-tts-1794059069-web4WUX32apxClgdm5zj"
+        },
+        {
+          "take": "death-1",
+          "file": "voice-stalker-male-death-1.webm",
+          "generation_id": "gen-tts-1794059096-piupEWB4GrhoIlKeu13b"
+        },
+        {
+          "take": "death-2",
+          "file": "voice-stalker-male-death-2.webm",
+          "generation_id": "gen-tts-1794059100-82sbzRRQFrNjFG9M7Uvc"
+        },
+        {
+          "take": "enter-1",
+          "file": "voice-stalker-male-enter-1.webm",
+          "generation_id": "gen-tts-1794059103-ITUoCp8gxYtyEDBPTVWb"
+        },
+        {
+          "take": "enter-2",
+          "file": "voice-stalker-male-enter-2.webm",
+          "generation_id": "gen-tts-1794059106-7Snks346cXhAm3MF7jUM"
+        },
+        {
+          "take": "enter-3",
+          "file": "voice-stalker-male-enter-3.webm",
+          "generation_id": "gen-tts-1794059110-oSxGrGTzaCGQVfJKWJ1O"
+        },
+        {
+          "take": "hurt-1",
+          "file": "voice-stalker-male-hurt-1.webm",
+          "generation_id": "gen-tts-1794059015-LUDP3aHmTFz7aAMVp4BV"
+        },
+        {
+          "take": "hurt-2",
+          "file": "voice-stalker-male-hurt-2.webm",
+          "generation_id": "gen-tts-1794059017-xyW2nSofYqxPpL7vv4o6"
+        },
+        {
+          "take": "hurt-3",
+          "file": "voice-stalker-male-hurt-3.webm",
+          "generation_id": "gen-tts-1794059020-Ky3TBJjizDDL0A1Z71wX"
+        },
+        {
+          "take": "hurt-4",
+          "file": "voice-stalker-male-hurt-4.webm",
+          "generation_id": "gen-tts-1794059023-PbVgEmQXUE6CW9YOruHS"
+        },
+        {
+          "take": "hurt-5",
+          "file": "voice-stalker-male-hurt-5.webm",
+          "generation_id": "gen-tts-1794059026-umu6PWQ2TaYSyuPHAoa2"
+        },
+        {
+          "take": "hurt-6",
+          "file": "voice-stalker-male-hurt-6.webm",
+          "generation_id": "gen-tts-1794059028-BTmhJ3LCKhFe3QRk4QHv"
+        },
+        {
+          "take": "level-1",
+          "file": "voice-stalker-male-level-1.webm",
+          "generation_id": "gen-tts-1794059090-HbcjRkdE49U6GkpiiCs4"
+        },
+        {
+          "take": "level-2",
+          "file": "voice-stalker-male-level-2.webm",
+          "generation_id": "gen-tts-1794059094-YKkmjJHMeORX9yZgqeCM"
+        },
+        {
+          "take": "loot-1",
+          "file": "voice-stalker-male-loot-1.webm",
+          "generation_id": "gen-tts-1794059082-O0u6KUgbKBb0sqdj0rdq"
+        },
+        {
+          "take": "loot-2",
+          "file": "voice-stalker-male-loot-2.webm",
+          "generation_id": "gen-tts-1794059085-YQAli1kdWGiAEvRjGdMs"
+        },
+        {
+          "take": "loot-3",
+          "file": "voice-stalker-male-loot-3.webm",
+          "generation_id": "gen-tts-1794059087-3bKZcNbyHk77l3t0uEwM"
+        },
+        {
+          "take": "low-1",
+          "file": "voice-stalker-male-low-1.webm",
+          "generation_id": "gen-tts-1794059040-bjIXs9aC6xuItJN0OLDX"
+        },
+        {
+          "take": "low-2",
+          "file": "voice-stalker-male-low-2.webm",
+          "generation_id": "gen-tts-1794059044-aNJMkuwgwOEzgdZdaOBe"
+        },
+        {
+          "take": "low-3",
+          "file": "voice-stalker-male-low-3.webm",
+          "generation_id": "gen-tts-1794059047-Urzqy4WVZJ6Je6uwHdRK"
+        },
+        {
+          "take": "pain-1",
+          "file": "voice-stalker-male-pain-1.webm",
+          "generation_id": "gen-tts-1794059031-GrIF0RGbHYe1bxjqVK3I"
+        },
+        {
+          "take": "pain-2",
+          "file": "voice-stalker-male-pain-2.webm",
+          "generation_id": "gen-tts-1794059035-0NXrfw6i2eod8ro0FUXX"
+        },
+        {
+          "take": "pain-3",
+          "file": "voice-stalker-male-pain-3.webm",
+          "generation_id": "gen-tts-1794059038-eYvOQlnmmy7E7wnPqPsL"
+        },
+        {
+          "take": "slain-1",
+          "file": "voice-stalker-male-slain-1.webm",
+          "generation_id": "gen-tts-1794059072-XZWeSOhX6dHsBcELTO7x"
+        },
+        {
+          "take": "slain-2",
+          "file": "voice-stalker-male-slain-2.webm",
+          "generation_id": "gen-tts-1794059075-InqFQ9Yc1Hq1Pr3EeG6N"
+        },
+        {
+          "take": "slain-3",
+          "file": "voice-stalker-male-slain-3.webm",
+          "generation_id": "gen-tts-1794059079-4DVQjNjOsobyYBmyeiEY"
+        },
+        {
+          "take": "streak-1",
+          "file": "voice-stalker-male-streak-1.webm",
+          "generation_id": "gen-tts-1794059050-1wNVXIMkiyH2e2dGJBcW"
+        },
+        {
+          "take": "streak-2",
+          "file": "voice-stalker-male-streak-2.webm",
+          "generation_id": "gen-tts-1794059053-8WR3bCgnoFmBHTblPnK5"
+        },
+        {
+          "take": "streak-3",
+          "file": "voice-stalker-male-streak-3.webm",
+          "generation_id": "gen-tts-1794059057-0ecR4rycLalnbPbJCSsT"
+        },
+        {
+          "take": "streak-4",
+          "file": "voice-stalker-male-streak-4.webm",
+          "generation_id": "gen-tts-1794059060-q079ZuKSEBKrx9E7uYE3"
+        }
+      ]
+    },
+    {
+      "kind": "speech",
+      "what": "Player voice, emberbound-female (apps/web/public/audio/voice-emberbound-female-*)",
+      "model": "google/gemini-3.8-flash-tts-20260922",
+      "provider": "Google",
+      "voice": "Kore",
+      "instructions": "A young woman, a fire mage in a dark fantasy world. Fierce and controlled, a little wild underneath. Per line a short delivery note (struck by a blow, badly wounded, facing a huge monster, ...). Not theatrical, not an announcer.",
+      "takes": [
+        {
+          "take": "boss-1",
+          "file": "voice-emberbound-female-boss-1.webm",
+          "generation_id": "gen-tts-1794059242-VQiHwN57Go46cBq4RqAf"
+        },
+        {
+          "take": "boss-2",
+          "file": "voice-emberbound-female-boss-2.webm",
+          "generation_id": "gen-tts-1794059246-AW5ODuxNZHderXwvL1bH"
+        },
+        {
+          "take": "boss-3",
+          "file": "voice-emberbound-female-boss-3.webm",
+          "generation_id": "gen-tts-1794059249-897Z2NtF5lMCjVwB8Rd7"
+        },
+        {
+          "take": "death-1",
+          "file": "voice-emberbound-female-death-1.webm",
+          "generation_id": "gen-tts-1794059277-y5BzTacGZdzwwZ2r6aaI"
+        },
+        {
+          "take": "death-2",
+          "file": "voice-emberbound-female-death-2.webm",
+          "generation_id": "gen-tts-1794059280-s6dxXzGarhyIBKY5ffuf"
+        },
+        {
+          "take": "enter-1",
+          "file": "voice-emberbound-female-enter-1.webm",
+          "generation_id": "gen-tts-1794059283-xGtlSRjzSEzEuEnTmgR6"
+        },
+        {
+          "take": "enter-2",
+          "file": "voice-emberbound-female-enter-2.webm",
+          "generation_id": "gen-tts-1794059286-GikCGRXtRZeEm0PAfgc1"
+        },
+        {
+          "take": "enter-3",
+          "file": "voice-emberbound-female-enter-3.webm",
+          "generation_id": "gen-tts-1794059289-yZexDU8yfV1KyxSUDCRX"
+        },
+        {
+          "take": "hurt-1",
+          "file": "voice-emberbound-female-hurt-1.webm",
+          "generation_id": "gen-tts-1794059193-YAfqdg5VJldGvA7XPTiD"
+        },
+        {
+          "take": "hurt-2",
+          "file": "voice-emberbound-female-hurt-2.webm",
+          "generation_id": "gen-tts-1794059196-Z7NVdOSBS5rib7Y2cKhw"
+        },
+        {
+          "take": "hurt-3",
+          "file": "voice-emberbound-female-hurt-3.webm",
+          "generation_id": "gen-tts-1794059199-qNNuEdZEiDBRNZ17FK1a"
+        },
+        {
+          "take": "hurt-4",
+          "file": "voice-emberbound-female-hurt-4.webm",
+          "generation_id": "gen-tts-1794059202-Czim3mqdN3qS4NjQ1XQH"
+        },
+        {
+          "take": "hurt-5",
+          "file": "voice-emberbound-female-hurt-5.webm",
+          "generation_id": "gen-tts-1794059204-8a4JHuOLFZL9LJhv1iXo"
+        },
+        {
+          "take": "hurt-6",
+          "file": "voice-emberbound-female-hurt-6.webm",
+          "generation_id": "gen-tts-1794059207-KyRx8xkDYOBEtJVhOMYd"
+        },
+        {
+          "take": "level-1",
+          "file": "voice-emberbound-female-level-1.webm",
+          "generation_id": "gen-tts-1794059271-75tDKF9JDxdhB85nteB3"
+        },
+        {
+          "take": "level-2",
+          "file": "voice-emberbound-female-level-2.webm",
+          "generation_id": "gen-tts-1794059274-OsYXHAdjG0C8JIjpgVc1"
+        },
+        {
+          "take": "loot-1",
+          "file": "voice-emberbound-female-loot-1.webm",
+          "generation_id": "gen-tts-1794059262-fopi7UiYnE2lE5W8GdRc"
+        },
+        {
+          "take": "loot-2",
+          "file": "voice-emberbound-female-loot-2.webm",
+          "generation_id": "gen-tts-1794059265-VXUKEyqT3xYdNdSDZ0tf"
+        },
+        {
+          "take": "loot-3",
+          "file": "voice-emberbound-female-loot-3.webm",
+          "generation_id": "gen-tts-1794059268-yEECw0wsuuTHBGxneu5B"
+        },
+        {
+          "take": "low-1",
+          "file": "voice-emberbound-female-low-1.webm",
+          "generation_id": "gen-tts-1794059218-7maKWI2V522VkP6OGHll"
+        },
+        {
+          "take": "low-2",
+          "file": "voice-emberbound-female-low-2.webm",
+          "generation_id": "gen-tts-1794059221-vCz1sddqMWF3S4fK9Vs2"
+        },
+        {
+          "take": "low-3",
+          "file": "voice-emberbound-female-low-3.webm",
+          "generation_id": "gen-tts-1794059224-6xLU05fTU7SrypxxJ2pj"
+        },
+        {
+          "take": "pain-1",
+          "file": "voice-emberbound-female-pain-1.webm",
+          "generation_id": "gen-tts-1794059209-RRbKHeYizr79MRlHjctI"
+        },
+        {
+          "take": "pain-2",
+          "file": "voice-emberbound-female-pain-2.webm",
+          "generation_id": "gen-tts-1794059212-XeBprQOKPVJpOgkH8feF"
+        },
+        {
+          "take": "pain-3",
+          "file": "voice-emberbound-female-pain-3.webm",
+          "generation_id": "gen-tts-1794059215-6d4cxoMj8CUYeuk2Ttxq"
+        },
+        {
+          "take": "slain-1",
+          "file": "voice-emberbound-female-slain-1.webm",
+          "generation_id": "gen-tts-1794059252-ikrIbVqbyT9WVCe7p83C"
+        },
+        {
+          "take": "slain-2",
+          "file": "voice-emberbound-female-slain-2.webm",
+          "generation_id": "gen-tts-1794059255-TKsCeld5aVMOtYyzlaNe"
+        },
+        {
+          "take": "slain-3",
+          "file": "voice-emberbound-female-slain-3.webm",
+          "generation_id": "gen-tts-1794059258-EtNc4zLu1XtgqkgTm5K0"
+        },
+        {
+          "take": "streak-1",
+          "file": "voice-emberbound-female-streak-1.webm",
+          "generation_id": "gen-tts-1794059228-mWzBD8dfyLDht0vPBxl5"
+        },
+        {
+          "take": "streak-2",
+          "file": "voice-emberbound-female-streak-2.webm",
+          "generation_id": "gen-tts-1794059233-GNnBJkPmK6M79hOvv702"
+        },
+        {
+          "take": "streak-3",
+          "file": "voice-emberbound-female-streak-3.webm",
+          "generation_id": "gen-tts-1794059236-MgCuYokCsYhPtNUIZbnK"
+        },
+        {
+          "take": "streak-4",
+          "file": "voice-emberbound-female-streak-4.webm",
+          "generation_id": "gen-tts-1794059239-Ltb1ZaC4klhTT6cyMSZK"
+        }
+      ]
     }
   ]
 }

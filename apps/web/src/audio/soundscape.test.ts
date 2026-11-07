@@ -390,6 +390,30 @@ describe("createSoundscape", () => {
     expect(hit([])).toEqual(["player-hurt"]);
   });
 
+  it("a voiced grunt stands in for the generic hurt cue, never for the blow that landed", () => {
+    const hit = (entities: SnapshotEntity[], grunted: boolean) => {
+      const heard: string[] = [];
+      const s = createSoundscape({ play: (n) => heard.push(n), voice: { observe: () => grunted } });
+      s.reset(null);
+      s.observe(snap({ tick: 1, entities, player: testPlayer({ life: 100 }) }));
+      s.observe(snap({ tick: 2, entities, player: testPlayer({ life: 80 }) }));
+      return heard.filter((n) => n === "monster-melee-hit" || n === "player-hurt");
+    };
+    expect(hit([], true)).toEqual([]);
+    expect(hit([], false)).toEqual(["player-hurt"]);
+    expect(hit([monster(1, 1)], true)).toEqual(["monster-melee-hit"]);
+  });
+
+  it("hands the voice no previous snapshot at the start of an area or across a change of one", () => {
+    const seen: (number | null)[] = [];
+    const s = createSoundscape({ play: () => {}, voice: { observe: (b) => { seen.push(b?.tick ?? null); return false; } } });
+    s.reset(null);
+    s.observe(snap({ tick: 1 }));
+    s.observe(snap({ tick: 2 }));
+    s.observe(snap({ tick: 3, area: "hideout" }));
+    expect(seen).toEqual([null, 1, null]);
+  });
+
   /**
    * A pool that SHRANK is not a pool that was emptied. Refunding a passive that
    * grants energy shield lowers the maximum, so the current value falls with it

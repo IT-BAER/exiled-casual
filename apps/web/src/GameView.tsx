@@ -34,6 +34,7 @@ import { isTextEntry } from "./input/text-entry";
 import { ALL_SFX, CORE_SFX, playSfx, preloadSfx, setAmbient, stopAmbient } from "./audio/sfx";
 import { setMusic, setMusicDead, stopMusic } from "./audio/music";
 import { createSoundscape } from "./audio/soundscape";
+import { createPlayerVoice, playerVoiceSfx, speakerFor } from "./audio/player-voice";
 import { telemetry } from "./telemetry/client";
 import { reportError } from "./telemetry/errors";
 import { createGameObserver } from "./telemetry/observe";
@@ -455,7 +456,8 @@ export function GameView({
      * with the one before it. Loading starts here rather than on first use so the
      * opening bolt of a session is not the one that fires in silence.
      */
-    const soundscape = createSoundscape();
+    const speaker = speakerFor(playedClassId, characterClass(playedClassId).body);
+    const soundscape = createSoundscape({ voice: createPlayerVoice(speaker) });
     /** The same snapshots, said out loud, when ui.debugLogging is on. */
     const debugLog = createDebugSnapshotLog();
     /** The same snapshots, counted for telemetry: read-only, never an intent. */
@@ -918,7 +920,7 @@ export function GameView({
           // minutes can play. The world art is what the world asks for later (the
           // fire sheet on the first cast, an icon on the first drop; render/world-art.ts),
           // never awaited: a texture that 404s or stalls must not hold anything up.
-          void preloadSfx(ALL_SFX);
+          void preloadSfx([...ALL_SFX, ...playerVoiceSfx(speaker)]);
           void preloadWorldArt();
         }
         fadeTimer = setTimeout(() => setLoading(false), FADE_MS);

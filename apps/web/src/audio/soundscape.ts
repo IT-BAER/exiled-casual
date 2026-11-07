@@ -9,6 +9,7 @@ import { strikesTheFloor } from "../render/skill-fx";
 import { skillFx as fxProfile } from "../render/skills";
 import { AURA_OFF, SKILL_CUES, areaCue, buffCues, skillCues } from "./skill-cues";
 import { landed as markLanded } from "../render/boss-tells";
+import type { PlayerVoice } from "./player-voice";
 
 /**
  * The fight, heard rather than described.
@@ -244,6 +245,8 @@ interface Options {
   stopAllLoops?: () => void;
   /** Gold collected: the sampled coin-pickup cue (drop-sound.ts). */
   coins?: (at: At) => void;
+  /** The player's own voice (player-voice.ts); a grunt it plays stands in for `player-hurt`. */
+  voice?: Pick<PlayerVoice, "observe">;
 }
 
 /**
@@ -338,10 +341,13 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       listener(snap.player.x, snap.player.y);
       const before = prev;
       prev = snap;
-      if (before === null) return;
+      if (before === null) { opts.voice?.observe(null, snap); return; }
       // A rebuilt area replaces every entity at once. Diffing across that would
       // report the whole population as dead and every portal as closed.
-      if (before.area !== snap.area || snap.tick < before.tick) { reset(); prev = snap; return; }
+      if (before.area !== snap.area || snap.tick < before.tick) {
+        reset(); prev = snap; opts.voice?.observe(null, snap); return;
+      }
+      const grunted = opts.voice?.observe(before, snap) ?? false;
 
       const was = new Map<number, SnapshotEntity>();
       for (const e of before.entities) was.set(e.id, e);
@@ -495,7 +501,8 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         const adjacent = snap.entities.some((e) =>
           e.kind === "monster"
           && Math.hypot(e.x - snap.player.x, e.y - snap.player.y) <= MELEE_RANGE);
-        play(adjacent ? "monster-melee-hit" : "player-hurt");
+        if (adjacent) play("monster-melee-hit");
+        else if (!grunted) play("player-hurt");
       }
 
       // ── Casts ───────────────────────────────────────────────────────────────
