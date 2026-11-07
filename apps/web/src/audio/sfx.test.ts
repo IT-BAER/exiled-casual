@@ -11,7 +11,8 @@ import {
   sfxCategory, startSfxLoop, startSfxLoopAt, stopAmbient, stopSfxLoop, toListenerSpace,
 } from "./sfx";
 import { MAREN_SFX, VARKIS_SFX } from "./npc-voice";
-import { ITEM_MATERIALS, ABILITY_CUES } from "./soundscape";
+import { ITEM_MATERIALS, ABILITY_CUES, ROOM_PROFILE, HIDEOUT_PROFILE } from "./soundscape";
+import { effectiveWet, type RoomProfile } from "./bus";
 
 /** `fake.ctx` is null until a test installs a stand-in context, as in headless jsdom.
  *  `sends` records every `send(b, node, wet, category, spatial)` and hands back its wet gain. */
@@ -57,6 +58,12 @@ function voiceFiles(): string[] {
 function voiceGain(name: string): number {
   const body = readFileSync(SRC, "utf8");
   const match = new RegExp(`"${name}":\\s*\\{\\s*gain:\\s*([\\d.]+)`).exec(body);
+  return Number(match?.[1]);
+}
+
+function voiceWet(name: string): number {
+  const body = readFileSync(SRC, "utf8");
+  const match = new RegExp(`"${name}":\\s*\\{[^}]*\\bwet:\\s*([\\d.]+)`).exec(body);
   return Number(match?.[1]);
 }
 
@@ -265,6 +272,27 @@ describe("playSfx without WebAudio", () => {
     expect(playSfxAt("monster-death", 1, 1)).toBe(0);
     expect(() => startSfxLoopAt("skill-ember-bolt-flight", "k", 1, 1)).not.toThrow();
     expect(() => moveSfxLoop("k", 2, 2)).not.toThrow();
+  });
+
+  /**
+   * Measured (ebur128, max momentary loudness): at the flat 0.5 the lines peaked
+   * around -22 LUFS against -27 for a skill impact and -30 for a cast, on top of the
+   * fight. Each line is now matched to -30, beside a cast and under an impact.
+   */
+  it("keeps the player's lines under the fight", () => {
+    const gains = voiceNames().filter((n) => n.startsWith("voice-")).map(voiceGain);
+    expect(gains).toHaveLength(96);
+    for (const g of gains) expect(g).toBeLessThan(0.35);
+    expect([...gains].sort((a, b) => a - b)[48]!).toBeLessThan(0.25);
+  });
+
+  it("says the player's lines in the room he stands in: a cave rings, open ground stays dry", () => {
+    for (const name of voiceNames().filter((n) => n.startsWith("voice-"))) {
+      const wet = (room: RoomProfile) => effectiveWet(voiceWet(name), sfxCategory(name), room);
+      expect(wet(ROOM_PROFILE.vaal_stone!), name).toBeGreaterThan(ROOM_PROFILE.vaal_stone!.wetFloor);
+      expect(wet(HIDEOUT_PROFILE), name).toBeGreaterThan(HIDEOUT_PROFILE.wetFloor);
+      expect(wet(ROOM_PROFILE.coast!), name).toBe(ROOM_PROFILE.coast!.wetFloor);
+    }
   });
 
   it("gives Varkis the room: an npc cue is a world cue", () => {
