@@ -55,6 +55,10 @@ const FLAVOUR = "#c98a3e"; // the Atlas panel's amber lore line
 const RARITY_TINT: Record<WaystoneRarity, string> = { normal: "#c8c8c8", magic: MAGIC, rare: "#e6d64a" };
 
 const NODE = 26; // medallion diameter
+
+interface Pan { x: number; y: number }
+/** px a press may wander and still be a click on a place. */
+const PAN_SLOP = 5;
 const CLEARED = "#7ea45c";
 const FOG = "#4c463a";
 /** Out of fog, but the stone in hand is too weak: a refusal, not a blank. */
@@ -78,8 +82,44 @@ function AtlasMap(props: {
   onSelect: (id: string) => void;
   /** The open place's panel, drawn in the node field so it can anchor to a node. */
   popup: React.ReactNode;
+  /** How far the world has been dragged, in px. */
+  pan: Pan;
+  onPan: (pan: Pan) => void;
 }) {
-  const { nodes, completedNodes, selectedId, stoneTier, onSelect, popup } = props;
+  const { nodes, completedNodes, selectedId, stoneTier, onSelect, popup, pan, onPan } = props;
+
+  // A drag ends in a click on whatever it was released over; this swallows that one.
+  const dragged = useRef(false);
+  // The world is dragged like PoE's Atlas, because the inventory docks over its
+  // right third while a stone is being seated and the places under it must be reachable.
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // The open place's panel is a panel, not ground: its socket takes clicks and drops.
+    if (e.button !== 0 || (e.target as Element).closest('[data-testid="prep-popup"]')) return;
+    const start = { x: e.clientX, y: e.clientY, pan };
+    // Half the world's own size each way, so at least half of it is always on screen.
+    const box = e.currentTarget.getBoundingClientRect();
+    const clamp = (v: number, half: number) => Math.round(Math.max(-half, Math.min(half, v)));
+    let moving = false;
+    const move = (m: PointerEvent) => {
+      const dx = m.clientX - start.x, dy = m.clientY - start.y;
+      // Negated so a press without coordinates (NaN travel) stays a click.
+      if (!moving && !(Math.hypot(dx, dy) >= PAN_SLOP)) return;
+      moving = true;
+      onPan({ x: clamp(start.pan.x + dx, box.width / 2), y: clamp(start.pan.y + dy, box.height / 2) });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      if (!moving) return;
+      // The click follows its pointerup in the same task, so the guard ends there.
+      dragged.current = true;
+      setTimeout(() => { dragged.current = false; }, 0);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
   // Four states, not three: a place can be out of fog and still refuse the stone
   // in your hand, which is a different problem to solve and has to look like one.
   const state = (n: AtlasGraphNode) =>
@@ -103,9 +143,13 @@ function AtlasMap(props: {
 
   return (
     <div
+      data-testid="prep-map"
+      onPointerDown={onPointerDown}
       style={{
         position: "absolute",
         inset: 0,
+        transform: `translate(${pan.x}px, ${pan.y}px)`,
+        touchAction: "none",
         // Full-bleed painted world, per atlas-maps.webp: the map IS the screen,
         // darkened at the edges so the docked bar and banner still read.
         backgroundImage:
@@ -163,7 +207,7 @@ function AtlasMap(props: {
               // Under-tier opens too: its panel says which tier it wants and is
               // where a seated stone that is too weak gets taken back out.
               disabled={st === "fog"}
-              onClick={() => onSelect(n.id)}
+              onClick={() => { if (!dragged.current) onSelect(n.id); }}
               title={tip}
               style={{
                 position: "absolute",
@@ -505,6 +549,9 @@ function NodePopup(props: {
 export const PreparationPanel = React.memo(function PreparationPanel({ atlasSeed, completedNodes, socketedStone, onEject, onActivate, onNodeSelect, mapOpen = false, onClose }: Props) {
   const nodes = atlasGraph(atlasSeed);
   const [nodeId, setNodeId] = useState<string | null>(null);
+  // Held here, not in AtlasMap: a pan re-renders the open place's panel, which
+  // re-measures itself against the inventory from where its node now is.
+  const [pan, setPan] = useState<Pan>({ x: 0, y: 0 });
   // The place has to accept the stone. Selecting a node and then a weaker stone
   // is an easy way to end up here, so the button says no rather than firing an
   // intent the sim would drop on the floor.
@@ -531,6 +578,8 @@ export const PreparationPanel = React.memo(function PreparationPanel({ atlasSeed
         completedNodes={completedNodes}
         selectedId={nodeId}
         stoneTier={socketedStone?.tier ?? null}
+        pan={pan}
+        onPan={setPan}
         // Clicking the open place again shuts it, so the map can be read without
         // a panel standing on it.
         onSelect={(id) => {

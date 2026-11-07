@@ -328,6 +328,89 @@ describe("a place demands a Waystone of its own tier", () => {
   });
 });
 
+describe("the atlas pans by drag, as PoE's does", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  const atlasSeed = 42;
+  // jsdom has no PointerEvent: fireEvent.pointerDown would drop the coordinates.
+  const pointer = (el: Element | Window, type: string, x: number, y: number) =>
+    fireEvent(el, new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y }));
+  const panel = () => render(
+    <PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} socketedStone={null}
+      onEject={() => {}} onActivate={() => {}} onClose={() => {}} />,
+  );
+  /** A 1366x768 screen, the size the inventory hid a third of the atlas on. */
+  const screen1366 = () => vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(
+    { x: 0, y: 0, left: 0, top: 0, width: 1366, height: 768, right: 1366, bottom: 768, toJSON: () => ({}) } as DOMRect,
+  );
+  const offset = () => screen.getByTestId("prep-map").style.transform;
+
+  it("moves the map with a drag over empty ground", () => {
+    screen1366();
+    panel();
+    const map = screen.getByTestId("prep-map");
+    pointer(map, "pointerdown", 900, 400);
+    pointer(window, "pointermove", 700, 380);
+    pointer(window, "pointerup", 700, 380);
+    expect(offset()).toBe("translate(-200px, -20px)");
+  });
+
+  it("a drag that starts on a place moves the map and does not open the place", () => {
+    screen1366();
+    panel();
+    const node = screen.getByTestId(`prep-node-${atlasGraph(atlasSeed)[0]!.id}`);
+    pointer(node, "pointerdown", 500, 300);
+    pointer(window, "pointermove", 440, 300);
+    pointer(node, "pointerup", 440, 300);
+    fireEvent.click(node);
+    expect(offset()).toBe("translate(-60px, 0px)");
+    expect(screen.queryByTestId("prep-popup")).toBeNull();
+  });
+
+  it("a press that wobbles a pixel or two is still a click: the place opens and the map stays put", () => {
+    screen1366();
+    panel();
+    const node = screen.getByTestId(`prep-node-${atlasGraph(atlasSeed)[0]!.id}`);
+    pointer(node, "pointerdown", 500, 300);
+    pointer(window, "pointermove", 502, 301);
+    pointer(node, "pointerup", 502, 301);
+    fireEvent.click(node);
+    expect(offset()).toBe("translate(0px, 0px)");
+    expect(screen.getByTestId("prep-popup")).toBeTruthy();
+  });
+
+  it("stops at half a screen each way, so the world can never be dragged off it", () => {
+    screen1366();
+    panel();
+    const map = screen.getByTestId("prep-map");
+    pointer(map, "pointerdown", 900, 400);
+    pointer(window, "pointermove", -1500, 2400);
+    pointer(window, "pointerup", -1500, 2400);
+    expect(offset()).toBe("translate(-683px, 384px)");
+    // A second drag starts from where the first stopped, and is held at the same edge.
+    pointer(map, "pointerdown", 100, 100);
+    pointer(window, "pointermove", 3000, -3000);
+    pointer(window, "pointerup", 3000, -3000);
+    expect(offset()).toBe("translate(683px, -384px)");
+  });
+
+  it("a press on the open place's panel is not a drag: the socket keeps its clicks", () => {
+    screen1366();
+    const onEject = vi.fn();
+    render(
+      <PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} socketedStone={stone()}
+        onEject={onEject} onActivate={() => {}} onClose={() => {}} />,
+    );
+    fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(atlasSeed)[0]!.id}`));
+    const socket = screen.getByTestId("prep-socket");
+    pointer(socket, "pointerdown", 600, 300);
+    pointer(window, "pointermove", 640, 300);
+    pointer(socket, "pointerup", 640, 300);
+    fireEvent.click(socket);
+    expect(offset()).toBe("translate(0px, 0px)");
+    expect(onEject).toHaveBeenCalledOnce();
+  });
+});
+
 describe("the place's biome", () => {
   it("names what the node is made of, under its name", () => {
     render(
