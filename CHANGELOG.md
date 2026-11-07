@@ -10,6 +10,35 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-11-07
+
+### Added
+
+- Drag the Atlas while the map device is open, so places hidden under the
+  inventory can be reached.
+- Options > UI has a cursor picker with a picture of each cursor: the plain
+  arrow or the gilt blade.
+
+### Changed
+
+- The default cursor is a plain steel arrow.
+- Your character's voice sits under the fight and sounds like the place you
+  stand in.
+- Maren talks to herself only while you stand idle in the hideout, every three
+  to five minutes.
+- The desert wind is much quieter.
+- The dodge roll and the Vaulting Shot backflip play slower. Movement is
+  unchanged.
+
+### Fixed
+
+- No more hits while a map is still loading: nothing spawns close to the
+  entrance, and the game waits behind the loading screen.
+- The tracker under NEXT MAP no longer shows an Install button.
+- The old hurt grunt no longer plays over your character's voice.
+- Monsters no longer get stuck in narrow gaps, standing still while they
+  chase you.
+
 ## [0.7.4] - 2026-11-07
 
 ### Added
