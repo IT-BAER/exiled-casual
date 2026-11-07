@@ -6,13 +6,14 @@ look comes in three states and four sizes:
 
   normal  the arrow at rest, its tip on the top-left corner (hotspot 0 0)
   deny    the same arrow cooled to red iron (an illegal drop target)
-  press   PoE2's click tilt while a mouse button is held: the arrow turns TURN_DEG
-          counter-clockwise and leans in, its body foreshortened toward the tip
-          by LEAN, both around the tip, which stays on the
+  press   PoE2's click tilt while a mouse button is held: the arrow leans in, its
+          body foreshortened toward the tip by LEAN while the tip stays on the
           point. A hardware cursor cannot animate, so it snaps.
 
+Every frame of both looks is turned TURN_DEG counter-clockwise around the tip.
+
 Sizes are CSS px (DIP); every frame ships at 1x and 2x, named by its pixel size
-(`cursor_plain_48.png` is Medium at 2x). The art fills the box's height. Never
+(`cursor_plain_48.png` is Medium at 2x). The turned art fills the box. Never
 above 32: Chromium drops a larger custom cursor near native UI.
 
 Writes apps/web/public/textures/ui/cursor*.png. Run after touching a master:
@@ -34,7 +35,7 @@ UI = ROOT / "apps" / "web" / "public" / "textures" / "ui"
 SIZES = (20, 24, 28, 32)
 # How far the pressed arrow foreshortens along its axis: a subtle lean, not a swing.
 LEAN = 0.95
-# And how far it turns counter-clockwise; past ~5 deg the upper edge would rise above the tip.
+# The whole cursor's turn counter-clockwise; much past this the upper edge rises above the tip.
 TURN_DEG = 4.0
 # The plain arrow read too bright beside the HUD; colour scaled, alpha untouched.
 PLAIN_GAIN = 0.8
@@ -79,6 +80,11 @@ def press_axis(art: np.ndarray) -> np.ndarray:
     return v / np.linalg.norm(v)
 
 
+def silhouette(art: np.ndarray) -> np.ndarray:
+    ys, xs = np.nonzero(art[..., 3] > 8)
+    return np.stack([xs + 0.5, ys + 0.5], 1)
+
+
 def render(art: np.ndarray, m2: np.ndarray, px: int) -> Image.Image:
     """Source -> 2x2 linear map m2 (output px per source px), tip pinned at (0, 0)."""
     pm = art.copy()
@@ -100,12 +106,15 @@ def main() -> None:
         ax = press_axis(art)
         t = math.radians(TURN_DEG)
         turn = np.array([[math.cos(t), math.sin(t)], [-math.sin(t), math.cos(t)]])  # CCW, y down
-        lean = turn @ (np.eye(2) - (1 - LEAN) * np.outer(ax, ax))
+        lean = np.eye(2) - (1 - LEAN) * np.outer(ax, ax)
+        turned = silhouette(art) @ turn.T
+        # Anything above the tip would be cut off at the bitmap's top edge.
+        assert turned[:, 1].min() > -1, f"{look}: TURN_DEG lifts the art above its tip"
         for size in SIZES:
-            k = size / max(art.shape[:2])
+            k = size / turned.max()
             for scale in (1, 2):
                 px = size * scale
-                rest = np.eye(2) * k * scale
+                rest = turn * k * scale
                 frames = {
                     "": render(src["normal"], rest, px),
                     "_deny": render(src["deny"], rest, px),
@@ -113,7 +122,7 @@ def main() -> None:
                 }
                 for suffix, im in frames.items():
                     im.save(UI / f"{stem}{suffix}_{px}.png", optimize=True)
-            print(f"{look} {size}: art {k * art.shape[0]:.1f} px tall")
+            print(f"{look} {size}: {k:.4f} css px per source px")
 
 
 if __name__ == "__main__":
