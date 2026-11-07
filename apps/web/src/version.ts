@@ -9,4 +9,4 @@
  * `<version> <Phase>`: the phase is the promise (Alpha means saves may not
  * survive, Beta means they should), the number is the release, patch included.
  */
-export const GAME_VERSION = "v0.7.2 Alpha";
+export const GAME_VERSION = "v0.7.3 Alpha";

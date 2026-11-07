@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-07
+
 ### Added
 
 - Hard rares: a rare monster with a second modifier (Hulking, Relentless or
