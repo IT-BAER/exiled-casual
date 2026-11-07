@@ -48,9 +48,7 @@ export const VIEWER_CSS = `
 
 .av-head { display: flex; align-items: center; gap: 8px; padding: 12px 12px 8px; }
 .av-title { font: 15px/1 var(--av-display); letter-spacing: 0.08em; color: var(--av-gold); flex: 1; }
-.av-scroll { overflow-y: auto; flex: 1; padding: 0 6px 10px; scrollbar-width: thin; scrollbar-color: var(--av-gold-dim) transparent; }
-.av-scroll::-webkit-scrollbar { width: 8px; }
-.av-scroll::-webkit-scrollbar-thumb { background: rgba(122, 92, 34, 0.7); border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
+.av-scroll { overflow-y: auto; flex: 1; padding: 0 6px 10px; }
 
 .av-search { margin: 0 12px 8px; position: relative; }
 .av-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--av-faint); pointer-events: none; }
@@ -116,7 +114,7 @@ export const VIEWER_CSS = `
 .av-note { color: var(--av-faint); font-size: 12px; margin-top: 8px; }
 .av-note b { color: var(--av-dim); font-weight: normal; }
 
-.av-list { max-height: 188px; overflow-y: auto; border: 1px solid var(--av-line); border-radius: 7px; margin-top: 8px; scrollbar-width: thin; scrollbar-color: var(--av-gold-dim) transparent; }
+.av-list { max-height: 188px; overflow-y: auto; border: 1px solid var(--av-line); border-radius: 7px; margin-top: 8px; }
 .av-list .av-row { border-radius: 0; margin: 0; text-transform: none; }
 
 .av-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
