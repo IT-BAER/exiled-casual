@@ -134,6 +134,16 @@
          to red iron, so the refusal is legible without leaving the art. */
       [data-cursor="deny"] { cursor: url(/textures/ui/cursor_plain_deny_24.png) 0 0, not-allowed !important; }
       [data-cursor="deny"] { cursor: image-set(url(/textures/ui/cursor_plain_deny_24.png) 1x, url(/textures/ui/cursor_plain_deny_48.png) 2x) 0 0, not-allowed !important; }
+      /* Every scrollbar is a ::-webkit-scrollbar one, because Chromium draws the OS
+         arrow over a native scrollbar whatever `cursor` says, and only a custom
+         one takes the page's. `scrollbar-width` or `scrollbar-color` on an element
+         makes its scrollbar native again (Chrome 121+), so outside this block they
+         may only say `none`. Firefox, which has no ::-webkit-scrollbar, gets the
+         same thin gold through the standard properties. */
+      ::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(122, 92, 34, 0.7); background-clip: padding-box; border: 2px solid transparent; border-radius: 4px; }
+      ::-webkit-scrollbar-corner { background: transparent; }
+      @supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: #7a5c22 transparent; } }
       #root { width: 100%; height: 100%; }
 
       /* The first-boot cover.

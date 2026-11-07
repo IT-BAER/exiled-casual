@@ -279,7 +279,7 @@ function PatchNotes(): React.ReactElement | null {
         Patch Notes
       </div>
       <Divider style={{ margin: "5px 0 8px", opacity: 0.5 }} />
-      <div style={{ maxHeight: "40vh", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${GOLD_DIM} transparent`, paddingRight: 6 }}>
+      <div style={{ maxHeight: "40vh", overflowY: "auto", paddingRight: 6 }}>
       {NEWS_HISTORY.map((r) => (
         <div key={r.version} style={{ marginBottom: 10 }}>
           <div

@@ -2,11 +2,10 @@
  * The pointer art the player can pick, at the size they pick, and PoE2's click
  * tilt. index.html draws the default (plain, medium) from the first paint;
  * `applyCursor` replaces it with one `<style>` for the chosen look and size,
- * which covers the menus and the game alike. The bitmaps and the press frame's
- * hotspot come from tools/build_cursors.py.
+ * which covers the menus and the game alike. The bitmaps come from
+ * tools/build_cursors.py; every frame has its tip on the top-left corner.
  */
 import type { CursorSize, CursorStyle } from "./settings";
-import { PRESS_HOTSPOT_X } from "./cursor-frames.generated";
 
 export const CURSORS: readonly { id: CursorStyle; label: string; src: string }[] = [
   { id: "plain", label: "Plain", src: "/textures/ui/cursor_plain_64.png" },
@@ -40,13 +39,8 @@ export function cursorCss(style: CursorStyle, size: CursorSize): string {
   const stem = STEM[style];
   return [
     rule("*", frames(stem, px), "0 0", "default"),
-    // Held: the same arrow tilted around its tip, which sits right of the bitmap's edge.
-    rule(
-      ":root[data-cursor-press], :root[data-cursor-press] *",
-      frames(`${stem}_press`, px),
-      `${PRESS_HOTSPOT_X[style][px]} 0`,
-      "default",
-    ),
+    // Held: the same arrow leaning in toward its tip, which stays on the point.
+    rule(":root[data-cursor-press], :root[data-cursor-press] *", frames(`${stem}_press`, px), "0 0", "default"),
     // A refusal outranks the tilt: the second selector beats the press rule's.
     rule(
       '[data-cursor="deny"], :root[data-cursor-press] [data-cursor="deny"]',

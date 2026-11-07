@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest";
 import { applyCursor, cursorCss, trackCursorPress } from "./cursor";
-import { PRESS_HOTSPOT_X } from "./cursor-frames.generated";
 
 afterEach(() => {
   document.getElementById("cursor-css")?.remove();
@@ -13,9 +12,7 @@ describe("cursorCss", () => {
     const css = cursorCss("plain", "medium");
     expect(css).toContain("url(/textures/ui/cursor_plain_24.png) 1x, url(/textures/ui/cursor_plain_48.png) 2x) 0 0");
     expect(css).toContain("url(/textures/ui/cursor_plain_deny_24.png) 1x, url(/textures/ui/cursor_plain_deny_48.png) 2x) 0 0");
-    expect(css).toContain(
-      `url(/textures/ui/cursor_plain_press_24.png) 1x, url(/textures/ui/cursor_plain_press_48.png) 2x) ${PRESS_HOTSPOT_X.plain[24]} 0`,
-    );
+    expect(css).toContain("url(/textures/ui/cursor_plain_press_24.png) 1x, url(/textures/ui/cursor_plain_press_48.png) 2x) 0 0");
   });
 
   it("names the gilt blade's files without a look prefix, at 32 for huge", () => {

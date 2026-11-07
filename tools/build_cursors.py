@@ -1,28 +1,25 @@
-"""Build every cursor bitmap the client ships, and the hotspots the CSS needs.
+"""Build every cursor bitmap the client ships.
 
 Two looks (Options > UI): the plain arrow, from its 512 px master, and the gilt
 blade, whose only masters are its first 64 px frames (normal and deny). Each
 look comes in three states and four sizes:
 
-  normal  the arrow at rest
+  normal  the arrow at rest, its tip on the top-left corner (hotspot 0 0)
   deny    the same arrow cooled to red iron (an illegal drop target)
-  press   tilted TILT_DEG clockwise around the tip while a mouse button is held,
-          PoE2's click tilt; a hardware cursor cannot animate, so it snaps
+  press   PoE2's click tilt while a mouse button is held: the arrow leans in, its
+          body foreshortened toward the tip by LEAN while the tip stays on the
+          point. A hardware cursor cannot animate, so it snaps.
 
 Sizes are CSS px (DIP); every frame ships at 1x and 2x, named by its pixel size
-(`cursor_plain_48.png` is Medium at 2x). Chromium drops a custom cursor larger
-than 32 DIP near native UI, so the TILTED frame must also fit 32 at Huge: the art
-is scaled per size until the tilted silhouette fits the box, and the tip of a
-tilted frame sits right of the bitmap's left edge, which the hotspot carries.
+(`cursor_plain_48.png` is Medium at 2x). The art fills the box's height. Never
+above 32: Chromium drops a larger custom cursor near native UI.
 
-Writes apps/web/public/textures/ui/cursor*.png and
-apps/web/src/cursor-frames.generated.ts. Run after touching a master:
+Writes apps/web/public/textures/ui/cursor*.png. Run after touching a master:
 
     python tools/build_cursors.py
 """
 from __future__ import annotations
 
-import math
 import pathlib
 
 import cv2
@@ -31,10 +28,10 @@ from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 UI = ROOT / "apps" / "web" / "public" / "textures" / "ui"
-GENERATED = ROOT / "apps" / "web" / "src" / "cursor-frames.generated.ts"
 
 SIZES = (20, 24, 28, 32)
-TILT_DEG = 15.0
+# How far the pressed arrow foreshortens along its axis: a subtle lean, not a swing.
+LEAN = 0.88
 # The plain arrow read too bright beside the HUD; colour scaled, alpha untouched.
 PLAIN_GAIN = 0.8
 # Luminance -> red iron, fitted on the first plain deny frame (mean error 0.25/255).
@@ -71,42 +68,18 @@ def gilt_sources() -> dict[str, np.ndarray]:
     }
 
 
-def rotate(pts: np.ndarray, deg: float) -> np.ndarray:
-    """Clockwise on screen (y down) around the origin."""
-    t = math.radians(deg)
-    c, s = math.cos(t), math.sin(t)
-    return np.stack([pts[:, 0] * c - pts[:, 1] * s, pts[:, 0] * s + pts[:, 1] * c], 1)
-
-
-def silhouette(art: np.ndarray) -> np.ndarray:
+def press_axis(art: np.ndarray) -> np.ndarray:
+    """Unit vector from the tip (origin) to the silhouette's centroid: the arrow's axis."""
     ys, xs = np.nonzero(art[..., 3] > 8)
-    return np.stack([xs + 0.5, ys + 0.5], 1).astype(np.float64)
+    v = np.array([xs.mean() + 0.5, ys.mean() + 0.5])
+    return v / np.linalg.norm(v)
 
 
-def layout(art: np.ndarray, size: int) -> tuple[float, int]:
-    """Largest art scale (CSS px per source px) whose rest AND tilted frames fit `size`,
-    and the tilted frame's integer hotspot x."""
-    pts = silhouette(art)
-    rest_w, rest_h = pts[:, 0].max(), pts[:, 1].max()
-    tilt = rotate(pts, TILT_DEG)
-    best = (0.0, 0)
-    for step in range(1, 4000):
-        k = step / 4000 * size / rest_h
-        hx = math.ceil(-tilt[:, 0].min() * k)
-        if (rest_w * k > size or rest_h * k > size or hx + tilt[:, 0].max() * k > size
-                or tilt[:, 1].max() * k > size):
-            break
-        best = (k, hx)
-    return best
-
-
-def render(art: np.ndarray, k: float, deg: float, hx: float, px: int) -> Image.Image:
-    """Source -> scale k (output px per source px) -> rotate around the tip -> tip at (hx, 0)."""
+def render(art: np.ndarray, m2: np.ndarray, px: int) -> Image.Image:
+    """Source -> 2x2 linear map m2 (output px per source px), tip pinned at (0, 0)."""
     pm = art.copy()
     pm[..., :3] *= pm[..., 3:4] / 255  # premultiplied, or the rim bleeds dark
-    t = math.radians(deg)
-    c, s = math.cos(t) * k * SS, math.sin(t) * k * SS
-    m = np.array([[c, -s, hx * SS], [s, c, 0.0]], np.float32)
+    m = np.hstack([m2 * SS, np.zeros((2, 1))]).astype(np.float32)
     big = cv2.warpAffine(pm, m, (px * SS, px * SS), flags=cv2.INTER_CUBIC,
                          borderMode=cv2.BORDER_CONSTANT, borderValue=0)
     big = np.clip(big, 0, None)
@@ -118,33 +91,23 @@ def render(art: np.ndarray, k: float, deg: float, hx: float, px: int) -> Image.I
 
 def main() -> None:
     looks = {"plain": ("cursor_plain", plain_sources()), "gilt": ("cursor", gilt_sources())}
-    hot: dict[str, dict[int, int]] = {}
     for look, (stem, src) in looks.items():
-        hot[look] = {}
+        art = src["normal"]
+        ax = press_axis(art)
+        lean = np.eye(2) - (1 - LEAN) * np.outer(ax, ax)
         for size in SIZES:
-            k, hx = layout(src["normal"], size)
-            hot[look][size] = hx
+            k = size / max(art.shape[:2])
             for scale in (1, 2):
                 px = size * scale
+                rest = np.eye(2) * k * scale
                 frames = {
-                    "": render(src["normal"], k * scale, 0, 0, px),
-                    "_deny": render(src["deny"], k * scale, 0, 0, px),
-                    "_press": render(src["normal"], k * scale, TILT_DEG, hx * scale, px),
+                    "": render(src["normal"], rest, px),
+                    "_deny": render(src["deny"], rest, px),
+                    "_press": render(src["normal"], rest @ lean, px),
                 }
                 for suffix, im in frames.items():
                     im.save(UI / f"{stem}{suffix}_{px}.png", optimize=True)
-            print(f"{look} {size}: art {k * src['normal'].shape[0]:.1f} px tall, press hotspot {hx} 0")
-    rows = "\n".join(
-        f"  {look}: {{ {', '.join(f'{s}: {h}' for s, h in sizes.items())} }},"
-        for look, sizes in hot.items()
-    )
-    GENERATED.write_text(
-        "// GENERATED by tools/build_cursors.py. Do not edit.\n"
-        "/** Hotspot x (CSS px) of each look's tilted press frame, per cursor size; y is 0. */\n"
-        f"export const PRESS_HOTSPOT_X = {{\n{rows}\n}} as const;\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+            print(f"{look} {size}: art {k * art.shape[0]:.1f} px tall")
 
 
 if __name__ == "__main__":
