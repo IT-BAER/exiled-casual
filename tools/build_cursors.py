@@ -31,7 +31,7 @@ UI = ROOT / "apps" / "web" / "public" / "textures" / "ui"
 
 SIZES = (20, 24, 28, 32)
 # How far the pressed arrow foreshortens along its axis: a subtle lean, not a swing.
-LEAN = 0.88
+LEAN = 0.95
 # The plain arrow read too bright beside the HUD; colour scaled, alpha untouched.
 PLAIN_GAIN = 0.8
 # Luminance -> red iron, fitted on the first plain deny frame (mean error 0.25/255).
