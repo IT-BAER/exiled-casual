@@ -457,10 +457,10 @@ export function GameView({
     const debugLog = createDebugSnapshotLog();
     /** The same snapshots, counted for telemetry: read-only, never an intent. */
     const watch = createGameObserver();
-    // Read once per beat, so the containers opened since the last one ride on it.
+    // Read once per beat, so the containers opened and monsters killed since the last one ride on it.
     telemetry.setContext(() => {
-      const caches = watch.takeCaches();
-      return caches > 0 ? { ...watch.context(), caches } : watch.context();
+      const caches = watch.takeCaches(), kills = watch.takeKills();
+      return { ...watch.context(), ...(caches > 0 ? { caches } : {}), ...(kills > 0 ? { kills } : {}) };
     });
     const dropBeatHook = telemetry.addBeatHook(() => {
       const l = watch.takeLoot();
@@ -766,7 +766,7 @@ export function GameView({
         stoodIn = msg.area;
         // The base also says what the floor is, which is what his boots land on.
         soundscape.reset(base?.biomeId ?? null);
-        watch.area(msg.area, base?.biomeId ?? null);
+        watch.area(msg.area, base?.biomeId ?? null, grid);
         setAmbient(base?.biomeId ?? null, grid?.shore ?? null);
         setMusic(base?.biomeId ?? null);
         // Nothing the player had open belongs to the place they just left. The

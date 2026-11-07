@@ -81,10 +81,22 @@ describe("parseBatch", () => {
       { k: "roster", t: 14, characters: 1, oldestAge: "2-6", maxLevel: 7 },
       { k: "roster", t: 15, characters: 0 },
       { k: "beat", t: 16, view: "game", active: 30, caches: 2 },
+      { k: "beat", t: 17, view: "game", active: 30, area: "map", kills: 14, explored: 37 },
+      { k: "waystone", t: 18, tier: 2 },
     ];
     const b = (parseBatch(batch(sent)) as { ok: true; batch: Batch }).batch;
     expect(b.dropped).toBe(0);
     expect(b.events).toEqual(sent);
+  });
+
+  it("drops a beat's kills or explored share out of range, and a waystone without a tier", () => {
+    const r = parseBatch(batch([
+      { k: "beat", t: 1, view: "game", active: 30, kills: -1, explored: 101 },
+      { k: "waystone", t: 2, tier: "high" },
+    ]));
+    const b = (r as { ok: true; batch: Batch }).batch;
+    expect(b.events).toEqual([{ k: "beat", t: 1, view: "game", active: 30 }]);
+    expect(b.dropped).toBe(1);
   });
 
   it("refuses the new events outside their sets, and never carries a name", () => {

@@ -27,7 +27,7 @@ export const MAP_VW = 13;
  */
 export const MAP_INSET_VW = 0.6;
 /** World units the player reveals around themselves. */
-const REVEAL_RADIUS = 9;
+export const REVEAL_RADIUS = 9;
 /**
  * Terrain pixels per grid cell. The terrain layer is drawn at this resolution
  * and downscaled smoothly into the box, which is what keeps the walls looking

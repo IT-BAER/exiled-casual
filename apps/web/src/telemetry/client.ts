@@ -24,6 +24,8 @@ export interface BeatContext {
   level?: number;
   classId?: string;
   caches?: number;
+  kills?: number;
+  explored?: number;
 }
 
 export interface TelemetryOptions {

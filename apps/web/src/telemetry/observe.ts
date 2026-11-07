@@ -8,6 +8,7 @@
 import type { AreaKind, Snapshot } from "@exiled/protocol";
 import type { Rarity } from "@exiled/telemetry";
 import type { BeatContext, EventDraft } from "./client";
+import { REVEAL_RADIUS } from "../hud/Minimap";
 
 export interface LootCounts { normal: number; magic: number; rare: number; unique: number }
 
@@ -15,6 +16,15 @@ const emptyLoot = (): LootCounts => ({ normal: 0, magic: 0, rare: 0, unique: 0 }
 
 /** Units from the player within which a rare counts as seen: about half the camera's 19-unit width. */
 export const SEEN_RANGE = 9;
+
+/** The part of an area's walkable grid that `explored` reads. */
+export interface Ground {
+  cols: number; rows: number; cellSize: number; originX: number; originY: number;
+  /** 1 = walkable. */
+  cells: Uint8Array;
+}
+
+const WAYSTONE = "map.waystone";
 
 export function createGameObserver() {
   let level: number | null = null;
@@ -38,9 +48,42 @@ export function createGameObserver() {
   let bossFought = false;
   let openedBoxes = new Set<number>();
   let caches = 0;
+  /** Monsters alive in the area; one missing from the next snapshot died. */
+  let monsters = new Set<number>();
+  let kills = 0;
+  /** Waystones lying in the area, id to tier; one gone from the next snapshot was picked up. */
+  let stones = new Map<number, number>();
+  let ground: Ground | null = null;
+  let seenCells = new Uint8Array(0);
+  let walkable = 0;
+  let seenWalkable = 0;
+  let markedAt: { x: number; y: number } | null = null;
+
+  /** Marks the minimap's reveal disc around (x, y), redone only after a step of a unit. */
+  const reveal = (x: number, y: number): void => {
+    if (!ground || (markedAt && Math.hypot(x - markedAt.x, y - markedAt.y) < 1)) return;
+    markedAt = { x, y };
+    const g = ground, r = REVEAL_RADIUS / g.cellSize;
+    const cx = (x - g.originX) / g.cellSize, cy = (y - g.originY) / g.cellSize;
+    for (let j = Math.max(0, Math.floor(cy - r)); j < Math.min(g.rows, Math.ceil(cy + r) + 1); j++) {
+      for (let i = Math.max(0, Math.floor(cx - r)); i < Math.min(g.cols, Math.ceil(cx + r) + 1); i++) {
+        const c = j * g.cols + i;
+        if (seenCells[c] || g.cells[c] !== 1 || (i - cx) ** 2 + (j - cy) ** 2 > r * r) continue;
+        seenCells[c] = 1;
+        seenWalkable++;
+      }
+    }
+  };
 
   return {
-    area(kind: AreaKind, biomeId: string | null | undefined): void {
+    area(kind: AreaKind, biomeId: string | null | undefined, grid?: Ground | null): void {
+      monsters = new Set();
+      stones = new Map();
+      ground = kind === "map" ? grid ?? null : null;
+      seenCells = new Uint8Array(ground ? ground.cols * ground.rows : 0);
+      walkable = ground ? ground.cells.reduce((n, c) => n + (c === 1 ? 1 : 0), 0) : 0;
+      seenWalkable = 0;
+      markedAt = null;
       seen = new Set();
       primed = false;
       biome = biomeId ?? undefined;
@@ -98,9 +141,12 @@ export function createGameObserver() {
       done = new Set(snap.completedNodes);
 
       const raresNow = new Set<number>();
+      const monstersNow = new Set<number>();
+      const stonesNow = new Map<number, number>();
       atPortal = false;
       for (const ent of snap.entities) {
         if (ent.kind === "monster") {
+          monstersNow.add(ent.id);
           if (ent.rare) {
             raresNow.add(ent.id);
             if (!raresSeen.has(ent.id) && Math.hypot(ent.x - p.x, ent.y - p.y) <= SEEN_RANGE) {
@@ -121,20 +167,36 @@ export function createGameObserver() {
           // The first snapshot of an area only learns which were opened before.
           if (primed) caches++;
           openedBoxes.add(ent.id);
-        } else if (ent.kind === "groundItem" && !seen.has(ent.id)) {
-          seen.add(ent.id);
-          if (primed) loot[(ent.rarity ?? "normal") as Rarity]++;
+        } else if (ent.kind === "groundItem") {
+          if (ent.baseId === WAYSTONE) stonesNow.set(ent.id, ent.waystoneTier ?? 0);
+          if (!seen.has(ent.id)) {
+            seen.add(ent.id);
+            if (primed) loot[(ent.rarity ?? "normal") as Rarity]++;
+          }
         }
       }
       for (const id of rares) if (!raresNow.has(id)) out.push(at("rareKill"));
       rares = raresNow;
+      for (const id of monsters) if (!monstersNow.has(id)) kills++;
+      monsters = monstersNow;
+      for (const [id, t] of stones) if (!stonesNow.has(id)) out.push({ k: "waystone", tier: t });
+      stones = stonesNow;
+      reveal(p.x, p.y);
       primed = true;
 
       ctx = { area: snap.area, level: p.level };
       if (biome) ctx.biome = biome;
       if (snap.area === "map") ctx.tier = tier;
       if (p.classId) ctx.classId = p.classId;
+      if (ground && walkable > 0) ctx.explored = Math.floor((100 * seenWalkable) / walkable);
       return out;
+    },
+
+    /** Monsters killed since the last call. */
+    takeKills(): number {
+      const n = kills;
+      kills = 0;
+      return n;
     },
 
     /** Drops counted since the last call, or null when there were none. */

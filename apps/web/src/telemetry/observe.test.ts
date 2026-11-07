@@ -143,6 +143,44 @@ describe("game observer", () => {
     expect(o.takeCaches()).toBe(0);
   });
 
+  it("counts monsters killed since the last beat, never the ones a new area does not have", () => {
+    const mob = (id: number) => ({ id, kind: "monster", x: 0, y: 0 }) as SnapshotEntity;
+    const o = createGameObserver();
+    o.area("map", "desert");
+    o.observe(snap({ entities: [mob(1), mob(2), mob(3)] }));
+    o.observe(snap({ entities: [mob(3)] }));
+    expect(o.takeKills()).toBe(2);
+    expect(o.takeKills()).toBe(0);
+    o.area("hideout", null);
+    o.observe(snap({ area: "hideout", entities: [] }));
+    expect(o.takeKills()).toBe(0);
+  });
+
+  it("reports a waystone picked up off the floor, with its tier", () => {
+    const stone = (id: number, tier: number) =>
+      ({ id, kind: "groundItem", rarity: "normal", baseId: "map.waystone", waystoneTier: tier, x: 0, y: 0 }) as unknown as SnapshotEntity;
+    const o = createGameObserver();
+    o.area("map", "coast");
+    o.observe(snap({ entities: [stone(7, 2), item(8, "rare")] }));
+    expect(o.observe(snap({ entities: [item(8, "rare")] }))).toEqual([{ k: "waystone", tier: 2 }]);
+    // Leaving the area is not picking it up.
+    o.observe(snap({ entities: [stone(9, 3)] }));
+    o.area("hideout", null);
+    expect(o.observe(snap({ area: "hideout", entities: [] }))).toEqual([{ k: "area", area: "hideout" }]);
+  });
+
+  it("puts the share of a map's walkable ground the player has been near on the beat", () => {
+    // 40 cells in a row, the last 10 wall: the 9-unit reveal from x=0 reaches cells 0..9.
+    const cells = new Uint8Array(40).map((_, i) => (i < 30 ? 1 : 0));
+    const grid = { cols: 40, rows: 1, cellSize: 1, originX: 0, originY: 0, cells };
+    const o = createGameObserver();
+    o.area("map", "forest", grid);
+    o.observe(snap({ player: { x: 0, y: 0 } }));
+    expect(o.context().explored).toBe(33);
+    o.observe(snap({ player: { x: 29, y: 0 } }));
+    expect(o.context().explored).toBe(100 * 20 / 30 | 0);
+  });
+
   it("reports the context a beat carries", () => {
     const o = createGameObserver();
     o.area("map", "forest");

@@ -76,9 +76,10 @@ export type TelemetryEvent =
   | { k: "start"; t: number; screen: string; dpr: number; gpu: string; lang: string; ref: string; pwa: boolean; cores: number; memGb: number; touch: boolean }
   /**
    * Every 30 s while the tab is visible. `active` is the visible seconds since the last beat: play time is their sum.
-   * `caches` is how many containers were opened since the last beat.
+   * `caches` is how many containers were opened since the last beat, `kills` how many monsters died, and
+   * `explored` the percent of the map's walkable ground the player has come within reveal range of.
    */
-  | { k: "beat"; t: number; view: View; active: number; fps?: number; fpsLow?: number; area?: Area; biome?: string; tier?: number; level?: number; classId?: string; caches?: number }
+  | { k: "beat"; t: number; view: View; active: number; fps?: number; fpsLow?: number; area?: Area; biome?: string; tier?: number; level?: number; classId?: string; caches?: number; kills?: number; explored?: number }
   | { k: "view"; t: number; view: View }
   /** Time from navigation to the menu's first paint, and to the first game frame. */
   | { k: "load"; t: number; menuMs?: number; gameMs?: number }
@@ -98,6 +99,8 @@ export type TelemetryEvent =
   | { k: "atlas"; t: number; node: string; tier: number; stone: number }
   /** Walked through a portal into an area. */
   | { k: "portal"; t: number; to: Area }
+  /** A waystone was picked up off the floor of a map. */
+  | { k: "waystone"; t: number; tier: number }
   /** Once per monster: a rare came within about a screen of the player, or died. Once per area: the boss woke, or took a hit. */
   | { k: "rareSeen" | "rareKill" | "bossSeen" | "bossFight"; t: number; tier: number; biome?: string }
   | { k: "respawn"; t: number; where: (typeof RESPAWNS)[number] }
@@ -175,6 +178,8 @@ function parseEvent(e: unknown): TelemetryEvent | null {
       opt(out, "level", int(e.level, 0, 1000));
       opt(out, "classId", str(e.classId, 40));
       opt(out, "caches", int(e.caches, 0, 1000));
+      opt(out, "kills", int(e.kills, 0, 10_000));
+      opt(out, "explored", int(e.explored, 0, 100));
       return out as TelemetryEvent;
     }
     case "view": {
@@ -252,6 +257,10 @@ function parseEvent(e: unknown): TelemetryEvent | null {
     case "portal": {
       const to = oneOf(e.to, AREAS);
       return to ? { k: "portal", t, to } : null;
+    }
+    case "waystone": {
+      const tier = int(e.tier, 0, 100);
+      return tier !== undefined ? { k: "waystone", t, tier } : null;
     }
     case "rareSeen":
     case "rareKill":
