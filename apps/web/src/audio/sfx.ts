@@ -52,7 +52,8 @@ const VOICES: Record<string, Voice> = {
   // Beds sit 3 dB under where they were first balanced: the place is the background.
   "ambient-hideout":          { gain: 0.110, wet: 0.08, vary: 0 },
   "ambient-cave":             { gain: 0.058, wet: 0.24, vary: 0 },
-  "ambient-wind":             { gain: 0.062, wet: 0.04, vary: 0 },
+  // Its master is 9-17 dB hotter than the other beds'; this lands it at the forest's -48 LUFS.
+  "ambient-wind":             { gain: 0.018, wet: 0.04, vary: 0 },
   "ambient-swamp":            { gain: 0.057, wet: 0.10, vary: 0 },
   "ambient-forest":           { gain: 0.050, wet: 0.08, vary: 0 },
   // Open coast: almost no reverb, because there is nothing out there to reflect.

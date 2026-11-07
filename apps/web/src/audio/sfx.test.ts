@@ -680,6 +680,18 @@ describe("positional voices", () => {
       }
     });
 
+    it("plays the desert wind at the level of the other open-air beds", () => {
+      // Integrated loudness of each shipped master (ffmpeg ebur128 over four loops). The
+      // masters are not levelled alike, so a bed's gain only means something against these.
+      const MASTER_LUFS: Record<string, number> = {
+        "ambient-hideout": -30.1, "ambient-forest": -21.9, "ambient-shore": -24.6, "ambient-wind": -13.2,
+      };
+      const heard = (bed: string) => MASTER_LUFS[bed]! + 20 * Math.log10(voiceGain(bed));
+      const peers = ["ambient-hideout", "ambient-forest", "ambient-shore"].map(heard);
+      expect(heard("ambient-wind")).toBeLessThanOrEqual(Math.max(...peers) + 0.5);
+      expect(heard("ambient-wind")).toBeGreaterThanOrEqual(Math.min(...peers) - 0.5);
+    });
+
     it("drops one-shots around the player at random gaps while the bed plays", async () => {
       installTimed();
       vi.spyOn(Math, "random").mockReturnValue(0);
