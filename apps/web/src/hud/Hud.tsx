@@ -7,6 +7,8 @@ import { DISPLAY, ItemTooltip, SERIF } from "./ItemTooltip";
 import { flaskTooltip } from "./flask-tooltip";
 import { manaTooltip } from "./mana-tooltip";
 import { PANEL_W } from "./layout";
+import type { Objective } from "./first-map";
+import { installPrompt, useInstallOffer } from "../menu/install-prompt";
 import { SkillTooltip } from "./SkillTooltip";
 import { XpBar } from "./XpBar";
 import { MAP_INSET_VW, MAP_VW } from "./Minimap";
@@ -655,8 +657,8 @@ interface HudProps {
   targetId?: number | null;
   /** Bumped by a transfer the inventory panel refused itself; shows Inventory Full like the sim's refusal. */
   refusedSeq?: number;
-  /** Track "Open the Map Device": the character has never been in a map (hud/first-map.ts). */
-  mapPointer?: boolean;
+  /** The quest tracker's line: first map, next map, map complete (hud/first-map.ts). */
+  objective?: Objective | null;
 }
 
 /**
@@ -972,9 +974,10 @@ export function Hud({
   controlMode = "mouse",
   targetId = null,
   refusedSeq = 0,
-  mapPointer = false,
+  objective = null,
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
+  const canInstall = useInstallOffer();
   // Length-normalised here rather than trusted: the bar rides in the save, and a
   // row drawn from a short array would silently lose its last sockets.
   const bar = React.useMemo(() => {
@@ -1421,7 +1424,7 @@ export function Hud({
       {/* PoE2's quest tracker: right-aligned under the minimap, the quest in
           gold capitals over its objective in parchment, on a shade that fades
           out toward the playfield. */}
-      {mapPointer && (
+      {objective && (
         <div
           data-testid="objective-tracker"
           role="status"
@@ -1437,12 +1440,28 @@ export function Hud({
           }}
         >
           <div style={{ fontFamily: DISPLAY, fontSize: 13, letterSpacing: 1.5, textTransform: "uppercase", color: "#c9a84c" }}>
-            First Map
+            {objective.quest}
           </div>
-          <div style={{ fontFamily: SERIF, fontSize: 14, color: "#e8dcc0", marginTop: 3, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7 }}>
-            <span style={{ width: 5, height: 5, transform: "rotate(45deg)", border: "1px solid #c9a84c", flex: "0 0 auto" }} />
-            Open the Map Device
-          </div>
+          {objective.steps.map((step) => (
+            <div key={step} style={{ fontFamily: SERIF, fontSize: 14, color: "#e8dcc0", marginTop: 3, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7 }}>
+              <span style={{ width: 5, height: 5, transform: "rotate(45deg)", border: "1px solid #c9a84c", flex: "0 0 auto" }} />
+              {step}
+            </div>
+          ))}
+          {objective.install && canInstall && (
+            <button
+              type="button"
+              title="Install Exiled Casual as an app, one click from your desktop or home screen."
+              onClick={() => { void installPrompt()?.().catch(() => undefined); }}
+              style={{
+                pointerEvents: "auto", marginTop: 6, padding: "2px 10px", cursor: "pointer",
+                fontFamily: DISPLAY, fontSize: 11, letterSpacing: 1.5, textTransform: "uppercase",
+                color: "#c9a84c", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(201,168,76,0.6)",
+              }}
+            >
+              Install
+            </button>
+          )}
         </div>
       )}
 

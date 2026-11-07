@@ -186,8 +186,8 @@ export function attachProp(
 const BECKON_TICKS = 45;
 
 /**
- * How far the Map Device swells toward its hover glow, 0..1, for a character
- * that has never opened a map (hud/first-map.ts). A slow breath on the device's
+ * How far the Map Device swells toward its hover glow, 0..1, while the
+ * objective points at it (hud/first-map.ts). A slow breath on the device's
  * own brass, not a marker over it: nothing 2D stands in the scene.
  */
 export function deviceBeckon(tick: number): number {

@@ -42,16 +42,31 @@ export function nextGoal(record: CharacterRecord | null | undefined): NextGoal |
     : null;
   if (levelGoal && done >= LEVEL_GOAL_AT) return levelGoal;
 
-  const graph = atlasGraph(seed);
   const raw = session["completedNodes"];
   const completed = Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
+  const next = nextNode(seed, completed);
+  if (next) return { kind: "node", ...next, first: !atlasGraph(seed).some((n) => completed.includes(n.id)) };
+  return levelGoal;
+}
+
+/**
+ * The cheapest open place on the Atlas. After a clear, the routes out of the
+ * node just cleared come first: its boss raised a stone to that tier
+ * (`nextNodeTier`), so it is the place the stone in hand is for.
+ */
+export function nextNode(
+  seed: number,
+  completed: readonly string[],
+  cleared?: string,
+): { name: string; tier: number } | null {
+  const graph = atlasGraph(seed);
   const open = graph
     .filter((n) => !completed.includes(n.id) && isNodeReachable(graph, completed, n.id))
-    .map((n) => ({ name: n.name, tier: atlasNodeTier(graph, n.id) }))
+    .map((n) => ({ id: n.id, name: n.name, tier: atlasNodeTier(graph, n.id) }))
     .sort((a, b) => a.tier - b.tier);
-  const next = open[0];
-  if (next) return { kind: "node", ...next, first: !graph.some((n) => completed.includes(n.id)) };
-  return levelGoal;
+  const routes = cleared && completed.includes(cleared) ? graph.find((n) => n.id === cleared)?.links ?? [] : [];
+  const best = open.find((n) => routes.includes(n.id)) ?? open[0];
+  return best ? { name: best.name, tier: best.tier } : null;
 }
 
 function obj(raw: unknown): Record<string, unknown> {

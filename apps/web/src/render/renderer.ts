@@ -436,7 +436,7 @@ export class SnapshotRenderer {
     }
   }
 
-  /** Breathe the Map Device's glow until the character has opened a map (hud/first-map.ts). */
+  /** Breathe the Map Device's glow while the objective points at it (hud/first-map.ts). */
   setMapDeviceBeckon(on: boolean): void {
     this.beckonDevice = on;
   }

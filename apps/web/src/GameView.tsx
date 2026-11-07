@@ -68,7 +68,7 @@ import { createLoadClock } from "./load-phases";
 import { reloadPage } from "./chunk-reload";
 import { beginLoad, setLoadPart } from "./load-progress";
 import { pickTip } from "./tips";
-import { hasEnteredMap, useFirstMap } from "./hud/first-map";
+import { hasEnteredMap, useObjective } from "./hud/first-map";
 import { OptionsPanel } from "./menu/OptionsPanel";
 import { DEFAULT_SETTINGS, MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT, controlModeOf, presetOf, stepDown, type ControlMode, type Settings } from "./settings";
 import { enforceMode, socketForKey } from "./controls";
@@ -1096,11 +1096,12 @@ export function GameView({
     rendererRef.current?.setPet(settings.ui.pet);
   }, [settings.ui.pet]);
 
-  /** Until the character first stands in a map: an objective line and a breathing device. */
-  const mapPointer = useFirstMap(settings, onSettingsChange, characterId, snapshot);
+  /** First map, then the next one after each clear: an objective line and a breathing device. */
+  const objective = useObjective(settings, onSettingsChange, characterId, snapshot);
+  const beckon = objective?.beckon ?? false;
   useEffect(() => {
-    rendererRef.current?.setMapDeviceBeckon(mapPointer);
-  }, [mapPointer]);
+    rendererRef.current?.setMapDeviceBeckon(beckon);
+  }, [beckon]);
 
   /**
    * Auto graphics: from the plate lifting until the next area, one fps reading a
@@ -1217,7 +1218,7 @@ export function GameView({
         keybinds={keybinds}
         controlMode={controlMode}
         refusedSeq={refusedSeq}
-        mapPointer={mapPointer}
+        objective={objective}
       />
       {settings.ui.minimap && (
         <Minimap

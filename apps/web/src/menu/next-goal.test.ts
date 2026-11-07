@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { MAX_LEVEL, atlasGraph, atlasNodeTier, xpToNext } from "@exiled/rules";
 import type { CharacterRecord } from "@exiled/persistence";
-import { nextGoal } from "./next-goal";
+import { nextGoal, nextNode } from "./next-goal";
 
 const SEED = 1234;
 const graph = atlasGraph(SEED);
@@ -11,6 +11,26 @@ function rec(state: unknown, level = 1): CharacterRecord {
 }
 const save = (level: number, xp: number, completedNodes: string[] = []) =>
   rec({ version: 2, progress: { level, xp, gold: 0 }, session: { atlasSeed: SEED, completedNodes } }, level);
+
+describe("nextNode", () => {
+  it("prefers what the node just cleared opened, the place its boss stone was raised for", () => {
+    const start = graph[0]!;
+    const first = graph.find((n) => n.id === start.links[0])!;
+    const done = [start.id, first.id];
+    const fromFirst = nextNode(SEED, done, first.id);
+    const ownRoutes = graph.filter((n) => first.links.includes(n.id) && !done.includes(n.id));
+    if (ownRoutes.length > 0) {
+      expect(ownRoutes.map((n) => n.name)).toContain(fromFirst?.name);
+      expect(fromFirst?.tier).toBe(Math.min(...ownRoutes.map((n) => atlasNodeTier(graph, n.id))));
+    }
+    // Without a cleared origin it is the cheapest open place anywhere.
+    expect(nextNode(SEED, done, "node.not-cleared")).toEqual(nextNode(SEED, done));
+  });
+
+  it("is null once nothing is left open", () => {
+    expect(nextNode(SEED, graph.map((n) => n.id))).toBeNull();
+  });
+});
 
 describe("nextGoal", () => {
   it("has nothing to say without a record, or for a save it cannot read", () => {

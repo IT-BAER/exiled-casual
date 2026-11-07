@@ -17,6 +17,7 @@ import { xpPerHour, TICK_BACKGROUND, TICK_BACKGROUND_EMPTY, RAIL_H } from "./XpB
 import type { Snapshot } from "@exiled/protocol";
 import { MAP_PORTALS } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
+import { _resetInstallPrompt, captureInstallPrompt } from "../menu/install-prompt";
 
 // No globals:true in this repo, so @testing-library/react does not auto-register
 // its afterEach cleanup — do it explicitly or renders leak across tests.
@@ -369,8 +370,28 @@ describe("Hud", () => {
   // --- first-map objective ---
 
   it("tracks the objective to open the Map Device while pointed at it", () => {
-    render(<Hud snapshot={makeSnap({ area: "hideout" })} mapPointer />);
-    expect(screen.getByTestId("objective-tracker")).toHaveTextContent(/Open the Map Device/);
+    render(<Hud snapshot={makeSnap({ area: "hideout" })} objective={{ quest: "First Map", steps: ["Open the Map Device"], beckon: true }} />);
+    expect(screen.getByTestId("objective-tracker")).toHaveTextContent(/First Map.*Open the Map Device/);
+  });
+
+  it("tracks the next map by name and tier after a clear", () => {
+    render(<Hud snapshot={makeSnap({ area: "hideout" })} objective={{ quest: "Next Map", steps: ["Sunken Hollow, Tier 2"], beckon: true }} />);
+    expect(screen.getByTestId("objective-tracker")).toHaveTextContent(/Next Map.*Sunken Hollow, Tier 2/);
+  });
+
+  it("offers Install under the tracker after a clear, never on the first map", () => {
+    captureInstallPrompt(window);
+    const e = new Event("beforeinstallprompt", { cancelable: true }) as Event & { prompt: () => Promise<void> };
+    e.prompt = vi.fn(() => Promise.resolve());
+    act(() => { window.dispatchEvent(e); });
+    const first = render(<Hud snapshot={makeSnap({ area: "hideout" })} objective={{ quest: "First Map", steps: ["Open the Map Device"], beckon: true }} />);
+    expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
+    first.unmount();
+    render(<Hud snapshot={makeSnap({ area: "map" })} objective={{ quest: "Map Complete", steps: ["The Waystone opens X, Tier 2"], beckon: false, install: true }} />);
+    fireEvent.click(screen.getByRole("button", { name: /install/i }));
+    expect(e.prompt).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /install/i })).toBeNull();
+    _resetInstallPrompt();
   });
 
   it("tracks no objective once the character has been in a map", () => {

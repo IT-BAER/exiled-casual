@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_SETTINGS, sanitize, type Settings } from "../settings";
 import { FIRST_MAP_TIP, TIPS, pickTip } from "../tips";
-import { MAP_ENTERED_CAP, hasEnteredMap, markMapEntered, showsMapPointer } from "./first-map";
+import { atlasGraph, atlasNodeTier } from "@exiled/rules";
+import {
+  MAP_ENTERED_CAP, hasEnteredMap, markMapEntered, objectiveFor, showsMapPointer, type ObjectiveWhere,
+} from "./first-map";
 
 const ID = "3f1c2a9e-0000-4000-8000-000000000001";
 const at = (area: "hideout" | "map", level = 1) => ({ area, player: { level } });
@@ -57,6 +60,50 @@ describe("the first-map pointer", () => {
     expect(s.ui.mapEntered).toEqual([ID]);
     expect(sanitize({ ui: { mapEntered: "nope" } }).ui.mapEntered).toEqual([]);
     expect(sanitize({}).ui.mapEntered).toEqual([]);
+  });
+});
+
+describe("the objective after a cleared map", () => {
+  const graph = atlasGraph(0);
+  const start = graph[0]!;
+  const opened = graph.filter((n) => start.links.includes(n.id));
+  const cheapest = Math.min(...opened.map((n) => atlasNodeTier(graph, n.id)));
+  const entered = markMapEntered(DEFAULT_SETTINGS, ID);
+  const snap = (over: Partial<ObjectiveWhere> = {}): ObjectiveWhere => ({
+    area: "hideout", player: { level: 6 }, atlasSeed: 0, completedNodes: [start.id], mapOpen: false, ...over,
+  });
+
+  it("is the first-map pointer before any map", () => {
+    expect(objectiveFor(DEFAULT_SETTINGS, ID, snap({ player: { level: 1 }, completedNodes: [] }), false))
+      .toEqual({ quest: "First Map", steps: ["Open the Map Device"], beckon: true });
+  });
+
+  it("names the next node and tier in the hideout and beckons the device", () => {
+    const o = objectiveFor(entered, ID, snap({ activeNodeId: start.id, mapOpen: true }), false);
+    expect(o).toMatchObject({ quest: "Next Map", beckon: true, install: true });
+    const named = opened.find((n) => o?.steps[0] === `${n.name}, Tier ${atlasNodeTier(graph, n.id)}`);
+    expect(named).toBeDefined();
+    expect(atlasNodeTier(graph, named!.id)).toBe(cheapest);
+  });
+
+  it("goes quiet while a map the character has not cleared is open", () => {
+    const run = opened[0]!.id;
+    expect(objectiveFor(entered, ID, snap({ activeNodeId: run, mapOpen: true }), false)).toBeNull();
+    // Its portals ran out without a clear: the device is the next step again.
+    expect(objectiveFor(entered, ID, snap({ activeNodeId: run, mapOpen: false }), false)?.quest).toBe("Next Map");
+  });
+
+  it("says in the map, once its boss fell this visit, what the stone opens", () => {
+    const o = objectiveFor(entered, ID, snap({ area: "map", activeNodeId: start.id, mapOpen: true }), true);
+    expect(o).toMatchObject({ quest: "Map Complete", beckon: false, install: true });
+    expect(o?.steps[0]).toMatch(/^The Waystone opens .+, Tier \d+$/);
+    // A re-run of a cleared node says nothing until its boss falls again.
+    expect(objectiveFor(entered, ID, snap({ area: "map", activeNodeId: start.id, mapOpen: true }), false)).toBeNull();
+  });
+
+  it("has nothing to point at once every node is cleared, nor in the lab", () => {
+    expect(objectiveFor(entered, ID, snap({ completedNodes: graph.map((n) => n.id) }), false)).toBeNull();
+    expect(objectiveFor(DEFAULT_SETTINGS, "", snap(), false)).toBeNull();
   });
 });
 

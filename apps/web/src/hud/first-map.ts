@@ -15,6 +15,7 @@ import React from "react";
 import { START_LEVEL } from "@exiled/rules";
 import type { AreaKind } from "@exiled/protocol";
 import { MAX_CONTROL_ENTRIES, type Settings } from "../settings";
+import { nextNode } from "../menu/next-goal";
 
 export const MAP_ENTERED_CAP = MAX_CONTROL_ENTRIES;
 
@@ -45,18 +46,71 @@ export function showsMapPointer(settings: Settings, characterId: string, where: 
     && !hasEnteredMap(settings, characterId);
 }
 
-/** Marks the character on its first map snapshot and answers whether to point. */
-export function useFirstMap(
+/** The HUD's quest tracker: one quest over its steps, and whether the device breathes. */
+export interface Objective {
+  quest: string;
+  steps: string[];
+  beckon: boolean;
+  /** After a clear: the browser's install offer rides here, where players actually close the tab. */
+  install?: true;
+}
+
+export interface ObjectiveWhere extends Where {
+  atlasSeed: number;
+  completedNodes: string[];
+  mapOpen: boolean;
+  activeNodeId?: string;
+}
+
+/**
+ * Telemetry 7 Nov: 4 of 6 boss killers portalled home and closed the game
+ * within 16-66 s without opening the device again; the hideout had nothing left
+ * to say once the first map was done. So after a clear the tracker names the
+ * next place on the fixed-ratio track (docs/09 rule 7) and the device breathes
+ * until a map that is not yet cleared is open. `clearedHere`: a boss fell
+ * during this visit to the map, which the snapshot alone cannot tell from a
+ * re-run of a node cleared before.
+ */
+export function objectiveFor(
+  settings: Settings,
+  characterId: string,
+  where: ObjectiveWhere | null,
+  clearedHere: boolean,
+): Objective | null {
+  if (where === null || characterId === "") return null;
+  if (showsMapPointer(settings, characterId, where)) {
+    return { quest: "First Map", steps: ["Open the Map Device"], beckon: true };
+  }
+  if (where.completedNodes.length === 0) return null;
+  const next = nextNode(where.atlasSeed, where.completedNodes, where.activeNodeId);
+  if (!next) return null;
+  const place = `${next.name}, Tier ${next.tier}`;
+  if (where.area === "map") {
+    return clearedHere
+      ? { quest: "Map Complete", steps: [`The Waystone opens ${place}`], beckon: false, install: true }
+      : null;
+  }
+  const running = where.mapOpen && !!where.activeNodeId && !where.completedNodes.includes(where.activeNodeId);
+  return running ? null : { quest: "Next Map", steps: [place], beckon: true, install: true };
+}
+
+/** Marks the character on its first map snapshot and answers what the tracker says. */
+export function useObjective(
   settings: Settings,
   onSettingsChange: ((next: Settings) => void) | undefined,
   characterId: string,
-  where: Where | null,
-): boolean {
+  where: ObjectiveWhere | null,
+): Objective | null {
   const inMap = where?.area === "map";
   React.useEffect(() => {
     if (!inMap) return;
     const next = markMapEntered(settings, characterId);
     if (next !== settings) onSettingsChange?.(next);
   }, [inMap, settings, characterId, onSettingsChange]);
-  return showsMapPointer(settings, characterId, where);
+  // Clears counted on entering the map; more of them since means its boss fell.
+  const entry = React.useRef<number | null>(null);
+  if (!inMap) entry.current = null;
+  else if (entry.current === null) entry.current = where!.completedNodes.length;
+  const clearedHere = inMap && where!.completedNodes.length > entry.current!;
+  return objectiveFor(settings, characterId, where, clearedHere);
 }
