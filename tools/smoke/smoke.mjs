@@ -6,6 +6,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { areaReason } from "./judge.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PORT = 5199;
@@ -72,7 +73,10 @@ function killVite(child) {
 
 const readSnap = () =>
   // eslint-disable-next-line no-undef
-  ({ area: window.__snap?.area ?? null, tick: window.__snap?.tick ?? null, entities: window.__snap?.entities?.length ?? null });
+  ({
+    area: window.__snap?.area ?? null, tick: window.__snap?.tick ?? null, entities: window.__snap?.entities?.length ?? null,
+    portalsLeft: window.__snap?.portalsLeft ?? null, mapOpen: window.__snap?.mapOpen ?? null,
+  });
 
 async function runNode(browser, node) {
   const t0 = Date.now();
@@ -120,7 +124,8 @@ async function runNode(browser, node) {
 
   const reasons = [];
   if (dialogOpen) reasons.push("controls dialog is open; &control=mouse should have answered it");
-  if (snap1.area !== "map") reasons.push(`area is ${JSON.stringify(snap1.area)}, expected "map"`);
+  const area = areaReason(snap1, inMap);
+  if (area) reasons.push(area);
   if (!(typeof snap1.tick === "number" && typeof snap2.tick === "number" && snap2.tick > snap1.tick))
     reasons.push(`tick did not advance (${snap1.tick} -> ${snap2.tick})`);
   if (errors.console) reasons.push(`${errors.console} console error(s)`);
