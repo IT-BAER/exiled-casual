@@ -192,38 +192,45 @@ function useWide(): boolean {
  * short, straight out of CHANGELOG.md (tools/changelog_to_news.mjs).
  */
 function PatchNotes(): React.ReactElement | null {
+  // Quiet until looked at: the composition's weight is the logo and the panel
+  // with PLAY, so this sits dimmed and wakes on hover.
+  const [hover, setHover] = React.useState(false);
   if (!useWide()) return null;
   return (
     <FramedPanel
       data-testid="patch-notes"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         position: "absolute",
-        left: "1.5vw",
+        left: "1.2vw",
         top: "50%",
         transform: "translateY(-50%)",
-        width: "min(20vw, 320px)",
-        padding: "14px 16px",
+        width: "min(16vw, 260px)",
+        padding: "10px 12px",
         zIndex: 2,
+        opacity: hover ? 1 : 0.6,
+        transition: "opacity 200ms ease",
       }}
     >
-      <div style={{ fontFamily: DISPLAY, fontSize: 13, letterSpacing: 3, textTransform: "uppercase", color: GOLD }}>
+      <div style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 2.5, textTransform: "uppercase", color: GOLD_DIM }}>
         Patch Notes
       </div>
-      <Divider style={{ margin: "6px 0 8px" }} />
+      <Divider style={{ margin: "5px 0 7px" }} />
       {/* The list scrolls, not the panel: the gilt is drawn outside the panel's
           padding box, and overflow on the panel itself clips it away. */}
-      <div style={{ maxHeight: "40vh", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${GOLD_DIM} transparent`, paddingRight: 6 }}>
+      <div style={{ maxHeight: "36vh", overflowY: "auto", scrollbarWidth: "thin", scrollbarColor: `${GOLD_DIM} transparent`, paddingRight: 6 }}>
       {NEWS_HISTORY.map((r) => (
-        <div key={r.version} style={{ marginBottom: 10 }}>
+        <div key={r.version} style={{ marginBottom: 9 }}>
           <div
             data-version={r.version}
-            style={{ fontFamily: DISPLAY, fontSize: 12, letterSpacing: 1.5, color: GOLD, marginBottom: 3 }}
+            style={{ fontFamily: DISPLAY, fontSize: 11, letterSpacing: 1.2, color: GOLD_DIM, marginBottom: 2 }}
           >
             {r.version}
-            <span style={{ color: GOLD_DIM }}>{"  ·  "}{shortDate(r.date)}</span>
+            <span>{"  ·  "}{shortDate(r.date)}</span>
           </div>
           {r.entries.map((line) => (
-            <div key={line} style={{ fontFamily: SERIF, fontSize: 12, color: PARCHMENT, lineHeight: 1.4, opacity: 0.9 }}>
+            <div key={line} style={{ fontFamily: SERIF, fontSize: 11, color: PARCHMENT, lineHeight: 1.35, opacity: 0.8, marginBottom: 2 }}>
               {line}
             </div>
           ))}

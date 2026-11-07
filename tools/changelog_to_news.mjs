@@ -20,7 +20,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CHANGELOG = join(root, "CHANGELOG.md");
 const OUT = join(root, "apps", "web", "src", "news.generated.ts");
 
-/** How many lines of a release the menu has room for, in LATEST and in the patch-notes window. */
+/** How many lines of the newest release LATEST has room for. */
 const HEADLINE_MAX = 3;
 /** How many releases the patch-notes window lists. */
 const HISTORY_COUNT = 5;
@@ -47,14 +47,15 @@ function releases(text) {
   }
   // The changelog explains, the menu announces: an entry's first sentence is its headline.
   const headline = (e) => /^.+?[.!?](?=\s|$)/.exec(e)?.[0] ?? e;
-  return out.map((r) => ({ ...r, entries: r.entries.slice(0, HEADLINE_MAX).map(headline) }));
+  return out.map((r) => ({ ...r, entries: r.entries.map(headline) }));
 }
 
 export function parseChangelog(text) {
-  return releases(text)[0] ?? { version: null, date: null, entries: [] };
+  const r = releases(text)[0];
+  return r ? { ...r, entries: r.entries.slice(0, HEADLINE_MAX) } : { version: null, date: null, entries: [] };
 }
 
-/** The newest `count` releases for the menu's patch-notes window. */
+/** The newest `count` releases for the menu's patch-notes window, every entry kept: it scrolls. */
 export function parseHistory(text, count = HISTORY_COUNT) {
   return releases(text).slice(0, count);
 }

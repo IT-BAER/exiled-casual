@@ -41,7 +41,7 @@ describe("the menu's patch-notes window", () => {
     expect(history).toEqual(NEWS_HISTORY);
   });
 
-  it("skips Unreleased, keeps three headlines a release, and stops at the count", () => {
+  it("skips Unreleased, keeps every headline of a release, and stops at the count", () => {
     const text = [
       "## [Unreleased]", "", "- not yet", "",
       "## [0.3.0] - 2026-10-03", "", "### Added", "", "- One. More.", "- Two", "- Three", "- Four", "",
@@ -49,7 +49,7 @@ describe("the menu's patch-notes window", () => {
       "## [0.1.0] - 2026-10-01", "", "- Oldest", "",
     ].join("\n");
     expect(parseHistory(text, 2)).toEqual([
-      { version: "0.3.0", date: "2026-10-03", entries: ["One.", "Two", "Three"] },
+      { version: "0.3.0", date: "2026-10-03", entries: ["One.", "Two", "Three", "Four"] },
       { version: "0.2.0", date: "2026-10-02", entries: ["Older"] },
     ]);
   });
