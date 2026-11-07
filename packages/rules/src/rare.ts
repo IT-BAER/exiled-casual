@@ -1,4 +1,4 @@
-import type { MonsterDef, RareModifier } from "@exiled/content-schema";
+import type { HardRareModifier, MonsterDef, RareModifier } from "@exiled/content-schema";
 
 /** PoE's magic monster carries +30% damage; life is doubled, not PoE's +148%, because a pack here is a handful of bodies. */
 const MAGIC_LIFE_MUL_PCT = 200;
@@ -43,5 +43,19 @@ export function makeRare(def: MonsterDef, mods: RareModifier): MonsterDef {
         [mods.element]: def.defenses.resPct[mods.element] + mods.addedResPct,
       },
     },
+  };
+}
+
+/**
+ * A hard rare: a rare (already through `makeRare`) with a second, non-elemental
+ * modifier on top. Its element, resistances and name stay, with the new prefix in front.
+ */
+export function makeHardRare(rare: MonsterDef, mod: HardRareModifier): MonsterDef {
+  return {
+    ...rare,
+    name: `${mod.namePrefix} ${rare.name}`,
+    maxLifeFixed: Math.trunc(rare.maxLifeFixed * mod.lifeMulPct / 100),
+    moveSpeedFixed: Math.trunc(rare.moveSpeedFixed * mod.moveSpeedMulPct / 100),
+    attackDamage: { ...rare.attackDamage, amountFixed: Math.trunc(rare.attackDamage.amountFixed * mod.damageMulPct / 100) },
   };
 }

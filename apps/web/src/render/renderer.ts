@@ -869,7 +869,7 @@ export class SnapshotRenderer {
         updateRareElement(mesh, e.element);
       }
       if (e.kind === "monster" && !e.boss) {
-        const tier: Tier | null = e.rare ? "rare" : e.magic ? "magic" : null;
+        const tier: Tier | null = e.hard ? "hard" : e.rare ? "rare" : e.magic ? "magic" : null;
         if (this.tiers.get(e.id) !== tier) {
           setTier(mesh, tier);
           this.tiers.set(e.id, tier);

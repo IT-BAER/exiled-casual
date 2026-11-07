@@ -102,7 +102,7 @@ export type TelemetryEvent =
   /** A waystone was picked up off the floor of a map. */
   | { k: "waystone"; t: number; tier: number }
   /** Once per monster: a rare came within about a screen of the player, or died. Once per area: the boss woke, or took a hit. */
-  | { k: "rareSeen" | "rareKill" | "bossSeen" | "bossFight"; t: number; tier: number; biome?: string }
+  | { k: "rareSeen" | "rareKill" | "bossSeen" | "bossFight"; t: number; tier: number; biome?: string; hard?: boolean }
   | { k: "respawn"; t: number; where: (typeof RESPAWNS)[number] }
   | { k: "createFail"; t: number; reason: (typeof CREATE_FAILS)[number] }
   /** Sent by beacon right before the page reloads itself. */
@@ -270,6 +270,7 @@ function parseEvent(e: unknown): TelemetryEvent | null {
       if (tier === undefined) return null;
       const out: Obj = { k: e.k, t, tier };
       opt(out, "biome", oneOf(e.biome, BIOME_IDS));
+      if (e.hard === true) out.hard = true;
       return out as TelemetryEvent;
     }
     case "respawn": {

@@ -1,6 +1,6 @@
 import React from "react";
 import type { Snapshot, SnapshotEntity } from "@exiled/protocol";
-import { MONSTERS, RARE_TEMPLATES } from "@exiled/content-runtime";
+import { MONSTERS, RARE_TEMPLATES, HARD_RARE_MODIFIERS } from "@exiled/content-runtime";
 import { areaLevel } from "@exiled/rules";
 import { DISPLAY } from "./ItemTooltip";
 import { ElementIcon } from "./ElementIcon";
@@ -52,6 +52,9 @@ function modifierLines(e: SnapshotEntity): string[] {
       if (t.moveSpeedMulPct > 100) out.push("Moves Quickly");
       if (t.damageMulPct > 100) out.push("Extra Damage");
     }
+    // A hard rare's second modifier, and why it is worth the fight.
+    const h = HARD_RARE_MODIFIERS.find((m) => m.id === e.hard);
+    if (h) out.push(h.namePrefix, "Drops a Rare Item");
   } else if (e.magic) {
     out.push("Extra Life", "Extra Damage");
   }
@@ -71,7 +74,9 @@ export function TargetFrame({ snapshot, targetId, top = "0.6vw" }: {
   const tier = e.rare ? "rare" : e.magic ? "magic" : "normal";
   const frame = FRAMES[tier];
   const base = (e.species && MONSTERS.get(e.species)?.name) ?? "";
-  const prefix = e.rare ? RARE_TEMPLATES.find((r) => r.element === e.element)?.namePrefix : undefined;
+  const theme = e.rare ? RARE_TEMPLATES.find((r) => r.element === e.element)?.namePrefix : undefined;
+  const hardPrefix = HARD_RARE_MODIFIERS.find((m) => m.id === e.hard)?.namePrefix;
+  const prefix = [hardPrefix, theme].filter(Boolean).join(" ") || undefined;
   const lifePct = e.maxLife && e.maxLife > 0 ? Math.max(0, Math.min(100, ((e.life ?? 0) / e.maxLife) * 100)) : 0;
   const mods = modifierLines(e);
   // The skill statuses on it (curses, marks, chill), stun last since it is the shortest.

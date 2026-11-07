@@ -273,6 +273,8 @@ export interface SnapshotEntity {
   rare?: boolean;
   /** monster only: PoE's blue tier. Absent on every other monster. */
   magic?: boolean;
+  /** monster only: a hard rare's second modifier id (`HARD_RARE_MODIFIERS`); it always drops a rare item. */
+  hard?: string;
   /**
    * The element of the monster's hit whenever that hit is elemental (fire, cold,
    * lightning, chaos); absent on a physical hitter. On a rare it is also its theme.

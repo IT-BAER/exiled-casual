@@ -44,6 +44,8 @@ export function createGameObserver() {
   /** Rares alive in the area, and which of them came into view. Monsters leave a snapshot only by dying. */
   let rares = new Set<number>();
   let raresSeen = new Set<number>();
+  /** The rares that carry a second modifier; a hard rare's kill is flagged. */
+  let hardRares = new Set<number>();
   let bossSeen = false;
   let bossFought = false;
   let openedBoxes = new Set<number>();
@@ -92,6 +94,7 @@ export function createGameObserver() {
       stoodIn = kind;
       rares = new Set();
       raresSeen = new Set();
+      hardRares = new Set();
       bossSeen = false;
       bossFought = false;
       openedBoxes = new Set();
@@ -101,8 +104,8 @@ export function createGameObserver() {
       const out: EventDraft[] = [];
       const p = snap.player;
       const tier = snap.areaTier;
-      const at = (k: "rareSeen" | "rareKill" | "bossSeen" | "bossFight"): EventDraft =>
-        (biome ? { k, tier, biome } : { k, tier });
+      const at = (k: "rareSeen" | "rareKill" | "bossSeen" | "bossFight", hard = false): EventDraft =>
+        ({ k, tier, ...(biome ? { biome } : {}), ...(hard ? { hard: true } : {}) });
 
       if (portalTo) {
         out.push({ k: "portal", to: portalTo });
@@ -149,9 +152,10 @@ export function createGameObserver() {
           monstersNow.add(ent.id);
           if (ent.rare) {
             raresNow.add(ent.id);
+            if (ent.hard) hardRares.add(ent.id);
             if (!raresSeen.has(ent.id) && Math.hypot(ent.x - p.x, ent.y - p.y) <= SEEN_RANGE) {
               raresSeen.add(ent.id);
-              out.push(at("rareSeen"));
+              out.push(at("rareSeen", ent.hard !== undefined));
             }
           }
           if (ent.boss) {
@@ -175,7 +179,7 @@ export function createGameObserver() {
           }
         }
       }
-      for (const id of rares) if (!raresNow.has(id)) out.push(at("rareKill"));
+      for (const id of rares) if (!raresNow.has(id)) out.push(at("rareKill", hardRares.has(id)));
       rares = raresNow;
       for (const id of monsters) if (!monstersNow.has(id)) kills++;
       monsters = monstersNow;

@@ -295,6 +295,8 @@ export interface MonsterC {
   rare: 0 | 1;
   /** 1 = magic. Optional, written only on a magic monster, so older saves and checksums stay as they were. */
   magic?: 1;
+  /** A hard rare's second modifier id (`HARD_RARE_MODIFIERS`). Written only on one, like `magic`. */
+  hard?: string;
   /** 1 = boss add, 0 = normal spawn */
   summoned: 0 | 1;
   /** Stunned while tick < this: no move, no attack, no new wind-up. Written only by a stun; never on a boss. */

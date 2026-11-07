@@ -67,6 +67,13 @@ describe("TargetFrame", () => {
       .toEqual(["Extra Life", "Moves Quickly", "Extra Damage", "Cold Attacks"]);
   });
 
+  it("a hard rare: both prefixes, its second modifier, and the promise of a rare item", () => {
+    render(<TargetFrame snapshot={snap([{ id: 1, species: IMP, rare: true, hard: "savage", element: "cold", life: 1, maxLife: 1 }])} targetId={1} />);
+    expect(screen.getByTestId("target-name")).toHaveTextContent("Savage Frost-Touched Cinder Imp");
+    expect([...screen.getByTestId("target-mods").children].map((c) => c.textContent))
+      .toEqual(["Extra Life", "Moves Quickly", "Extra Damage", "Savage", "Drops a Rare Item", "Cold Attacks"]);
+  });
+
   it("every tier's bar is the same size, whatever its frame art", () => {
     const sizes = [{}, { magic: true }, { rare: true, element: "fire" as const }].map((tier) => {
       render(<TargetFrame snapshot={snap([{ id: 1, species: IMP, life: 1, maxLife: 1, ...tier }])} targetId={1} />);

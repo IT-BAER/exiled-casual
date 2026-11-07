@@ -88,6 +88,15 @@ describe("game observer", () => {
     expect(o.observe(snap({ entities: [] }))).toEqual([]);
   });
 
+  it("marks a hard rare's sighting and kill, so its guaranteed rare item can be told apart", () => {
+    const o = createGameObserver();
+    o.area("map", "strand");
+    o.observe(snap());
+    expect(o.observe(snap({ entities: [mon(7, 3, { rare: true, hard: "hulking" })] })))
+      .toEqual([{ k: "rareSeen", tier: 2, biome: "strand", hard: true }]);
+    expect(o.observe(snap({ entities: [] }))).toEqual([{ k: "rareKill", tier: 2, biome: "strand", hard: true }]);
+  });
+
   it("does not take a new area's empty snapshot for a dead rare", () => {
     const o = createGameObserver();
     o.area("map", "strand");

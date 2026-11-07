@@ -74,10 +74,12 @@ export const HIT_ALPHA = 0.3;
  * hugging the outline and slowly travelling over it. Kept low because a map
  * holds many of them (owner: must not distract); judged in the app.
  */
-export type Tier = "magic" | "rare";
+export type Tier = "magic" | "rare" | "hard";
 export const TIER_GLOW: Record<Tier, { color: Color3; strength: number }> = {
   magic: { color: new Color3(0.35, 0.55, 1.0), strength: 0.42 },
   rare: { color: new Color3(1.0, 0.7, 0.12), strength: 0.6 },
+  // A hard rare always drops a rare item: hotter and stronger, one per map at most.
+  hard: { color: new Color3(1.0, 0.42, 0.08), strength: 0.85 },
 };
 /** Wider than the rim (3.4): a skin over the body, not a line round it. */
 const TIER_POWER = 1.6;

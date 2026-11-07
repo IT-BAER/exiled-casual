@@ -5,6 +5,7 @@ import {
   type BiomeId,
   type MonsterArchetype,
   type MonsterDef,
+  type HardRareModifier,
   type RareModifier,
 } from "@exiled/content-schema";
 
@@ -474,6 +475,32 @@ export function rareTemplate(n: number, archetype?: MonsterArchetype, firstClear
   const set = archetype === "brute" || archetype === "heavy" ? BIG_RARE_TEMPLATES : RARE_TEMPLATES;
   const i = Math.abs(Math.trunc(n)) % set.length;
   return firstClear ? { ...set[i]!, damageMulPct: FIRST_CLEAR_RARE_DAMAGE_PCT } : set[i]!;
+}
+
+/**
+ * A hard rare's second modifier (PoE2's wisp-possessed rare: tougher, and it
+ * always drops a rare item). Our names, not PoE's.
+ */
+export const HARD_RARE_MODIFIERS: readonly HardRareModifier[] = [
+  { id: "hulking", namePrefix: "Hulking", lifeMulPct: 150, moveSpeedMulPct: 100, damageMulPct: 100 },
+  { id: "relentless", namePrefix: "Relentless", lifeMulPct: 100, moveSpeedMulPct: 120, damageMulPct: 100 },
+  { id: "savage", namePrefix: "Savage", lifeMulPct: 100, moveSpeedMulPct: 100, damageMulPct: 125 },
+];
+
+/**
+ * Hulking's life on a level 1 character's first map. Measured by the bot
+ * (`playtest.test.ts`, 10 seeds a class): at 150 the melee class took 23 s longer
+ * to clear and the class spread broke its 1.2 band.
+ */
+const FIRST_MAP_HULKING_LIFE_PCT = 125;
+
+/**
+ * Pick a hard rare's second modifier from any integer, like `rareTemplate`.
+ * `firstMap`: a level 1 character's first map, where it may only get tougher.
+ */
+export function hardRareModifier(n: number, firstMap = false): HardRareModifier {
+  if (firstMap) return { ...HARD_RARE_MODIFIERS[0]!, lifeMulPct: FIRST_MAP_HULKING_LIFE_PCT };
+  return HARD_RARE_MODIFIERS[Math.abs(Math.trunc(n)) % HARD_RARE_MODIFIERS.length]!;
 }
 
 /**

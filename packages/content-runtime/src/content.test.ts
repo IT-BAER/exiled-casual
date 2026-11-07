@@ -14,6 +14,8 @@ import {
   MONSTERS,
   RARE_TEMPLATES,
   rareTemplate,
+  HARD_RARE_MODIFIERS,
+  hardRareModifier,
   MONSTER_POOLS,
   PACK_COUNT,
   pickPack,
@@ -47,6 +49,19 @@ describe("RARE_TEMPLATES", () => {
     expect(rareTemplate(6)).toBe(RARE_TEMPLATES[2]);
     expect(rareTemplate(-6)).toBe(RARE_TEMPLATES[2]);
     expect(rareTemplate(0x7fffffff)).toBeDefined();
+  });
+
+  it("a hard rare's second modifier is never elemental, and the first map only makes it tougher", () => {
+    expect(new Set(HARD_RARE_MODIFIERS.map((m) => m.id)).size).toBe(HARD_RARE_MODIFIERS.length);
+    for (const m of HARD_RARE_MODIFIERS) expect(m).not.toHaveProperty("element");
+    expect(new Set([0, 1, 2, 3, 4, 5].map((n) => hardRareModifier(n).id)).size).toBe(HARD_RARE_MODIFIERS.length);
+    expect(hardRareModifier(-4)).toBe(hardRareModifier(4));
+    for (let n = 0; n < 6; n++) {
+      const m = hardRareModifier(n, true);
+      expect(m.damageMulPct).toBe(100);
+      expect(m.moveSpeedMulPct).toBe(100);
+      expect(m.lifeMulPct).toBeGreaterThan(100);
+    }
   });
 
   it("a big-bodied rare trades the swarm multipliers for 300% life and 200% damage", () => {

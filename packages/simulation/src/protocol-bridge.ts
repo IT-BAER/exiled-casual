@@ -428,6 +428,7 @@ export function buildSnapshot(
       rare: mon.rare === 1,
       species: mon.defId,
     };
+    if (mon.hard !== undefined) entry.hard = mon.hard;
     // makeRare converts a rare's whole hit to one element, so the attack type IS its theme.
     const hit = damageTypeOf(mon.attackType);
     if (hit !== "physical") entry.element = hit as MonsterElement;

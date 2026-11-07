@@ -83,6 +83,7 @@ describe("parseBatch", () => {
       { k: "beat", t: 16, view: "game", active: 30, caches: 2 },
       { k: "beat", t: 17, view: "game", active: 30, area: "map", kills: 14, explored: 37 },
       { k: "waystone", t: 18, tier: 2 },
+      { k: "rareKill", t: 19, tier: 1, biome: "coast", hard: true },
     ];
     const b = (parseBatch(batch(sent)) as { ok: true; batch: Batch }).batch;
     expect(b.dropped).toBe(0);

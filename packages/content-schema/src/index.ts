@@ -309,6 +309,18 @@ export interface RareModifier {
 }
 
 /**
+ * A hard rare's second modifier, on top of its RareModifier. Never elemental:
+ * the rare already has its element. Multipliers in percent, 100 = unchanged.
+ */
+export interface HardRareModifier {
+  id: string;
+  namePrefix: string;
+  lifeMulPct: number;
+  moveSpeedMulPct: number;
+  damageMulPct: number;
+}
+
+/**
  * What a monster asks of the player. The number of an archetype is a statement
  * about the monster, so the archetype and not the layout decides how many stand
  * at a socket (see PACK_COUNT in content-runtime).

@@ -152,6 +152,32 @@ describe("pool-driven spawning", () => {
     for (const r of ratios(["node.the_wrackline"])) expect(r).toBeGreaterThanOrEqual(2);
   });
 
+  // Telemetry 7 Nov: a rare kill paid a rare item 3.23% of the time. A hard rare
+  // always does (death.ts), so it is placed where it can be counted on.
+  it("a node's first clear fields one hard rare; a re-run one in about three maps, never two", () => {
+    const hard = (node: string, completedNodes: string[], seed: number) => {
+      const world = new World();
+      const session = { ...mapSessionAtTier(1), mapSeed: seed, activeNodeId: node, completedNodes };
+      buildArea(world, "map", session, generateArea(seed, CONTENT_VERSION, grammarForNode(node)));
+      return world.query("monster").map((e) => world.get<MonsterC>(e, "monster")!).filter((m) => m.hard !== undefined);
+    };
+    for (let seed = 0; seed < 20; seed++) {
+      const first = hard("node.the_wrackline", [], seed);
+      expect(first).toHaveLength(1);
+      // A level 1 character's first map: the hard rare is tougher, never harder-hitting.
+      expect(first[0]).toMatchObject({ rare: 1, hard: "hulking" });
+      expect(hard("node.emberfall", ["node.the_wrackline"], seed)).toHaveLength(1);
+    }
+    let maps = 0;
+    for (let seed = 0; seed < 90; seed++) {
+      const n = hard("node.the_wrackline", ["node.the_wrackline"], seed).length;
+      expect(n).toBeLessThanOrEqual(1);
+      maps += n;
+    }
+    expect(maps).toBeGreaterThanOrEqual(18);
+    expect(maps).toBeLessThanOrEqual(42);
+  });
+
   it("a socket holds that archetype's pack count", () => {
     const { world, session, layout } = mapFixture({ mapSeed: 7 });
     buildArea(world, "map", session, layout);

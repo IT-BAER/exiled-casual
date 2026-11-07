@@ -1,12 +1,12 @@
 import { fp, fpDist2, fpMul } from "@exiled/fixed-point";
 import { blockerCollision, gridCollision, hasLineOfSight } from "./collision";
 import {
-  makeMagic, makeRare, atlasNodeIndex, mapBaseIdForNode, monsterTierScale, waystoneScaleFor, bossLifeMilli,
+  makeHardRare, makeMagic, makeRare, atlasNodeIndex, mapBaseIdForNode, monsterTierScale, waystoneScaleFor, bossLifeMilli,
   areaLevel, dropCount, dropCategory, quantityScaleMilli, rollItem, familyForClass,
   MONSTER_ILVL_OFFSET, DROP_POOL,
 } from "@exiled/rules";
 import {
-  PACK_COUNT, bossFor, mapBase, pickPack, rareTemplate,
+  PACK_COUNT, bossFor, hardRareModifier, mapBase, pickPack, rareTemplate,
   ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints, HIDEOUT_FLOOR, isPortalScroll,
 } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
@@ -375,6 +375,12 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
     const rareCount = Math.min(liveAt.length, 2 + (fnv1a32(`rares:${session.mapSeed}`) % 2));
     // Socket -> the rare's place in route order, which seeds its own theme.
     const rareSockets = new Map(Array.from({ length: rareCount }, (_, k) => [liveAt[Math.floor((k * liveAt.length) / rareCount)]!, k]));
+    // One hard rare (a second modifier, always drops a rare item, death.ts): the
+    // first rare of a node's first clear, so every new place pays one early;
+    // on a re-run one map in three, at a seeded rare. -1 = none.
+    const nodeFirstClear = !session.completedNodes.includes(session.activeNodeId);
+    const hardHash = fnv1a32(`hard:${session.mapSeed}`);
+    const hardRank = rareCount === 0 ? -1 : nodeFirstClear ? 0 : hardHash % 3 === 0 ? (hardHash >>> 2) % rareCount : -1;
     // One whole pack is magic, PoE's blue pack. Its own hash, not the bestiary
     // stream, so which species stand where is the same with or without it.
     const magicCandidates = liveAt.filter((i) => !rareSockets.has(i));
@@ -405,7 +411,9 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         // The map's seed and the rare's place on the route pick its element: a
         // given map always demands the same resistances, and a replay stays identical.
         const magic = !rare && i === magicSocket;
-        const def = rare ? makeRare(base, rareTemplate(session.mapSeed ^ fnv1a32(`rare:${rareSockets.get(i)}`), base.archetype, firstClear)) : magic ? makeMagic(base) : base;
+        const hardMod = rare && rareSockets.get(i) === hardRank ? hardRareModifier(hardHash >>> 4, firstClear) : undefined;
+        const rareDef = rare ? makeRare(base, rareTemplate(session.mapSeed ^ fnv1a32(`rare:${rareSockets.get(i)}`), base.archetype, firstClear)) : undefined;
+        const def = rareDef ? (hardMod ? makeHardRare(rareDef, hardMod) : rareDef) : magic ? makeMagic(base) : base;
         const ring = PACK_SPREAD[j % PACK_SPREAD.length]!;
         const nearX = sx + ring.dx, nearY = sy + ring.dy;
         const farX = sx - ring.dx, farY = sy - ring.dy;
@@ -427,7 +435,7 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
         if (!pos) continue;
         rareHere = false;
         placed.push(pos);
-        spawnMonster(world, def, pos.x, pos.y, rare, scale, magic);
+        spawnMonster(world, def, pos.x, pos.y, rare, scale, magic, hardMod?.id);
       }
     }
 
@@ -691,6 +699,7 @@ export function spawnMonster(
   rare: boolean,
   scale: { lifeMilli: number; dmgMilli: number } = { lifeMilli: 1000, dmgMilli: 1000 },
   magic = false,
+  hard?: string,
 ): Entity {
   const scaledLife = fpMul(def.maxLifeFixed, scale.lifeMilli);
   const scaledDmg = fpMul(def.attackDamage.amountFixed, scale.dmgMilli);
@@ -713,6 +722,7 @@ export function spawnMonster(
     rare: rare ? 1 : 0,
     summoned: 0,
     ...(magic ? { magic: 1 as const } : {}),
+    ...(hard ? { hard } : {}),
   });
   world.set<DefensesC>(e, "defenses", {
     res: def.defenses.resPct,

@@ -210,6 +210,17 @@ describe("buildSnapshot", () => {
     }
   });
 
+  it("a hard rare names its second modifier in the snapshot, a plain rare carries none", () => {
+    const { world, sim } = createCombatSim(42);
+    const plain = addMonster(world, 0, 0);
+    const hard = addMonster(world, 2, 0);
+    world.set<MonsterC>(plain, "monster", { ...world.get<MonsterC>(plain, "monster")!, rare: 1 });
+    world.set<MonsterC>(hard, "monster", { ...world.get<MonsterC>(hard, "monster")!, rare: 1, hard: "savage" });
+    const snap = buildSnapshot(world, sim, 0, CONTENT_VERSION);
+    expect(snap.entities.find((e) => e.id === hard)!.hard).toBe("savage");
+    expect(snap.entities.find((e) => e.id === plain)!.hard).toBeUndefined();
+  });
+
   it("a magic monster says so in the snapshot, and a normal one carries no flag", () => {
     const { world, sim } = createCombatSim(42);
     const normal = addMonster(world, 0, 0);

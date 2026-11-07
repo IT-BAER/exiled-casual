@@ -237,6 +237,13 @@ describe("rarity glow through the rim plugin", () => {
     const plain = fakeUbo();
     plugin.hardBindForSubMesh(plain.ubo, s, engine!, sub(null));
     expect(plain.floats["tierGlow"]).toBe(0);
+
+    // A hard rare is the one to chase: a hotter shimmer than a plain rare's.
+    const hard = fakeUbo();
+    plugin.hardBindForSubMesh(hard.ubo, s, engine!, sub({ tier: "hard" }));
+    expect(hard.floats["tierGlow"]).toBeGreaterThan(rare.floats["tierGlow"]!);
+    const [hr, hg] = hard.colors["tierColor"]!;
+    expect(hr).toBeGreaterThan(hg);
   });
 
   it("setTier marks the body meshes only, never the ground blob or the aura ring", () => {

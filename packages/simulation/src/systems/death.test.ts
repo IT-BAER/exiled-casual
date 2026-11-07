@@ -328,7 +328,7 @@ describe("registerDeath", () => {
   })();
 
   /** A dead monster in a tier-5 map, boss or rare, ready for one `sim.step`. */
-  function makeDrop(opts: { boss: boolean; rare?: boolean; magic?: boolean; mapSeed?: number; waystoneSeed?: number }) {
+  function makeDrop(opts: { boss: boolean; rare?: boolean; magic?: boolean; hard?: boolean; mapSeed?: number; waystoneSeed?: number }) {
     const sim = new Simulation();
     registerDeath(sim);
     const w = sim.world;
@@ -342,8 +342,22 @@ describe("registerDeath", () => {
     w.set(m, "monster", { defId: "d", moveSpeed: 0, bodyRadius: 0, attackRange: 0, attackCooldownTicks: 0, attackDamage: 0, attackType: 1, attackReadyTick: 0, state: "idle", rare: opts.boss || opts.rare === false ? 0 : 1, summoned: 0 });
     if (opts.boss) w.set(m, "boss", { phase: 1, nextAbilityTick: 0, spawnX: 0, spawnY: 0, rootedUntilTick: 0 });
     if (opts.magic) w.set(m, "monster", { ...w.get<MonsterC>(m, "monster")!, rare: 0, magic: 1 });
+    if (opts.hard) w.set(m, "monster", { ...w.get<MonsterC>(m, "monster")!, hard: "savage" });
     return { sim, w };
   }
+
+  it("a hard rare always pays a rare item; a plain rare rarely does", () => {
+    let plain = 0;
+    for (let i = 1; i <= 40; i++) {
+      const hard = makeDrop({ boss: false, hard: true, mapSeed: i });
+      hard.sim.step([]);
+      expect(dropped(hard.w).some((d) => d.item.rarity === "rare"), `seed ${i}`).toBe(true);
+      const rare = makeDrop({ boss: false, mapSeed: i });
+      rare.sim.step([]);
+      if (dropped(rare.w).some((d) => d.item.rarity === "rare")) plain++;
+    }
+    expect(plain).toBeLessThan(10);
+  });
 
   const dropped = (w: World) =>
     equipmentDrops(w).map((e) => w.get(e, "item") as { item: { rarity: string } });

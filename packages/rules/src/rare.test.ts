@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
 import { resBlock, type MonsterDef, type RareModifier } from "@exiled/content-schema";
-import { makeMagic, makeRare } from "./rare.js";
+import { makeHardRare, makeMagic, makeRare } from "./rare.js";
 
 const cinderImp: MonsterDef = {
   id: "monster.cinder_imp.v1",
@@ -87,5 +87,16 @@ describe("makeMagic", () => {
     expect(magic.defenses).toEqual(cinderImp.defenses);
     expect(cinderImp.maxLifeFixed).toBe(fp(40));
     expect(magic).not.toBe(cinderImp);
+  });
+
+  it("a hard rare stacks its second modifier on the rare, keeps its element and names both", () => {
+    const rare = makeRare(cinderImp, RARE_TEMPLATE);
+    const hard = makeHardRare(rare, { id: "savage", namePrefix: "Savage", lifeMulPct: 150, moveSpeedMulPct: 120, damageMulPct: 125 });
+    expect(hard.name).toBe(`Savage ${rare.name}`);
+    expect(hard.maxLifeFixed).toBe(Math.trunc(rare.maxLifeFixed * 150 / 100));
+    expect(hard.moveSpeedFixed).toBe(Math.trunc(rare.moveSpeedFixed * 120 / 100));
+    expect(hard.attackDamage).toEqual({ type: rare.attackDamage.type, amountFixed: Math.trunc(rare.attackDamage.amountFixed * 125 / 100) });
+    expect(hard.defenses).toEqual(rare.defenses);
+    expect(rare.name).not.toMatch(/^Savage/);
   });
 });

@@ -134,7 +134,10 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
           const area = Math.trunc((quantityScaleMilli(MR_NORMAL, ws.quantityPct, 0) * share) / 100);
           // A boss can never pay nothing: docs/09 rule 4, the map closes on a
           // guaranteed payout. Everything above the floor stays fully variable.
-          const count = Math.max(dropCount(fnv1a32(`count:${s.mapSeed}:${tick}:${e}`), mr, area), isBoss ? 1 : 0);
+          // A hard rare pays one rare item every time too: a fixed floor on a
+          // harder target, the ordinary rare's variance untouched (docs/09 rule 5).
+          const isHard = world.get<MonsterC>(e, "monster")?.hard !== undefined;
+          const count = Math.max(dropCount(fnv1a32(`count:${s.mapSeed}:${tick}:${e}`), mr, area), isBoss || isHard ? 1 : 0);
           const ilvl = areaLevel(s.areaTier) + MONSTER_ILVL_OFFSET[mr]!;
           const pool = isBoss ? BOSS_DROP_POOL : DROP_POOL;
 
@@ -143,7 +146,7 @@ export function registerDeath(sim: Simulation, collisionRef?: CollisionRef): voi
             // Category is its own stream (docs/02 §13), so what a drop is stays
             // independent of what it rolled. The boss's first item is the
             // guaranteed one and skips the pool: it is always a rare.
-            const forced = isBoss && i === 0;
+            const forced = (isBoss || isHard) && i === 0;
             const equipment = forced || dropCategory(fnv1a32(`cat:${s.mapSeed}:${tick}:${e}:${i}`), pool) === "equipment";
             const item = equipment
               ? rollItem(ITEM_POOLS, seed, ilvl, mr, forced ? "rare" : undefined, ws.rarityPct, familyForClass(s.classId))
