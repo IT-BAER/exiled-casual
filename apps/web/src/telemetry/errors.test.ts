@@ -20,6 +20,12 @@ describe("error capture", () => {
     expect(stack).toBe(err.stack);
   });
 
+  it("names an Error whose event message is a bare \"Uncaught \" by its own name and message", () => {
+    // Edge 139 on 0.7.1: a DOMException from React's insertBefore arrived as "Uncaught ".
+    const err = new DOMException("The node before which the new node is to be inserted is not a child of this node.", "NotFoundError");
+    expect(fire(err)[1]).toBe("Uncaught NotFoundError: The node before which the new node is to be inserted is not a child of this node.");
+  });
+
   it("records the type and text of a thrown string", () => {
     expect(fire("socket gone")[1]).toBe("Uncaught [string] socket gone");
   });

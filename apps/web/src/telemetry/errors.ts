@@ -47,8 +47,13 @@ export function thrownText(v: unknown): string {
 export function installErrorCapture(report = reportError): () => void {
   const onError = (e: ErrorEvent) => {
     const v = e.error as unknown;
-    const msg = v instanceof Error || v == null ? e.message || String(v) : `Uncaught ${thrownText(v)}`;
-    report("window", msg, v instanceof Error ? v.stack : undefined, e.filename);
+    // Not every engine makes DOMException an Error subclass.
+    const err = v instanceof Error || (typeof DOMException !== "undefined" && v instanceof DOMException) ? (v as Error) : null;
+    // Edge reports a DOMException's event message as a bare "Uncaught ".
+    const msg = err
+      ? (e.message.trim() && e.message.trim() !== "Uncaught" ? e.message : `Uncaught ${err.name}: ${err.message}`)
+      : v == null ? e.message || String(v) : `Uncaught ${thrownText(v)}`;
+    report("window", msg, err?.stack, e.filename);
   };
   const onRejection = (e: PromiseRejectionEvent) => {
     const r = e.reason as unknown;
