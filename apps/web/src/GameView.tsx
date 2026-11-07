@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Engine, Vector3 } from "@babylonjs/core";
 import type { Scene } from "@babylonjs/core";
 import { applyGraphics, capMaterialLights, createScene, setMapFill } from "./render/engine";
@@ -780,13 +781,15 @@ export function GameView({
         // A place that arrives mid-dissolve takes the plate back at full
         // opacity, and the unmount that dissolve had queued must not fire on it.
         clearTimeout(fadeTimer);
-        setLoading(true);
-        setLeaving(false);
-        setTip(pickTip(Math.random, msg.area === "hideout" && !hasEnteredMap(settingsRef.current, characterId)));
         const biome = base ? BIOMES[base.biomeId] : null;
-        setArea({
-          name: biome?.name ?? "Hideout",
-          art: `${LOADING_ART}/${base?.biomeId ?? "hideout"}.jpg`,
+        flushSync(() => {
+          setLoading(true);
+          setLeaving(false);
+          setTip(pickTip(Math.random, msg.area === "hideout" && !hasEnteredMap(settingsRef.current, characterId)));
+          setArea({
+            name: biome?.name ?? "Hideout",
+            art: `${LOADING_ART}/${base?.biomeId ?? "hideout"}.jpg`,
+          });
         });
         buildLevel(
           scene, grid, base?.tilesetId,

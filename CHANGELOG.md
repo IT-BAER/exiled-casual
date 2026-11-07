@@ -16,6 +16,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   large and two small. Click one to see it full size.
 - A Patch Notes window on the main menu lists the last five releases in short.
 
+### Fixed
+
+- Stepping through a portal no longer flashes every spell effect over the
+  hideout for a moment before the loading screen appears.
+
 ## [0.7.3] - 2026-11-07
 
 ### Added

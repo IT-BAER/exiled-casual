@@ -30,6 +30,8 @@ const hoisted = vi.hoisted(() => ({
   /** When set, loadProps returns this instead of resolving at once, so a test
    *  can land the hideout's area message before the props "arrive". */
   propsLoaded: null as Promise<void> | null,
+  /** Called inside every `scene.render()`, so a test can see what the frame was drawn under. */
+  onRender: null as (() => void) | null,
 }));
 
 vi.mock("@babylonjs/core", () => ({
@@ -54,7 +56,7 @@ vi.mock("./render/engine", () => ({
   capMaterialLights: vi.fn(),
   createScene: () => ({
     scene: {
-      render: vi.fn(),
+      render: vi.fn(() => hoisted.onRender?.()),
       getTransformMatrix: vi.fn(),
       // Held, not called: real Babylon defers this behind a timeout and only
       // fires it once the new area's materials and textures are in. Running it
@@ -554,6 +556,27 @@ describe("GameView", () => {
     paintSettled();
     await finishFade();
     expect(screen.queryByTestId("loading-screen")).toBeNull();
+  });
+
+  it("never draws a frame of the next area before its plate is on the page", async () => {
+    await mountGame();
+    sendArea("map.desert");
+    becomeReady();
+    paintSettled();
+    await finishFade();
+
+    // The worker's message is not a React event, so its state commits in a later
+    // task and a frame can come first: the area is built and its effect warm-up
+    // spawned by then, and that frame drew all of it over the hideout.
+    const covered: boolean[] = [];
+    hoisted.onRender = () => covered.push(screen.queryByTestId("loading-screen") !== null);
+    hoisted.worker?.onmessage?.({
+      data: { type: "area", area: "hideout", layout: { grid: { w: 1, h: 1, cells: [0] }, objectiveAnchors: [] } },
+    });
+    hoisted.frame?.();
+    hoisted.onRender = null;
+    await act(async () => { await Promise.resolve(); });
+    expect(covered).toEqual([true]);
   });
 
   /**
