@@ -57,7 +57,9 @@ export const SKILL_CLIPS = {
   bowAimNeutral: { name: "Rig|Bow_Aim_Neutral", bow: true, end: 0.36 },
   bowNotch: { name: "Rig|Bow_Notch", bow: true },
   bowRapid: { name: "Rig|Bow_RapidShoot_Loop", bow: true, loop: true },
-  jogFlip: { name: "Rig|JogToFlip", full: true },
+  // The flip turns by 0.8 s of 1.2; the rest lands into a jog, which Vaulting Shot's
+  // reversed play would spend half its 0.5 s leap on.
+  jogFlip: { name: "Rig|JogToFlip", full: true, end: 0.67 },
   slide: { name: "Rig|Slide_Start", full: true },
   ninjaJumpStart: { name: "Rig|NinjaJump_Start", full: true },
   ninjaJumpLand: { name: "Rig|NinjaJump_Land", full: true },
@@ -554,6 +556,12 @@ export function actionRatio(authoredSeconds: number, windowSeconds: number | und
   const matched = authoredSeconds / windowSeconds;
   return Math.min(ACTION_RATIO_MAX, Math.max(ACTION_RATIO_MIN, matched));
 }
+
+/**
+ * Fraction of the Roll take that plays: the tumble is over by 0.94 s of 1.47 and the
+ * rest is the rise, which the ease back to the gait covers.
+ */
+export const ROLL_END = 0.64;
 
 /** Authored length of a clip in seconds. */
 function clipSeconds(group: AnimationGroup): number {
@@ -1873,8 +1881,8 @@ export class RigActor {
   }
 
   /**
-   * The dodge roll: the whole body, paced so the take fills `seconds`. The
-   * locomotion clip keeps running (and switching) underneath and comes back
+   * The dodge roll: the whole body, its tumble (`ROLL_END`) paced to fill `seconds`.
+   * The locomotion clip keeps running (and switching) underneath and comes back
    * eased when the roll ends.
    */
   playRoll(seconds?: number): void {
@@ -1884,9 +1892,9 @@ export class RigActor {
     this.cancelAction();
     this.stopStrike();
     group.stop();
-    const ratio = actionRatio(clipSeconds(group), seconds);
+    const ratio = actionRatio(clipSeconds(group) * ROLL_END, seconds);
     group.speedRatio = ratio;
-    group.start(false, ratio);
+    group.start(false, ratio, group.from, group.from + (group.to - group.from) * ROLL_END);
     this.scene.sortActiveAnimatables();
     group.onAnimationGroupEndObservable.addOnce((g) => this.easeOutToLocomotion(g));
   }
@@ -1913,7 +1921,7 @@ export class RigActor {
     const loop = spec.loop === true;
     const paced = loop
       ? 1
-      : releaseSeconds !== undefined ? actionRatio(clipSeconds(group) * release, releaseSeconds) : actionRatio(clipSeconds(group), seconds);
+      : releaseSeconds !== undefined ? actionRatio(clipSeconds(group) * release, releaseSeconds) : actionRatio(clipSeconds(group) * (spec.end ?? 1), seconds);
     const ratio = paced * playback;
     group.speedRatio = ratio;
     group.start(loop, ratio, group.from, spec.end === undefined ? group.to : group.from + (group.to - group.from) * spec.end);

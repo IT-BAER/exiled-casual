@@ -72,6 +72,7 @@ import {
   IDLE_LEG_BREATH,
   SKILL_CLIP_IDS,
   SKILL_CLIPS,
+  ROLL_END,
 } from "./rig";
 
 let engine: InstanceType<typeof NullEngine>;
@@ -2418,6 +2419,32 @@ describe("a sword strike moves the legs only while standing", () => {
     expect(off("run", "thigh_l"), "thigh back on the run").toBeLessThan(2);
   }), 60_000);
 
+  // Roll is 1.47 s and its tumble is over by ~0.93 s; the rest is the rise. The
+  // whole take squeezed into the sim's 0.6 s tumbled at 2.4x.
+  it("plays the roll's tumble, not its rise, over the sim's 0.6 s", () => withFiles(async () => {
+    const { scene, rig } = await rigged();
+    rig.standSettled();
+    for (let i = 0; i < 10; i++) { rig.setLocomotion(0); scene.render(); }
+    rig.playRoll(0.6);
+    const roll = scene.animationGroups.find((g) => g.name === "hero-roll")!;
+    const take = (roll.to - roll.from) / roll.targetedAnimations[0]!.animation.framePerSecond;
+    expect(roll.speedRatio).toBeCloseTo((take * ROLL_END) / 0.6, 3);
+    expect(roll.speedRatio, "the tumble's pace").toBeLessThan(1.7);
+    let reached = 0;
+    let frames = 0;
+    while (roll.isPlaying && frames < 120) {
+      rig.setLocomotion(0);
+      scene.render();
+      frames++;
+      const at = roll.animatables[0]?.masterFrame;
+      if (roll.isPlaying && at !== undefined) reached = Math.max(reached, (at - roll.from) / (roll.to - roll.from));
+    }
+    expect(roll.isPlaying, "the roll ended").toBe(false);
+    expect(reached, "furthest point of the take").toBeGreaterThan(ROLL_END - 0.05);
+    expect(reached, "furthest point of the take").toBeLessThanOrEqual(ROLL_END + 0.01);
+    expect((frames * FRAME_MS) / 1000, "ends with the sim's roll").toBeCloseTo(0.6, 1);
+  }), 60_000);
+
   // The sim lets him walk through every cast: a whole-body take that kept the
   // legs then stood still while the body slid (Skyfire's `transform`).
   it("leaves the legs on the run under a whole-body skill take, and the arms on the take", () => withFiles(async () => {
@@ -2956,6 +2983,52 @@ describe("a class skill plays its own take", () => {
       expect(take.isPlaying, "the take ended").toBe(false);
       expect(reached, "furthest point of the take").toBeGreaterThan(0.3);
       expect(reached, "furthest point of the take").toBeLessThanOrEqual(SKILL_CLIPS.bowAimNeutral.end! + 0.01);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
+
+  // Vaulting Shot plays JogToFlip backwards over the travel's 0.5 s. The take's last
+  // third lands into a jog and plays first when reversed: the whole take flipped at 2.4x.
+  it("flips Vaulting Shot backwards from the cut, paced on the cut", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      const file = (name: string) => new File([readFileSync(`${MODELS}${name}`)], name, { type: "model/gltf-binary" });
+      await loadPlayerRig(scene, ["male"], { anims: file("anim-library.glb"), wardrobes: { male: file("wardrobe.glb") } });
+      const rig = attachRig(scene, new Mesh("hero", scene), "male")!;
+      for (let i = 0; i < 3; i++) { rig.setLocomotion(0); scene.render(); }
+      const take = rig.clipGroups.get("jogFlip")!;
+      const end = SKILL_CLIPS.jogFlip.end;
+      const seconds = (take.to - take.from) / take.targetedAnimations[0]!.animation.framePerSecond;
+      expect(rig.playSkill("jogFlip", 0.5, undefined, 0.5, -1)).toBe(true);
+      expect(take.speedRatio).toBeCloseTo(-(seconds * end) / 0.5, 3);
+      expect(Math.abs(take.speedRatio), "the flip's pace").toBeLessThan(1.7);
+      let first: number | undefined;
+      let lowest = 1;
+      let highest = 0;
+      let frames = 0;
+      while (take.isPlaying && frames < 120) {
+        rig.setLocomotion(0);
+        scene.render();
+        frames++;
+        const at = take.animatables[0]?.masterFrame;
+        if (!take.isPlaying || at === undefined) continue;
+        const pos = (at - take.from) / (take.to - take.from);
+        first ??= pos;
+        lowest = Math.min(lowest, pos);
+        highest = Math.max(highest, pos);
+      }
+      expect(take.isPlaying, "the take ended").toBe(false);
+      expect(first, "starts at the cut").toBeGreaterThan(end - 0.1);
+      expect(highest, "never past the cut").toBeLessThanOrEqual(end + 0.01);
+      expect(lowest, "runs back to the take's start").toBeLessThan(0.1);
+      expect((frames * 16) / 1000, "lands with the travel").toBeCloseTo(0.5, 1);
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
