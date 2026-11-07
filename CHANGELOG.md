@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-11-07
+
 ### Added
 
 - The main menu shows the newest devlog screenshots beside the buttons, one
