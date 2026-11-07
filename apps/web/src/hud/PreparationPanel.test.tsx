@@ -35,6 +35,28 @@ describe("PreparationPanel", () => {
     expect(onActivate).toHaveBeenCalledWith(node.id, s.x, s.y);
   });
 
+  it("seats a stone in a page the browser has translated", () => {
+    // Safari and Chrome translation swap each text node for a <font> holding the
+    // translation. React still points at the old node, so inserting a sibling
+    // before it threw NotFoundError at the socket (Safari 27, 0.6.0 telemetry).
+    const panel = (s: SocketedStone | null) => (
+      <PreparationPanel atlasSeed={atlasSeed} completedNodes={[]} socketedStone={s}
+        onEject={() => {}} onActivate={() => {}} onClose={() => {}} />
+    );
+    const { rerender, container } = render(panel(null));
+    fireEvent.click(screen.getByTestId(`prep-node-${atlasGraph(atlasSeed)[0]!.id}`));
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    const texts: Text[] = [];
+    while (walker.nextNode()) texts.push(walker.currentNode as Text);
+    for (const t of texts) {
+      const font = document.createElement("font");
+      font.textContent = t.data;
+      t.replaceWith(font);
+    }
+    expect(() => rerender(panel(stone({ tier: 1 })))).not.toThrow();
+    expect(screen.getByTestId("prep-arealevel").textContent).toContain("Tier 1");
+  });
+
   it("opens below a node when the screen has no room for the panel above it", () => {
     // 2048x962: the node field is 396 px tall from y 96, and the panel is 386 px.
     const nodes = atlasGraph(atlasSeed);

@@ -451,7 +451,9 @@ function NodePopup(props: {
                 <span style={{ color: "#7c7361" }}>{"  ·  "}</span>
               </span>
             )}
-            Area Level{" "}
+            {/* An element, not a bare text node: page translation swaps text nodes
+                out, and seating a stone inserts the tier before this one. */}
+            <span>Area Level </span>
             <b style={{ color: stone ? GOLD : "#5a564a" }}>{stone ? areaLevel(stone.tier) : "—"}</b>
             {stone && <span style={{ color: "#7c7361" }}>{"  ·  "}Portals <b style={{ color: MAGIC }}>{MAP_PORTALS}</b></span>}
           </span>
