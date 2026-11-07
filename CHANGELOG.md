@@ -4,11 +4,17 @@ All notable changes to this project are recorded here, in the shape
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) gives it, with versions
 following [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-The top released section is also what the main menu shows under LATEST. It is
-not copied by hand: `node tools/changelog_to_news.mjs` reads this file and
+The last five released sections are also what the main menu's Patch Notes
+window shows. They are not copied by hand: `node tools/changelog_to_news.mjs` reads this file and
 writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
+
+### Added
+
+- The main menu shows the newest devlog screenshots beside the buttons, one
+  large and two small. Click one to see it full size.
+- A Patch Notes window on the main menu lists the last five releases in short.
 
 ## [0.7.3] - 2026-11-07
 

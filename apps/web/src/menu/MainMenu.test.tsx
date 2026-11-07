@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
+import { DEVLOG_TILES } from "../devlog.generated";
 import { MainMenu } from "./MainMenu";
 import { ModeDialog } from "./ModeDialog";
 import { _setLiveConfig } from "../telemetry/liveops";
@@ -43,6 +44,23 @@ describe("MainMenu", () => {
     expect(screen.getByTestId("boot-log").textContent).toMatch(/1 character found/i);
     rerender(<MainMenu {...props} characterCount={3} />);
     expect(screen.getByTestId("boot-log").textContent).toMatch(/3 characters found/i);
+  });
+
+  it("shows the devlog's newest shots beside the buttons instead of the LATEST text", () => {
+    render(<MainMenu {...props} />);
+    const tiles = within(screen.getByTestId("devlog-tiles")).getAllByRole("button");
+    expect(tiles.map((t) => t.textContent)).toEqual(DEVLOG_TILES.map((t) => t.caption));
+    expect(screen.queryByText(/^latest$/i)).toBeNull();
+  });
+
+  it("opens a tile's shot larger, and Escape closes it", () => {
+    render(<MainMenu {...props} />);
+    fireEvent.click(within(screen.getByTestId("devlog-tiles")).getAllByRole("button")[1]!);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain(DEVLOG_TILES[1]!.caption);
+    expect(dialog.querySelector("img")!.getAttribute("src")).toBe(DEVLOG_TILES[1]!.full);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("draws the atmosphere behind it", () => {

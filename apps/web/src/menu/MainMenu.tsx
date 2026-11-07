@@ -19,8 +19,10 @@
  * characters are separate pools by design, see the accounts spec).
  */
 import React from "react";
+import { createPortal } from "react-dom";
 import { GAME_VERSION } from "../version";
-import { NEWS_ENTRIES, NEWS_HISTORY } from "../news.generated";
+import { NEWS_HISTORY } from "../news.generated";
+import { DEVLOG_TILES } from "../devlog.generated";
 import { Atmosphere } from "./atmos";
 import { BRAZIERS } from "./braziers";
 import { Divider, EMBER, FramedPanel, GOLD, GOLD_DIM, MENU_ART, MenuButton, PARCHMENT, DISPLAY, SERIF } from "./frames";
@@ -80,7 +82,7 @@ export function MainMenu({
           zIndex: 2,
         }}
       >
-        <LatestPanel />
+        <DevlogTiles />
         <div style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 220 }}>
           <MenuButton
             tone="primary"
@@ -121,47 +123,110 @@ export function MainMenu({
   );
 }
 
+type DevlogTile = (typeof DEVLOG_TILES)[number];
+
 /**
- * Where PoE1 puts a microtransaction sale, this puts what the build actually is.
- * The composition needs the weight on that side of the panel; the content does
- * not need to be a shop.
+ * Where PoE1 hangs two shop pictures left of its buttons, the newest devlog
+ * shots: one large, two stacked beside it (tools/devlog_to_menu.mjs).
  */
-function LatestPanel(): React.ReactElement {
+function DevlogTiles(): React.ReactElement {
+  const [open, setOpen] = React.useState<DevlogTile | null>(null);
+  const [large, ...small] = DEVLOG_TILES;
   return (
     <div
+      data-testid="devlog-tiles"
       style={{
         flex: 1,
         minWidth: 0,
-        padding: "6px 16px 8px 6px",
-        display: "flex",
-        flexDirection: "column",
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
+        gridTemplateRows: "1fr 1fr",
         gap: 6,
       }}
     >
-      <div
+      {large && <Tile tile={large} big onOpen={setOpen} />}
+      {small.map((t) => <Tile key={t.src} tile={t} onOpen={setOpen} />)}
+      {open && <Lightbox tile={open} onClose={() => setOpen(null)} />}
+    </div>
+  );
+}
+
+function Tile({ tile, big, onOpen }: { tile: DevlogTile; big?: boolean; onOpen: (t: DevlogTile) => void }): React.ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(tile)}
+      onPointerEnter={(e) => { e.currentTarget.style.filter = "brightness(1.15)"; }}
+      onPointerLeave={(e) => { e.currentTarget.style.filter = ""; }}
+      style={{
+        position: "relative",
+        gridRow: big ? "span 2" : undefined,
+        // The large tile takes the two small ones' height; they set it by their own 16:9.
+        aspectRatio: big ? undefined : "16 / 9",
+        padding: 0,
+        border: `1px solid ${GOLD_DIM}`,
+        background: "#000",
+        overflow: "hidden",
+        cursor: "pointer",
+      }}
+    >
+      {/* The caption names the button; the picture adds nothing a reader needs twice. */}
+      <img src={tile.src} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+      <span
         style={{
-          fontFamily: DISPLAY,
-          fontSize: 13,
-          letterSpacing: 3,
-          textTransform: "uppercase",
-          color: GOLD,
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding: big ? "18px 10px 7px" : "12px 6px 4px",
+          background: "linear-gradient(transparent, rgba(0,0,0,0.85))",
+          fontFamily: SERIF,
+          fontSize: big ? 13 : 11,
+          lineHeight: 1.3,
+          color: PARCHMENT,
+          textAlign: "left",
+          textShadow: "0 1px 2px #000",
         }}
       >
-        Latest
-      </div>
-      <Divider style={{ margin: "2px 0 6px" }} />
-      {/* Straight out of CHANGELOG.md, via tools/changelog_to_news.mjs: the
-          menu cannot advertise a build that was never released, and nobody has
-          to remember to copy anything. The first line is the headline. */}
-      <div style={{ fontFamily: SERIF, fontSize: 14, color: PARCHMENT, lineHeight: 1.45 }}>
-        {NEWS_ENTRIES[0]}
-      </div>
-      {NEWS_ENTRIES.slice(1).map((line) => (
-        <div key={line} style={{ fontFamily: SERIF, fontSize: 12, color: GOLD_DIM, lineHeight: 1.5 }}>
-          {line}
+        {tile.caption}
+      </span>
+    </button>
+  );
+}
+
+function Lightbox({ tile, onClose }: { tile: DevlogTile; onClose: () => void }): React.ReactElement {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  // A portal: the tiles' panel is transformed, and a fixed child of a transform is fixed to IT.
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={tile.caption}
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 20,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.8)",
+        cursor: "pointer",
+      }}
+    >
+      <FramedPanel style={{ padding: 14, maxWidth: "min(84vw, 1280px)" }}>
+        <img src={tile.full} alt={tile.alt} style={{ display: "block", width: "100%", maxHeight: "74vh", objectFit: "contain" }} />
+        <div style={{ marginTop: 10, fontFamily: SERIF, fontSize: 15, color: PARCHMENT }}>
+          {tile.caption}
+          <span style={{ marginLeft: 12, fontSize: 12, color: GOLD_DIM }}>{shortDate(tile.date)}</span>
         </div>
-      ))}
-    </div>
+      </FramedPanel>
+    </div>,
+    document.body,
   );
 }
 
