@@ -10,7 +10,8 @@ look comes in three states and four sizes:
           body foreshortened toward the tip by LEAN while the tip stays on the
           point. A hardware cursor cannot animate, so it snaps.
 
-Every frame of both looks is turned TURN_DEG counter-clockwise around the tip.
+Every frame of the plain arrow is turned TURN_DEG counter-clockwise around the tip;
+the gilt blade keeps its own angle.
 
 Sizes are CSS px (DIP); every frame ships at 1x and 2x, named by its pixel size
 (`cursor_plain_48.png` is Medium at 2x). The turned art fills the box. Never
@@ -35,7 +36,7 @@ UI = ROOT / "apps" / "web" / "public" / "textures" / "ui"
 SIZES = (20, 24, 28, 32)
 # How far the pressed arrow foreshortens along its axis: a subtle lean, not a swing.
 LEAN = 0.95
-# The whole cursor's turn counter-clockwise; past ~23 deg its upper edge rises above the tip.
+# The plain arrow's turn counter-clockwise; past ~23 deg its upper edge rises above the tip.
 TURN_DEG = 11.0
 # The plain arrow read too bright beside the HUD; colour scaled, alpha untouched.
 PLAIN_GAIN = 0.8
@@ -100,18 +101,18 @@ def render(art: np.ndarray, m2: np.ndarray, px: int) -> Image.Image:
 
 
 def main() -> None:
-    looks = {"plain": ("cursor_plain", plain_sources()), "gilt": ("cursor", gilt_sources())}
-    for look, (stem, src) in looks.items():
+    looks = {"plain": ("cursor_plain", plain_sources(), TURN_DEG), "gilt": ("cursor", gilt_sources(), 0.0)}
+    for look, (stem, src, turn_deg) in looks.items():
         art = src["normal"]
         ax = press_axis(art)
-        t = math.radians(TURN_DEG)
+        t = math.radians(turn_deg)
         turn = np.array([[math.cos(t), math.sin(t)], [-math.sin(t), math.cos(t)]])  # CCW, y down
         lean = np.eye(2) - (1 - LEAN) * np.outer(ax, ax)
         turned = silhouette(art) @ turn.T
         # Anything above the tip would be cut off at the bitmap's top edge.
         assert turned[:, 1].min() > -1, f"{look}: TURN_DEG lifts the art above its tip"
         for size in SIZES:
-            k = size / turned.max()
+            k = size / (turned.max() + 0.5)  # pixel edge, not centre
             for scale in (1, 2):
                 px = size * scale
                 rest = turn * k * scale
