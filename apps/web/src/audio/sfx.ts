@@ -189,7 +189,6 @@ const VOICES: Record<string, Voice> = {
   "boss-bog-burst":           { gain: 0.25, wet: 0.20, vary: 0.10, src: "footstep-mud", rate: 0.6 },
   "boss-thorns":              { gain: 0.34, wet: 0.22, vary: 0.05, src: "skill-ground-slam-impact", rate: 1.15 },
   "boss-phase-three":         { gain: 0.40, wet: 0.35, vary: 0, src: "monster-slam-impact", rate: 0.6 },
-  "player-hurt":              { gain: 0.194, wet: 0.10, vary: 0.08, takes: 3 },
   "player-death":             { gain: 0.36, wet: 0.20, vary: 0.03, takes: 3 },
   // Varkis (varkis-voice.ts). A voice never wanders in pitch: that is a different man.
   "npc-varkis-greet-1":       { gain: 0.5, wet: 0.06, vary: 0, takes: 2 },
@@ -488,7 +487,7 @@ export const CORE_SFX: readonly string[] = [
   "skill-herald-of-ash-cast", "skill-herald-of-ash-burst", "skill-aura-off",
   "skill-status-chilled", "skill-status-stunned", "skill-status-marked",
   "skill-status-flammable", "skill-status-scorched",
-  "monster-melee-hit", "monster-hurt", "monster-death", "player-hurt",
+  "monster-melee-hit", "monster-hurt", "monster-death",
   "footstep-stone", "flask-drink",
   // A drop must never be a silent first play.
   "drop-normal", "drop-magic", "drop-rare", "drop-unique", "drop-currency", "drop-gold",

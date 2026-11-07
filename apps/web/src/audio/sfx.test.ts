@@ -73,6 +73,10 @@ describe("sfx assets", () => {
     expect([...voices].sort()).toEqual([...onDisk].sort());
   });
 
+  it("the player has no grunt of his own beside his voice lines", () => {
+    expect(voiceNames().filter((n) => n.startsWith("player-"))).toEqual(["player-death"]);
+  });
+
   it("everything preloaded is a real voice", () => {
     const voices = new Set(voiceNames());
     for (const name of CORE_SFX) expect(voices.has(name), name).toBe(true);

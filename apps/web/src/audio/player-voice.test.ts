@@ -53,10 +53,11 @@ describe("player voice", () => {
 
   it("grunts on a hit for 8% of the pool, cries on 25%, and stays silent under that", () => {
     const { groups, voice, advance } = rig();
-    expect(voice.observe(snap({ life: 100 }), snap({ life: 95 }))).toBe(false);
-    expect(voice.observe(snap({ life: 95 }), snap({ life: 85 }))).toBe(true);
+    voice.observe(snap({ life: 100 }), snap({ life: 95 }));
+    expect(groups()).toEqual([]);
+    voice.observe(snap({ life: 95 }), snap({ life: 85 }));
     advance(5);
-    expect(voice.observe(snap({ life: 85 }), snap({ life: 55 }))).toBe(true);
+    voice.observe(snap({ life: 85 }), snap({ life: 55 }));
     expect(groups()).toEqual(["hurt", "pain"]);
   });
 

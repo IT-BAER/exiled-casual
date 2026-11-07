@@ -181,13 +181,6 @@ SOURCES: dict[str, str | dict | list[str | dict]] = {
     # riser: a riser has a pitch that promises a downbeat the sim may never deliver.
     "monster-slam-windup": "Justsoundeffects - Transition Whooshes Vol. 1/WHSH_Whoosh Low 07_JSE_TW1.wav",
     "monster-slam-impact": "344 Audio - Epic Impacts Vol. 1/Impact 038.wav",
-    # The other half of the same event: a spell landing on the player from range.
-    # Takes 2, 3: two sharp gasps of one male voice from another pack.
-    "player-hurt": [
-        "344 Audio - Screaming/VOXScrm_Male in Shock 4_344 Audio_Screaming.wav",
-        "Pole Position Production - The Grunts Library/Male 1 - Breathing - Gasping - Ehrlund M1.wav@13.60:0.60:1.7",
-        "Pole Position Production - The Grunts Library/Male 1 - Breathing - Gasping - Ehrlund M1.wav@3.72:0.60:2.1",
-    ],
 
     # ── Skills ──────────────────────────────────────────────────────────────────
     # Takes 2, 3 are built: no other fire whoosh exists. The same growl a tone down over a

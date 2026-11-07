@@ -245,7 +245,7 @@ interface Options {
   stopAllLoops?: () => void;
   /** Gold collected: the sampled coin-pickup cue (drop-sound.ts). */
   coins?: (at: At) => void;
-  /** The player's own voice (player-voice.ts); a grunt it plays stands in for `player-hurt`. */
+  /** The player's own voice (player-voice.ts): his grunts and cries are its, not this file's. */
   voice?: Pick<PlayerVoice, "observe">;
 }
 
@@ -347,7 +347,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       if (before.area !== snap.area || snap.tick < before.tick) {
         reset(); prev = snap; opts.voice?.observe(null, snap); return;
       }
-      const grunted = opts.voice?.observe(before, snap) ?? false;
+      opts.voice?.observe(before, snap);
 
       const was = new Map<number, SnapshotEntity>();
       for (const e of before.entities) was.set(e.id, e);
@@ -484,9 +484,8 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         play(cueFor("monster-hurt", e.species), 1, at(e));
       }
 
-      // The player taking a hit: something's hands if anything is standing on him,
-      // and something's spell otherwise. Two samples for one event reads as variety
-      // rather than as a double hit, because only one of them ever plays.
+      // The player taking a hit from something standing on him: the blow landing.
+      // A hit from range has no sound of its own here; his voice grunts for it.
       //
       // A pool that SHRANK is not a pool that was emptied. Refunding a passive
       // that grants energy shield lowers the maximum, and the current value falls
@@ -502,7 +501,6 @@ export function createSoundscape(opts: Options = {}): Soundscape {
           e.kind === "monster"
           && Math.hypot(e.x - snap.player.x, e.y - snap.player.y) <= MELEE_RANGE);
         if (adjacent) play("monster-melee-hit");
-        else if (!grunted) play("player-hurt");
       }
 
       // ── Casts ───────────────────────────────────────────────────────────────

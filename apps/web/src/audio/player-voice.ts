@@ -54,11 +54,8 @@ export const ENTER_DELAY_S = 1;
 const LATE_S = 3;
 
 export interface PlayerVoice {
-  /**
-   * Called once per snapshot; `before` is null on the first one in an area.
-   * Says whether a grunt or cry played, so the generic hurt cue can stand down.
-   */
-  observe(before: Snapshot | null, snap: Snapshot): boolean;
+  /** Called once per snapshot; `before` is null on the first one in an area. */
+  observe(before: Snapshot | null, snap: Snapshot): void;
 }
 
 interface Options {
@@ -105,26 +102,22 @@ export function createPlayerVoice(speaker: string, opts: Options = {}): PlayerVo
         kills.length = 0;
         queue.length = 0;
         if (snap.area === "map" && random() < ENTER_CHANCE) queue.push({ group: "enter", at: t + ENTER_DELAY_S });
-        return false;
+        return;
       }
       const p = snap.player;
       const q = before.player;
       if (q.alive && !p.alive) {
         queue.length = 0;
         say("death", true);
-        return false;
+        return;
       }
-      if (!p.alive) return false;
+      if (!p.alive) return;
 
       // A pool that shrank is a refund or an unequip, not damage (soundscape.ts).
-      let grunted = false;
       const pool = p.maxLife + p.maxEnergyShield;
       if (p.maxLife >= q.maxLife && p.maxEnergyShield >= q.maxEnergyShield && pool > 0) {
         const hit = (q.life + q.energyShield - p.life - p.energyShield) / pool;
-        if (hit >= HURT_FRAC && t - gruntAt >= GRUNT_GAP_S && say(hit >= PAIN_FRAC ? "pain" : "hurt")) {
-          gruntAt = t;
-          grunted = true;
-        }
+        if (hit >= HURT_FRAC && t - gruntAt >= GRUNT_GAP_S && say(hit >= PAIN_FRAC ? "pain" : "hurt")) gruntAt = t;
       }
 
       const was = new Map<number, SnapshotEntity>();
@@ -159,7 +152,6 @@ export function createPlayerVoice(speaker: string, opts: Options = {}): PlayerVo
       for (let i = queue.length - 1; i >= 0; i--) if (t - queue[i]!.at > LATE_S) queue.splice(i, 1);
       const due = queue.findIndex((w) => t >= w.at);
       if (due >= 0 && say(queue[due]!.group)) queue.splice(due, 1);
-      return grunted;
     },
   };
 }

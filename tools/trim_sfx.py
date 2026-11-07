@@ -105,7 +105,6 @@ MAX_SECONDS: dict[str, float] = {
     "trade-": 0.60,
     "footstep": 0.35,
     "monster-hurt": 0.55,
-    "player-hurt": 0.55,
     "monster-melee-hit": 0.60,
     "monster-spit": 0.70,
     "skill-blink": 0.80,

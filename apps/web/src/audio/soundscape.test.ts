@@ -133,10 +133,12 @@ describe("createSoundscape", () => {
     const mine: string[] = [];
     const p = createSoundscape({ play: (n) => mine.push(n) });
     p.reset(null);
-    p.observe(snap({ tick: 1, player: testPlayer({ life: 200 }) }));
+    // Something standing on him, unhurt, so each hit he takes is a blow.
+    const near = [monster(1, 1, 50)];
+    p.observe(snap({ tick: 1, entities: near, player: testPlayer({ life: 200 }) }));
     const playerGaps = gaps((i) => {
       const before = mine.length;
-      p.observe(snap({ tick: i + 2, player: testPlayer({ life: 199 - i }) }));
+      p.observe(snap({ tick: i + 2, entities: near, player: testPlayer({ life: 199 - i }) }));
       return mine.length > before;
     });
 
@@ -380,33 +382,19 @@ describe("createSoundscape", () => {
     ])).toEqual([]);
   });
 
-  it("hands with something standing on him, spell without", () => {
+  it("a blow from something standing on him lands; a hit from range is left to his own voice", () => {
     const hit = (entities: SnapshotEntity[]) => run([
       snap({ tick: 1, entities, player: testPlayer({ life: 100 }) }),
       snap({ tick: 2, entities, player: testPlayer({ life: 80 }) }),
     ]).filter((n) => n === "monster-melee-hit" || n === "player-hurt");
     expect(hit([monster(1, 1)])).toEqual(["monster-melee-hit"]);
-    expect(hit([monster(1, 9)])).toEqual(["player-hurt"]);
-    expect(hit([])).toEqual(["player-hurt"]);
-  });
-
-  it("a voiced grunt stands in for the generic hurt cue, never for the blow that landed", () => {
-    const hit = (entities: SnapshotEntity[], grunted: boolean) => {
-      const heard: string[] = [];
-      const s = createSoundscape({ play: (n) => heard.push(n), voice: { observe: () => grunted } });
-      s.reset(null);
-      s.observe(snap({ tick: 1, entities, player: testPlayer({ life: 100 }) }));
-      s.observe(snap({ tick: 2, entities, player: testPlayer({ life: 80 }) }));
-      return heard.filter((n) => n === "monster-melee-hit" || n === "player-hurt");
-    };
-    expect(hit([], true)).toEqual([]);
-    expect(hit([], false)).toEqual(["player-hurt"]);
-    expect(hit([monster(1, 1)], true)).toEqual(["monster-melee-hit"]);
+    expect(hit([monster(1, 9)])).toEqual([]);
+    expect(hit([])).toEqual([]);
   });
 
   it("hands the voice no previous snapshot at the start of an area or across a change of one", () => {
     const seen: (number | null)[] = [];
-    const s = createSoundscape({ play: () => {}, voice: { observe: (b) => { seen.push(b?.tick ?? null); return false; } } });
+    const s = createSoundscape({ play: () => {}, voice: { observe: (b) => { seen.push(b?.tick ?? null); } } });
     s.reset(null);
     s.observe(snap({ tick: 1 }));
     s.observe(snap({ tick: 2 }));
@@ -422,11 +410,12 @@ describe("createSoundscape", () => {
    * chest piece, which is the sibling case the one guard covers.
    */
   it("says nothing when the pool itself got smaller", () => {
+    // Something standing on him, so a real hit is heard as its blow.
     const hurt = (before: Partial<Snapshot["player"]>, after: Partial<Snapshot["player"]>) =>
       run([
-        snap({ tick: 1, player: testPlayer(before) }),
-        snap({ tick: 2, player: testPlayer(after) }),
-      ]).filter((n) => n === "monster-melee-hit" || n === "player-hurt");
+        snap({ tick: 1, entities: [monster(1, 1)], player: testPlayer(before) }),
+        snap({ tick: 2, entities: [monster(1, 1)], player: testPlayer(after) }),
+      ]).filter((n) => n === "monster-melee-hit");
 
     expect(hurt(
       { energyShield: 40, maxEnergyShield: 40 },
@@ -440,7 +429,7 @@ describe("createSoundscape", () => {
     expect(hurt(
       { energyShield: 40, maxEnergyShield: 40 },
       { energyShield: 10, maxEnergyShield: 40 },
-    )).toEqual(["player-hurt"]);
+    )).toEqual(["monster-melee-hit"]);
   });
 
   /**
