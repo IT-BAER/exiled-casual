@@ -6,8 +6,9 @@ look comes in three states and four sizes:
 
   normal  the arrow at rest, its tip on the top-left corner (hotspot 0 0)
   deny    the same arrow cooled to red iron (an illegal drop target)
-  press   PoE2's click tilt while a mouse button is held: the arrow leans in, its
-          body foreshortened toward the tip by LEAN while the tip stays on the
+  press   PoE2's click tilt while a mouse button is held: the arrow turns TURN_DEG
+          counter-clockwise and leans in, its body foreshortened toward the tip
+          by LEAN, both around the tip, which stays on the
           point. A hardware cursor cannot animate, so it snaps.
 
 Sizes are CSS px (DIP); every frame ships at 1x and 2x, named by its pixel size
@@ -20,6 +21,7 @@ Writes apps/web/public/textures/ui/cursor*.png. Run after touching a master:
 """
 from __future__ import annotations
 
+import math
 import pathlib
 
 import cv2
@@ -32,6 +34,8 @@ UI = ROOT / "apps" / "web" / "public" / "textures" / "ui"
 SIZES = (20, 24, 28, 32)
 # How far the pressed arrow foreshortens along its axis: a subtle lean, not a swing.
 LEAN = 0.95
+# And how far it turns counter-clockwise; past ~5 deg the upper edge would rise above the tip.
+TURN_DEG = 4.0
 # The plain arrow read too bright beside the HUD; colour scaled, alpha untouched.
 PLAIN_GAIN = 0.8
 # Luminance -> red iron, fitted on the first plain deny frame (mean error 0.25/255).
@@ -94,7 +98,9 @@ def main() -> None:
     for look, (stem, src) in looks.items():
         art = src["normal"]
         ax = press_axis(art)
-        lean = np.eye(2) - (1 - LEAN) * np.outer(ax, ax)
+        t = math.radians(TURN_DEG)
+        turn = np.array([[math.cos(t), math.sin(t)], [-math.sin(t), math.cos(t)]])  # CCW, y down
+        lean = turn @ (np.eye(2) - (1 - LEAN) * np.outer(ax, ax))
         for size in SIZES:
             k = size / max(art.shape[:2])
             for scale in (1, 2):
