@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, openSync, readSync, closeSync, fstatSync } from "node:fs";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
-import { ipPrefix, maskIps } from "./ip";
+import { ipPrefix, isPrivateIp, maskIps } from "./ip";
 
 export interface Hit {
   t: number;
@@ -70,7 +70,9 @@ export function parseAccessLine(line: string): Hit | null {
     bytes: m[13] === "-" ? 0 : Number(m[13]),
     referrer: refHost(m[14]!),
     ua,
-    bot: isBot(ua, rawPath),
+    // Visitors arrive through Cloudflare with their own address; a private one is
+    // a scanner or a check inside the network, whatever agent it claims.
+    bot: isBot(ua, rawPath) || isPrivateIp(m[1]!),
   };
 }
 
