@@ -1982,6 +1982,69 @@ describe("the robe's leg backing stays under its trousers", () => {
   }, 60_000);
 });
 
+/**
+ * An arm backing darkens the skin INSIDE a sleeve. Past the hem it is a dark
+ * collar standing off the bare arm, and the skin seen under it reads as a pale
+ * hole in the sleeve. Measured along the upper arm at bind, out from the shoulder.
+ */
+describe("an arm backing ends at its chest's sleeve", () => {
+  const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
+  const SHELLS = ["chest.stalker.coat", "chest.ember.robe", "chest.ironsworn.cuirass"];
+
+  it("reaches no further down either arm than the sleeve over it, on both bodies", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    try {
+      const past: Record<string, number> = {};
+      for (const file of ["wardrobe.glb", "wardrobe-female.glb"]) {
+        const wardrobe = await LoadAssetContainerAsync(
+          new File([readFileSync(`${MODELS}${file}`)], file, { type: "model/gltf-binary" }), scene);
+        for (const root of wardrobe.rootNodes) root.computeWorldMatrix(true);
+        const mesh = (name: string) => wardrobe.meshes.find((m) => m.name === name) as Mesh;
+        for (const shell of SHELLS) {
+          const bones = mesh(shell).skeleton!.bones;
+          const at = (name: string) => {
+            const node = bones.find((b) => b.name === name)!.getTransformNode()!;
+            node.computeWorldMatrix(true);
+            return node.getAbsolutePosition();
+          };
+          for (const side of ["l", "r"]) {
+            const backing = shell.replace(/\.[a-z]+$/, `.backing_arm_${side}`);
+            const bp = mesh(backing).getPositionData(true, true)!;
+            // Skinned positions and the joint nodes come out mirrored in x, so
+            // the arm takes its side from the backing's own vertices.
+            const sign = Math.sign(bp[0]!);
+            const head = at(`upperarm_${side}`);
+            const axis = at(`lowerarm_${side}`).subtract(head).normalize();
+            head.x = sign * Math.abs(head.x);
+            axis.x = sign * Math.abs(axis.x);
+            /** Furthest reach along the arm of the vertices within 16 cm of it. */
+            const reach = (p: ArrayLike<number>) => {
+              let most = -Infinity;
+              for (let j = 0; j < p.length; j += 3) {
+                const d = new Vector3(p[j]!, p[j + 1]!, p[j + 2]!).subtract(head);
+                const t = Vector3.Dot(d, axis);
+                if (t > 0 && d.subtract(axis.scale(t)).length() < 0.16) most = Math.max(most, t);
+              }
+              return most;
+            };
+            const mm = (reach(bp) - reach(mesh(shell).getPositionData(true, true)!)) * 1000;
+            expect(Number.isFinite(mm), `${file} ${backing}`).toBe(true);
+            past[`${file} ${backing}`] = Math.round(mm);
+          }
+        }
+      }
+      // mm past the sleeve. The backing is kept out to the sleeve cut plus its
+      // 6 mm rim lip; the tear-rim reach carried 8-21 mm collars past it.
+      for (const mm of Object.values(past)) expect(mm, JSON.stringify(past)).toBeLessThanOrEqual(6);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }, 60_000);
+});
+
 describe("calmTowardFirst", () => {
   it("keeps a share of each key's distance from the first, and leaves the source alone", () => {
     const rot = new Animation("r", "rotationQuaternion", 30, Animation.ANIMATIONTYPE_QUATERNION);

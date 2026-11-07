@@ -5003,7 +5003,7 @@ def main():
             for region in ("arm_l", "arm_r"):
                 fitted.update(build_gorget(
                     rig, body, worn, f"chest.ironsworn.backing_{region}", region,
-                    fill=shell, shell=shell, metallic=metallic, near=BACKING_NEAR,
+                    fill=shell, shell=shell, metallic=metallic, near=None,
                     reach=SOFT_BACKING_REACH,
                     keep=lambda co, x=arm_edge: abs(co.x) <= x))
             continue
@@ -5013,7 +5013,9 @@ def main():
         # A decoded coat is holed at the shoulder caps and the crotch, and the
         # skin under a hole is drawn; the backing stands under those too.
         # An arm is backed everywhere inboard of the sleeve cut, hole or not,
-        # so the backing ends at the hem and never stands out below it.
+        # so the backing ends at the hem and never stands out below it. No
+        # tear-rim reach on an arm: past the cut the nearest cloth is the hem,
+        # and a backing pushed out to it is a dark collar over bare skin.
         edge_x = fitted[shell]["cut_pauldron_edge_x"] + SUIT_RIM_LIP
         # Every soft suit backs its legs, a closed skirt included: a robe hands
         # every vertex below the hip to the skirt chains, and those swing clear
@@ -5025,7 +5027,8 @@ def main():
             fitted.update(build_gorget(rig, body, worn,
                                        f"chest.{look}.backing_{region}", region,
                                        fill=shell, shell=shell, metallic=metallic,
-                                       near=BACKING_NEAR, reach=SOFT_BACKING_REACH, keep=keep,
+                                       near=None if keep else BACKING_NEAR,
+                                       reach=SOFT_BACKING_REACH, keep=keep,
                                        ride=region.startswith("leg")))
     # The trousers are parked. They were the body's own legs pushed four
     # millimetres out and called leather, standing in for leg armour the chest
