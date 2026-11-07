@@ -18,6 +18,10 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Maren the cartographer talks: she greets you when you walk up, and says a
   line when her table of Waystones opens and when it closes. Now and then she
   says something to nobody in particular.
+- Your character talks: a grunt when a hit lands hard and a cry when one
+  nearly kills you, and a line when your life runs low, on a kill streak, when
+  a boss wakes and when it falls, on a rare drop, a level up, your death and
+  each new map.
 
 ### Changed
 
