@@ -5,7 +5,7 @@ import { fp } from "@exiled/fixed-point";
 import { canAllocate, passivePoints, PASSIVE_TREE, effectiveSkill } from "@exiled/rules";
 import { SKILLS, DEFAULT_ATTACK_BY_CLASS, MONSTERS, isCurrency } from "@exiled/content-runtime";
 import { PICKUP_RADIUS } from "@exiled/protocol";
-import { hasLineOfSight, type Collision } from "./collision";
+import { chaseStep, hasLineOfSight, type Collision } from "./collision";
 import { bodyRadiusOf } from "./body";
 import { activeBuffs, activeStatuses } from "./status";
 import { telegraphCovers } from "./systems/telegraph-resolve";
@@ -584,11 +584,18 @@ export class Bot {
     return g;
   }
 
-  /** Whether monster `e` at `from` can walk to `to`: a straight line or a route for its own body. */
+  /**
+   * Whether monster `e` at `from` can walk to `to`: a straight line or a route for its own body,
+   * and its own chase step moves it. The nav floods cell centres, so a disc off centre in a
+   * slot its own width has a route and never takes a step of it.
+   */
   private reaches(e: Entity, from: Position, to: Position): boolean {
     const r = bodyRadiusOf(this.g.world, e);
-    if (!this.collision.nav || hasLineOfSight(this.collision, from.x, from.y, to.x, to.y, r)) return true;
-    return this.collision.nav.waypoint(from.x, from.y, to.x, to.y, r) !== null;
+    if (!this.collision.nav) return true;
+    if (!hasLineOfSight(this.collision, from.x, from.y, to.x, to.y, r)
+      && this.collision.nav.waypoint(from.x, from.y, to.x, to.y, r) === null) return false;
+    const step = chaseStep(this.collision, from.x, from.y, to.x, to.y, this.g.world.get<MonsterC>(e, "monster")!.moveSpeed, r);
+    return step.x !== from.x || step.y !== from.y;
   }
 
   /** Walk toward `to` along the nav field, as far ahead as the line stays clear. */

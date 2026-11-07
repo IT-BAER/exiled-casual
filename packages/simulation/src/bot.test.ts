@@ -317,6 +317,27 @@ describe("Bot", () => {
     for (const c of out.filter((x) => x.type === "moveTo")) expect(c.data!["x"]!).toBeGreaterThanOrEqual(me.x);
   });
 
+  it("does not back off a monster wedged where its nav says it fits but its disc cannot step", () => {
+    // Rustwater, seed 427: a grubling 3 milli off the centre of a slot its own width
+    // stood chasing for 12 minutes while he stepped out of 3 units and back every tick.
+    const { g, me } = setupAs("class.emberbound");
+    const x0 = me.x + fp(0.5), x1 = me.x + fp(1.5), y1 = me.y - fp(0.3), y0 = me.y - fp(5);
+    const at = { x: me.x + fp(1.9), y: me.y - fp(1.2) };
+    const grub = spawnMonster(g.world, MONSTERS.get("monster.drowned_grubling.v1")!, at.x, at.y, false);
+    const r = g.world.get<MonsterC>(grub, "monster")!.bodyRadius;
+    const block: Collision = {
+      isWalkable: (x, y, rr) => {
+        if (rr === r && (x !== at.x || y !== at.y) && Math.hypot(x - at.x, y - at.y) < fp(1)) return false;
+        const gx = Math.max(0, x0 - x, x - x1), gy = Math.max(0, y0 - y, y - y1);
+        return gx * gx + gy * gy >= rr * rr && (gx > 0 || gy > 0);
+      },
+      nav: { waypoint: (_fx, _fy, tx, ty) => ({ x: tx, y: ty }) },
+    };
+    g.world.set<MonsterC>(grub, "monster", { ...g.world.get<MonsterC>(grub, "monster")!, state: "chase" });
+    const out = new Bot(g, block, {}).decide(false);
+    for (const c of out.filter((x) => x.type === "moveTo")) expect(c.data!["x"]!).toBeGreaterThanOrEqual(me.x);
+  });
+
   it("stands and casts at full life with a monster close, rather than backing off", () => {
     const out = setup([0, 2]).bot.decide(false);
     expect(out.some((c) => c.type === "useSkill")).toBe(true);
