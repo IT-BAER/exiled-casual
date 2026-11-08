@@ -1948,10 +1948,11 @@ function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", loo
  * Maren, the cartographer: the female body in her own look, which no item base
  * maps to - a dark velvet gown and long red hair, the hair worn in the helmet
  * slot so the body's own buns are hidden the way any helmet hides them. Bare
- * hands, leather boots under the hem.
+ * hands, and the Ember slippers: dark cloth, so where the skirt panels part at a
+ * turn the gap reads as shadow, not as the tan of a leather boot.
  */
 export const CARTOGRAPHER_LOOKS: Looks = {
-  ...looksForEquipment({ boots: { baseId: "base.stalker_boots" } }, "female"),
+  ...looksForEquipment({ boots: { baseId: "base.ember_slippers" } }, "female"),
   helmet: "maren",
   chest: "maren",
 };
@@ -1959,21 +1960,27 @@ export const CARTOGRAPHER_LOOKS: Looks = {
 /** Her hair colour, linear like the glTF base colour it replaces (the pack's brown is 0.34, 0.19, 0.10). */
 export const CARTOGRAPHER_HAIR = new Color3(0.6, 0.05, 0.02);
 
+/** Multiplies her slippers' cloth, so it reads as the gown's dark rather than as tan. */
+export const CARTOGRAPHER_SLIPPERS = new Color3(0.16, 0.11, 0.11);
+
 /**
- * The cartographer. Her hair and brows get material CLONES tinted red: the
- * wardrobe's materials are shared by every rig built from it, the player's too.
+ * The cartographer. Her brows get material CLONES tinted red, and her slippers
+ * clones shaded dark: the wardrobe's materials are shared by every rig built
+ * from it, the player's too.
  */
 function buildCartographer(scene: Scene, root: Mesh): void {
   if (!buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS)) return;
   const clones = new Map<Material, Material>();
   for (const mesh of root.getChildMeshes()) {
     const [slot, , part] = mesh.name.split(".");
-    if (slot !== "base" || (part !== "hair" && part !== "brows") || !mesh.material) continue;
+    const shade = slot === "base" && (part === "hair" || part === "brows") ? CARTOGRAPHER_HAIR
+      : slot === "boots" ? CARTOGRAPHER_SLIPPERS : null;
+    if (!shade || !mesh.material) continue;
     let tinted = clones.get(mesh.material);
     if (!tinted) {
-      tinted = mesh.material.clone(`${root.name}-${part}`)!;
-      if (tinted instanceof PBRMaterial) tinted.albedoColor = CARTOGRAPHER_HAIR.clone();
-      else if (tinted instanceof StandardMaterial) tinted.diffuseColor = CARTOGRAPHER_HAIR.clone();
+      tinted = mesh.material.clone(`${root.name}-${slot}-${part}`)!;
+      if (tinted instanceof PBRMaterial) tinted.albedoColor = shade.clone();
+      else if (tinted instanceof StandardMaterial) tinted.diffuseColor = shade.clone();
       clones.set(mesh.material, tinted);
     }
     mesh.material = tinted;

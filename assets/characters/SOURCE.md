@@ -229,6 +229,10 @@ references made with `/codex-imagegen`; the job folders are
   erased the bodice and both sleeves. Fitted by `fit_soft_suit` like the robe,
   without the robe's shin cut; its back has vents at the hem as decoded. It
   passes the idle clearance gate over torso and collar where the robe does not.
+  Unlike the robe it is one-sided: a panel's inside samples a light part of the
+  atlas and showed as a tan wedge where the skirt parts at a turn, so the gap
+  shows its leg backing instead, built matte and darker (`GOWN_BACKING`). Her
+  Ember slippers are shaded dark on her own material clones (`meshes.ts`).
 - `maren-hair-v1.glb`: long red hair, rebuilt as a closed surface
   (`open_volume.py --res 240 --radius 2`), 8 000 triangles with a baked normal
   map (fidelity p99 0.0013, normal p5 0.91). Seated by `fit_hair`: sized by its

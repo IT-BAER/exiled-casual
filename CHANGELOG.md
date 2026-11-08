@@ -10,6 +10,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Fixed
+
+- Maren's skirt no longer shows light patches where it parts as she turns, and
+  her slippers are dark under the hem.
+
 ## [0.7.6] - 2026-11-08
 
 ### Added

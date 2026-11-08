@@ -613,9 +613,12 @@ RIGID_GEAR = (
         "src": "maren-gown-30k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
         # No greaves: the robe cuts its trouser shins, a gown has none, and the
         # cut opened slits up the back of the skirt where it hangs by the calves.
+        # One-sided, unlike the robe: a panel's inside samples a light part of
+        # the decode's atlas and showed as a tan wedge where the skirt parts;
+        # culled, the gap shows the dark matte backing (GOWN_BACKING) instead.
         "deform": SUIT_BONES, "bodies": ("female",),
         "matte": True, "clean": True, "skirt_floor": False,
-        "skirt": 1.7, "twosided": True,
+        "skirt": 1.7,
     },
     {
         "slot": "helmet", "look": "maren", "part": "tresses",
@@ -4752,6 +4755,7 @@ CHEST_SHELLS = {
     "maren": "chest.maren.gown",
 }
 SOFT_METALLIC = 0.0         # a leather or cloth collar plate is not steel
+GOWN_BACKING = (0.95, 0.55)  # Maren's leg backing: matte, darker than her gown's mean
 BACKING_AIR = 0.003         # the torso backing stops this far under the cuirass
 BACKING_REACH = 0.15        # and looks this far out along its normal for it
 # A soft suit's backing also stands under the HOLES in its shell: a vertex whose
@@ -4840,8 +4844,12 @@ def ride_shell(obj, shell):
 
 def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar", fill=None,
                  shell="chest.ironsworn.cuirass", metallic=STEEL_METALLIC, near=None,
-                 reach=BACKING_REACH, keep=None, ride=False):
+                 reach=BACKING_REACH, keep=None, ride=False, cloth=None):
     """Cut a body region off the body, push it out, and call it steel.
+
+    `cloth` (roughness, shade) makes it matte cloth instead, its albedo the
+    shell's mean times `shade`: a gown whose skirt parts at a turn shows its
+    backing, and a glossy one lit by the torch reads as a hole.
 
     The cut is exactly the piece `split_body_regions` will make, so hiding that
     piece under this plate leaves no skin uncovered and no crack. With `fill`, a
@@ -4997,7 +5005,7 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
         px = np.empty(len(image.pixels), dtype=np.float32)
         image.pixels.foreach_get(px)
         px = px.reshape(-1, image.channels)
-        target = cuirass_albedo(worn, shell)
+        target = cuirass_albedo(worn, shell) * (cloth[1] if cloth else 1.0)
         luma = px[:, :3] @ LUMA
         grain = 1.0 + (luma / max(float(luma.mean()), 1e-6) - 1.0) * STEEL_GRAIN
         px[:, :3] = np.clip(np.outer(grain, target), 0.0, 1.0)
@@ -5006,7 +5014,7 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
         # The rust's roughness map blotches the highlight; the cuirass reads even.
         for link in list(bsdf.inputs["Roughness"].links):
             mat.node_tree.links.remove(link)
-        bsdf.inputs["Roughness"].default_value = STEEL_ROUGHNESS
+        bsdf.inputs["Roughness"].default_value = cloth[0] if cloth else STEEL_ROUGHNESS
     obj.data.materials.append(mat)
     for poly in obj.data.polygons:
         poly.use_smooth = True
@@ -5130,7 +5138,8 @@ def main():
                                        fill=shell, shell=shell, metallic=metallic,
                                        near=None if keep else BACKING_NEAR,
                                        reach=SOFT_BACKING_REACH, keep=keep,
-                                       ride=region.startswith("leg")))
+                                       ride=region.startswith("leg"),
+                                       cloth=GOWN_BACKING if look == "maren" and region.startswith("leg") else None))
     # The trousers are parked. They were the body's own legs pushed four
     # millimetres out and called leather, standing in for leg armour the chest
     # slot did not have; the harness carries real cuisses and greaves now, so

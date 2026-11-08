@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
 import { Mesh, NullEngine, PBRMaterial, StandardMaterial, type Material } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { makeMesh, CARTOGRAPHER_HAIR } from "./meshes";
+import { makeMesh, CARTOGRAPHER_HAIR, CARTOGRAPHER_SLIPPERS } from "./meshes";
 import { loadPlayerRig, resetPlayerRig, rigOf } from "./rig";
 
 /** Babylon reads a File through FileReader, which node does not ship. */
@@ -75,6 +75,13 @@ describe("Maren's body", () => {
         const [r, g, b] = albedo(m.material);
         expect(r).toBeCloseTo(CARTOGRAPHER_HAIR.r);
         expect(r).toBeGreaterThan(3 * Math.max(g, b));
+      }
+      // Her slippers are dark on clones of their own, so a parted skirt shows shadow, not tan.
+      const slippers = root.getChildMeshes().filter((m) => m.name.startsWith("boots.") && m.isEnabled());
+      expect(slippers.length).toBeGreaterThan(0);
+      for (const m of slippers) {
+        expect(shared.has(m.material!)).toBe(false);
+        expect(albedo(m.material)[0]).toBeCloseTo(CARTOGRAPHER_SLIPPERS.r);
       }
       // A second body on the same wardrobe keeps the pack's own brown.
       const her = new Mesh("other", scene);
