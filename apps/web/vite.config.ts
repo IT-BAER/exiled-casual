@@ -17,6 +17,17 @@ function audioVersion(): string {
   return h.digest("hex").slice(0, 10);
 }
 
+/** Hash of each model's bytes, by file name: a changed model gets a new URL (`render/model-url.ts`). */
+function modelVersions(): Record<string, string> {
+  const dir = fileURLToPath(new URL("./public/models/", import.meta.url));
+  const out: Record<string, string> = {};
+  if (!existsSync(dir)) return out;
+  for (const f of readdirSync(dir).sort()) {
+    if (f.endsWith(".glb")) out[f] = createHash("sha1").update(readFileSync(dir + f)).digest("hex").slice(0, 10);
+  }
+  return out;
+}
+
 /** `<package version>+<short commit>`, `+dev` when there is no git. */
 function buildId(): string {
   const { version } = JSON.parse(readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8")) as { version: string };
@@ -44,6 +55,7 @@ export default defineConfig({
   plugins: [react(), playtestCapture()],
   define: {
     "import.meta.env.VITE_AUDIO_VERSION": JSON.stringify(audioVersion()),
+    "import.meta.env.VITE_MODEL_VERSIONS": JSON.stringify(modelVersions()),
     "import.meta.env.VITE_EC_BUILD": JSON.stringify(buildId()),
     "import.meta.env.VITE_EC_BUILT_AT": JSON.stringify(String(Date.now())),
   },

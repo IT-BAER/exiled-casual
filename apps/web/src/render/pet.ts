@@ -24,6 +24,7 @@ import { MaterialPluginBase } from "@babylonjs/core/Materials/materialPluginBase
 import "@babylonjs/core/Shaders/particles.fragment";
 import { standGroundBlob } from "./meshes";
 import { warmContainer } from "./warm-shaders";
+import { modelUrl } from "./model-url";
 
 /**
  * The companion cat: PoE1's Celestial Cat Pet, its motion recreated from PoE's
@@ -43,7 +44,7 @@ import { warmContainer } from "./warm-shaders";
  * `stepFollow`; `PetActor` hangs the glTF on a root and plays the clip PoE's
  * controller would. Failure to load is not fatal: the actor simply has no body.
  */
-export const PET_URL = "/models/pet.glb";
+export const PET_URL = modelUrl("/models/pet.glb");
 export const PET_ID = "pet.cat.v1";
 /** PoE's idle_floating, run_floating, idle_relaxed_floating, happy_floating. */
 export const PET_CLIPS = ["hover", "gallop", "relaxed", "emerge"] as const;

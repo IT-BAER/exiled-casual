@@ -13,9 +13,10 @@
  * this got there first. Warms once per page life.
  */
 import { setDownloaded } from "../load-progress";
+import { modelUrl } from "../render/model-url";
 
 /** The models `loadPlayerRig` will ask for, by the same URLs, or the cache misses. */
-export const MENU_STAGE_MODELS = ["/models/wardrobe.glb", "/models/wardrobe-female.glb", "/models/anim-library.glb"] as const;
+export const MENU_STAGE_MODELS = [modelUrl("/models/wardrobe.glb"), modelUrl("/models/wardrobe-female.glb"), modelUrl("/models/anim-library.glb")] as const;
 
 interface Warmers {
   chunk: () => Promise<unknown>;
@@ -51,7 +52,7 @@ export function warmMenuStage(warmers: Partial<Warmers> = {}): Promise<void> {
  * App so no menu module imports it; importing runs it, which mounts nothing.
  * Each model's bytes feed the loading plate's bar (`load-progress`).
  */
-export const GAME_MODELS = ["/models/props.glb", "/models/rocks.glb", "/models/monsters.glb"] as const;
+export const GAME_MODELS = [modelUrl("/models/props.glb"), modelUrl("/models/rocks.glb"), modelUrl("/models/monsters.glb")] as const;
 
 interface GameWarmers {
   chunk: () => Promise<unknown>;

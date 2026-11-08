@@ -22,6 +22,7 @@ import "@babylonjs/loaders/glTF";
 import { MeshoptDecoder } from "meshoptimizer/decoder";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
+import { modelUrl } from "./model-url";
 
 /**
  * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
@@ -606,8 +607,8 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
  * cycle; only a change of body (the `base` look) rebuilds.
  */
 const WARDROBE_URL: Record<Body, string> = {
-  male: "/models/wardrobe.glb",
-  female: "/models/wardrobe-female.glb",
+  male: modelUrl("/models/wardrobe.glb"),
+  female: modelUrl("/models/wardrobe-female.glb"),
 };
 
 // The served wardrobe is meshopt-packed (`tools/pack_wardrobe.mjs`). Babylon's
@@ -826,7 +827,7 @@ interface SkirtChain {
   rests: Vector3[];
 }
 
-const ANIM_URL = "/models/anim-library.glb";
+const ANIM_URL = modelUrl("/models/anim-library.glb");
 
 /**
  * The two packs share bone *names* but not rest poses: per-bone rest lengths

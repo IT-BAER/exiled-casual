@@ -15,6 +15,7 @@ import {
 import { addRim } from "./rim";
 import { idleRatio } from "./rig";
 import { warmContainer } from "./warm-shaders";
+import { modelUrl } from "./model-url";
 
 /**
  * Every creature in the game as one authored glTF.
@@ -30,7 +31,7 @@ import { warmContainer } from "./warm-shaders";
  * headless test or a failed fetch leaves `loaded` null and every caller falls
  * back to the primitive imp it always had, so the lab still runs.
  */
-const MONSTERS_URL = "/models/monsters.glb";
+const MONSTERS_URL = modelUrl("/models/monsters.glb");
 
 /**
  * glTF's own wrapper node. It carries the right-to-left-handed conversion, so an
