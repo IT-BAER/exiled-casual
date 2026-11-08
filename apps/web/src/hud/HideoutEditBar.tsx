@@ -16,6 +16,12 @@ const KIND_NAMES: Record<string, string> = {
   brazier: "Brazier", bookshelf: "Bookshelf", cauldron: "Cauldron", grainSack: "Grain Sack", pot: "Amphora",
 };
 
+/**
+ * The banner's two buttons hug their label with an icon in front: at the menu's
+ * 180 px minimum the label sat off-centre with an empty band beside it.
+ */
+const BANNER_BUTTON: React.CSSProperties = { minWidth: 0, padding: "0 20px" };
+
 export function pieceName(id: string): string {
   return SERVICE_NAMES[id] ?? DECOR_NAMES[id] ?? KIND_NAMES[decorById(id)?.kind ?? ""] ?? id;
 }
@@ -130,13 +136,13 @@ export function HideoutEditBar({
             data-testid="hideout-edit-reset"
             height={34}
             tone={confirmReset ? "danger" : "normal"}
-            style={{ minWidth: 110 }}
+            style={BANNER_BUTTON}
             onClick={() => { if (confirmReset) { onReset(); setConfirmReset(false); } else setConfirmReset(true); }}
           >
-            {confirmReset ? "Confirm?" : "Reset"}
+            {confirmReset ? "Confirm?" : "↺ Reset"}
           </MenuButton>
-          <MenuButton data-testid="hideout-edit-done" height={34} tone="primary" style={{ minWidth: 110 }} onClick={() => onToggle(false)}>
-            Done
+          <MenuButton data-testid="hideout-edit-done" height={34} tone="primary" style={BANNER_BUTTON} onClick={() => onToggle(false)}>
+            {"✓ Done"}
           </MenuButton>
         </FramedPanel>
       )}

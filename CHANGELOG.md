@@ -19,6 +19,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - After an update, Maren could appear bald and half dressed until a second
   reload: the game now asks for each changed model under a new address, so no
   cached copy of the old one can answer.
+- The Edit Hideout banner's Reset and Done buttons fit their labels and carry
+  icons, instead of floating in an empty band.
 
 ## [0.7.8] - 2026-11-08
 
