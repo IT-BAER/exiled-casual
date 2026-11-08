@@ -52,6 +52,9 @@ export const UI_ART: readonly string[] = [
   "/textures/ui/stash_cell_v4.webp",
   // The map device's Atlas. The world plate is the largest single file in the UI.
   "/textures/ui/atlas_world_v1.jpg",
+  "/textures/ui/atlas_sheet_v1.webp",
+  "/textures/ui/atlas_sheet_mask_v1.webp",
+  "/textures/ui/atlas_backdrop_v1.webp",
   "/textures/ui/atlas_node_header_v1.webp",
   "/textures/ui/atlas_node_socket_v2.webp",
   "/textures/ui/waystone_icon_v1.webp",

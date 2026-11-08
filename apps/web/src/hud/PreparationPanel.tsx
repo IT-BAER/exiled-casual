@@ -64,6 +64,9 @@ const FOG = "#4c463a";
 /** Out of fog, but the stone in hand is too weak: a refusal, not a blank. */
 const UNDER_TIER = "#8a5a4a";
 
+/** The torn sheet the world is printed on (PoE1's Atlas), cut by `tools/build_atlas_sheet.py`. */
+const ATLAS_SHEET_MASK = "url(/textures/ui/atlas_sheet_mask_v1.webp)";
+
 /**
  * The world map, per atlas-maps.webp: places sit where the graph put them, routes
  * are drawn between them, and what you have cleared is lit while the rest sits in
@@ -150,16 +153,47 @@ function AtlasMap(props: {
         inset: 0,
         transform: `translate(${pan.x}px, ${pan.y}px)`,
         touchAction: "none",
-        // Full-bleed painted world, per atlas-maps.webp: the map IS the screen,
-        // darkened at the edges so the docked bar and banner still read.
-        backgroundImage:
-          "radial-gradient(ellipse at 50% 45%, rgba(4,6,6,0.3) 35%, rgba(6,8,8,0.9) 100%),url(/textures/ui/atlas_world_v1.jpg), url(/textures/ui/char_stone_v1.webp)",
-        // Carved stone tiles under the painting, so a missing world art file
-        // degrades to the character sheet's surface rather than to black.
-        backgroundSize: "cover, cover, 420px",
-        backgroundPosition: "center, center, center",
       }}
     >
+      {/* Full-bleed painted world, per atlas-maps.webp, printed on a torn sheet
+          lying on cloth: the paper underneath, the painting multiplied onto it
+          (so folds and stains run through the map) and fading out short of the
+          tear, the shadow lifting the sheet off the cloth. The filter isolates
+          the group, so the multiply sees only the paper. */}
+      <div
+        style={{
+          position: "absolute",
+          inset: "1.5%",
+          pointerEvents: "none",
+          filter: "drop-shadow(0 10px 22px rgba(0,0,0,0.85))",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "url(/textures/ui/atlas_sheet_v1.webp) center / 100% 100% no-repeat",
+          }}
+        />
+        <div
+          data-testid="prep-map-art"
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundImage:
+              "radial-gradient(ellipse at 50% 45%, rgba(4,6,6,0.1) 35%, rgba(6,8,8,0.35) 100%),url(/textures/ui/atlas_world_v1.jpg), url(/textures/ui/char_stone_v1.webp)",
+            // Carved stone tiles under the painting, so a missing world art file
+            // degrades to the character sheet's surface rather than to black.
+            backgroundSize: "cover, cover, 420px",
+            backgroundPosition: "center, center, center",
+            maskImage: ATLAS_SHEET_MASK,
+            WebkitMaskImage: ATLAS_SHEET_MASK,
+            maskSize: "100% 100%",
+            WebkitMaskSize: "100% 100%",
+            mixBlendMode: "multiply",
+          }}
+        />
+      </div>
       {/* Node field, inset so a medallion on the edge is not clipped and the
           bottom dock does not sit on top of one. */}
       <div style={{ position: "absolute", top: 96, left: 90, right: 90, bottom: 470 }}>
@@ -566,7 +600,7 @@ export const PreparationPanel = React.memo(function PreparationPanel({ atlasSeed
       style={{
         position: "absolute",
         inset: 0,
-        background: "#050606",
+        background: "#050606 url(/textures/ui/atlas_backdrop_v1.webp) center / cover no-repeat",
         overflow: "hidden",
         pointerEvents: "auto",
         fontFamily: SERIF,
