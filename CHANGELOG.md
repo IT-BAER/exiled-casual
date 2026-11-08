@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.8] - 2026-11-08
+
 ### Fixed
 
 - Maren's hair no longer dips into her head at the temples.
