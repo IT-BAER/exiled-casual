@@ -10,6 +10,16 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Changed
+
+- Varkis and Maren stand square behind the middle of their tables, facing you.
+
+### Fixed
+
+- After an update, Maren could appear bald and half dressed until a second
+  reload: the game now asks for each changed model under a new address, so no
+  cached copy of the old one can answer.
+
 ## [0.7.8] - 2026-11-08
 
 ### Fixed

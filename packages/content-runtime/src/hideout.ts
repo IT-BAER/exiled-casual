@@ -114,12 +114,12 @@ export const HIDEOUT_SERVICES: Readonly<Record<HideoutServiceId, { x: number; z:
   // Up-left of the arrival spot, between Maren's corner and the device: on the
   // walk to both and 2 below the nearest portal slot. STASH_CHEST_W 1.20.
   stash: { ...at(-3.6, 2.1), yaw: 0.25, block: 0.4 },
-  // Behind his counter on the right flank, turned with it (PI is square to the
-  // camera, so PI + 15 degrees). The counter stands between him and the camera:
-  // his legs are behind timber and his hands are over the wares.
-  vendor: { ...at(5.95, 0.42), yaw: 3.40339, block: 0.28 },
-  // Behind her atlas table on the left flank, turned the other way with it.
-  cartographer: { ...at(-5.87, 0.46), yaw: 2.87979, block: 0.28 },
+  // Straight behind the middle of his counter on the right flank, facing the
+  // camera (PI) square on like the counter: his legs are behind timber and his
+  // hands are over the wares. The room around the two stalls stays organic.
+  vendor: { ...at(5.7, 0.45), yaw: 3.14159, block: 0.28 },
+  // Straight behind the middle of her atlas table on the left flank.
+  cartographer: { ...at(-5.6, 0.45), yaw: 3.14159, block: 0.28 },
 };
 
 export const HIDEOUT_SERVICE_IDS = Object.keys(HIDEOUT_SERVICES) as HideoutServiceId[];
@@ -139,7 +139,7 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
   // Turned off the screen square, like everything here: a room somebody lives in
   // is not laid out on a grid.
   {
-    id: "carto-table", kind: "table", ...at(-5.6, -0.55), yaw: deg(300),
+    id: "carto-table", kind: "table", ...at(-5.6, -0.55), yaw: SCREEN_SQUARE,
     scale: { x: 1.45, z: 1.4 }, top: TABLE_TOP,
     extras: [
       { kind: "atlasModel", dx: 0, dz: 0.02 },
@@ -158,7 +158,7 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
   // Varkis's stall: a counter with his wares laid out on it, a rug to stand
   // the stall on and his stock stacked behind him.
   {
-    id: "vendor-counter", kind: "table", ...at(5.7, -0.5), yaw: deg(330), top: TABLE_TOP,
+    id: "vendor-counter", kind: "table", ...at(5.7, -0.5), yaw: SCREEN_SQUARE, top: TABLE_TOP,
     extras: [
       { kind: "orbTransmutation", dx: -0.82, dz: -0.12 },
       { kind: "orbAugmentation", dx: -0.62, dz: 0.12 },
