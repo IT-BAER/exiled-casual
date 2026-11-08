@@ -29,6 +29,9 @@ export function decorRootName(id: string): string {
   return `${DECOR_PREFIX}${id}`;
 }
 
+/** Wares and candles on a stall are furniture, not loot: this share of the drop glow, on their own material copies. */
+const EXTRA_GLOW = 0.4;
+
 /** Contact-blob half-extents per furniture kind, before `scale`; a rug lies flat and has none. */
 const DECOR_BLOBS: Partial<Record<PropKind, [number, number]>> = {
   table: [1.25, 0.7], bench: [0.7, 0.35], crate: [0.5, 0.5],
@@ -171,7 +174,10 @@ export function buildHideoutDecor(scene: Scene, moved?: Readonly<Record<string, 
       node.rotation.y = x.yaw ?? 0;
       if (x.s !== undefined) node.scaling.setAll(x.s);
       if (x.kind === "atlasModel") buildAtlasModel(scene, node);
-      else attachProp(scene, node, x.kind, true);
+      else {
+        for (const m of Object.values(attachProp(scene, node, x.kind) ?? {}))
+          (m as { emissiveColor?: Color3 }).emissiveColor?.scaleInPlace(EXTRA_GLOW);
+      }
     }
     const blob = DECOR_BLOBS[d.kind];
     if (blob) standGroundBlob(scene, root, blob[0] * (d.scale?.x ?? 1), blob[1] * (d.scale?.z ?? 1));

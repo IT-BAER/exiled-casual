@@ -15,6 +15,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Varkis and Maren stand square behind the middle of their tables, facing you.
 - The Atlas is a torn, stained parchment sheet lying on crimson velvet, with the
   world printed on it, instead of a painting that stops at a hard edge.
+- The wares and candles on Varkis's and Maren's tables glow softly, instead of
+  shining like fresh loot on the ground.
 
 ### Fixed
 
