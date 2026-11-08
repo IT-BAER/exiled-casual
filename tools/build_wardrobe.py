@@ -3479,6 +3479,7 @@ HAIR_CROWN = 0.14       # the crown slice, as a fraction of height from the top
 HAIR_CROWN_WIDTH = 1.16  # crown slice width over the head's at the same depth
 HAIR_LIFT = 0.010       # metres of hair over the top of the skull
 HAIR_CLEAR = 0.004      # metres every strand stands off the scalp
+HAIR_PUSH_PASSES = 8
 HAIR_CLEAR_LOW = 0.024  # and off the neck and shoulders, which turn under it in the idle
 # Face opening: chin, hairline at the middle and at the temples (fractions of head
 # height), half-width over head width. Curved, or the cut reads as a ruled fringe.
@@ -3529,16 +3530,23 @@ def fit_hair(donor, body, rig):
     jaw = h_lo.z + h_dims.z * 0.35  # the nape: below it the hair falls away from the neck
     pushed = 0
     worst = 0.0
-    for v in donor.data.vertices:
-        hit, normal, _, _ = bvh.find_nearest(v.co)
-        if hit is None:
-            continue
-        clear = HAIR_CLEAR if hit.z > jaw else HAIR_CLEAR_LOW
-        depth = (v.co - hit).dot(normal)
-        if depth < clear:
-            worst = min(worst, depth)
-            v.co = hit + normal * clear
-            pushed += 1
+    # Repeated: a strand pushed off one curve of the skull can land inside the
+    # next (the ear, the temple), and a single pass left 19 of them 2 mm in.
+    for _ in range(HAIR_PUSH_PASSES):
+        moved = 0
+        for v in donor.data.vertices:
+            hit, normal, _, _ = bvh.find_nearest(v.co)
+            if hit is None:
+                continue
+            clear = HAIR_CLEAR if hit.z > jaw else HAIR_CLEAR_LOW
+            depth = (v.co - hit).dot(normal)
+            if depth < clear - 1e-5:
+                worst = min(worst, depth)
+                v.co = hit + normal * clear
+                moved += 1
+        pushed += moved
+        if not moved:
+            break
     donor.data.update()
     return Matrix.Identity(4), {
         "scale": round(scale, 4), "crown_width_m": round(c_dims.x * scale, 4),

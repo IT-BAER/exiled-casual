@@ -238,5 +238,10 @@ references made with `/codex-imagegen`; the job folders are
   map (fidelity p99 0.0013, normal p5 0.91). Seated by `fit_hair`: sized by its
   crown against the skull's, the face opened on a curved hairline, every strand
   pushed 4 mm off the scalp and 24 mm off the neck below the nape, then skinned by
-  transfer over `HAIR_BONES`. In the idle no skin comes within 46 mm of it; the
-  gate's coverage rate counts the gaps between locks, which hair has.
+  transfer over `HAIR_BONES`; the push repeats until no strand is inside (one
+  pass left 19 vertices up to 2.35 mm inside the head). `tools/check_worn_gear_fit.py`
+  (the static half of `fit_worn_gear.ps1`, written for this) passes: 0 strands
+  inside the skull, clean weights. In the idle no skin comes within 47 mm of the
+  hair (16 mm of neck clearance let it 15 mm through, 4-12 mm 8-12 mm); the
+  gate's coverage rate (0.31%) counts gaps between locks, and a cap under the
+  hair, tried at 5 and 10 mm, made the gate's radial bins worse, not better.
