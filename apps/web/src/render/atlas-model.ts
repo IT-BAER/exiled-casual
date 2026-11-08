@@ -134,7 +134,7 @@ function buildRelief(scene: Scene, parent: TransformNode, nodes: readonly AtlasG
     m.albedoColor = Color3.White();
     // The table stands away from the fires; a little of its own light keeps the
     // land readable as land and not a dark slab.
-    m.emissiveColor = new Color3(0.16, 0.14, 0.11).toLinearSpace();
+    m.emissiveColor = new Color3(0.07, 0.06, 0.05).toLinearSpace();
   });
   mesh.parent = parent;
 }

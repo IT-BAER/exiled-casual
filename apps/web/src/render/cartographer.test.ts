@@ -48,7 +48,7 @@ describe("Maren's body", () => {
     expect(rigOf(root)).toBeNull();
   });
 
-  it("is the female body, bare-headed, her hair red on her own material and nobody else's", async () => {
+  it("is the female body in her own gown and long hair, the buns hidden, her brows red on her own material and nobody else's", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     try {
@@ -58,11 +58,18 @@ describe("Maren's body", () => {
       const shared = new Set(scene.materials);
       const root = makeMesh(scene, "cartographer", "maren");
       const rig = rigOf(root)!;
-      expect(rig.currentLooks.base).toBe("female");
-      expect(rig.currentLooks.helmet).toBeNull();
-      const hair = root.getChildMeshes().filter((m) => m.name.split(".")[0] === "base" && m.name.split(".")[2] === "hair");
-      expect(hair.length).toBeGreaterThan(0);
-      for (const m of hair) {
+      expect(rig.currentLooks).toMatchObject({ base: "female", helmet: "maren", chest: "maren" });
+      const part = (m: { name: string }) => m.name.split(".").slice(0, 3).join(".");
+      const shown = (name: string) => root.getChildMeshes().filter((m) => part(m) === name);
+      // Her long hair and her gown are drawn; the pack's buns are hidden under the helmet slot.
+      for (const name of ["helmet.maren.tresses", "chest.maren.gown"]) {
+        expect(shown(name).length, name).toBeGreaterThan(0);
+        for (const m of shown(name)) expect(m.isEnabled(), name).toBe(true);
+      }
+      for (const m of shown("base.female.hair")) expect(m.isEnabled()).toBe(false);
+      const brows = shown("base.female.brows");
+      expect(brows.length).toBeGreaterThan(0);
+      for (const m of brows) {
         expect(m.isEnabled()).toBe(true);
         expect(shared.has(m.material!)).toBe(false);
         const [r, g, b] = albedo(m.material);

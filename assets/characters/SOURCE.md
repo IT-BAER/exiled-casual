@@ -212,3 +212,27 @@ CC0, PBRPX); the feathers and nocks are flat colours. Fitted by `fit_back_quiver
 `tools/build_wardrobe.py`: rigid on `spine_03`, foot over the left kidney level with
 `spine_02`, mouth behind the right shoulder, cleared against every chest and helmet in both
 the rest pose and the idle clip.
+
+## Maren's look (`chest.maren.gown`, `helmet.maren.tresses`)
+
+Her own look, on the female body only (`"bodies": ("female",)` in `RIGID_GEAR`):
+no item base maps to it, so the male wardrobe does not carry it. Both donors
+are local TRELLIS.2 decodes (`--res 512`, seed 42, 1.5 and 1.8 minutes) of
+references made with `/codex-imagegen`; the job folders are
+`review/3d/maren-gown/` and `review/3d/maren-hair/`.
+
+- `maren-gown-30k-v1.glb`: a headless T-pose gown in the robe's framing,
+  decimated straight from the 147 914-triangle decode to 29 998 with a 512 px
+  texture. 20k failed the fidelity gate (normal p5 0.83); 30k passes (p99
+  0.0008 of the diagonal, normal p5 0.93). The closed-surface rebuild route was
+  tried and rejected: a hollow garment is thin everywhere, and the volume pass
+  erased the bodice and both sleeves. Fitted by `fit_soft_suit` like the robe,
+  without the robe's shin cut; its back has vents at the hem as decoded. It
+  passes the idle clearance gate over torso and collar where the robe does not.
+- `maren-hair-v1.glb`: long red hair, rebuilt as a closed surface
+  (`open_volume.py --res 240 --radius 2`), 8 000 triangles with a baked normal
+  map (fidelity p99 0.0013, normal p5 0.91). Seated by `fit_hair`: sized by its
+  crown against the skull's, the face opened on a curved hairline, every strand
+  pushed 4 mm off the scalp and 24 mm off the neck below the nape, then skinned by
+  transfer over `HAIR_BONES`. In the idle no skin comes within 46 mm of it; the
+  gate's coverage rate counts the gaps between locks, which hair has.

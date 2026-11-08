@@ -651,6 +651,12 @@ describe.each(WARDROBES)("wardrobe asset $file", ({ file, body, root }) => {
       "gloves.ironsworn.gauntlet_l", "gloves.ironsworn.gauntlet_r",
       "gloves.stalker.glove_l", "gloves.stalker.glove_r",
       "gloves.ember.wrap_l", "gloves.ember.wrap_r",
+      // Maren's own look, on her body only (`bodies` in build_wardrobe.py).
+      ...(body === "female" ? [
+        "helmet.maren.tresses", "chest.maren.gown", "chest.maren.gorget", "chest.maren.backing",
+        "chest.maren.backing_arm_l", "chest.maren.backing_arm_r",
+        "chest.maren.backing_leg_l", "chest.maren.backing_leg_r",
+      ] : []),
     ].sort());
   });
 

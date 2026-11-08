@@ -1945,14 +1945,16 @@ function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", loo
 }
 
 /**
- * Maren, the cartographer: the female body in the Stalker leathers, bare-headed
- * so her hair shows. A traveller's kit, and nothing like Varkis's robe.
+ * Maren, the cartographer: the female body in her own look, which no item base
+ * maps to - a dark velvet gown and long red hair, the hair worn in the helmet
+ * slot so the body's own buns are hidden the way any helmet hides them. Bare
+ * hands, leather boots under the hem.
  */
-export const CARTOGRAPHER_LOOKS: Looks = looksForEquipment({
-  chest: { baseId: "base.stalker_leathers" },
-  gloves: { baseId: "base.stalker_gloves" },
-  boots: { baseId: "base.stalker_boots" },
-}, "female");
+export const CARTOGRAPHER_LOOKS: Looks = {
+  ...looksForEquipment({ boots: { baseId: "base.stalker_boots" } }, "female"),
+  helmet: "maren",
+  chest: "maren",
+};
 
 /** Her hair colour, linear like the glTF base colour it replaces (the pack's brown is 0.34, 0.19, 0.10). */
 export const CARTOGRAPHER_HAIR = new Color3(0.6, 0.05, 0.02);

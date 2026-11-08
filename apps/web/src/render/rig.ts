@@ -687,7 +687,7 @@ export const BASE_LOOKS: Looks = {
  * `tools/build_wardrobe.py` carries a `skirt` key for. Every other look leaves
  * the chains unused, so the solver can sit out.
  */
-const SKIRTED_CHEST: ReadonlySet<string> = new Set(["stalker", "ember"]);
+const SKIRTED_CHEST: ReadonlySet<string> = new Set(["stalker", "ember", "maren"]);
 
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],

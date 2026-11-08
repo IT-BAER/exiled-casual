@@ -451,6 +451,10 @@ SHIN_TUCK = 0.02
 
 # Both class hoods come from `tools/prep_hood.py` already skinned, crown to
 # capelet, on the joints the hood and the coat or robe under its capelet ride.
+# Long hair rides the head, the neck and the upper back by the body's own weights:
+# Head-rigid, the length hanging down the back swings through the shoulder blades
+# the moment the head turns.
+HAIR_BONES = ("Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r")
 HOOD_BONES = ("Head", "neck_01", "spine_02", "spine_03", "clavicle_l", "clavicle_r",
               "upperarm_l", "upperarm_r")
 
@@ -599,6 +603,24 @@ RIGID_GEAR = (
         "slot": "gloves", "look": "ember", "part": "wrap",
         "src": "wrap-hand-v1.glb", "bone": "hand_r", "fit": "hand_authored",
         "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
+    },
+    # Maren's own look, the cartographer's and nobody else's: no item base maps
+    # to it, so only her body carries it (`bodies`). A floor-length gown laid out
+    # like the robe, and long hair worn in the helmet slot, which hides the
+    # body's own buns the way every helmet does.
+    {
+        "slot": "chest", "look": "maren", "part": "gown",
+        "src": "maren-gown-30k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
+        # No greaves: the robe cuts its trouser shins, a gown has none, and the
+        # cut opened slits up the back of the skirt where it hangs by the calves.
+        "deform": SUIT_BONES, "bodies": ("female",),
+        "matte": True, "clean": True, "skirt_floor": False,
+        "skirt": 1.7, "twosided": True,
+    },
+    {
+        "slot": "helmet", "look": "maren", "part": "tresses",
+        "src": "maren-hair-v1.glb", "bone": "Head", "fit": "hair",
+        "deform": HAIR_BONES, "bodies": ("female",), "twosided": True,
     },
     # Off hand, but worn on the back: last, because it is laid on whatever chest
     # and hood are already fitted. Donor provenance in `assets/characters/SOURCE.md`.
@@ -3450,6 +3472,79 @@ def fit_back_quiver(donor, body, rig):
     }
 
 
+HAIR_CROWN = 0.14       # the crown slice, as a fraction of height from the top
+HAIR_CROWN_WIDTH = 1.16  # crown slice width over the head's at the same depth
+HAIR_LIFT = 0.010       # metres of hair over the top of the skull
+HAIR_CLEAR = 0.004      # metres every strand stands off the scalp
+HAIR_CLEAR_LOW = 0.024  # and off the neck and shoulders, which turn under it in the idle
+# Face opening: chin, hairline at the middle and at the temples (fractions of head
+# height), half-width over head width. Curved, or the cut reads as a ruled fringe.
+HAIR_FACE = (0.10, 0.84, 0.94, 0.34)
+
+
+def fit_hair(donor, body, rig):
+    """Seat a generated hairstyle on this skull, open the face, clear the skin.
+
+    A decoded hairstyle has no measurable cavity (the decoder fills where the head
+    was), so it cannot be seated by contact the way `fit_head_shell` seats steel.
+    It is sized by its crown against the skull's, set on top of it, then every
+    face over the face is cut and every vertex inside the body pushed out to
+    HAIR_CLEAR off the skin. Placed here, so the build returns identity.
+    """
+    head = group_points(body, "Head")
+    h_lo, h_hi, h_dims, h_c = bbox(head)
+    pts = [v.co.copy() for v in donor.data.vertices]
+    d_lo, d_hi, d_dims, d_c = bbox(pts)
+    crown = [p for p in pts if p.z > d_hi.z - d_dims.z * HAIR_CROWN]
+    skull = [p for p in head if p.z > h_hi.z - h_dims.z * HAIR_CROWN * 2.2]
+    _, _, c_dims, c_c = bbox(crown)
+    _, _, s_dims, s_c = bbox(skull)
+    scale = s_dims.x * HAIR_CROWN_WIDTH / max(c_dims.x, 1e-6)
+    lift = Vector((s_c.x - c_c.x * scale, s_c.y - c_c.y * scale, h_hi.z + HAIR_LIFT - d_hi.z * scale))
+    M = Matrix.Translation(lift) @ Matrix.Scale(scale, 4)
+    donor.data.transform(M)
+    donor.data.update()
+    # The face: everything in front of the head's middle, between chin and brow.
+    chin = h_lo.z + h_dims.z * HAIR_FACE[0]
+    half = h_dims.x * HAIR_FACE[3]
+
+    def hairline(x):
+        t = min(1.0, abs(x - h_c.x) / half) ** 2
+        return h_lo.z + h_dims.z * (HAIR_FACE[1] + (HAIR_FACE[2] - HAIR_FACE[1]) * t)
+
+    bm = bmesh.new()
+    bm.from_mesh(donor.data)
+    face_cut = [f for f in bm.faces
+                if (c := f.calc_center_median()).y < h_c.y and chin < c.z < hairline(c.x) and abs(c.x - h_c.x) < half]
+    bmesh.ops.delete(bm, geom=face_cut, context="FACES")
+    loose = [v for v in bm.verts if not v.link_faces]
+    bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    bm.to_mesh(donor.data)
+    bm.free()
+    # Clear the skin: a strand inside the body is pushed out along the surface normal.
+    bvh = bvh_of(body, body.matrix_world)
+    jaw = h_lo.z + h_dims.z * 0.35  # the nape: below it the hair falls away from the neck
+    pushed = 0
+    worst = 0.0
+    for v in donor.data.vertices:
+        hit, normal, _, _ = bvh.find_nearest(v.co)
+        if hit is None:
+            continue
+        clear = HAIR_CLEAR if hit.z > jaw else HAIR_CLEAR_LOW
+        depth = (v.co - hit).dot(normal)
+        if depth < clear:
+            worst = min(worst, depth)
+            v.co = hit + normal * clear
+            pushed += 1
+    donor.data.update()
+    return Matrix.Identity(4), {
+        "scale": round(scale, 4), "crown_width_m": round(c_dims.x * scale, 4),
+        "skull_width_m": round(s_dims.x, 4), "face_faces_cut": len(face_cut),
+        "pushed_out_of_skin": pushed, "deepest_before_mm": round(worst * 1000, 2),
+        "clear_mm": HAIR_CLEAR * 1000, "clear_low_mm": HAIR_CLEAR_LOW * 1000,
+    }
+
+
 def fit_as_built(donor, body, rig):
     """Place a donor that was built in this body's own frame; its builder gates it."""
     return Matrix.Identity(4), {"placed_as_authored": True}
@@ -3457,6 +3552,7 @@ def fit_as_built(donor, body, rig):
 
 FITTERS = {
     "as_built": fit_as_built,
+    "hair": fit_hair,
     "head_shell": fit_head_shell,
     "hand_grip": fit_hand_grip,
     "held": fit_held,
@@ -3971,6 +4067,8 @@ def build_rigid_gear(rig, body):
     pairs, off = assert_symmetric(rig)
     print(f"{rig.name}: {pairs} mirrored bone pairs, worst {off * 1000:.4f} mm off centre")
     for spec in RIGID_GEAR:
+        if BODY not in spec.get("bodies", (BODY,)):
+            continue
         src = body_src(spec)
         path = os.path.join(GEAR_SRC, src)
         if BOOTSTRAP and spec["fit"] == "as_built":
@@ -4651,6 +4749,7 @@ CHEST_SHELLS = {
     "ironsworn": "chest.ironsworn.cuirass",
     "stalker": "chest.stalker.coat",
     "ember": "chest.ember.robe",
+    "maren": "chest.maren.gown",
 }
 SOFT_METALLIC = 0.0         # a leather or cloth collar plate is not steel
 BACKING_AIR = 0.003         # the torso backing stops this far under the cuirass
@@ -4983,6 +5082,8 @@ def main():
     # through across the back: a backing filled out to just under it shows
     # steel through every crack instead of the void.
     for look, shell in CHEST_SHELLS.items():
+        if shell not in bpy.data.objects:
+            continue  # a body-limited look this body does not carry
         metallic = STEEL_METALLIC if look == "ironsworn" else SOFT_METALLIC
         fitted.update(build_gorget(rig, body, worn, f"chest.{look}.gorget", "collar",
                                    shell=shell, metallic=metallic))

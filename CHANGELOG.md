@@ -10,6 +10,26 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Added
+
+- Edit Hideout: the small arrow above the right end of the experience bar
+  opens it. Click any piece to pick it up, the mouse wheel turns it, a click
+  puts it down, right click or Escape puts it back. Furniture, the stash, the
+  map device, Varkis and Maren all move, and your arrangement is saved.
+- Varkis now sells from behind a counter laid out with his wares, and Maren
+  keeps a big table with your own Atlas on it in relief: every place, every
+  route, and a lit pin for each place you have cleared.
+- Options > UI has a cursor size setting, Small to Huge, for both cursors.
+
+### Changed
+
+- The hideout is cosier and laid out by hand: rugs, a bookshelf, stock behind
+  the stall and a fire corner, nothing standing in a straight line, and every
+  path to the device, the stash and both traders still open.
+- Maren wears long red hair and a dark velvet gown.
+- The cursor leans slightly while a mouse button is held, and the plain arrow
+  is a little dimmer and turned like PoE's.
+
 ## [0.7.5] - 2026-11-07
 
 ### Added
