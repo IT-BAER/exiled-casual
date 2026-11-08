@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-11-08
+
 ### Added
 
 - Edit Hideout: the small arrow above the right end of the experience bar
