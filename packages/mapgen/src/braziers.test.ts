@@ -20,9 +20,10 @@ describe("brazierSpotsFor", () => {
     // A 0.5 body is 1 wide; a rock a cell off the lane's diagonal shut the way past the bowl.
     for (const g of ["loop", "open-field", "sunken-ruins", "coast"] as GrammarId[]) {
       for (let seed = 0; seed < 60; seed++) {
-        const { cols, rows, cellSize, originX, originY, cells } = generateArea(seed, "v", g).grid;
+        const layout = generateArea(seed, "v", g);
+        const { cols, rows, cellSize, originX, originY, cells } = layout.grid;
         const wall = (x: number, y: number) => x < 0 || y < 0 || x >= cols || y >= rows || cells[y * cols + x] !== 1;
-        for (const s of brazierSpotsFor(generateArea(seed, "v", g))) {
+        for (const s of brazierSpotsFor(layout)) {
           const fx = (s.x - originX) / cellSize, fy = (s.z - originY) / cellSize;
           const [nx, ny] = ([[1, 0], [-1, 0], [0, 1], [0, -1]] as const).find(([dx, dy]) => Number.isInteger(fx + dx * 1.5) && Number.isInteger(fy + dy * 1.5) && wall(fx + dx * 1.5, fy + dy * 1.5))!;
           for (let y = Math.floor(fy) - 6; y <= Math.ceil(fy) + 6; y++) {
