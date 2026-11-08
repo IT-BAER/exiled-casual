@@ -7,6 +7,7 @@ import {
   type Scene,
 } from "@babylonjs/core";
 import { warmContainer } from "./warm-shaders";
+import { modelUrl } from "./model-url";
 
 /**
  * The hideout props — the two interactables and the furniture — as one authored glTF.
@@ -21,7 +22,7 @@ import { warmContainer } from "./warm-shaders";
  * failed fetch leave `loaded` null and every caller falls back to the primitives
  * it always had, so the lab still runs and the stash is still clickable.
  */
-const PROPS_URL = "/models/props.glb";
+const PROPS_URL = modelUrl("/models/props.glb");
 
 /**
  * glTF's own wrapper node. It carries the right-to-left-handed conversion, so an

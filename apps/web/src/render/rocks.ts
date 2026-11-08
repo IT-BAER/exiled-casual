@@ -12,6 +12,7 @@ import {
   type Mesh,
   type Scene,
 } from "@babylonjs/core";
+import { modelUrl } from "./model-url";
 
 /**
  * The blocker rocks — six boulder variants as one authored glTF, scattered along
@@ -25,7 +26,7 @@ import {
  * a failed fetch (and every headless test) leaves `loaded` null, `buildLevel`
  * sees that and puts the full-height box band back, and the map still plays.
  */
-const ROCKS_URL = "/models/rocks.glb";
+const ROCKS_URL = modelUrl("/models/rocks.glb");
 
 /** glTF's own wrapper node, carrying the handedness flip. */
 const GLTF_ROOT = "__root__";

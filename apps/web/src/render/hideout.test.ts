@@ -39,7 +39,7 @@ describe("hideout decor", () => {
       if (!offCentre) continue;
       const degrees = (d.yaw * 180) / Math.PI;
       expect(Math.abs(degrees - Math.round(degrees)), d.id).toBeLessThan(1e-6);
-      expect(Math.round(degrees) % ROT_STEP, d.id).toBe(0);
+      expect(Math.abs(Math.round(degrees) % ROT_STEP), d.id).toBe(0);
     }
   });
 

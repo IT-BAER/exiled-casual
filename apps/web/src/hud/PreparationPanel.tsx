@@ -65,6 +65,40 @@ const FOG = "#4c463a";
 const UNDER_TIER = "#8a5a4a";
 
 /**
+ * The painting's edge as a burnt-parchment alpha: a rectangle inset from the
+ * edges, frayed by turbulence and softened, so the map dissolves into the dark
+ * along an uneven line instead of stopping at a straight cut.
+ */
+const ATLAS_EDGE_MASK = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" preserveAspectRatio="none">'
+  + '<filter id="f" x="-10%" y="-10%" width="120%" height="120%">'
+  + '<feTurbulence type="fractalNoise" baseFrequency="0.012 0.018" numOctaves="4" seed="7"/>'
+  + '<feDisplacementMap in="SourceGraphic" scale="70" xChannelSelector="R" yChannelSelector="G"/>'
+  + '<feGaussianBlur stdDeviation="16"/></filter>'
+  + '<rect x="55" y="55" width="890" height="890" rx="40" fill="white" filter="url(#f)"/></svg>',
+)}")`;
+
+/**
+ * The rim the mask leaves: a faint ember glow on the burnt line and smoke drifting
+ * across it. Inset shadows rather than art, so they follow the panel at any size.
+ */
+const ATLAS_EDGE_CSS = `
+.atlas-edge-embers { position: absolute; inset: 2.5%; pointer-events: none; border-radius: 6%;
+  box-shadow: inset 0 0 60px 18px rgba(150, 52, 14, 0.18), inset 0 0 14px 4px rgba(255, 120, 40, 0.10);
+  animation: atlas-ember 6s ease-in-out infinite alternate; }
+.atlas-edge-smoke { position: absolute; inset: -4%; pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 18% at 30% 0%, rgba(8, 9, 10, 0.85), transparent 70%),
+    radial-gradient(ellipse 55% 16% at 75% 100%, rgba(8, 9, 10, 0.85), transparent 70%),
+    radial-gradient(ellipse 14% 55% at 0% 60%, rgba(8, 9, 10, 0.85), transparent 70%),
+    radial-gradient(ellipse 14% 50% at 100% 35%, rgba(8, 9, 10, 0.85), transparent 70%);
+  animation: atlas-smoke 38s ease-in-out infinite alternate; }
+@keyframes atlas-ember { from { opacity: 0.55; } to { opacity: 1; } }
+@keyframes atlas-smoke { from { transform: translate(-1.5%, 0.8%); } to { transform: translate(1.5%, -0.8%); } }
+@media (prefers-reduced-motion: reduce) { .atlas-edge-embers, .atlas-edge-smoke { animation: none; } }
+`;
+
+/**
  * The world map, per atlas-maps.webp: places sit where the graph put them, routes
  * are drawn between them, and what you have cleared is lit while the rest sits in
  * fog. The reference paints a whole world under its nodes; this field is the same
@@ -150,16 +184,34 @@ function AtlasMap(props: {
         inset: 0,
         transform: `translate(${pan.x}px, ${pan.y}px)`,
         touchAction: "none",
-        // Full-bleed painted world, per atlas-maps.webp: the map IS the screen,
-        // darkened at the edges so the docked bar and banner still read.
-        backgroundImage:
-          "radial-gradient(ellipse at 50% 45%, rgba(4,6,6,0.3) 35%, rgba(6,8,8,0.9) 100%),url(/textures/ui/atlas_world_v1.jpg), url(/textures/ui/char_stone_v1.webp)",
-        // Carved stone tiles under the painting, so a missing world art file
-        // degrades to the character sheet's surface rather than to black.
-        backgroundSize: "cover, cover, 420px",
-        backgroundPosition: "center, center, center",
       }}
     >
+      <style>{ATLAS_EDGE_CSS}</style>
+      {/* Full-bleed painted world, per atlas-maps.webp, on its own layer so its
+          edge can burn away without taking a place on the rim with it. Dragged
+          into view, the edge is a ragged, smouldering line dissolving into the
+          dark, not the rectangle the painting ends in. */}
+      <div
+        data-testid="prep-map-art"
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          backgroundImage:
+            "radial-gradient(ellipse at 50% 45%, rgba(4,6,6,0.3) 35%, rgba(6,8,8,0.9) 100%),url(/textures/ui/atlas_world_v1.jpg), url(/textures/ui/char_stone_v1.webp)",
+          // Carved stone tiles under the painting, so a missing world art file
+          // degrades to the character sheet's surface rather than to black.
+          backgroundSize: "cover, cover, 420px",
+          backgroundPosition: "center, center, center",
+          maskImage: ATLAS_EDGE_MASK,
+          WebkitMaskImage: ATLAS_EDGE_MASK,
+          maskSize: "100% 100%",
+          WebkitMaskSize: "100% 100%",
+        }}
+      />
+      {/* Embers where the map burns away, under drifting smoke. */}
+      <div className="atlas-edge-embers" />
+      <div className="atlas-edge-smoke" />
       {/* Node field, inset so a medallion on the edge is not clipped and the
           bottom dock does not sit on top of one. */}
       <div style={{ position: "absolute", top: 96, left: 90, right: 90, bottom: 470 }}>
