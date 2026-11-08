@@ -102,13 +102,21 @@ export type Intent =
    * The sim re-checks every id against what this character has actually
    * unlocked, so a client that offers a locked skill can still only be told no.
    */
-  | { kind: "setSkillBar"; bar: (string | null)[] };
+  | { kind: "setSkillBar"; bar: (string | null)[] }
+  /**
+   * Edit Hideout: stand one piece here, turned `rot` whole degrees (a multiple of
+   * 15). The sim refuses a piece off the floor or on top of the player or the
+   * arrival spot, so a client preview can only ever be told no.
+   */
+  | { kind: "placeHideoutPiece"; pieceId: string; x: Fixed; y: Fixed; rot: number }
+  /** Edit Hideout's Reset: every piece back where content stands it. */
+  | { kind: "resetHideoutLayout" };
 
 /** How a sort packs the grid; the Sort button steps through them in this order. */
 export const SORT_MODES = ["type", "rarity", "size"] as const;
 export type SortMode = (typeof SORT_MODES)[number];
 
-export type CommandType = "moveTo" | "moveDir" | "useSkill" | "dodge" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "applyCurrencyAll" | "sellItem" | "buyItem" | "buybackItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar";
+export type CommandType = "moveTo" | "moveDir" | "useSkill" | "dodge" | "stop" | "interact" | "activateMap" | "pickupItem" | "equipItem" | "unequipItem" | "dropItem" | "moveItem" | "sortItems" | "useFlask" | "applyCurrency" | "applyCurrencyAll" | "sellItem" | "buyItem" | "buybackItem" | "revive" | "usePortalScroll" | "allocatePassive" | "refundPassive" | "respecPassives" | "setSkillBar" | "placeHideoutPiece" | "resetHideoutLayout";
 
 // ---------------------------------------------------------------------------
 // Run loop
@@ -460,6 +468,11 @@ export interface Snapshot {
   deathRecap?: DeathRecap;
   /** Present while the newest save was refused (storage full or blocked); progress since is not kept. */
   saveFailed?: true;
+  /**
+   * The pieces moved in Edit Hideout, world floats; every other piece stands where
+   * content says. Present (possibly empty) only in the hideout.
+   */
+  hideoutLayout?: { id: string; x: number; y: number; rot: number }[];
   player: {
     id: number; x: number; y: number;
     life: number; maxLife: number; mana: number; maxMana: number;
@@ -848,6 +861,19 @@ export function validateIntent(v: unknown): Intent {
       }
       return { kind: "setSkillBar", bar: bar as (string | null)[] };
     }
+    case "placeHideoutPiece": {
+      if (typeof obj["pieceId"] !== "string" || obj["pieceId"].length === 0)
+        throw new Error("validateIntent placeHideoutPiece: pieceId must be a non-empty string");
+      for (const k of ["x", "y", "rot"] as const) {
+        if (!Number.isInteger(obj[k])) throw new Error(`validateIntent placeHideoutPiece: ${k} must be an integer`);
+      }
+      return {
+        kind: "placeHideoutPiece", pieceId: obj["pieceId"] as string,
+        x: obj["x"] as Fixed, y: obj["y"] as Fixed, rot: obj["rot"] as number,
+      };
+    }
+    case "resetHideoutLayout":
+      return { kind: "resetHideoutLayout" };
     default:
       throw new Error(`validateIntent: unknown kind: ${String(obj["kind"])}`);
   }

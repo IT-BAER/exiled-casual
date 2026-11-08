@@ -12,7 +12,9 @@ import { buildSea, stirSea } from "./render/sea";
 import type { WakeBody } from "./render/wake";
 import { Presence } from "./presence";
 import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
-import { SnapshotRenderer } from "./render/renderer";
+import { updateAtlasModel } from "./render/atlas-model";
+import { attachHideoutEdit, type HideoutEditState } from "./input/hideout-edit";
+import { SnapshotRenderer, PROP_YAW_SHIFT } from "./render/renderer";
 import { loadProps, resetProps } from "./render/props";
 import { loadMonsters, resetMonsters } from "./render/monsters";
 import { loadPet, resetPet } from "./render/pet";
@@ -155,6 +157,9 @@ export function GameView({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
+  // Edit Hideout (input/hideout-edit.ts): whether the mode is on, and what it holds.
+  const [hideoutEdit, setHideoutEdit] = useState<HideoutEditState>({ active: false, hovered: null, carrying: null, valid: true });
+  const hideoutEditRef = useRef<ReturnType<typeof attachHideoutEdit> | null>(null);
   const [targetId, setTargetId] = useState<number | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
@@ -589,6 +594,18 @@ export function GameView({
     // path the canvas picker uses for portals and devices.
     setPick(() => approach);
 
+    // Attached after the bindings, but its listeners sit on the window's capture
+    // phase, so while the mode is on it hears every canvas press first.
+    const hideoutEditor = attachHideoutEdit({
+      canvas, scene, renderer,
+      post: (intent) => { dlog("intent", intent.kind, intent); worker.postMessage({ type: "intent", intent } satisfies ToWorker); },
+      serviceYawShift: PROP_YAW_SHIFT,
+      onChange: setHideoutEdit,
+      onExit: () => hideoutEditRef.current?.setActive(false),
+    });
+    hideoutEditRef.current = hideoutEditor;
+    if (import.meta.env?.DEV) (window as unknown as { __hideoutEdit?: unknown }).__hideoutEdit = hideoutEditor;
+
     // `?play&map` / `?play&map=<node name>`: the driven-browser leg of the ?play
     // harness (App.tsx). Bare `map` opens the device panel on arrival; a name
     // sockets the permanent waystone into that node, activates it, and walks
@@ -717,6 +734,8 @@ export function GameView({
         for (const ev of watch.observe(msg.snapshot)) telemetry.track(ev);
         varkis.observe(msg.snapshot);
         maren.observe(msg.snapshot);
+        hideoutEditor.onSnapshot(msg.snapshot);
+        if (msg.snapshot.area === "hideout") updateAtlasModel(scene, msg.snapshot.atlasSeed, msg.snapshot.completedNodes);
         debugLog(msg.snapshot);
         // An idle frame moves only `tick`, which nothing in React reads, so it renders nothing.
         const ticked = shownSnap && { ...shownSnap, tick: msg.snapshot.tick };
@@ -811,7 +830,7 @@ export function GameView({
         buildSea(scene, grid, base && BIOMES[base.biomeId].sea === true ? true : grid?.water && !grid.shore ? "fen" : false);
         setMapFill(scene, msg.area === "map");
         // Furniture, and only in the hideout: a map is a place you pass through.
-        if (msg.area === "hideout") { buildHideoutDecor(scene); void preloadSfx([...VARKIS_SFX, ...MAREN_SFX]); }
+        if (msg.area === "hideout") { buildHideoutDecor(scene, hideoutEditor.moved()); void preloadSfx([...VARKIS_SFX, ...MAREN_SFX]); }
         else clearHideoutDecor(scene);
         applyTilesetFloor(scene, base?.tilesetId ?? null);
         setGroundPatch(scene, base?.tilesetId ?? null, tilesetDir);
@@ -947,7 +966,7 @@ export function GameView({
       // The worker's hideout area message usually beats props.glb here, and its
       // dressing pass aborted on the missing container with no retry — a bare
       // hideout while every entity mesh had its art. Dress it again now.
-      if (!unmounted && stoodIn === "hideout") buildHideoutDecor(scene);
+      if (!unmounted && stoodIn === "hideout") buildHideoutDecor(scene, hideoutEditor.moved());
       // Same race: warmed before monsters.glb, every creature was a greybox, compiled
       // twice over, and a first flinch still linked its squashed shader mid-fight.
       modelsIn = true;
@@ -1082,6 +1101,8 @@ export function GameView({
       resetMonsters();
       resetPet();
       rendererRef.current = null;
+      hideoutEditor.detach();
+      hideoutEditRef.current = null;
       resetPhysics();
       resetRocks();
       stopAmbient();
@@ -1235,6 +1256,15 @@ export function GameView({
         controlMode={controlMode}
         refusedSeq={refusedSeq}
         objective={objective}
+        hideoutEdit={{
+          ...hideoutEdit,
+          onToggle: (on) => {
+            hideoutEditRef.current?.setActive(on);
+            // The room is what is being edited: nothing may stand over it.
+            if (on) { setPanelOpen(false); setInventoryOpen(false); setStashOpen(false); setVendorOpen(false); setCharacterOpen(false); }
+          },
+          onReset: () => sendIntent({ kind: "resetHideoutLayout" }),
+        }}
       />
       {settings.ui.minimap && (
         <Minimap

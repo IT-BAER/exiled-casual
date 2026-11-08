@@ -91,7 +91,13 @@ vi.mock("./render/renderer", () => ({
     setMapDeviceBeckon = vi.fn();
     cameraShake = () => ({ x: 0, z: 0 });
     wadingBodies = () => [];
+    overridePlacement = vi.fn();
   },
+  PROP_YAW_SHIFT: 0,
+}));
+vi.mock("./render/atlas-model", () => ({ updateAtlasModel: vi.fn() }));
+vi.mock("./input/hideout-edit", () => ({
+  attachHideoutEdit: () => ({ setActive: vi.fn(), onSnapshot: vi.fn(), moved: () => ({}), detach: vi.fn() }),
 }));
 vi.mock("./render/sea", () => ({ buildSea: vi.fn(), stirSea: vi.fn() }));
 vi.mock("./render/rig", () => ({ loadPlayerRig: () => Promise.resolve(), resetPlayerRig: vi.fn() }));

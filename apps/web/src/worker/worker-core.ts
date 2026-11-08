@@ -17,7 +17,7 @@ import {
   devDump,
   equipStartingGear,
 } from "@exiled/simulation";
-import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, ProgressC, ShardsC, EquipmentC, KvStore } from "@exiled/simulation";
+import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, ProgressC, ShardsC, EquipmentC, HideoutLayoutC, KvStore } from "@exiled/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind, DevOp } from "@exiled/protocol";
 import { CONTENT_VERSION, defaultAttackFor, waystoneItem } from "@exiled/content-runtime";
 import { MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT } from "@exiled/protocol";
@@ -265,8 +265,10 @@ export class WorkerCore {
     const gear = this.world.get<EquipmentC>(e, "equipment");
     const gearSig = Object.entries(gear?.slots ?? {}).map(([k, v]) => `${k}:${v?.baseId}:${v?.affixes.length}`).join(",");
     const shardSig = Object.entries(shards?.counts ?? {}).map(([k, n]) => `${k}:${n}`).join(",");
+    // Edit Hideout's arrangement: a piece put down changes nothing else.
+    const layoutSig = (this.world.get<HideoutLayoutC>(e, "hideoutLayout")?.pieces ?? []).map((q) => `${q.id}:${q.x},${q.y},${q.rot}`).join(",");
     return `${s?.completedNodes.join(",") ?? ""}|${cells(inv)}|${cells(stash)}|${barSig}|${skills?.attackReseeded ? 1 : 0}` +
-      `|${p?.level},${p?.xp},${p?.gold}|${s?.passives?.join(",") ?? ""}|${shardSig}|${gearSig}`;
+      `|${p?.level},${p?.xp},${p?.gold}|${s?.passives?.join(",") ?? ""}|${shardSig}|${gearSig}|${layoutSig}`;
   }
 
   /**

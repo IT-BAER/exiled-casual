@@ -65,7 +65,7 @@ const STAND_TURN_AT = 1.3;
  * them by however far the lens has moved since, so a prop that was composed
  * square to the frame stays square to it.
  */
-const PROP_YAW_SHIFT = FACE_CAMERA_YAW - Math.PI;
+export const PROP_YAW_SHIFT = FACE_CAMERA_YAW - Math.PI;
 
 /**
  * Distance the player has to cover in ONE tick for the move to be a teleport.
@@ -498,6 +498,15 @@ export class SnapshotRenderer {
     this.hoveredEntityId = id;
   }
 
+  /** Entities Edit Hideout is carrying: drawn at the cursor, not where the snapshot stands them. */
+  private placementOverrides = new Map<number, { x: number; z: number; yaw: number }>();
+
+  /** Draw entity `id` at world (x, z) with render yaw `yaw` until called with null. */
+  overridePlacement(id: number, at: { x: number; z: number; yaw: number } | null): void {
+    if (at) this.placementOverrides.set(id, at);
+    else this.placementOverrides.delete(id);
+  }
+
   /** Outline the monster under the cursor in red, PoE2-style; null clears it. */
   setHoveredMonster(id: number | null): void {
     if (id === this.outlinedId) return;
@@ -875,6 +884,13 @@ export class SnapshotRenderer {
           this.tiers.set(e.id, tier);
         }
       }
+    }
+    for (const [id, at] of this.placementOverrides) {
+      const mesh = this.meshes.get(id);
+      if (!mesh) continue;
+      mesh.position.x = at.x;
+      mesh.position.z = at.z;
+      mesh.rotation.y = at.yaw;
     }
 
     // Crossing an area replaces the whole population at once. A portal that went

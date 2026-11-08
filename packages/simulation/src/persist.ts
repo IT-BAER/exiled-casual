@@ -1,7 +1,8 @@
 import type { KvStore } from "@exiled/persistence";
 import type { World } from "./ecs";
-import type { SessionC, InventoryC, StashC, VendorC, BuybackC, EquipmentC, ProgressC, ShardsC, SkillsC, FloorItem } from "./components";
+import type { SessionC, InventoryC, StashC, VendorC, BuybackC, EquipmentC, ProgressC, ShardsC, SkillsC, FloorItem, HideoutLayoutC, HideoutPieceC } from "./components";
 import { hideoutFloor as hideoutFloorOf, layFloor } from "./hideout-floor";
+import { sanitizeLayout } from "./hideout-layout";
 import { stockMapShop, stockVendor } from "./vendor";
 import { withPermanentWaystone, placeFirstFit } from "./inventory";
 import { handsClash, canEquip } from "./equipment";
@@ -53,6 +54,8 @@ export interface PersistedState {
   mapShop?: VendorC;
   /** What lies on the hideout floor. Absent when it is bare, and on every older save. */
   hideoutFloor?: FloorItem[];
+  /** The pieces moved in Edit Hideout. Absent when nothing was, and on every older save. */
+  hideoutLayout?: HideoutPieceC[];
 }
 
 /** Read the durable state off the session singleton, or null if there is none. */
@@ -71,6 +74,7 @@ export function snapshot(world: World): PersistedState | null {
   const buyback = world.get<BuybackC>(e, "buyback");
   const mapShop = world.get<VendorC>(e, "mapShop");
   const hideoutFloor = hideoutFloorOf(world, e);
+  const hideoutLayout = world.get<HideoutLayoutC>(e, "hideoutLayout")?.pieces ?? [];
   return {
     version: VERSION, session, inventory, stash, equipment, progress, shards,
     ...(vendor ? { vendor } : {}),
@@ -78,6 +82,7 @@ export function snapshot(world: World): PersistedState | null {
     ...(mapShop ? { mapShop } : {}),
     ...(skills ? { skills } : {}),
     ...(hideoutFloor.length > 0 ? { hideoutFloor } : {}),
+    ...(hideoutLayout.length > 0 ? { hideoutLayout } : {}),
   };
 }
 
@@ -315,6 +320,11 @@ export function restore(world: World, state: PersistedState): void {
   // A restore always lands in the hideout, so the floor goes straight onto it.
   world.remove(e, "hideoutFloor");
   if (Array.isArray(state.hideoutFloor)) layFloor(world, state.hideoutFloor.map(rebaseFloor));
+  // The arrangement is set here and stood up by the hideoutEdit system's next tick,
+  // which is the one place that also re-collides the room.
+  const pieces = sanitizeLayout(state.hideoutLayout);
+  if (pieces.length > 0) world.set<HideoutLayoutC>(e, "hideoutLayout", { pieces });
+  else world.remove(e, "hideoutLayout");
   // Saved gear has to reach the player, not just the equipment panel. Life and
   // mana are not persisted, so a restored session starts full.
   recomputePlayerStats(world, { refill: true });

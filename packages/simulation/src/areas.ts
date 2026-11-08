@@ -7,7 +7,7 @@ import {
 } from "@exiled/rules";
 import {
   PACK_COUNT, bossFor, hardRareModifier, mapBase, pickPack, rareTemplate,
-  ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints, HIDEOUT_FLOOR, isPortalScroll,
+  ITEM_POOLS, baseOf, currencyItem, currencyForRoll, hideoutFootprints, isPortalScroll, HIDEOUT_SERVICES,
 } from "@exiled/content-runtime";
 import { ELEMENTS, type MonsterDef } from "@exiled/content-schema";
 import { brazierSpotsFor, shutsFloor, BRAZIER_RADIUS, SPAWN_SAFE_RADIUS, type AreaLayout } from "@exiled/mapgen";
@@ -20,6 +20,7 @@ import type {
 } from "./components";
 import type { Blocker, Collision } from "./collision";
 import { dropGold } from "./systems/gold";
+import { layoutOf, movedRecord, onHideoutFloor, servicePlacement } from "./hideout-layout";
 
 /** What a cache pays as the loot math indexes rarity: 2 = rare. A found room is
  *  worth a rare monster's burst, which is where the number comes from rather
@@ -37,32 +38,13 @@ export const HIDEOUT_SPAWN = { x: fp(0), y: fp(0) } as const;
  */
 export const PORTAL_RADIUS: number = fp(2.5);
 
-// Close enough to the (0,0) spawn that the device is on screen the moment you
-// arrive: the camera only shows ~9.5 world units vertically.
-//
-// The literals below are the composed frame — device straight ahead, stash to
-// the left, vendor to the right — turned 45 degrees clockwise, because the
-// camera is. It looks past the grid diagonally (`CAMERA_ALPHA`), so a device
-// placed on +y alone lands up-and-right of the player instead of above him and
-// the vendor walks off the bottom-right corner. The turn is rigid and about the
-// (0,0) spawn: (x,y) -> ((x-y)/sqrt2, (x+y)/sqrt2), which is why the numbers are
-// no longer round. Re-derive them if `CAMERA_ALPHA` ever moves again.
-const MAP_DEVICE_X: number = fp(-2.828);
-const MAP_DEVICE_Y: number = fp(2.828);
+// The device's default spot, close enough to the (0,0) spawn that it is on screen
+// the moment you arrive. Every hideout service, this one included, stands where
+// content-runtime/hideout.ts says unless the player moved it (hideout-layout.ts);
+// this is the fallback a world with no device standing in it rings portals round.
+const MAP_DEVICE_X: number = fp(HIDEOUT_SERVICES.mapDevice.x);
+const MAP_DEVICE_Y: number = fp(HIDEOUT_SERVICES.mapDevice.z);
 export const MAP_DEVICE_POS = { x: MAP_DEVICE_X, y: MAP_DEVICE_Y } as const;
-const STASH_X: number = fp(-4.95);
-const STASH_Y: number = fp(-2.121);
-// Mirror of the stash on the opposite side of the map device, so the two
-// vendors flank it the way PoE2's camp keeps the stash and the crafting bench
-// on either side of the fire.
-const VENDOR_X: number = fp(2.121);
-const VENDOR_Y: number = fp(4.95);
-// Maren, the cartographer: screen (-3.0, -0.6), down-left of the device on the
-// stash's side, so Varkis keeps the right flank to himself. 3.1 from the spawn,
-// 5.5 from the device, 4.6 from the nearest portal slot (whose reach is 2.5), 3.3
-// from the stash and 3.0 from the nearest bench at the table.
-const CARTOGRAPHER_X: number = fp(-1.697);
-const CARTOGRAPHER_Y: number = fp(-2.546);
 
 /**
  * Offsets from the map device, plus the render yaw that angles each portal outward.
@@ -180,12 +162,16 @@ export function spawnPortalRing(world: World, count: number): void {
   // Clamped: map affixes are specced to change the revive count (docs/01 §8), and
   // a budget larger than the ring would otherwise index past the end.
   const n = Math.min(count, PORTAL_RING.length);
+  // Round the device wherever it stands: the player may have moved it.
+  const deviceE = world.query("interactable", "position")
+    .find((e) => world.get<InteractableC>(e, "interactable")!.kind === "mapDevice");
+  const device = deviceE !== undefined ? world.get<Position>(deviceE, "position")! : MAP_DEVICE_POS;
   for (let i = 0; i < n; i++) {
     const slot = PORTAL_RING[i]!;
     const e = world.create();
     world.set<Position>(e, "position", {
-      x: MAP_DEVICE_X + slot.dx,
-      y: MAP_DEVICE_Y + slot.dy,
+      x: device.x + slot.dx,
+      y: device.y + slot.dy,
     });
     world.set<InteractableC>(e, "interactable", {
       kind: "portal",
@@ -274,35 +260,39 @@ function withMonsterRes(def: MonsterDef, add: number): MonsterDef {
 export function buildArea(world: World, area: AreaKind, session: SessionC, layout: AreaLayout, tick = 0): void {
   if (area === "hideout") {
     // Map device
+    // Every service stands where the player's layout puts it, content's spot if unmoved.
+    const pieces = layoutOf(world);
+    const device = servicePlacement(pieces, "mapDevice");
     const deviceE = world.create();
-    world.set<Position>(deviceE, "position", { x: MAP_DEVICE_X, y: MAP_DEVICE_Y });
+    world.set<Position>(deviceE, "position", { x: device.x, y: device.y });
     world.set<InteractableC>(deviceE, "interactable", {
       kind: "mapDevice",
       radius: fp(2.5),
-      yaw: 0,
+      yaw: device.yaw,
     });
 
     // Stash, off to the side of the map device the way PoE2's camp keeps its
     // chest at the edge of the fire rather than in the traffic lane.
+    const stash = servicePlacement(pieces, "stash");
     const stashE = world.create();
-    world.set<Position>(stashE, "position", { x: STASH_X, y: STASH_Y });
+    world.set<Position>(stashE, "position", { x: stash.x, y: stash.y });
     world.set<InteractableC>(stashE, "interactable", {
       kind: "stash",
       radius: fp(2.5),
-      yaw: 0,
+      yaw: stash.yaw,
     });
 
     // Disenchanter vendor, mirroring the stash on the right side so items can
     // be sold without crossing the map-device traffic lane.
+    // Faces the camera across his counter (content's yaw is PI): at yaw 0 the
+    // player walks up to talk to the back of his hood.
+    const vendor = servicePlacement(pieces, "vendor");
     const vendorE = world.create();
-    world.set<Position>(vendorE, "position", { x: VENDOR_X, y: VENDOR_Y });
+    world.set<Position>(vendorE, "position", { x: vendor.x, y: vendor.y });
     world.set<InteractableC>(vendorE, "interactable", {
       kind: "vendor",
-      // Turned to face the camera. This was 0 while the disenchanter was a
-      // bench, which reads the same from either side; he is a man now, and at
-      // yaw 0 the player walks up to talk to the back of his hood.
       radius: fp(2.5),
-      yaw: 3.14159,
+      yaw: vendor.yaw,
     });
 
     // Portals equal to the current portal budget (0 if map not open or exhausted).
@@ -310,12 +300,13 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
 
     // The cartographer, created last so every entity before her keeps the id it
     // had before she existed. Faces the camera, as the disenchanter does.
+    const carto = servicePlacement(pieces, "cartographer");
     const cartographerE = world.create();
-    world.set<Position>(cartographerE, "position", { x: CARTOGRAPHER_X, y: CARTOGRAPHER_Y });
+    world.set<Position>(cartographerE, "position", { x: carto.x, y: carto.y });
     world.set<InteractableC>(cartographerE, "interactable", {
       kind: "cartographer",
       radius: fp(2.5),
-      yaw: 3.14159,
+      yaw: carto.yaw,
     });
   } else {
     // Map: the active node's biome pool fills the spawn sockets (two or three
@@ -499,29 +490,14 @@ export function buildArea(world: World, area: AreaKind, session: SessionC, layou
  * own, so a footprint drawn to the silhouette holds the player half a metre off
  * the thing he is walking up to.
  */
-const BLOCK_RADIUS: Partial<Record<InteractableC["kind"], number>> = {
-  mapDevice: 0.55,   // DEVICE_SPAN 1.61 across in build_props.py
-  stash: 0.4,        // STASH_CHEST_W 1.20
-  vendor: 0.28,      // a man
-  cartographer: 0.28, // a woman
+export const BLOCK_RADIUS: Partial<Record<InteractableC["kind"], number>> = {
+  // The hideout's own four, from the list Edit Hideout's preview reads too.
+  mapDevice: HIDEOUT_SERVICES.mapDevice.block,
+  stash: HIDEOUT_SERVICES.stash.block,
+  vendor: HIDEOUT_SERVICES.vendor.block,
+  cartographer: HIDEOUT_SERVICES.cartographer.block,
   container: 0.28,   // the widest of chest 0.82, crate 0.80, barrel 0.56
 };
-
-/**
- * `HIDEOUT_FLOOR` in the sim's own integers. Screen (sx, sy) is world
- * ((x + y) / sqrt2, (y - x) / sqrt2), so each bound is compared times sqrt2.
- */
-const FLOOR_SQRT2 = {
-  left: fp(HIDEOUT_FLOOR.left * Math.SQRT2), right: fp(HIDEOUT_FLOOR.right * Math.SQRT2),
-  bottom: fp(HIDEOUT_FLOOR.bottom * Math.SQRT2), top: fp(HIDEOUT_FLOOR.top * Math.SQRT2),
-};
-
-function onHideoutFloor(x: number, y: number): boolean {
-  const across = x + y;
-  const up = y - x;
-  return across >= FLOOR_SQRT2.left && across <= FLOOR_SQRT2.right
-    && up >= FLOOR_SQRT2.bottom && up <= FLOOR_SQRT2.top;
-}
 
 /**
  * The collision the area is played against: its walls, plus everything standing
@@ -533,6 +509,23 @@ function onHideoutFloor(x: number, y: number): boolean {
  * which is why it is a Collision now where it used to be null.
  */
 export function areaCollision(world: World, area: AreaKind, layout: AreaLayout): Collision {
+  if (area !== "map") return hideoutCollision(world);
+  return gridCollision(layout.grid, [...interactableBlockers(world), ...brazierBlockers(layout)]);
+}
+
+/**
+ * The hideout's collision: its services and its furniture where the player's
+ * layout stands them. Edit Hideout calls this again after every move.
+ */
+export function hideoutCollision(world: World): Collision {
+  const blockers = interactableBlockers(world);
+  // Sim (x, y) is Babylon (x, z): the decor list is written in the renderer's
+  // axes because that is where it is composed.
+  for (const f of hideoutFootprints(movedRecord(layoutOf(world)))) blockers.push({ x: fp(f.x), y: fp(f.z), r: fp(f.r) });
+  return blockerCollision(blockers, onHideoutFloor);
+}
+
+function interactableBlockers(world: World): Blocker[] {
   const blockers: Blocker[] = [];
   for (const e of world.query("interactable")) {
     const it = world.get<InteractableC>(e, "interactable")!;
@@ -541,13 +534,7 @@ export function areaCollision(world: World, area: AreaKind, layout: AreaLayout):
     const p = world.get<Position>(e, "position")!;
     blockers.push({ x: p.x, y: p.y, r: fp(r) });
   }
-  if (area !== "map") {
-    // Sim (x, y) is Babylon (x, z): the decor list is written in the renderer's
-    // axes because that is where it is composed.
-    for (const f of hideoutFootprints()) blockers.push({ x: fp(f.x), y: fp(f.z), r: fp(f.r) });
-    return blockerCollision(blockers, onHideoutFloor);
-  }
-  return gridCollision(layout.grid, [...blockers, ...brazierBlockers(layout)]);
+  return blockers;
 }
 
 /**

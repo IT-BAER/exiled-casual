@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { Matrix, NullEngine, Scene, Vector3, VertexBuffer } from "@babylonjs/core";
-import { HIDEOUT_DECOR, HIDEOUT_FLOOR, SCREEN_SQUARE, hideoutFootprints } from "@exiled/content-runtime";
+import { HIDEOUT_DECOR, HIDEOUT_FLOOR, HIDEOUT_SERVICES, ROT_STEP, SCREEN_SQUARE, decorDiscs, hideoutFootprints } from "@exiled/content-runtime";
 import { HIDEOUT_EDGE_NAME, buildHideoutDecor, clearHideoutDecor } from "./hideout";
 import { PROP_KINDS } from "./props";
 import { CAMERA_ALPHA } from "./engine";
@@ -23,6 +23,30 @@ const HALF_H = 4.75;
 describe("hideout decor", () => {
   it("asks only for props the asset actually carries", () => {
     for (const d of HIDEOUT_DECOR) expect(PROP_KINDS).toContain(d.kind);
+    for (const x of HIDEOUT_DECOR.flatMap((d) => d.extras ?? [])) {
+      if (x.kind !== "atlasModel") expect(PROP_KINDS).toContain(x.kind);
+    }
+  });
+
+  /**
+   * The sim collides against a long piece's discs turned by its yaw, and turns them
+   * with a literal cos/sin table so no engine's Math.cos can move a wall. A piece
+   * whose discs sit off its centre therefore has to stand on a whole step.
+   */
+  it("stands every piece with off-centre discs on a whole rotation step", () => {
+    for (const d of HIDEOUT_DECOR) {
+      const offCentre = decorDiscs(d, 0, 0, [1, 0]).some((c) => Math.hypot(c.x, c.z) > 1e-9);
+      if (!offCentre) continue;
+      const degrees = (d.yaw * 180) / Math.PI;
+      expect(Math.abs(degrees - Math.round(degrees)), d.id).toBeLessThan(1e-6);
+      expect(Math.round(degrees) % ROT_STEP, d.id).toBe(0);
+    }
+  });
+
+  it("gives every piece its own id", () => {
+    const ids = HIDEOUT_DECOR.map((d) => d.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of Object.keys(HIDEOUT_SERVICES)) expect(ids).not.toContain(id);
   });
 
   /**
@@ -41,14 +65,19 @@ describe("hideout decor", () => {
    * The furniture must not stand where the game does. The device is the walk every
    * session starts with, and the two shops are the ones the player clicks.
    */
-  it("stands clear of the player, the device and the two shops", () => {
+  it("stands clear of the player, the device and the stash, and of each person but their own table", () => {
+    const S = HIDEOUT_SERVICES;
     const busy: readonly { x: number; z: number; r: number }[] = [
-      { x: 0, z: 0, r: 1.6 },            // where he arrives
-      { x: -2.828, z: 2.828, r: 3.6 },   // the map device and its portal arc
-      { x: -4.95, z: -2.121, r: 2.0 },   // the stash
-      { x: 2.121, z: 4.95, r: 2.0 },     // the disenchanter
+      { x: 0, z: 0, r: 1.6 },                         // where he arrives
+      { x: S.mapDevice.x, z: S.mapDevice.z, r: 3.6 }, // the map device and its portal arc
+      { x: S.stash.x, z: S.stash.z, r: 2.0 },
+      { x: S.vendor.x, z: S.vendor.z, r: 1.5 },
+      { x: S.cartographer.x, z: S.cartographer.z, r: 1.5 },
     ];
+    // A person stands behind their own table on purpose, on their own rug.
+    const own = new Set(["vendor-counter", "rug-stall", "carto-table", "rug-carto"]);
     for (const d of HIDEOUT_DECOR) {
+      if (own.has(d.id)) continue;
       for (const b of busy) {
         const gap = Math.hypot(d.x - b.x, d.z - b.z);
         expect(gap, `${d.kind} at ${d.x.toFixed(1)},${d.z.toFixed(1)}`).toBeGreaterThan(b.r);
@@ -56,11 +85,12 @@ describe("hideout decor", () => {
     }
   });
 
-  it("does not stack two pieces on one spot", () => {
-    for (let i = 0; i < HIDEOUT_DECOR.length; i++) {
-      for (let j = i + 1; j < HIDEOUT_DECOR.length; j++) {
-        const a = HIDEOUT_DECOR[i]!;
-        const b = HIDEOUT_DECOR[j]!;
+  it("does not stack two pieces on one spot (a rug is floor, and goes under)", () => {
+    const solid = HIDEOUT_DECOR.filter((d) => d.kind !== "rug");
+    for (let i = 0; i < solid.length; i++) {
+      for (let j = i + 1; j < solid.length; j++) {
+        const a = solid[i]!;
+        const b = solid[j]!;
         expect(Math.hypot(a.x - b.x, a.z - b.z), `${a.kind} vs ${b.kind}`).toBeGreaterThan(0.7);
       }
     }
@@ -100,8 +130,9 @@ describe("hideout decor", () => {
     const discs = hideoutFootprints();
     expect(discs.length).toBeGreaterThanOrEqual(solid.length);
     for (const disc of discs) {
+      // A stretched table's end discs sit its scaled half-length out.
       const nearest = Math.min(...solid.map((d) => Math.hypot(d.x - disc.x, d.z - disc.z)));
-      expect(nearest).toBeLessThanOrEqual(0.7);
+      expect(nearest).toBeLessThanOrEqual(1.0);
     }
     for (const d of solid) {
       const nearest = Math.min(...discs.map((disc) => Math.hypot(d.x - disc.x, d.z - disc.z)));

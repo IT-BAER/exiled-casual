@@ -9,7 +9,8 @@ import { manaTooltip } from "./mana-tooltip";
 import { PANEL_W } from "./layout";
 import type { Objective } from "./first-map";
 import { SkillTooltip } from "./SkillTooltip";
-import { XpBar } from "./XpBar";
+import { XpBar, RAIL_H } from "./XpBar";
+import { HideoutEditBar } from "./HideoutEditBar";
 import { MAP_INSET_VW, MAP_VW } from "./Minimap";
 import { TargetFrame } from "./TargetFrame";
 import { playDropSound } from "../audio/drop-sound";
@@ -626,6 +627,11 @@ function Flask(props: { kind: "life" | "mana"; hotkey: string; charges: number; 
 
 interface HudProps {
   snapshot: Snapshot | null;
+  /** Edit Hideout: the menu arrow, and the banner while editing. Hideout only. */
+  hideoutEdit?: {
+    active: boolean; hovered: string | null; carrying: string | null; valid: boolean;
+    onToggle: (on: boolean) => void; onReset: () => void;
+  };
   /** Entity id the mouse is hovering — drives the name label. Null = no label. */
   hoveredEntityId?: number | null;
   /** Places the name label over the hovered object; without it the label sits
@@ -974,6 +980,7 @@ export function Hud({
   targetId = null,
   refusedSeq = 0,
   objective = null,
+  hideoutEdit,
 }: HudProps) {
   const [hoveredSkill, setHoveredSkill] = React.useState<string | null>(null);
   // Length-normalised here rather than trusted: the bar rides in the save, and a
@@ -1525,6 +1532,10 @@ export function Hud({
       <div data-testid="bar-connector" style={connectStyle} />
 
       <XpBar level={snapshot.player.level} xp={xp} xpToNext={xpToNext} left={railInset.left} right={railInset.right} />
+
+      {snapshot.area === "hideout" && hideoutEdit && (
+        <HideoutEditBar right={railInset.right} bottom={RAIL_H + 1} {...hideoutEdit} />
+      )}
 
       {/* The unspent-point count no longer rides a center chip; the plus on the
           lower bar (below, right of the flasks) carries it as a badge instead. */}

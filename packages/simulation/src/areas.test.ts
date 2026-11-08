@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateArea, brazierSpotsFor, SPAWN_SAFE_RADIUS } from "@exiled/mapgen";
 import { fp } from "@exiled/fixed-point";
-import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase, hideoutFootprints } from "@exiled/content-runtime";
+import { CONTENT_VERSION, MONSTERS, MONSTER_POOLS, PACK_COUNT, bossFor, mapBase, hideoutFootprints, HIDEOUT_SERVICES } from "@exiled/content-runtime";
 import { familyOf, mapBaseIdForNode, monsterTierScale } from "@exiled/rules";
 import type { MonsterDef } from "@exiled/content-schema";
 import { World, type Entity } from "./ecs.js";
@@ -454,8 +454,7 @@ describe("areaCollision", () => {
     // The rug is floor: it is the one thing standing where the player lands.
     expect(col.isWalkable(HIDEOUT_SPAWN.x, HIDEOUT_SPAWN.y, fp(0.5))).toBe(true);
     // The shops are objects too, and a portal is a doorway rather than an object.
-    expect(col.isWalkable(fp(-4.95), fp(-2.121), fp(0.5))).toBe(false);
-    expect(col.isWalkable(fp(2.121), fp(4.95), fp(0.5))).toBe(false);
+    for (const s of Object.values(HIDEOUT_SERVICES)) expect(col.isWalkable(fp(s.x), fp(s.z), fp(0.5))).toBe(false);
   });
 
   it("hideout: the floor ends past the furniture, so a walk away cannot lose the portals", () => {

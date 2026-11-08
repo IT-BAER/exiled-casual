@@ -23,6 +23,8 @@ export interface Command {
   flask?: "life" | "mana";
   /** Set when type === "setSkillBar"; kept off `data` since that field is numbers-only. */
   bar?: (string | null)[];
+  /** Set when type === "placeHideoutPiece": which piece; `data` carries x, y, rot. */
+  pieceId?: string;
 }
 
 export type System = (

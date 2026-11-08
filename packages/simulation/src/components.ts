@@ -603,6 +603,10 @@ export type FloorItem = ItemC & { x: number; y: number };
  * where floor items are ordinary ground entities.
  */
 export interface HideoutFloorC { items: FloorItem[] }
+/** One piece the player moved in Edit Hideout. `rot` is whole degrees, a multiple of ROT_STEP. */
+export interface HideoutPieceC { id: string; x: Fixed; y: Fixed; rot: number }
+/** The player's own arrangement of the hideout, sorted by id. Pieces never moved are absent. */
+export interface HideoutLayoutC { pieces: HideoutPieceC[] }
 /** One placed stack in the grid inventory. */
 export interface PlacedItem {
   x: number; y: number; w: number; h: number; item: Item;

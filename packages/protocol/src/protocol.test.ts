@@ -212,6 +212,17 @@ describe("validateIntent — setSkillBar", () => {
   });
 });
 
+describe("validateIntent — Edit Hideout", () => {
+  it("validates a placement and a reset, and refuses a placement that is not integers on a named piece", () => {
+    expect(validateIntent({ kind: "placeHideoutPiece", pieceId: "crate-carto", x: fp(1), y: fp(-2), rot: 45 }))
+      .toEqual({ kind: "placeHideoutPiece", pieceId: "crate-carto", x: fp(1), y: fp(-2), rot: 45 });
+    expect(validateIntent({ kind: "resetHideoutLayout" })).toEqual({ kind: "resetHideoutLayout" });
+    expect(() => validateIntent({ kind: "placeHideoutPiece", pieceId: "", x: 0, y: 0, rot: 0 })).toThrow("pieceId");
+    expect(() => validateIntent({ kind: "placeHideoutPiece", pieceId: "a", x: 0.5, y: 0, rot: 0 })).toThrow("x must be an integer");
+    expect(() => validateIntent({ kind: "placeHideoutPiece", pieceId: "a", x: 0, y: 0 })).toThrow("rot must be an integer");
+  });
+});
+
 describe("FromWorker area message", () => {
   // postMessage clones with the structured-clone algorithm; this guards against a
   // future "optimisation" (e.g. JSON) that would silently drop the Uint8Array grid.

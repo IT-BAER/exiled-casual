@@ -42,6 +42,7 @@ import { registerAreaTransition } from "./systems/area-transition";
 import { registerFlaskSystem } from "./systems/flask";
 import { registerRevive } from "./systems/revive";
 import { registerSkillsSystem } from "./systems/skills";
+import { registerHideoutEdit } from "./systems/hideout-edit";
 import { areaCollision, buildArea, spawnMonster } from "./areas";
 
 export function createCombatSim(
@@ -172,6 +173,7 @@ export function createCombatSim(
     // here only decides whether the walk out costs one tick or two.
     registerRevive(sim);
     registerSkillsSystem(sim);
+    registerHideoutEdit(sim, collisionRef);
   } else {
     // ── Legacy path: no session, golden-replay–safe bootstrap ────────────
     if (opts.monsters !== false) {

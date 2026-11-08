@@ -15,7 +15,7 @@ export type {
   DamageEvent, BossC, TelegraphC, SessionC, InteractableC, AreaKind,
   BuffsC, BuffEntry, StatusesC, StatusEntry, TravelC, SkillAreaC, HitPart, StatusOnHit, GroundProfile,
 } from "./components";
-export type { ItemC, PlacedItem, InventoryC, EquipmentC, FlasksC, SkillsC, ProgressC, ShardsC } from "./components";
+export type { ItemC, PlacedItem, InventoryC, EquipmentC, FlasksC, SkillsC, ProgressC, ShardsC, HideoutLayoutC } from "./components";
 export { placeFirstFit } from "./inventory";
 export { canEquip, EQUIP_SLOTS_BY_CLASS } from "./equipment";
 export { registerResourceRegen } from "./systems/resource";

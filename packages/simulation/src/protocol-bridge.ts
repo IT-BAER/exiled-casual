@@ -14,7 +14,7 @@ import type {
   Health, Mana, Position, Cooldowns, CastingC, StrikeC, CastReleaseC, MonsterC,
   AilmentC, ProjectileC, GroundAreaC, BossC, TelegraphC,
   SessionC, InteractableC, ContainerC, ItemC, GoldC, InventoryC, StashC, VendorC, EquipmentC, FlasksC, DefensesC, OffenseC, ProgressC, GearModsC,
-  EnergyShieldC, ShardsC, BuybackC, MoveDir, SkillsC, SkillHoldC, RollC, SkillAreaC, TravelC, BuffsC,
+  EnergyShieldC, ShardsC, BuybackC, MoveDir, SkillsC, SkillHoldC, RollC, SkillAreaC, TravelC, BuffsC, HideoutLayoutC,
 } from "./components";
 import { activeStatuses, isStunned, reservedMana } from "./status";
 import type { EffectNode, StatusSpec } from "@exiled/content-schema";
@@ -140,6 +140,10 @@ export function intentToCommand(intent: Intent, player: Entity, tick: number): C
       return { tick, entity: player, type: "respecPassives" };
     case "setSkillBar":
       return { tick, entity: player, type: "setSkillBar", bar: intent.bar };
+    case "placeHideoutPiece":
+      return { tick, entity: player, type: "placeHideoutPiece", pieceId: intent.pieceId, data: { x: intent.x, y: intent.y, rot: intent.rot } };
+    case "resetHideoutLayout":
+      return { tick, entity: player, type: "resetHideoutLayout" };
     case "usePortalScroll":
       // The scroll's right-click IS the Portal skill: one action, one cast time,
       // one cooldown. It differs from the free Y key only in spending the scroll.
@@ -659,6 +663,12 @@ export function buildSnapshot(
     atlasSeed: session?.atlasSeed ?? 0,
     completedNodes: session?.completedNodes ?? [],
     ...(session?.activeNodeId ? { activeNodeId: session.activeNodeId } : {}),
+    ...(session?.area === "hideout" && sessionE !== undefined
+      ? {
+        hideoutLayout: (world.get<HideoutLayoutC>(sessionE, "hideoutLayout")?.pieces ?? [])
+          .map((p) => ({ id: p.id, x: toNumber(p.x), y: toNumber(p.y), rot: p.rot })),
+      }
+      : {}),
     ...(ph.life <= 0 && sim.recentHits.length > 0
       ? { deathRecap: summarizeHits(sim.recentHits, toNumber(ph.maxLife)) }
       : {}),
