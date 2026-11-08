@@ -17,6 +17,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
   world printed on it, instead of a painting that stops at a hard edge.
 - The wares and candles on Varkis's and Maren's tables glow softly, instead of
   shining like fresh loot on the ground.
+- The equipment panel uses Path of Exile 2's layout: the amulet sits beside the
+  top of the body armour, a ring on each side one row lower, and gloves and boots
+  below the rings. The life and mana flasks stand beside the gloves and boots.
 
 ### Fixed
 

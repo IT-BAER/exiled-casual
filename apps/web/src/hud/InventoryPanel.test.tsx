@@ -59,6 +59,29 @@ describe("InventoryPanel", () => {
     }
   });
 
+  it("lays the paper-doll out as PoE2 does: amulet by the body's top, a ring each side a row lower, gloves and boots under the rings", () => {
+    render(<InventoryPanel inventory={inv} flaskKeys={{ life: "1", mana: "2" }} onClose={() => {}} />);
+    // jsdom folds `calc(4 * 2.363vw)` to `calc(9.452vw)`; the helmet is two units wide.
+    const vw = (v: string) => Number(/([\d.]+)vw/.exec(v)?.[1] ?? 0);
+    const unit = vw(screen.getByTestId("equip-slot-helmet").style.width) / 2;
+    const units = (el: HTMLElement) => ({ x: vw(el.style.left) / unit, y: vw(el.style.top) / unit });
+    const at = (slot: string) => units(screen.getByTestId(`equip-slot-${slot}`));
+    const body = at("body"), amulet = at("amulet"), ring1 = at("ring1"), ring2 = at("ring2"), gloves = at("gloves"), boots = at("boots");
+    expect(amulet.y).toBeCloseTo(body.y);
+    for (const ring of [ring1, ring2]) expect(ring.y).toBeCloseTo(amulet.y + 1);
+    for (const foot of [gloves, boots]) expect(foot.y).toBeCloseTo(ring1.y + 1);
+    // Each ring stands over the inner edge of the glove or boot below it, clear of the body.
+    expect(ring1.x + 1).toBeCloseTo(gloves.x + 2);
+    expect(ring1.x + 1).toBeLessThan(body.x);
+    for (const right of [amulet, ring2]) expect(right.x).toBeCloseTo(boots.x);
+    expect(ring2.x).toBeGreaterThan(body.x + 2);
+    // The flasks flank that bottom row: life outside the gloves, mana outside the boots.
+    const flask = (kind: string) => units(screen.getByTestId(`inventory-flask-${kind}-socket`).parentElement!.parentElement!);
+    expect(flask("life").x).toBeLessThan(gloves.x);
+    expect(flask("mana").x).toBeGreaterThan(boots.x + 1);
+    for (const kind of ["life", "mana"]) expect(flask(kind).y).toBeCloseTo(gloves.y);
+  });
+
   it("carries its two tabs in the header band and opens on the Inventory page", () => {
     render(<InventoryPanel inventory={inv} onClose={() => {}} />);
     const band = screen.getByTestId("inventory-close").parentElement!;

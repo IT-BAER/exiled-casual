@@ -269,19 +269,27 @@ function EquipSlot({
   );
 }
 
-// Paper-doll layout in equipment units, matching reference-screenshots/inventory+equipment.png.
+// Paper-doll layout in equipment units, PoE2's own (poe2wiki's Equipment capture; both
+// reference screenshots agree): the amulet beside the body's top, a ring each side a row
+// lower, gloves and boots under the rings. Side slots stand 0.45 units off the centre column.
 const PAPER_DOLL: { slot: EquipSlotId; x: number; y: number; w: number; h: number; label: string }[] = [
   { slot: "weapon1", x: 0, y: 0, w: 2, h: 4, label: "Weapon" },
   { slot: "weapon2", x: 8, y: 0, w: 2, h: 4, label: "Weapon" },
   { slot: "helmet", x: 4, y: 0, w: 2, h: 2, label: "Helmet" },
-  { slot: "amulet", x: 7, y: 0, w: 1, h: 1, label: "Amulet" },
   { slot: "body", x: 4, y: 2, w: 2, h: 3, label: "Body" },
-  { slot: "gloves", x: 2, y: 3, w: 2, h: 2, label: "Gloves" },
-  { slot: "boots", x: 6, y: 3, w: 2, h: 2, label: "Boots" },
-  { slot: "ring1", x: 3, y: 5, w: 1, h: 1, label: "Ring" },
+  { slot: "amulet", x: 6.45, y: 2, w: 1, h: 1, label: "Amulet" },
+  { slot: "ring1", x: 2.55, y: 3, w: 1, h: 1, label: "Ring" },
+  { slot: "ring2", x: 6.45, y: 3, w: 1, h: 1, label: "Ring" },
+  { slot: "gloves", x: 1.55, y: 4, w: 2, h: 2, label: "Gloves" },
   { slot: "belt", x: 4, y: 5, w: 2, h: 1, label: "Belt" },
-  { slot: "ring2", x: 6, y: 5, w: 1, h: 1, label: "Ring" },
+  { slot: "boots", x: 6.45, y: 4, w: 2, h: 2, label: "Boots" },
 ];
+
+// The 1.55-unit corner each weapon leaves beside the glove or boot below it.
+const FLASK_CORNER: React.CSSProperties = {
+  position: "absolute", top: `calc(4 * ${U})`, width: `calc(1.55 * ${U})`, height: `calc(2 * ${U})`,
+  display: "flex", justifyContent: "center", alignItems: "center",
+};
 
 /**
  * PoE1's Cosmetics page: one carved plate of empty frames that mirrors the
@@ -1391,23 +1399,15 @@ export const InventoryPanel = React.memo(function InventoryPanel({
             globe lands squarely on the currency and on the backpack's last row. */}
         <div style={{ padding: PANEL_PAD, paddingBottom: `calc(${PANEL_PAD} + ${ORB_RISE})`, width: contentW, boxSizing: "content-box", flex: 1, display: "flex", flexDirection: "column" }}>
           {page === "cosmetics" ? <CosmeticsPage pet={pet} {...(onPetToggle ? { onPetToggle } : {})} /> : (<>
-          {/* Equipment paper-doll. The flasks live inside it, in the block the
-              right-hand weapon leaves empty below itself, rather than in a strip
-              of their own under the whole doll: that strip cost a full row of
-              panel height and pushed the backpack down into the mana globe.
-              PoE2's own screen centres them under the doll (inventory+equipment
-              .png), but its doll fills its box and ours does not — two columns of
-              bare panel beside the boots is the more obvious wrong. */}
+          {/* Equipment paper-doll. The flasks flank its bottom row, life outside the
+              gloves and mana outside the boots. PoE2 hangs them in a row under those
+              two, but that row costs two units of panel height, and the backpack then
+              runs into the currency strip and the mana globe. */}
           <div style={{ position: "relative", width: equipW, height: equipH, margin: "0 auto", flexShrink: 0 }}>
-            <div
-              style={{
-                position: "absolute",
-                left: `calc(8 * ${U})`, top: `calc(4 * ${U})`,
-                width: `calc(2 * ${U})`, height: `calc(2 * ${U})`,
-                display: "flex", gap: 4, justifyContent: "center", alignItems: "flex-start",
-              }}
-            >
+            <div style={{ ...FLASK_CORNER, left: 0 }}>
               <Flask kind="life" hotkey={keyCap(flaskKeys.life)} {...(flasks ? { charges: { now: flasks.lifeCharges, max: flasks.lifeMax } } : {})} />
+            </div>
+            <div style={{ ...FLASK_CORNER, left: `calc(8.45 * ${U})` }}>
               <Flask kind="mana" hotkey={keyCap(flaskKeys.mana)} {...(flasks ? { charges: { now: flasks.manaCharges, max: flasks.manaMax } } : {})} />
             </div>
             {PAPER_DOLL.map((s) => (
