@@ -213,35 +213,70 @@ CC0, PBRPX); the feathers and nocks are flat colours. Fitted by `fit_back_quiver
 `spine_02`, mouth behind the right shoulder, cleared against every chest and helmet in both
 the rest pose and the idle clip.
 
-## Maren's look (`chest.maren.gown`, `helmet.maren.tresses`)
+## Maren's look (`chest.maren.*`, `helmet.maren.*`)
 
 Her own look, on the female body only (`"bodies": ("female",)` in `RIGID_GEAR`):
-no item base maps to it, so the male wardrobe does not carry it. Both donors
-are local TRELLIS.2 decodes (`--res 512`, seed 42, 1.5 and 1.8 minutes) of
-references made with `/codex-imagegen`; the job folders are
-`review/3d/maren-gown/` and `review/3d/maren-hair/`.
+no item base maps to it, so the male wardrobe does not carry it. The gown and
+the head are local TRELLIS.2 decodes (`--res 512`, seed 42, about two minutes
+each) of references made with `/codex-imagegen` from her concept; the lace is a
+BlenderKit material; the hair is grown in the build with no donor. Job folder
+`review/3d/maren-zana/` (gitignored, BM-PC only): references, prep scripts and
+the completion ledger. Every Maren material is dulled to a tenth of a
+dielectric's specular (`MAREN_SPECULAR`, `KHR_materials_specular` 0.1): at full
+strength the hideout's fires wash her black gown grey-brown and her hair pale.
 
-- `maren-gown-30k-v1.glb`: a headless T-pose gown in the robe's framing,
-  decimated straight from the 147 914-triangle decode to 29 998 with a 512 px
-  texture. 20k failed the fidelity gate (normal p5 0.83); 30k passes (p99
-  0.0008 of the diagonal, normal p5 0.93). The closed-surface rebuild route was
-  tried and rejected: a hollow garment is thin everywhere, and the volume pass
-  erased the bodice and both sleeves. Fitted by `fit_soft_suit` like the robe,
-  without the robe's shin cut; its back has vents at the hem as decoded. It
-  passes the idle clearance gate over torso and collar where the robe does not.
-  Unlike the robe it is one-sided: a panel's inside samples a light part of the
-  atlas and showed as a tan wedge where the skirt parts at a turn, so the gap
-  shows its leg backing instead, built matte and darker (`GOWN_BACKING`). Her
-  Ember slippers are shaded dark on her own material clones (`meshes.ts`).
-- `maren-hair-v1.glb`: long red hair, rebuilt as a closed surface
-  (`open_volume.py --res 240 --radius 2`), 8 000 triangles with a baked normal
-  map (fidelity p99 0.0013, normal p5 0.91). Seated by `fit_hair`: sized by its
-  crown against the skull's, the face opened on a curved hairline, every strand
-  pushed 4 mm off the scalp and 24 mm off the neck below the nape, then skinned by
-  transfer over `HAIR_BONES`; the push repeats until no strand is inside (one
-  pass left 19 vertices up to 2.35 mm inside the head). `tools/check_worn_gear_fit.py`
-  (the static half of `fit_worn_gear.ps1`, written for this) passes: 0 strands
-  inside the skull, clean weights. In the idle no skin comes within 47 mm of the
-  hair (16 mm of neck clearance let it 15 mm through, 4-12 mm 8-12 mm); the
-  gate's coverage rate (0.31%) counts gaps between locks, and a cap under the
-  hair, tried at 5 and 10 mm, made the gate's radial bins worse, not better.
+- `maren-dress-v3.glb`: a sleeveless dress with a two-tier caped collar and an
+  overskirt split in front, decoded from the ghost-mannequin reference
+  `review/3d/maren-zana/maren-garment-reference-v1.png` and decimated to 36k
+  (fidelity p99 0.0014, normal p5 0.912; 30k failed). The decode's skirt was
+  several thin closed slabs with creases, which the leg clearance pushed through
+  each other as facets and a slit, so `prep_dress_v3.py` rebuilds everything
+  under the waist from its OUTERMOST surface (overskirt, dress panel and the
+  curtains at the split, zipped to the bodice at the waist), 15 071 triangles.
+  TRELLIS's atlas lost the print, so it is re-textured by projection:
+  `retex_unwrap.py` (smart UV), `retex_bake.py` (front, back and +x side
+  references registered per image row, weighted by normal^4, faces seen only at
+  a grazing angle filled from their neighbours, metal buttons off the front
+  placket) and `retex_apply.py`, a 2048 base and ORM. Those scripts and the
+  references live in the gitignored job folder on BM-PC only. Fitted by
+  `fit_soft_suit` seated on her waist, its +x half mirrored. Her boots are the
+  Stalker's knee boots, shaded black on her own material clones (`meshes.ts`).
+  The map's median luma was 0.154 against the concept's 0.10-0.12, so the base
+  colour is raised to the power 1.5 (`"tone"`). `clear_shoulders` stands the
+  capelet 4 mm off the lace round each upper arm and `blur_shoulder_weights`
+  blurs its weights over 30 mm there: the tiers lay closer than the lace and
+  folded where the arm drops from the T-pose.
+- `chest.maren.lace` and `chest.maren.cuffs` (`build_lace`): her own arm and leg
+  regions pushed 2 mm off the skin with cylindrical UVs, alpha-blended and
+  single-sided, plus opaque grey cuffs over the last 25 mm before each wrist.
+  The lace is BlenderKit "Elegant Black Floral Lace Embroidery"
+  (`ae5d9a16-d846-4def-a1a2-a2cbe92bc8c2`, royalty free, 1K), kept as
+  `assets/props/source/mat-black-floral-lace.blend`; it ships no opacity map, so
+  alpha is taken from its height map (`LACE_ALPHA` 0.65 net, 0.97 motif).
+- `maren-head-v1.glb` -> `helmet.maren.face` (`build_face`): her own head, face,
+  ears and neck in one piece, so the pack's head, eyes, brows and neck are
+  hidden while she wears it (`COVERED_BY_LOOK` in `render/rig.ts`). Decoded from
+  a bald bust reference of her concept. The decode is opened as a WHOLE bust
+  (`tools/open_volume.py --res 384 --radius 1`) and cropped afterwards with
+  caps: cropped first, the opening's flood fill entered through the cuts and
+  left a hollow double-walled shell. Rebuilt at 12 000 triangles (fidelity p99
+  0.00040, normal p5 0.984), no normal map. TRELLIS's own texture was washed
+  out, so the atlas (repacked, coverage 0.60) is the front reference projected
+  with one smoothed scale and offset per image row, and the decode's
+  gain-matched albedo wherever the reference does not see. `build_face` scales
+  it crown to chin onto the pack's head (0.3646 m per donor unit), collapses
+  the folded slivers the decimation left (one was a white fleck on her forehead
+  under the game's sun), pushes her skull just inside the pack's where hair
+  grows so the scalp cap covers it, eases her neck onto the pack's under the
+  collar, both smoothed over the mesh, and skins it by transfer over
+  `FACE_BONES`. The base colour is taken down to 0.45 linear (`FACE_GAIN`): the
+  reference was drawn lit and burnt out to white in the hideout. Her drawn
+  hands, arms and legs are tinted to match on material clones
+  (`CARTOGRAPHER_SKIN`, `render/meshes.ts`).
+- `helmet.maren.tresses` and `helmet.maren.scalp` (`build_hair`): strand cards in
+  three layers over an opaque cap cut from the pack's own scalp, one guide
+  strand per card combed from a side part, hung under gravity against her
+  body, gown, collar and face, waved per lock, alpha-tested at 0.3 and
+  two-sided. A procedural 1024 atlas, colours measured off the concept. The cap
+  is cut off the pack's ears (`bare_ears`), which are not drawn under her own
+  head. Skinned by transfer over `HAIR_BONES`, head-rigid above the jaw.

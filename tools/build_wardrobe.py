@@ -24,7 +24,7 @@ import bmesh
 import bpy
 import mathutils
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 SRC = "D:/VSC/exiled-casual/assets/characters/"
 GEAR_SRC = "D:/VSC/exiled-casual/assets/props/source/trellis_local/"
@@ -605,25 +605,32 @@ RIGID_GEAR = (
         "deform": GAUNTLET_BONES, "matte": True, "mirror": True,
     },
     # Maren's own look, the cartographer's and nobody else's: no item base maps
-    # to it, so only her body carries it (`bodies`). A floor-length gown laid out
-    # like the robe, and long hair worn in the helmet slot, which hides the
-    # body's own buns the way every helmet does.
+    # to it, so only her body carries it (`bodies`). A sleeveless dress with a
+    # caped collar and an overskirt parted in front. Her long hair is worn in the
+    # helmet slot, which hides the body's own buns the way every helmet does; it
+    # is grown on her by `build_hair`, with no donor.
     {
         "slot": "chest", "look": "maren", "part": "gown",
-        "src": "maren-gown-30k-v1.glb", "bone": "spine_03", "fit": "soft_suit",
+        "src": "maren-dress-v3.glb", "bone": "spine_03", "fit": "soft_suit",
+        # Seated on her waist and sized on it: scaled whole, sole to skull base,
+        # its waist hung 7 cm under hers and came out 3 cm wider than she is.
+        "fit_args": {"seat": "waist", "sleeves": "none", "girth": "waist"},
+        "symmetric": "+x",
+        # The overskirt's front split (`review/3d/maren-zana/prep_dress_v3.py`)
+        # stays open: every other loop the decode left is welded shut.
+        "openings": 2,
         # No greaves: the robe cuts its trouser shins, a gown has none, and the
         # cut opened slits up the back of the skirt where it hangs by the calves.
-        # One-sided, unlike the robe: a panel's inside samples a light part of
-        # the decode's atlas and showed as a tan wedge where the skirt parts;
-        # culled, the gap shows the dark matte backing (GOWN_BACKING) instead.
+        # Two-sided like the robe: the flare hangs away from her legs, and the
+        # split shows the inside of the back panel.
         "deform": SUIT_BONES, "bodies": ("female",),
         "matte": True, "clean": True, "skirt_floor": False,
-        "skirt": 1.7,
-    },
-    {
-        "slot": "helmet", "look": "maren", "part": "tresses",
-        "src": "maren-hair-v1.glb", "bone": "Head", "fit": "hair",
-        "deform": HAIR_BONES, "bodies": ("female",), "twosided": True,
+        # 0, not the robe's 1.7: a gown has no trousers, so cloth near the legs is
+        # the back panel itself, and on the leg bones it tears off the chains beside it.
+        "skirt": 0, "skirt_hip": True, "twosided": True,
+        # Its colour was projected off a grey reference of a black dress: the
+        # map's median luma is 0.154 where the concept's dress is 0.10-0.12.
+        "tone": 1.5,
     },
     # Off hand, but worn on the back: last, because it is laid on whatever chest
     # and hood are already fitted. Donor provenance in `assets/characters/SOURCE.md`.
@@ -748,6 +755,8 @@ QUIVER_FOOT_ACROSS = 0.45  # the foot's x, toward his left
 # it the coat's skirt belongs to the cloth solver, and a lower foot only reaches
 # further into the hollow of the lower back.
 QUIVER_GAP = 0.004         # air between the quiver and any chest, hood or skin
+# Looks no item base maps to: a hideout NPC wears them, never with a quiver.
+NPC_LOOKS = ("maren",)
 # Lean of the mouth toward (+) or away from (-) the back, swept for the snuggest
 # lie; the back is not flat, so a quiver held upright touches one blade and floats.
 QUIVER_LEANS = [math.radians(d) for d in range(-16, 17, 2)]
@@ -1599,6 +1608,77 @@ def donor_trunk(donor, lo, dims, centre, band=(PLATE_TRUNK_FROM, PLATE_TRUNK_TO)
     return best
 
 
+# A dress's waist is looked for over this stretch of its height, and hers in
+# steps this tall between the heads of spine_01 and spine_03.
+WAIST_BAND = (0.60, 0.85)
+WAIST_SLICE = 0.01
+
+
+def donor_waist(donor, lo, dims, centre, band=WAIST_BAND):
+    """A dress's narrowest girth, as (height, width, middle front to back): the
+    trunk ray of `donor_trunk`, kept where it is shortest instead of longest."""
+    bvh = bvh_of(donor)
+    best = None
+    for i in range(PLATE_TRUNK_SAMPLES):
+        z = lo.z + dims.z * (band[0] + (band[1] - band[0]) * i / (PLATE_TRUNK_SAMPLES - 1))
+        origin = Vector((centre.x, centre.y, z))
+        hits = [bvh.ray_cast(origin, Vector(d)) for d in ((1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0))]
+        if any(h[0] is None for h in hits):
+            continue
+        span = hits[0][0].x - hits[1][0].x
+        if best is None or span < best[1]:
+            best = (z, span, (hits[2][0].y + hits[3][0].y) / 2)
+    if best is None:
+        raise SystemExit(f"no ray out of the donor's axis met its wall between {band[0]} and {band[1]}")
+    return best
+
+
+def body_waist(body, rig):
+    """Her narrowest trunk girth, as (height, width, middle front to back).
+
+    Rays out of the spine, across and through, the way `donor_waist` reads a
+    dress. Spine-weighted vertices in a slice miss the flanks: they read her
+    waist 0.164 m wide at z 1.105, where the skin is 0.249 m across.
+    """
+    bvh = bvh_of(body, body.matrix_world)
+    lo = rig.matrix_world @ rig.data.bones["spine_01"].head_local
+    hi = rig.matrix_world @ rig.data.bones["spine_03"].head_local
+    steps = max(1, int((hi.z - lo.z) / WAIST_SLICE))
+    best = None
+    for i in range(steps + 1):
+        origin = lo.lerp(hi, i / steps)
+        hits = [bvh.ray_cast(origin, Vector(d)) for d in ((1, 0, 0), (-1, 0, 0), (0, -1, 0), (0, 1, 0))]
+        if any(h[0] is None for h in hits):
+            continue
+        width = hits[0][0].x - hits[1][0].x
+        if best is None or width < best[1]:
+            best = (origin.z, width, (hits[2][0].y + hits[3][0].y) / 2)
+    if best is None:
+        raise SystemExit("no ray out of the spine met her skin between spine_01 and spine_03")
+    return best
+
+
+def warp_to_waist(donor, body, rig, head_z, floor_z):
+    """Fit a dress's height in two spans: top to waist onto her skull base to
+    waist, waist to hem onto her waist to the floor. The top span sets the
+    scale; the skirt is stretched in place below the donor's waist so the same
+    scale carries its hem to the floor. Width is sized on her waist plus the
+    air `clear_skin` holds."""
+    lo, hi, dims, c = bbox([v.co for v in donor.data.vertices])
+    d_z, d_w, d_y = donor_waist(donor, lo, dims, c)
+    b_z, b_w, b_y = body_waist(body, rig)
+    high = (head_z - b_z) / (hi.z - d_z)
+    stretch = (b_z - floor_z) / (d_z - lo.z) / high
+    for v in donor.data.vertices:
+        if v.co.z < d_z:
+            v.co.z = d_z - (d_z - v.co.z) * stretch
+    donor.data.update()
+    return {"high": high, "wide": (b_w + 2 * SUIT_SKIN_AIR) / d_w, "donor_y": d_y, "body_y": b_y,
+            "report": {"waist_z": round(b_z, 4), "waist_width_m": round(b_w, 4),
+                       "donor_waist_share": round((d_z - lo.z) / dims.z, 4),
+                       "donor_waist_width": round(d_w, 4), "skirt_stretch": round(stretch, 4)}}
+
+
 def body_crotch(body):
     """The lowest skin the pelvis carries, on the mid-plane: this body's crotch.
 
@@ -2435,7 +2515,105 @@ def clear_skin(donor, M, body, air=SUIT_SKIN_AIR, rings=SUIT_SKIN_RINGS):
     }
 
 
-def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_TO), soft=False):
+# `enclose_legs`: the legs and boots are read in bands this tall and sectors
+# this wide round the legs' own centre line; a skirt vertex closer to that line
+# than they reach in its cell, plus the air, is pushed out to it. The reach is
+# dilated over this many neighbouring cells, the push spread over this many
+# rings of the mesh (halving per ring), and above the boot tops it fades out
+# over LEGS_EASE.
+LEGS_BAND = 0.02
+LEGS_SECTORS = 24
+LEGS_AIR = 0.015             # wide enough that a knee bending in the idle keeps the cuff under it
+LEGS_DILATE = (2, 1)        # bands, sectors
+LEGS_RINGS = 3
+LEGS_EASE = 0.10
+
+
+def enclose_legs(skirt, body, worn, rig):
+    """Hold a skirt off the legs and the boots worn on them, all round.
+
+    A generated skirt hangs straight under the hips; her lower legs angle back,
+    and the back panel stood in front of her calves, which came out through it
+    with the boots on them. Each skirt vertex is compared with how far the legs
+    and boots reach in its own band and direction, so a flare that already
+    clears is left alone and only the panel in their way moves.
+    """
+    legs = []
+    for o in worn:
+        legs += [o.matrix_world @ v.co for v in o.data.vertices]
+    top = max(p.z for p in legs)
+    for b in ("calf_l", "calf_r", "foot_l", "foot_r"):
+        legs += [p for p in group_points(body, b, 0.35) if p.z < top]
+    # One axis for every band, knees and ankles: reach is dilated across bands, and
+    # a band's own middle moves (the boots' back rim alone fills the top band).
+    axis = sum((rig.matrix_world @ rig.data.bones[b].head_local).y
+               for b in ("calf_l", "calf_r", "foot_l", "foot_r")) / 4
+
+    def axis_y(k):
+        return axis
+
+    def cell(p):
+        k = int(p.z // LEGS_BAND)
+        a = math.atan2(p.y - axis_y(k), p.x) % (2 * math.pi)
+        return k, int(a / (2 * math.pi) * LEGS_SECTORS) % LEGS_SECTORS
+
+    reach = {}
+    for p in legs:
+        k, s = cell(p)
+        reach[(k, s)] = max(reach.get((k, s), 0.0), math.hypot(p.x, p.y - axis_y(k)))
+    grown = {}
+    for (k, s), r in reach.items():
+        for dk in range(-LEGS_DILATE[0], LEGS_DILATE[0] + 1):
+            for ds in range(-LEGS_DILATE[1], LEGS_DILATE[1] + 1):
+                key = (k + dk, (s + ds) % LEGS_SECTORS)
+                grown[key] = max(grown.get(key, 0.0), r)
+
+    M = skirt.matrix_world
+    inv = M.inverted()
+    bm = bmesh.new()
+    bm.from_mesh(skirt.data)
+    bm.verts.ensure_lookup_table()
+    world = [M @ v.co for v in bm.verts]
+    push, out = [0.0] * len(world), [None] * len(world)
+    for i, p in enumerate(world):
+        if p.z >= top + LEGS_EASE:
+            continue
+        k, s = cell(p)
+        k_need = min(k, int(top // LEGS_BAND))
+        need = grown.get((k_need, s))
+        if need is None:
+            continue
+        fade = 1.0 if p.z <= top else 1.0 - (p.z - top) / LEGS_EASE
+        d = Vector((p.x, p.y - axis_y(k), 0.0))
+        r = d.length
+        if r < 1e-6:
+            continue
+        out[i] = d / r
+        push[i] = max(0.0, need + LEGS_AIR - r) * fade
+    pushed = sum(1 for d in push if d > 0.0)
+    for _ in range(LEGS_RINGS):
+        spread = list(push)
+        for v in bm.verts:
+            if out[v.index] is None:
+                continue
+            ring = max((push[e.other_vert(v).index] for e in v.link_edges), default=0.0)
+            spread[v.index] = max(push[v.index], ring * 0.5)
+        push = spread
+    moved, deepest = 0, 0.0
+    for i, v in enumerate(bm.verts):
+        if push[i] > 0.0 and out[i] is not None:
+            v.co = inv @ (world[i] + out[i] * push[i])
+            moved += 1
+            deepest = max(deepest, push[i])
+    bm.to_mesh(skirt.data)
+    bm.free()
+    skirt.data.update()
+    return {"legs_enclosed_vertices": moved, "legs_inside_vertices": pushed,
+            "legs_enclose_max_move_mm": round(deepest * 1000, 1)}
+
+
+def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_TO), soft=False,
+                   seat="collar", sleeves="pauldron", girth="ribs"):
     """Place a whole harness on the body, then cut it back to the chest slot.
 
     The donor is a complete figure - helm, pauldrons, sleeves, gauntlets, fauld,
@@ -2451,6 +2629,11 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
     ankle is a boot. Those are their own slots and their own items, so the chest
     may not draw them. What is left is trunk, pauldrons, fauld and legs, and it
     REPLACES the torso and both legs - see `BODY_REGIONS`.
+
+    A sleeveless dress is no whole figure: `seat="waist"` fits its height in two
+    spans about her waist (`warp_to_waist`), `girth="waist"` sizes it on her
+    waist instead of the ribs, and `sleeves="none"` leaves its armholes uncut
+    and grows no shoulder caps, so it closes the trunk alone.
 
     Measured against the REST body, for the reason `fit_plate_torso` gives.
     """
@@ -2483,14 +2666,17 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
     # on this donor: 6860 vertices above the skull base and the pauldrons over
     # the ears).
     head_z = (rig.matrix_world @ rig.data.bones["Head"].head_local).z
+    waisted = warp_to_waist(donor, body, rig, head_z, b_lo.z) if seat == "waist" else None
     hp = [v.co for v in donor.data.vertices]
     d_lo, d_hi, d_dims, d_c = bbox(hp)
     trunk_at, trunk_w, trunk_d, trunk_y = donor_trunk(donor, d_lo, d_dims, d_c, trunk_band)
-    high = (head_z - b_lo.z) / d_dims.z
+    seat_z = head_z
+    high = waisted["high"] if waisted else (head_z - b_lo.z) / d_dims.z
     # The donor's own trunk centre carries the horizontal seat, for the reason
     # `donor_trunk` gives: a fauld flared behind the back drags the bounding box
-    # off the sternum.
-    crown = Vector((d_c.x, trunk_y, d_hi.z))
+    # off the sternum. A dress is seated on its waist's middle over hers.
+    crown = Vector((d_c.x, waisted["donor_y"] if waisted else trunk_y, d_hi.z))
+    seat_y = waisted["body_y"] if waisted else chest_c.y
 
     arms = []
     for side in "lr":
@@ -2500,7 +2686,7 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
     def matrix(wide):
         S = Matrix.Diagonal((wide, wide, high, 1.0))
         return seated(donor, S, Matrix.Identity(4), crown,
-                      Vector((chest_c.x, chest_c.y, head_z)))
+                      Vector((chest_c.x, seat_y, seat_z)))
 
     # The sweep is judged on the RIBS alone, and only on coverage and girth. The
     # cuirass was also held off the skin by a gap floor, because skin it touched
@@ -2508,10 +2694,15 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
     # so there is no longer any drawn surface under it to push through. What is
     # still drawn beside the steel - the neck and the head - is measured after
     # the cuts, where the helm is no longer in the way of the question.
+    #
+    # `girth="waist"` skips the sweep and takes the width `warp_to_waist` read
+    # off her waist, so a slim dress stays slim: sized on the ribs, a narrow
+    # corset came out 19% wider than tall and the hands hung inside its hips.
+    # `clear_skin` holds whatever then dips into her 4 mm off the skin.
     tries = []
-    ratio = PLATE_WIDTH_FROM
+    ratio = PLATE_WIDTH_FROM if girth == "ribs" else waisted["wide"] * trunk_w / chest_dims.x
     placement = None
-    while ratio <= PLATE_WIDTH_TO + 1e-9:
+    while ratio <= PLATE_WIDTH_TO + 1e-9 or girth == "waist":
         wide = (chest_dims.x * ratio) / trunk_w
         bvh = bvh_of(donor, matrix(wide))
         p01, med = gap_profile(bvh, sample)
@@ -2519,7 +2710,7 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
         arm_cov = covered_radially(bvh, arms, arm_segments)
         tries.append([round(ratio, 3), round(p01 * 1000, 2), round(med * 1000, 2),
                       round(cov, 4), round(arm_cov, 4)])
-        if cov >= PLATE_COVERAGE and med <= PLATE_MAX_MEDIAN:
+        if girth == "waist" or (cov >= PLATE_COVERAGE and med <= PLATE_MAX_MEDIAN):
             placement = matrix(wide)
             break
         ratio += PLATE_WIDTH_STEP
@@ -2601,13 +2792,15 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
     elbow = rig.matrix_world @ rig.data.bones["lowerarm_l"].head_local
     edge = abs(shoulder.x) + abs(elbow.x - shoulder.x) * SUIT_PAULDRON_DROP
     floor_z = shoulder.z - SUIT_SLEEVE_DROP
-    cut_arms = sum(cut_donor(donor, placement, Vector((s * edge, 0, 0)), Vector((s, 0, 0)),
-                             region=lambda p: p.z >= floor_z,
-                             lip=lambda p: Vector((0, shoulder.y - p.y, shoulder.z - p.z)))
-                   for s in (1, -1))
-    caps = inflate_pauldrons(donor, placement, body, rig, per_vertex=soft)
+    armless = sleeves == "none"
+    cut_arms = 0 if armless else sum(
+        cut_donor(donor, placement, Vector((s * edge, 0, 0)), Vector((s, 0, 0)),
+                  region=lambda p: p.z >= floor_z,
+                  lip=lambda p: Vector((0, shoulder.y - p.y, shoulder.z - p.z)))
+        for s in (1, -1))
+    caps = {} if armless else inflate_pauldrons(donor, placement, body, rig, per_vertex=soft)
     cleared = clear_skin(donor, placement, body)
-    if not cut_feet or not cut_arms:
+    if not cut_feet or not (cut_arms or armless):
         raise SystemExit(f"a harness cut removed nothing - feet {cut_feet}, arms "
                          f"{cut_arms}: this donor is not a whole figure")
 
@@ -2658,6 +2851,9 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
         "cut_verts_arms": cut_arms,
         "cut_pauldron_edge_x": round(edge, 4),
         "cut_sleeve_floor_z": round(floor_z, 4),
+        "seat": seat,
+        "girth": girth,
+        **(waisted["report"] if waisted else {}),
         "size_tries": tries,
     }
 
@@ -2668,8 +2864,8 @@ def fit_plate_suit(donor, body, rig, trunk_band=(PLATE_TRUNK_FROM, PLATE_TRUNK_T
 SOFT_TRUNK_BAND = (0.58, 0.70)
 
 
-def fit_soft_suit(donor, body, rig):
-    return fit_plate_suit(donor, body, rig, SOFT_TRUNK_BAND, soft=True)
+def fit_soft_suit(donor, body, rig, **opts):
+    return fit_plate_suit(donor, body, rig, SOFT_TRUNK_BAND, soft=True, **opts)
 
 
 def bones_of(rig, names):
@@ -3288,10 +3484,12 @@ def fit_back_quiver(donor, body, rig):
         raise SystemExit(f"quiver foot at z {foot_w.z:.3f} is not above the waist {waist.z:.3f}")
     length = d_dims.z * scale
 
-    # What it may touch: skin and every fitted chest and helmet, near its reach,
-    # as it stands at rest and as the idle leaves it relative to spine_03.
+    # What it may touch: skin and every fitted chest and helmet a player can
+    # wear, near its reach, as it stands at rest and as the idle leaves it
+    # relative to spine_03.
     sources = [body] + [o for o in bpy.data.objects if o.type == "MESH"
-                        and o.name.split(".")[0] in ("chest", "helmet")]
+                        and o.name.split(".")[0] in ("chest", "helmet")
+                        and o.name.split(".")[1] not in NPC_LOOKS]
     M_idle, _, _, shapes = idle_pose(rig, "spine_03", (), sources)
     back = M_idle.inverted()
     near, verts, faces = [], [], []
@@ -3475,87 +3673,6 @@ def fit_back_quiver(donor, body, rig):
     }
 
 
-HAIR_CROWN = 0.14       # the crown slice, as a fraction of height from the top
-HAIR_CROWN_WIDTH = 1.16  # crown slice width over the head's at the same depth
-HAIR_LIFT = 0.010       # metres of hair over the top of the skull
-HAIR_CLEAR = 0.004      # metres every strand stands off the scalp
-HAIR_PUSH_PASSES = 8
-HAIR_CLEAR_LOW = 0.024  # and off the neck and shoulders, which turn under it in the idle
-# Face opening: chin, hairline at the middle and at the temples (fractions of head
-# height), half-width over head width. Curved, or the cut reads as a ruled fringe.
-HAIR_FACE = (0.10, 0.84, 0.94, 0.34)
-
-
-def fit_hair(donor, body, rig):
-    """Seat a generated hairstyle on this skull, open the face, clear the skin.
-
-    A decoded hairstyle has no measurable cavity (the decoder fills where the head
-    was), so it cannot be seated by contact the way `fit_head_shell` seats steel.
-    It is sized by its crown against the skull's, set on top of it, then every
-    face over the face is cut and every vertex inside the body pushed out to
-    HAIR_CLEAR off the skin. Placed here, so the build returns identity.
-    """
-    head = group_points(body, "Head")
-    h_lo, h_hi, h_dims, h_c = bbox(head)
-    pts = [v.co.copy() for v in donor.data.vertices]
-    d_lo, d_hi, d_dims, d_c = bbox(pts)
-    crown = [p for p in pts if p.z > d_hi.z - d_dims.z * HAIR_CROWN]
-    skull = [p for p in head if p.z > h_hi.z - h_dims.z * HAIR_CROWN * 2.2]
-    _, _, c_dims, c_c = bbox(crown)
-    _, _, s_dims, s_c = bbox(skull)
-    scale = s_dims.x * HAIR_CROWN_WIDTH / max(c_dims.x, 1e-6)
-    lift = Vector((s_c.x - c_c.x * scale, s_c.y - c_c.y * scale, h_hi.z + HAIR_LIFT - d_hi.z * scale))
-    M = Matrix.Translation(lift) @ Matrix.Scale(scale, 4)
-    donor.data.transform(M)
-    donor.data.update()
-    # The face: everything in front of the head's middle, between chin and brow.
-    chin = h_lo.z + h_dims.z * HAIR_FACE[0]
-    half = h_dims.x * HAIR_FACE[3]
-
-    def hairline(x):
-        t = min(1.0, abs(x - h_c.x) / half) ** 2
-        return h_lo.z + h_dims.z * (HAIR_FACE[1] + (HAIR_FACE[2] - HAIR_FACE[1]) * t)
-
-    bm = bmesh.new()
-    bm.from_mesh(donor.data)
-    face_cut = [f for f in bm.faces
-                if (c := f.calc_center_median()).y < h_c.y and chin < c.z < hairline(c.x) and abs(c.x - h_c.x) < half]
-    bmesh.ops.delete(bm, geom=face_cut, context="FACES")
-    loose = [v for v in bm.verts if not v.link_faces]
-    bmesh.ops.delete(bm, geom=loose, context="VERTS")
-    bm.to_mesh(donor.data)
-    bm.free()
-    # Clear the skin: a strand inside the body is pushed out along the surface normal.
-    bvh = bvh_of(body, body.matrix_world)
-    jaw = h_lo.z + h_dims.z * 0.35  # the nape: below it the hair falls away from the neck
-    pushed = 0
-    worst = 0.0
-    # Repeated: a strand pushed off one curve of the skull can land inside the
-    # next (the ear, the temple), and a single pass left 19 of them 2 mm in.
-    for _ in range(HAIR_PUSH_PASSES):
-        moved = 0
-        for v in donor.data.vertices:
-            hit, normal, _, _ = bvh.find_nearest(v.co)
-            if hit is None:
-                continue
-            clear = HAIR_CLEAR if hit.z > jaw else HAIR_CLEAR_LOW
-            depth = (v.co - hit).dot(normal)
-            if depth < clear - 1e-5:
-                worst = min(worst, depth)
-                v.co = hit + normal * clear
-                moved += 1
-        pushed += moved
-        if not moved:
-            break
-    donor.data.update()
-    return Matrix.Identity(4), {
-        "scale": round(scale, 4), "crown_width_m": round(c_dims.x * scale, 4),
-        "skull_width_m": round(s_dims.x, 4), "face_faces_cut": len(face_cut),
-        "pushed_out_of_skin": pushed, "deepest_before_mm": round(worst * 1000, 2),
-        "clear_mm": HAIR_CLEAR * 1000, "clear_low_mm": HAIR_CLEAR_LOW * 1000,
-    }
-
-
 def fit_as_built(donor, body, rig):
     """Place a donor that was built in this body's own frame; its builder gates it."""
     return Matrix.Identity(4), {"placed_as_authored": True}
@@ -3563,7 +3680,6 @@ def fit_as_built(donor, body, rig):
 
 FITTERS = {
     "as_built": fit_as_built,
-    "hair": fit_hair,
     "head_shell": fit_head_shell,
     "hand_grip": fit_hand_grip,
     "held": fit_held,
@@ -3710,6 +3826,12 @@ def region_cores(body, bm):
     return cores
 
 
+def shin_top(rig, side):
+    """The height where a leg's drawn `leg_*` piece ends and its `shin_*` begins."""
+    knee = (rig.matrix_world @ rig.data.bones[f"calf_{side}"].head_local).z
+    return knee - SUIT_GREAVE_BELOW_KNEE + SHIN_TUCK
+
+
 def split_body_regions(body, look):
     """Cut a body into the pieces worn steel is allowed to replace.
 
@@ -3732,8 +3854,7 @@ def split_body_regions(body, look):
     cores = region_cores(body, bm)
     rig = body.find_armature()
     for side in "lr":
-        knee = (rig.matrix_world @ rig.data.bones[f"calf_{side}"].head_local).z
-        top = knee - SUIT_GREAVE_BELOW_KNEE + SHIN_TUCK
+        top = shin_top(rig, side)
         leg = cores[f"leg_{side}"]
         cores[f"shin_{side}"] = {i for i in leg if (body.matrix_world @ bm.verts[i].co).z < top}
         cores[f"leg_{side}"] = leg - cores[f"shin_{side}"]
@@ -4029,6 +4150,23 @@ def matte(mesh):
     _transform_channel(bsdf.inputs["Metallic"], lambda v: np.minimum(v, MATTE_METALLIC_CAP))
 
 
+def tone(mesh, gamma, gain=1.0):
+    """Raise the base colour map to `gamma`, darker cloth with its print still light,
+    times `gain` on the stored (sRGB) pixel."""
+    mat = mesh.data.materials[0]
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    node = bsdf.inputs["Base Color"].links[0].from_node
+    if node.type != "TEX_IMAGE":
+        raise SystemExit(f"cannot tone {mesh.name}: base colour comes from {node.type}")
+    image = node.image
+    px = np.empty(len(image.pixels), dtype=np.float32)
+    image.pixels.foreach_get(px)
+    px = px.reshape(-1, image.channels)
+    px[:, :3] = np.clip(px[:, :3], 0.0, 1.0) ** gamma * gain
+    image.pixels.foreach_set(px.ravel())
+    image.update()
+
+
 def unstring(mesh):
     """Cut the string out of a bow and return its two ends, top first.
 
@@ -4101,7 +4239,7 @@ def build_rigid_gear(rig, body):
         # fitter reads one surface; it is shaded smooth AFTER the cuts, so the
         # rims they leave get the same normals as the plate beside them.
         if spec.get("clean"):
-            detail_clean = weld_donor(donor, DONOR_WELD, DONOR_OPENINGS)
+            detail_clean = weld_donor(donor, DONOR_WELD, spec.get("openings", DONOR_OPENINGS))
         if spec.get("symmetric"):
             symmetrise(donor, "-x" if spec["symmetric"] == "-x" else "+x")
         M, detail = FITTERS[spec["fit"]](donor, body, rig, **spec.get("fit_args", {}))
@@ -4124,6 +4262,8 @@ def build_rigid_gear(rig, body):
         # after the mirror would run the texture through the map twice.
         if spec.get("matte"):
             matte(donor)
+        if spec.get("tone"):
+            tone(donor, spec["tone"])
         # A scanned suit is an open shell: the neck, the armholes, the hem and
         # the two sleeve mouths are rings it simply stops at, and a culled
         # backface turns each into a black cavity. Steel from inside is steel.
@@ -4156,7 +4296,8 @@ def build_rigid_gear(rig, body):
             skin_to_bone(donor, rig, spec["bone"])
         if spec.get("skirt") is not None:
             detail.update(skin_skirt(donor, body, rig, spec["skirt"],
-                                     floor=spec.get("skirt_floor", bool(spec.get("greaves")))))
+                                     floor=spec.get("skirt_floor", bool(spec.get("greaves"))),
+                                     hip=spec.get("skirt_hip", False)))
         if spec.get("greaves"):
             region = None
             if spec["greaves"] == "shins":
@@ -4362,7 +4503,7 @@ def build_skirt_bones(rig, columns, centre, segment):
     return made
 
 
-def skin_skirt(mesh, body, rig, clear, floor):
+def skin_skirt(mesh, body, rig, clear, floor, hip=False):
     """Hand the cloth below the hips to the skirt chains.
 
     A vertex is cloth when it hangs below the pelvis and sits more than `clear`
@@ -4374,6 +4515,10 @@ def skin_skirt(mesh, body, rig, clear, floor):
     ring out; the first skirted piece in `RIGID_GEAR` lays the ring out from its
     own cloth and later pieces bind to the same bones, so the piece whose cloth
     runs lowest is listed first.
+
+    `hip` gives the pinned share to the bones the cloth just above the hip line
+    rides, not to the bare pelvis: a piece skinned to the thighs up there opens
+    a seam at the hip line otherwise.
     """
     M = mesh.matrix_world
     legs = _leg_segments(rig)
@@ -4414,7 +4559,16 @@ def skin_skirt(mesh, body, rig, clear, floor):
     knots = [SKIRT_PINNED + (1.0 - SKIRT_PINNED) * (n + 1) / SKIRT_JOINTS
              for n in range(SKIRT_JOINTS)]
     step = 2.0 * math.pi / SKIRT_CHAINS
+    above = [v for v in mesh.data.vertices if (M @ v.co).z >= top_z] if hip else []
+    tree = mathutils.kdtree.KDTree(len(above))
+    for k, v in enumerate(above):
+        tree.insert(M @ v.co, k)
+    tree.balance()
+    named = {g.index: g.name for g in mesh.vertex_groups}
+    riding = [{named[g.group]: g.weight for g in v.groups if g.weight > 0} or {"pelvis": 1.0}
+              for v in above]
     for v, p in cloth:
+        anchor = riding[tree.find(p)[1]] if above else {"pelvis": 1.0}
         for g in mesh.vertex_groups:
             g.remove([v.index])
         t = min(1.0, max(0.0, (top_z - p.z) / span))
@@ -4437,7 +4591,9 @@ def skin_skirt(mesh, body, rig, clear, floor):
         near = math.floor(exact)
         blend = exact - near
         if pinned > 0:
-            groups["pelvis"].add([v.index], pinned, "REPLACE")
+            total = sum(anchor.values())
+            for name, w in anchor.items():
+                mesh.vertex_groups[name].add([v.index], pinned * w / total, "ADD")
         for chain, share in ((near % SKIRT_CHAINS, 1.0 - blend),
                              ((near + 1) % SKIRT_CHAINS, blend)):
             if share <= 0.0:
@@ -4763,7 +4919,7 @@ CHEST_SHELLS = {
     "maren": "chest.maren.gown",
 }
 SOFT_METALLIC = 0.0         # a leather or cloth collar plate is not steel
-GOWN_BACKING = (0.95, 0.55)  # Maren's leg backing: matte, darker than her gown's mean
+GOWN_BACKING = (0.95, 1.0)  # Maren's backing: matte, her gown's own mean, so a parting reads as cloth
 BACKING_AIR = 0.003         # the torso backing stops this far under the cuirass
 BACKING_REACH = 0.15        # and looks this far out along its normal for it
 # A soft suit's backing also stands under the HOLES in its shell: a vertex whose
@@ -5071,6 +5227,1262 @@ def build_gorget(rig, body, worn, name="chest.ironsworn.gorget", region="collar"
     }}
 
 
+# --------------------------------------------------------------------------
+# Lace
+#
+# Maren's sleeves and stockings are her own arm and leg skin, cut exactly as
+# `split_body_regions` cuts the drawn pieces, pushed off along the normals and
+# wearing the body's own weights, so no clip can part them from the skin under
+# them. Sheer: alpha BLEND over that skin, which stays drawn (`COVERED_BY_LOOK`
+# in render/rig.ts). A grey cuff closes each sleeve at the wrist.
+
+LACE_REGIONS = ("arm_l", "arm_r", "leg_l", "leg_r")
+LACE_OFFSET = 0.002         # off the skin; 1 mm z-fought at the play camera's depth range
+LACE_TILE = 0.32            # metres of limb per texture repeat: motifs about 6.5 cm
+LACE_ALPHA = (0.65, 0.97)   # the net between the motifs, and the motifs
+LACE_ROUGHNESS = 0.9
+CUFF_WIDTH = 0.025          # how far up the forearm the cuff reaches from the wrist joint
+CUFF_OFFSET = 0.003
+CUFF_COLOUR = (0.16, 0.16, 0.17, 1.0)
+LACE_BLEND = "D:/VSC/exiled-casual/assets/props/source/mat-black-floral-lace.blend"
+LACE_ID = "ae5d9a16-d846-4def-a1a2-a2cbe92bc8c2"
+LACE_NAME = "Elegant Black Floral Lace Embroidery"
+
+
+def lace_material():
+    """The BlenderKit floral lace as one RGBA image: its colour, and an alpha
+    read off its height map, where the motifs stand proud of the net. It ships
+    no opacity map. Returns the material and the image's mean alpha."""
+    imgs = {}
+    with bpy.data.libraries.load(LACE_BLEND) as (df, dt):
+        dt.images = list(df.images)
+    for im in dt.images:
+        for key in ("Base_Color", "Height"):
+            if im is not None and key.lower() in im.name.lower():
+                imgs[key] = im
+    if set(imgs) != {"Base_Color", "Height"}:
+        raise SystemExit(f"lace: only {sorted(imgs)} in {LACE_BLEND}")
+
+    def pixels(im):
+        a = np.empty(len(im.pixels), dtype=np.float32)
+        im.pixels.foreach_get(a)
+        return a.reshape(im.size[1], im.size[0], im.channels)
+
+    colour, height = pixels(imgs["Base_Color"]), pixels(imgs["Height"])[:, :, 0]
+    if colour.shape[:2] != height.shape:
+        raise SystemExit(f"lace: colour {colour.shape[:2]} and height {height.shape} differ")
+    net, motif = np.percentile(height, (50, 97))
+    t = np.clip((height - net) / max(float(motif - net), 1e-6), 0.0, 1.0)
+    alpha = LACE_ALPHA[0] + (LACE_ALPHA[1] - LACE_ALPHA[0]) * t * t * (3 - 2 * t)
+    h, w = height.shape
+    image = bpy.data.images.new("maren_lace", w, h, alpha=True)
+    rgba = np.concatenate([colour[:, :, :3], alpha[:, :, None]], 2).astype(np.float32)
+    image.pixels.foreach_set(rgba.ravel())
+    image.file_format = "PNG"
+    image.pack()
+
+    mat = bpy.data.materials.new("maren_lace")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    # Straight into Alpha: the glTF exporter writes that as alphaMode BLEND.
+    nt.links.new(tex.outputs["Alpha"], bsdf.inputs["Alpha"])
+    bsdf.inputs["Roughness"].default_value = LACE_ROUGHNESS
+    bsdf.inputs["Metallic"].default_value = 0.0
+    mat.surface_render_method = "BLENDED"
+    mat.use_backface_culling = True
+    return mat, float(alpha.mean())
+
+
+def limb_frame(rig, region):
+    """A limb's axis (root joint to the joint past its end) and a unit vector
+    across it towards the front, -Y, so a wrapped UV's seam runs down the back."""
+    side = region[-1]
+    a, b = (("upperarm", "hand") if region.startswith("arm") else ("thigh", "foot"))
+    root = rig.matrix_world @ rig.data.bones[f"{a}_{side}"].head_local
+    end = rig.matrix_world @ rig.data.bones[f"{b}_{side}"].head_local
+    axis = (end - root).normalized()
+    front = Vector((0.0, -1.0, 0.0))
+    across = (front - axis * front.dot(axis)).normalized()
+    return root, axis, across, axis.cross(across)
+
+
+def build_lace(rig, body, look="maren"):
+    """Lace over the drawn arm and leg pieces, and a cuff at each wrist."""
+    obj = body.copy()
+    obj.data = body.data.copy()
+    obj.name = obj.data.name = f"chest.{look}.lace"
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.transform(body.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    for mod in list(obj.modifiers):
+        obj.modifiers.remove(mod)
+    while obj.data.materials:
+        obj.data.materials.pop()
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    cores = region_cores(body, bm)
+    for side in "lr":
+        top = shin_top(rig, side)
+        cores[f"leg_{side}"] = {i for i in cores[f"leg_{side}"] if bm.verts[i].co.z >= top}
+    # Element indices go stale once anything is deleted, so each face carries
+    # its limb (1-based, 0 = none) and its cuff flag in layers instead.
+    limb = bm.faces.layers.int.new("limb")
+    cuff = bm.faces.layers.int.new("cuff")
+    # A face is a region's as soon as one corner is, exactly as the drawn piece.
+    for f in bm.faces:
+        for k, region in enumerate(LACE_REGIONS, 1):
+            if any(v.index in cores[region] for v in f.verts):
+                f[limb] = k
+                break
+    # The cuff: the sleeve's last CUFF_WIDTH before each wrist joint and on.
+    for side in "lr":
+        elbow = rig.matrix_world @ rig.data.bones[f"lowerarm_{side}"].head_local
+        wrist = rig.matrix_world @ rig.data.bones[f"hand_{side}"].head_local
+        fore = (wrist - elbow).normalized()
+        k = LACE_REGIONS.index(f"arm_{side}") + 1
+        for f in bm.faces:
+            if f[limb] == k and (f.calc_center_median() - wrist).dot(fore) > -CUFF_WIDTH:
+                f[cuff] = 1
+    # Pushed along the WHOLE body's normals, before the cut changes them at the rims.
+    bm.normal_update()
+    cuffed = {v for f in bm.faces if f[cuff] for v in f.verts}
+    for v in bm.verts:
+        v.co += v.normal * (CUFF_OFFSET if v in cuffed else LACE_OFFSET)
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if not f[limb]], context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+
+    # Wrapped UVs per limb: u round the axis, v along it, a whole number of
+    # repeats round each limb so the wrap meets itself.
+    uv = bm.loops.layers.uv.new("LaceUV")
+    wraps = {}
+    for k, region in enumerate(LACE_REGIONS, 1):
+        root, axis, across, up = limb_frame(rig, region)
+        faces = [f for f in bm.faces if f[limb] == k]
+        verts = {v for f in faces for v in f.verts}
+        radii = sorted(((v.co - root) - axis * (v.co - root).dot(axis)).length for v in verts)
+        wraps[region] = n = max(1, round(2 * math.pi * radii[len(radii) // 2] / LACE_TILE))
+        for f in faces:
+            us = []
+            for loop in f.loops:
+                d = loop.vert.co - root
+                us.append((math.atan2(d.dot(up), d.dot(across)) / (2 * math.pi) + 0.5) * n)
+            if max(us) - min(us) > n / 2:
+                us = [u + n if u < n / 2 else u for u in us]
+            for loop, u in zip(f.loops, us):
+                loop[uv].uv = (u, (loop.vert.co - root).dot(axis) / LACE_TILE)
+
+    cuffs = obj.copy()
+    cuffs.data = obj.data.copy()
+    cuffs.name = cuffs.data.name = f"chest.{look}.cuffs"
+    bpy.context.scene.collection.objects.link(cuffs)
+    for piece, keep in ((obj, 0), (cuffs, 1)):
+        cut = bm.copy()
+        flag = cut.faces.layers.int["cuff"]
+        bmesh.ops.delete(cut, geom=[f for f in cut.faces if f[flag] != keep], context="FACES")
+        bmesh.ops.delete(cut, geom=[v for v in cut.verts if not v.link_faces], context="VERTS")
+        for name_ in ("limb", "cuff"):
+            cut.faces.layers.int.remove(cut.faces.layers.int[name_])
+        cut.to_mesh(piece.data)
+        cut.free()
+        # The body's own UV sets and colours ride along in the copy: the exporter
+        # writes every UV set (the first is what the texture samples), and a VEC4
+        # COLOR_0 makes Babylon treat the mesh as carrying vertex alpha.
+        for layer in [l for l in piece.data.uv_layers if l.name != "LaceUV"]:
+            piece.data.uv_layers.remove(layer)
+        piece.data.uv_layers["LaceUV"].name = "UVMap"
+        for attr in list(piece.data.color_attributes):
+            piece.data.color_attributes.remove(attr)
+        piece.data.update()
+    bm.free()
+
+    lace, mean_alpha = lace_material()
+    cloth = bpy.data.materials.new(f"{look}_cuff")
+    cloth.use_nodes = True
+    bsdf = next(n for n in cloth.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Base Color"].default_value = CUFF_COLOUR
+    bsdf.inputs["Roughness"].default_value = LACE_ROUGHNESS
+    cloth.use_backface_culling = True
+    report = {}
+    for piece, mat in ((obj, lace), (cuffs, cloth)):
+        piece.data.materials.append(mat)
+        for poly in piece.data.polygons:
+            poly.use_smooth = True
+        used = set()
+        for v in piece.data.vertices:
+            used |= {g.group for g in v.groups if g.weight > 0.0}
+        for name_ in [g.name for g in piece.vertex_groups if g.index not in used]:
+            piece.vertex_groups.remove(piece.vertex_groups[name_])
+        if any(not v.groups for v in piece.data.vertices):
+            raise SystemExit(f"{piece.name}: vertices carry no weight")
+        rebind(piece, rig)
+        tris = sum(len(p.vertices) - 2 for p in piece.data.polygons)
+        report[piece.name] = {
+            "built_from": f"{body.name} {', '.join(LACE_REGIONS)} regions as drawn, "
+                          "offset along the body's own normals",
+            "source": "body", "bone": "spine_03", "fit": "body_offset",
+            "offset_mm": (LACE_OFFSET if piece is obj else CUFF_OFFSET) * 1000,
+            "vertices": len(piece.data.vertices), "triangles": tris,
+            "deform_bones": sorted(g.name for g in piece.vertex_groups),
+        }
+        print(f"fitted {piece.name}: {tris} tris, {len(piece.data.vertices)} verts")
+    report[obj.name].update({
+        "uv_tile_m": LACE_TILE, "wraps": wraps, "mean_alpha": round(mean_alpha, 3),
+        "texture": {"blenderkit_id": LACE_ID, "blenderkit_name": LACE_NAME},
+    })
+    return report
+
+
+# Maren's hair is grown, not decoded: a decode fills where the head was, so long
+# hair came out a helmet with a face cut into it, and nothing in it falls. One
+# guide strand per card, from a root on her own scalp: combed away from a part
+# on her left, held at its layer's lift over the skull until the skull turns
+# under it, then hung and pushed clear of her body and gown. Alpha-tested
+# cards in three layers over an opaque cap, so no gap between cards is skin.
+
+HAIR_PART_X = 0.022             # the part, on her left of the midline (+X)
+HAIR_LAYERS = (
+    # lift over the skull, clearance off body and gown once hanging,
+    # root spacing, card width at the root
+    (0.008, 0.007, 0.015, 0.030),
+    (0.016, 0.011, 0.019, 0.026),
+    (0.026, 0.015, 0.026, 0.022),
+)
+HAIR_SCALP_OFFSET = 0.003
+HAIR_RIM_SPLITS = 2             # times the faces astride the hairline are split before the cut
+HAIR_FACE = (0.10, 0.34)        # her face: chin, of head height; half-width, of head width
+HAIR_BUN_REACH = 0.03           # a scalp vertex grows hair where the pack's buns lie over it
+HAIR_FRONT = (0.85, 0.79)       # front hairline, mid-forehead and temple, of head height
+HAIR_SIDEBURN_Z = 1.645         # in front of the ear the buns' side lock runs to the jaw
+HAIR_STEP = 0.006               # guide strand growth
+HAIR_SEGMENT = 0.02             # card segment along the strand: six or more to a wave
+HAIR_TIPS = (1.16, 1.27)        # tip heights: below her shoulder blades
+HAIR_LOCK_TIPS = (1.10, 1.24)   # the lock in front of her right shoulder, to under the bust
+HAIR_RELEASE_NZ = 0.1           # past the widest of the skull the strand leaves it and hangs
+HAIR_GRAVITY = 0.3
+HAIR_SIDE_BIAS = 0.10           # forward for the lock, back for the rest
+HAIR_SIDE_REACH = 0.08
+HAIR_SMOOTH_PASSES = 4
+HAIR_ROOT_LIFT = 0.004          # where a strand leaves the scalp, just over the cap
+HAIR_ROOT_RAMP = 0.05           # and how far along it reaches its layer's lift
+HAIR_RIM = (0.004, 0.006, 0.016)  # the front hairline: cap held back, root spacing along it, card width
+HAIR_HEM_V = 0.03               # the middle of her back hangs this much longer
+HAIR_REST_REACH = 0.04          # a card within this of a surface lies along it
+HAIR_UNDER = 0.9                # the darker half of the atlas, for the under layer
+HAIR_MAX_TURN = math.radians(25)  # card twist per segment
+HAIR_SKIN_GUARD = 0.0015        # no card corner nearer her skin than this
+HAIR_SKIN_REACH = 0.05          # and one sunk this deep in her is still found and lifted out
+HAIR_FACE_HALF = 0.068          # half-width kept clear in front of her face, eyes down
+HAIR_FACE_ARCH = (1.66, 1.745)  # above the eyes the clear width closes as an arch to this height
+# All but the lock hangs behind her ears and shoulders: (height, how far back) from the ear top down.
+HAIR_BEHIND = ((1.67, -0.06), (1.62, 0.03), (1.50, 0.075))
+# Her left falls close beside her neck under the jaw, then behind the shoulder.
+# Both idles carry the neck 5 cm forward of its bind pose: hair standing off the
+# neck turns less about its axis than the neck does, and the neck comes out bare.
+HAIR_BEHIND_L = ((1.67, -0.06), (1.60, 0.005), (1.535, 0.005), (1.475, 0.10))
+# (reach from the neck's mid-depth axis, to angle round from her side where it
+# lets go; z rising from, to, falling from, to)
+HAIR_NECK_HUG = (0.065, math.radians(0), math.radians(30), 1.51, 1.535, 1.57, 1.60)
+HAIR_SHELF_BACK = 0.6
+HAIR_LOCK_BACK = 0.03           # a strand leaving the skull on her right forward of this joins the lock
+HAIR_SIDE_EASE = (0.07, 0.10)   # past the shoulder line the side limit closes in from this much wider over this drop
+HAIR_SIDE_MAX = 0.118          # below the shoulder, inboard of the upper arm hanging in the idle
+HAIR_SHOULDER_Z = 1.44
+HAIR_WAVE = (0.018, 0.13, 0.18)  # amplitude, wavelength range of the hanging length
+HAIR_WAVE_GROW = 0.18           # hanging length over which a wave reaches its amplitude
+HAIR_WAVE_OUT = 0.5             # share of the amplitude that also stands the crest off her
+HAIR_LOCKS = 16                 # strands round the head that wave as one lock
+HAIR_ATLAS = 1024
+HAIR_COLUMNS = 8                # clump variants side by side in the atlas
+HAIR_STRANDS = (70, 90)         # strands drawn per column
+HAIR_SPREAD = (0.8, 1.1)        # strand tones from this share of HAIR_LOW to this of HAIR_HIGH
+HAIR_CUTOFF = 0.3
+HAIR_ROUGHNESS = 0.85
+# sRGB, measured off `review/3d/maren-zana/maren-concept-v1.png` by hue (the
+# 10th, 25th and 75th luma percentiles of her hair; the 90th is lit sheen),
+# then taken down by 0.55 / 0.68 / 0.75 linear: under the hideout's firelight
+# the concept's own values read as a vivid red, not its auburn.
+HAIR_ROOT = (0.146, 0.072, 0.048)
+HAIR_LOW = (0.179, 0.092, 0.059)
+HAIR_HIGH = (0.290, 0.154, 0.113)
+HAIR_SEED = 1729
+# Her neck skin's own Head weight runs 0 to 1 between these heights (0.10 at
+# 1.52, 0.35 at 1.54, 0.87 at 1.58): hair beside the neck turns as far as it does.
+HAIR_HEAD_RAMP = (1.50, 1.60)
+
+
+HAIR_FREE_REGIONS = ("arm_l", "arm_r", "hand_l", "hand_r")
+# Maren's cloth and hair reflect a tenth of what a dielectric does: at full
+# strength the hideout's fires wash her black gown grey-brown and her hair pale.
+MAREN_SPECULAR = 0.1
+
+
+def dull(look, factor):
+    """Cut the specular of every material the look's pieces wear. The glTF
+    exporter writes a Specular IOR Level of f/2 as KHR_materials_specular f."""
+    mine = [o for o in bpy.data.objects if o.type == "MESH" and o.name.split(".")[1:2] == [look]]
+    mats = {m for o in mine for m in o.data.materials if m is not None}
+    for o in bpy.data.objects:
+        if o.type == "MESH" and o not in mine and mats & set(o.data.materials):
+            raise SystemExit(f"{o.name} shares a material with the {look} look")
+    for mat in mats:
+        for node in mat.node_tree.nodes:
+            if node.type == "BSDF_PRINCIPLED":
+                node.inputs["Specular IOR Level"].default_value = factor / 2
+    return sorted(m.name for m in mats)
+
+
+def bvh_except(body, regions):
+    """A world BVH over the body without the faces touching `regions`."""
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    cores = region_cores(body, bm)
+    bm.free()
+    drop = set().union(*(cores[r] for r in regions))
+    M = body.matrix_world
+    verts = [M @ v.co for v in body.data.vertices]
+    tris = []
+    for poly in body.data.polygons:
+        idx = list(poly.vertices)
+        if any(i in drop for i in idx):
+            continue
+        for k in range(1, len(idx) - 1):
+            tris.append((idx[0], idx[k], idx[k + 1]))
+    return mathutils.bvhtree.BVHTree.FromPolygons(verts, tris)
+
+
+def _smooth(e0, e1, x):
+    t = min(1.0, max(0.0, (x - e0) / (e1 - e0)))
+    return t * t * (3 - 2 * t)
+
+
+def hair_atlas(rng):
+    """Strand clumps in HAIR_COLUMNS columns, root at v=0, tips tapering and
+    clumping before v=1; colour everywhere, so a mip never bleeds black."""
+    n = HAIR_ATLAS
+    w = n // HAIR_COLUMNS
+    root, low, high = (np.array(c, dtype=np.float32) for c in (HAIR_ROOT, HAIR_LOW, HAIR_HIGH))
+    rgb = np.empty((n, n, 3), dtype=np.float32)
+    rgb[:] = (low + high) / 2
+    alpha = np.zeros((n, n), dtype=np.float32)
+    v = (np.arange(n, dtype=np.float32) + 0.5) / n
+    x = np.arange(w, dtype=np.float32)[None, :] + 0.5
+    t = np.clip((v - 0.5) / 0.5, 0.0, 1.0)
+    gather = t * t * (3 - 2 * t) * 0.75
+    margin = 6.0
+    tones = (root, low, high)
+    for col in range(HAIR_COLUMNS):
+        k = HAIR_UNDER if col < HAIR_COLUMNS // 2 else 1.0
+        root, low, high = (c * k for c in tones)
+        a_col = np.zeros((n, w), dtype=np.float32)
+        c_col = np.empty((n, w, 3), dtype=np.float32)
+        c_col[:] = (low + high) / 2
+        clumps = rng.uniform(margin + 12, w - margin - 12, size=rng.integers(1, 4))
+        # Thinning towards the column's sides, so a card has no hard edge.
+        for _ in range(int(rng.integers(HAIR_STRANDS[0], HAIR_STRANDS[1]))):
+            x0 = float(np.clip(rng.normal(w / 2, w / 4.5), margin, w - margin))
+            target = clumps[np.argmin(np.abs(clumps - x0))]
+            end = rng.uniform(0.72, 1.0)
+            start = rng.uniform(0.0, 0.04)
+            centre = x0 + (target - x0) * gather + 1.5 * np.sin(2 * np.pi * (v * rng.uniform(1, 3)
+                                                                          + rng.uniform()))
+            hw = rng.uniform(0.7, 1.4) * np.clip((end - v) / 0.15, 0.0, 1.0)
+            hw = np.where(v < start, 0.0, hw)
+            a = np.clip(hw[:, None] - np.abs(x - centre[:, None]) + 0.5, 0.0, 1.0)
+            # Wide spread, most strands dark: the wave reads in the game by strand contrast.
+            shade = low * HAIR_SPREAD[0] + (high * HAIR_SPREAD[1] - low * HAIR_SPREAD[0]) * rng.uniform() ** 2.0
+            # Short: roots show all over the crown, and a long dark root is a
+            # brush stroke per card there.
+            dark = np.clip(1.0 - v / 0.05, 0.0, 1.0)[:, None, None]
+            colour = shade[None, None, :] * (1 - dark) + root[None, None, :] * dark
+            over = a > a_col
+            c_col = np.where(over[:, :, None], colour, c_col)
+            a_col = np.maximum(a_col, a)
+        alpha[:, col * w:(col + 1) * w] = a_col
+        rgb[:, col * w:(col + 1) * w] = c_col
+    image = bpy.data.images.new("maren_hair", n, n, alpha=True)
+    image.pixels.foreach_set(np.concatenate([rgb, alpha[:, :, None]], 2).astype(np.float32).ravel())
+    image.file_format = "PNG"
+    image.pack()
+    return image, float(alpha.mean())
+
+
+def hair_material(image, look):
+    mat = bpy.data.materials.new(f"{look}_hair")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = next(nd for nd in nt.nodes if nd.type == "BSDF_PRINCIPLED")
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    # 1 - (alpha < cutoff): the glTF exporter writes this as alphaMode MASK.
+    below = nt.nodes.new("ShaderNodeMath")
+    below.operation = "LESS_THAN"
+    below.inputs[1].default_value = HAIR_CUTOFF
+    nt.links.new(tex.outputs["Alpha"], below.inputs[0])
+    keep = nt.nodes.new("ShaderNodeMath")
+    keep.operation = "SUBTRACT"
+    keep.inputs[0].default_value = 1.0
+    nt.links.new(below.outputs[0], keep.inputs[1])
+    nt.links.new(keep.outputs[0], bsdf.inputs["Alpha"])
+    bsdf.inputs["Roughness"].default_value = HAIR_ROUGHNESS
+    bsdf.inputs["Metallic"].default_value = 0.0
+    mat.use_backface_culling = False
+    return mat
+
+
+def scalp_region(body, buns):
+    """Her head's vertices that grow hair, and the head's measurements. Under
+    the pack's buns at the sides and back, whose hairline is authored clear of
+    the ears and down to the nape; above a curved hairline at the front, where
+    the buns' fringe is loose locks and their footprint ragged."""
+    M = body.matrix_world
+    N = M.to_3x3()
+    gi = body.vertex_groups["Head"].index
+    head = {}
+    for v in body.data.vertices:
+        if sum(g.weight for g in v.groups if g.group == gi) >= 0.5:
+            head[v.index] = (M @ v.co, (N @ v.normal).normalized())
+    lo, hi, dims, c = bbox([p for p, _ in head.values()])
+    half = dims.x * HAIR_FACE[1]
+    bvh = bvh_of(buns, buns.matrix_world)
+
+    def hairline(x):
+        t = min(1.0, abs(x - c.x) / half) ** 2
+        return lo.z + dims.z * (HAIR_FRONT[0] + (HAIR_FRONT[1] - HAIR_FRONT[0]) * t)
+
+    def grows_at(p, n, back=0.0):
+        front = p.y < c.y
+        if front and abs(p.x - c.x) < half:
+            return p.z >= hairline(p.x) + back
+        if front and p.z < HAIR_SIDEBURN_Z:
+            return False
+        return bvh.ray_cast(p + n * 0.0005, n, HAIR_BUN_REACH)[0] is not None
+
+    centre = Vector((c.x, c.y, lo.z + 0.55 * dims.z))
+    return grows_at, {"lo": lo, "hi": hi, "dims": dims, "centre": centre, "half": half,
+                      "chin": lo.z + dims.z * HAIR_FACE[0], "hairline": hairline}
+
+
+def build_scalp(body, grows_at, look):
+    """The opaque cap: her own scalp, pushed off along the normals, on the
+    body's own weights. Welded first: the head is split down its UV seams,
+    and two halves pushed apart leave a crack of skin along the part."""
+    obj = body.copy()
+    obj.data = body.data.copy()
+    obj.name = obj.data.name = f"helmet.{look}.scalp"
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.transform(body.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    for mod in list(obj.modifiers):
+        obj.modifiers.remove(mod)
+    while obj.data.materials:
+        obj.data.materials.pop()
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    dl = bm.verts.layers.deform.active
+    gi = body.vertex_groups["Head"].index
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces
+                               if not all(v[dl].get(gi, 0.0) >= 0.5 for v in f.verts)], context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=1e-5)
+    # Whole faces along the hairline are a crenellation of skin notches the
+    # size of the head's quads: the faces astride it are split, then cut by centre.
+    for _ in range(HAIR_RIM_SPLITS):
+        bm.normal_update()
+        side = {v: grows_at(v.co, v.normal, HAIR_RIM[0]) for v in bm.verts}
+        rim = {e for f in bm.faces if len({side[v] for v in f.verts}) == 2 for e in f.edges}
+        bmesh.ops.subdivide_edges(bm, edges=list(rim), cuts=1, use_grid_fill=True)
+    bm.normal_update()
+    keep = {f for f in bm.faces if grows_at(f.calc_center_median(), f.normal, HAIR_RIM[0])}
+    for v in {v for f in keep for v in f.verts}:
+        v.co += v.normal * HAIR_SCALP_OFFSET
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in keep], context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(obj.data)
+    bm.free()
+    for layer in list(obj.data.uv_layers):
+        obj.data.uv_layers.remove(layer)
+    for attr in list(obj.data.color_attributes):
+        obj.data.color_attributes.remove(attr)
+    mat = bpy.data.materials.new(f"{look}_scalp")
+    mat.use_nodes = True
+    bsdf = next(nd for nd in mat.node_tree.nodes if nd.type == "BSDF_PRINCIPLED")
+    bsdf.inputs["Base Color"].default_value = (*(c ** 2.2 for c in HAIR_LOW), 1.0)
+    bsdf.inputs["Roughness"].default_value = 0.8
+    mat.use_backface_culling = True
+    obj.data.materials.append(mat)
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+    return obj
+
+
+def sample_roots(scalp, rng, spacing):
+    """Points on her skin under the cap, area-weighted, at least `spacing` apart."""
+    tris = []
+    for poly in scalp.data.polygons:
+        idx = list(poly.vertices)
+        for k in range(1, len(idx) - 1):
+            a, b, c = (scalp.data.vertices[i] for i in (idx[0], idx[k], idx[k + 1]))
+            n = (a.normal + b.normal + c.normal).normalized()
+            pa, pb, pc = (v.co - n * HAIR_SCALP_OFFSET for v in (a, b, c))
+            area = (pb - pa).cross(pc - pa).length / 2
+            tris.append((area, pa, pb, pc, n))
+    areas = np.array([t[0] for t in tris])
+    total = float(areas.sum())
+    picks = rng.choice(len(tris), size=int(40 * total / spacing ** 2), p=areas / total)
+    cell = {}
+    roots = []
+    for k in picks:
+        _, pa, pb, pc, n = tris[k]
+        r1, r2 = rng.uniform(), rng.uniform()
+        if r1 + r2 > 1:
+            r1, r2 = 1 - r1, 1 - r2
+        p = pa + (pb - pa) * r1 + (pc - pa) * r2
+        key = tuple(int(math.floor(x / spacing)) for x in p)
+        near = (q for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)
+                for q in cell.get((key[0] + dx, key[1] + dy, key[2] + dz), ()))
+        if any((q - p).length < spacing for q in near):
+            continue
+        cell.setdefault(key, []).append(p)
+        roots.append((p, n))
+    return roots, total
+
+
+def hair_comb(p, head):
+    """Where hair at `p` is combed: away from the part over the top and front,
+    back and down behind the crown, down once off the top."""
+    s = 1.0 if p.x > HAIR_PART_X else -1.0
+    top = _smooth(1.665, 1.73, p.z)
+    back = _smooth(head["centre"].y, head["centre"].y + 0.07, p.y)
+    front = 1.0 - _smooth(head["centre"].y - 0.07, head["centre"].y, p.y)
+    side = s * (1.6 * top * (1 - back) + 0.25)
+    # Her left is tucked behind the ear, so it sweeps further back on the way down.
+    return Vector((side, 0.3 + 0.8 * back + 0.9 * front * top + (0.7 if s > 0 else 0.0),
+                   -(1.2 * (1 - top) + 0.4 * back)))
+
+
+def grow_strand(root, normal, lift, gap, rng, head, skin, shells):
+    """One guide strand as a polyline, and the index where it leaves the skull.
+    It joins the lock when it leaves the skull on her right, forward of her ear."""
+
+    def tangent(vec, n):
+        t = vec - n * vec.dot(n)
+        return t.normalized() if t.length > 1e-6 else Vector((0.0, 0.0, -1.0))
+
+    def outward(q):
+        hit, fn, _, _ = skin.find_nearest(q)
+        off = q - hit
+        return hit, (off.normalized() if off.dot(fn) > 1e-4 else fn)
+
+    obstacles = (skin, *shells)
+
+    def face(q):
+        """Out of the face: its full width from the chin to the eyes, an arch above."""
+        if q.y >= head["centre"].y - 0.02 or not head["chin"] < q.z < HAIR_FACE_ARCH[1]:
+            return q
+        rise = max(0.0, q.z - HAIR_FACE_ARCH[0]) / (HAIR_FACE_ARCH[1] - HAIR_FACE_ARCH[0])
+        half = HAIR_FACE_HALF * math.sqrt(1.0 - rise * rise)
+        return Vector((math.copysign(half, q.x), q.y, q.z)) if abs(q.x) < half else q
+
+    def rules(q):
+        q = face(q)
+        side = HAIR_SIDE_MAX + (not lock) * HAIR_SIDE_EASE[0] * _smooth(HAIR_SHOULDER_Z - HAIR_SIDE_EASE[1], HAIR_SHOULDER_Z, q.z)
+        if q.z < HAIR_SHOULDER_Z and abs(q.x) > side:
+            q = Vector((math.copysign(side, q.x), q.y, q.z))
+        if lock is False and q.z < HAIR_BEHIND[0][0]:
+            prof = HAIR_BEHIND_L if q.x > 0.0 else HAIR_BEHIND
+            back = prof[-1][1]
+            for (z0, y0), (z1, y1) in zip(prof, prof[1:]):
+                if q.z > z1:
+                    back = y0 + (y1 - y0) * _smooth(z0, z1, q.z)
+                    break
+            if q.y < back:
+                q = Vector((q.x, back, q.z))
+        if lock is False and q.x > 0.0:
+            reach, a0, a1, z0, z1, z2, z3 = HAIR_NECK_HUG
+            rel = Vector((q.x, q.y - head["neck_y"], 0.0))
+            k = _smooth(z0, z1, q.z) * (1.0 - _smooth(z2, z3, q.z)) * (1.0 - _smooth(a0, a1, math.atan2(rel.y, rel.x)))
+            if k > 0.0 and rel.length > reach:
+                rel *= 1.0 - k * (1.0 - reach / rel.length)
+                q = Vector((rel.x, rel.y + head["neck_y"], q.z))
+        return q
+
+    # A gown is a thin open shell whose winding says nothing about which side
+    # is out, so nothing here reads a normal's sign: a strand never crosses a
+    # surface (swept), and keeps its gap on whichever side it already is.
+    def swept(p, q):
+        seg = q - p
+        if seg.length < 1e-9:
+            return None
+        ray = seg.normalized()
+        best = None
+        for bvh in obstacles:
+            loc, n, _, dist = bvh.ray_cast(p, ray, seg.length + gap)
+            if loc is not None and (best is None or dist < best[1]):
+                best = (n if n.dot(ray) < 0 else -n, dist)
+        return best
+
+    def keep_gap(q, came):
+        for bvh in obstacles:
+            for _ in range(2):
+                hit, fn, _, _ = bvh.find_nearest(q, gap)
+                if hit is None:
+                    break
+                off = q - hit
+                if off.length > 1e-6:
+                    q = hit + off.normalized() * gap
+                else:
+                    q = hit + fn * (gap if (came - hit).dot(fn) >= 0 else -gap)
+        return q
+
+    # Longest down the middle of her back, so the ends make a soft V.
+    behind = _smooth(0.0, 0.06, root.y - head["centre"].y) * max(0.0, 1 - abs(root.x) / 0.07)
+    lock = tip = None
+    p = root + normal * HAIR_ROOT_LIFT
+    d = tangent(hair_comb(p, head), normal)
+    pts = [p]
+    release = None
+    for _ in range(400):
+        if release is None:
+            q = p + d * HAIR_STEP
+            hit, n = outward(q)
+            if n.z >= HAIR_RELEASE_NZ:
+                # It rises off the scalp to its layer, or the hairline is a ledge.
+                rise = _smooth(0.0, HAIR_ROOT_RAMP, len(pts) * HAIR_STEP)
+                q = face(hit + n * (HAIR_ROOT_LIFT + (lift - HAIR_ROOT_LIFT) * rise))
+                step = q - p
+                d = (step.normalized() * 0.65 + tangent(hair_comb(q, head), n) * 0.35).normalized()
+                p = q
+                pts.append(p)
+                continue
+            release = len(pts) - 1
+            lock = p.x < 0.0 and p.y < head["centre"].y + HAIR_LOCK_BACK
+            tip = rng.uniform(*(HAIR_LOCK_TIPS if lock else HAIR_TIPS)) - HAIR_HEM_V * behind
+        # Which side of the shoulder it falls: decided in the first few
+        # centimetres off the skull, then gravity alone.
+        near = (len(pts) - 1 - release) * HAIR_STEP < HAIR_SIDE_REACH
+        bias = Vector((0.0, (-HAIR_SIDE_BIAS if lock else HAIR_SIDE_BIAS) if near else 0.0, 0.0))
+        pull = Vector((0.0, 0.0, -HAIR_GRAVITY)) + bias
+        d = (d + pull).normalized()
+        q = rules(p + d * HAIR_STEP)
+        hit = swept(p, q)
+        if hit is not None:
+            # On a surface: slide down it, or off a level one sideways and out.
+            n = hit[0]
+            t = d - n * d.dot(n)
+            if t.length < 0.3:
+                out = Vector((p.x - head["centre"].x, p.y - head["centre"].y, 0.0))
+                t = pull + out.normalized() * 0.3
+                t = t - n * t.dot(n)
+            # Across her capelet's shelf all but the lock slides back, not out
+            # past the arm, where `HAIR_SIDE_MAX` would hold it on the shelf.
+            if not lock and p.z < HAIR_SHOULDER_Z + 0.08:
+                t = t + Vector((0.0, HAIR_SHELF_BACK, 0.0))
+                t = t - n * t.dot(n)
+            d = t.normalized() if t.length > 1e-6 else d
+            q = rules(p + d * HAIR_STEP)
+            if swept(p, q) is not None:
+                q = p
+        q = keep_gap(q, p)
+        if (q - p).length < 1e-5:
+            break
+        d = (q - p).normalized()
+        p = q
+        pts.append(p)
+        if p.z <= tip:
+            break
+    if release is None:
+        return pts, len(pts) - 1
+    # The bounces off the shoulders smoothed out, each pass kept clear.
+    for _ in range(HAIR_SMOOTH_PASSES):
+        for i in range(release + 1, len(pts) - 1):
+            mid = (pts[i - 1] + pts[i + 1]) / 2
+            pts[i] = keep_gap(pts[i] + (mid - pts[i]) * 0.5, pts[i])
+    return pts, release
+
+
+def neck_mid_y(body):
+    """Mid-depth of the piece `split_body_regions` cuts as the neck: every
+    vertex of a face with a corner in the neck core."""
+    bm = bmesh.new()
+    bm.from_mesh(body.data)
+    core = region_cores(body, bm)["neck"]
+    ys = [(body.matrix_world @ v.co).y for f in bm.faces if any(v.index in core for v in f.verts)
+          for v in f.verts]
+    bm.free()
+    return (min(ys) + max(ys)) / 2
+
+
+def build_hair(rig, body, shells, look="maren"):
+    """Strand cards and a scalp cap, `helmet.<look>.tresses` and `.scalp`."""
+    rng = np.random.default_rng(HAIR_SEED)
+    buns = bpy.data.objects[f"base.{BODY}.hair"]
+    grows_at, head = scalp_region(body, buns)
+    head["neck_y"] = neck_mid_y(body)
+    scalp = build_scalp(body, grows_at, look)
+    # Without her arms: they stand out level in the bind pose and hang beside
+    # her in every clip, so hair laid over them would float off her shoulders.
+    skin = bvh_except(body, HAIR_FREE_REGIONS)
+    shell_bvhs = [bvh_of(s, s.matrix_world) for s in shells]
+    obstacles = (skin, *shell_bvhs)
+    centre = head["centre"]
+
+    def resting_out(p):
+        """Off the surface a hanging strand lies on, so its card lies along
+        that surface; round the body's axis once it hangs free."""
+        radial = Vector((p.x - centre.x, p.y - centre.y, 0.0))
+        radial = radial.normalized() if radial.length > 1e-6 else Vector((0.0, 1.0, 0.0))
+        best = None
+        for bvh in obstacles:
+            hit, _, _, dist = bvh.find_nearest(p, HAIR_REST_REACH)
+            if hit is not None and dist > 1e-5 and (best is None or dist < best[1]):
+                best = (hit, dist)
+        if best is None:
+            return radial
+        on = (p - best[0]).normalized()
+        return on.lerp(radial, _smooth(HAIR_REST_REACH / 2, HAIR_REST_REACH, best[1])).normalized()
+
+    lock_wave = [(rng.uniform(*HAIR_WAVE[1:]), rng.uniform(0, 2 * math.pi)) for _ in range(HAIR_LOCKS)]
+
+    def clear_of(p, q, gap):
+        """`q` moved from `p`, stopped short of any surface between them and kept `gap` off it."""
+        seg = q - p
+        if seg.length > 1e-9:
+            ray = seg.normalized()
+            for bvh in obstacles:
+                _, _, _, dist = bvh.ray_cast(p, ray, seg.length + gap)
+                if dist is not None:
+                    q = p + ray * max(0.0, dist - gap)
+                    seg = q - p
+        for bvh in obstacles:
+            hit, _, _, dist = bvh.find_nearest(q, gap)
+            if hit is not None and dist > 1e-6:
+                q = hit + (q - hit) * (gap / dist)
+        return q
+
+    verts, faces, uvs, normals = [], [], [], []
+    cards = 0
+    per_layer = []
+    lengths = []
+    # The cap stops short of the front hairline and a close row of narrow cards
+    # is rooted on the line: their ragged roots are the hairline, not a mesh edge.
+    body_bvh = bvh_of(body, body.matrix_world)
+    rim = []
+    x = -head["half"]
+    while x < head["half"]:
+        z = head["hairline"](x) + rng.uniform(0.0, 0.004)
+        hit, n, _, _ = body_bvh.ray_cast(Vector((x, centre.y - 0.3, z)), Vector((0.0, 1.0, 0.0)))
+        if hit is not None:
+            rim.append((hit, n))
+        x += HAIR_RIM[1] * rng.uniform(0.7, 1.3)
+    for layer, (lift, gap, spacing, width) in enumerate((*HAIR_LAYERS, (*HAIR_LAYERS[0][:2], 0.0, HAIR_RIM[2]))):
+        roots = rim if layer == len(HAIR_LAYERS) else sample_roots(scalp, rng, spacing)[0]
+        per_layer.append(len(roots))
+        for root, normal in roots:
+            pts, release = grow_strand(root, normal, lift, gap, rng, head, skin, shell_bvhs)
+            if len(pts) < 3:
+                continue
+            seg = [0.0]
+            for a, b in zip(pts, pts[1:]):
+                seg.append(seg[-1] + (b - a).length)
+            total = seg[-1]
+            n_seg = max(3, round(total / HAIR_SEGMENT))
+            s_rel = seg[release]
+            lengths.append((total, s_rel))
+            # One wave per lock, so neighbouring cards crest together.
+            turn = math.atan2(root.x - centre.x, root.y - centre.y) / (2 * math.pi) + 0.5
+            wl, phase = lock_wave[int(turn * HAIR_LOCKS + rng.uniform(-0.2, 0.2)) % HAIR_LOCKS]
+            amp, phase = HAIR_WAVE[0] * rng.uniform(0.8, 1.2), phase + rng.normal(0.0, 0.3)
+            rows = []
+            k = 0
+            for j in range(n_seg + 1):
+                s = total * j / n_seg
+                while k < len(seg) - 2 and seg[k + 1] < s:
+                    k += 1
+                t = (s - seg[k]) / max(seg[k + 1] - seg[k], 1e-9)
+                p = pts[k].lerp(pts[k + 1], t)
+                tan = (pts[k + 1] - pts[k]).normalized()
+                if s <= s_rel:
+                    hit, fn, _, _ = skin.find_nearest(p)
+                    out = (p - hit).normalized() if (p - hit).length > 1e-5 else fn
+                else:
+                    out = resting_out(p)
+                rows.append([p, tan, out, s])
+            prev = None
+            for row in rows:
+                p, tan, out, s = row
+                w = tan.cross(out)
+                w = w.normalized() if w.length > 1e-6 else (prev or Vector((1.0, 0.0, 0.0)))
+                if prev is not None:
+                    if w.dot(prev) < 0:
+                        w = -w
+                    # A card turns at most this much per segment, or where the
+                    # surface under it changes it stands out edge-on as a flag.
+                    turn = prev.rotation_difference(w)
+                    if turn.angle > HAIR_MAX_TURN:
+                        w = Quaternion(turn.axis, HAIR_MAX_TURN) @ prev
+                    w = w - tan * w.dot(tan)
+                    w = w.normalized() if w.length > 1e-6 else prev
+                row.append(w)
+                prev = w
+            for row in rows:
+                p, tan, out, s, w = row
+                if s > s_rel:
+                    ramp = _smooth(0.0, HAIR_WAVE_GROW, s - s_rel)
+                    a = 2 * math.pi * (s - s_rel) / wl + phase
+                    row[0] = clear_of(p, p + (w * math.sin(a) + out * (HAIR_WAVE_OUT * (0.5 + 0.5 * math.cos(a))))
+                                      * (amp * ramp), gap)
+            # The under layer draws the darker half of the atlas, the top layer the lighter.
+            half_cols = HAIR_COLUMNS // 2
+            col = int(rng.integers(*((0, half_cols), (0, HAIR_COLUMNS), (half_cols, HAIR_COLUMNS),
+                                     (0, HAIR_COLUMNS))[layer]))
+            u0, u1 = (col + 0.03) / HAIR_COLUMNS, (col + 0.97) / HAIR_COLUMNS
+            wide = width * rng.uniform(0.8, 1.2)
+            base = len(verts)
+            for j, (p, tan, out, s, w) in enumerate(rows):
+                half = wide * (1 - 0.6 * (s / total) ** 2) / 2
+                # Each edge stops short of anything it would cut into.
+                edge = [half, half]
+                for e, sgn in enumerate((-1.0, 1.0)):
+                    for bvh in obstacles:
+                        loc, _, _, dist = bvh.ray_cast(p, w * sgn, edge[e])
+                        if loc is not None:
+                            edge[e] = max(0.002, dist - 0.002)
+                verts += [p - w * edge[0], p + w * edge[1]]
+                uvs += [(u0, s / total), (u1, s / total)]
+                normals += [out, out]
+            for j in range(len(rows) - 1):
+                a, b, c, d = base + 2 * j, base + 2 * j + 1, base + 2 * j + 3, base + 2 * j + 2
+                geo = (verts[b] - verts[a]).cross(verts[d] - verts[a])
+                faces.append((a, b, c, d) if geo.dot(normals[a]) > 0 else (a, d, c, b))
+            cards += 1
+
+    # Last, her skin wins: its normals are sound (a closed body), so any card
+    # corner still inside or on it, round an ear or a jaw, goes out along them.
+    # More than once: round an ear, a corner lifted off one fold can land inside the next.
+    lifted = 0
+    for _ in range(3):
+        for i, co in enumerate(verts):
+            hit, fn, _, _ = body_bvh.find_nearest(co, HAIR_SKIN_REACH)
+            if hit is not None and (co - hit).dot(fn) < HAIR_SKIN_GUARD:
+                verts[i] = hit + fn * HAIR_SKIN_GUARD
+                lifted += 1
+
+    mesh = bpy.data.meshes.new(f"helmet.{look}.tresses")
+    mesh.name = f"helmet.{look}.tresses"
+    mesh.from_pydata([tuple(v) for v in verts], [], faces)
+    mesh.update()
+    uv = mesh.uv_layers.new(name="UVMap")
+    for poly in mesh.polygons:
+        poly.use_smooth = True
+        for li in poly.loop_indices:
+            uv.data[li].uv = uvs[mesh.loops[li].vertex_index]
+    mesh.normals_split_custom_set_from_vertices([tuple(n) for n in normals])
+    obj = bpy.data.objects.new(mesh.name, mesh)
+    obj.name = mesh.name
+    bpy.context.scene.collection.objects.link(obj)
+    image, coverage = hair_atlas(rng)
+    mesh.materials.append(hair_material(image, look))
+    hair_weights(obj, body, rig)
+    keep_body_weights(scalp, rig)
+
+    report = {}
+    for piece in (obj, scalp):
+        tris = sum(len(p.vertices) - 2 for p in piece.data.polygons)
+        report[piece.name] = {
+            "source": "body", "bone": "Head", "fit": "grown" if piece is obj else "body_offset",
+            "vertices": len(piece.data.vertices), "triangles": tris,
+            "deform_bones": sorted(g.name for g in piece.vertex_groups),
+        }
+        print(f"fitted {piece.name}: {tris} tris, {len(piece.data.vertices)} verts")
+    report[obj.name].update({"cards": cards, "roots_per_layer": per_layer, "lifted_off_skin": lifted,
+                             "strand_m_mean": round(sum(t for t, _ in lengths) / len(lengths), 3),
+                             "on_skull_m_mean": round(sum(r for _, r in lengths) / len(lengths), 3),
+                             "layers": [list(lr) for lr in HAIR_LAYERS],
+                             "atlas_coverage": round(coverage, 3), "alpha_cutoff": HAIR_CUTOFF})
+    report[scalp.name]["offset_mm"] = HAIR_SCALP_OFFSET * 1000
+    return report
+
+
+def hair_weights(obj, body, rig):
+    """Head-rigid down to the jaw; down her neck, a blend into what the body
+    under the strand does, minus the head (`HAIR_HEAD_RAMP`); at most four."""
+    skin_by_transfer(obj, body, rig, HAIR_BONES)
+    names = {g.index: g.name for g in obj.vertex_groups}
+    for v in obj.data.vertices:
+        got = {names[g.group]: g.weight for g in v.groups if g.weight > 0.0}
+        low = {k: x for k, x in got.items() if k != "Head"}
+        total = sum(low.values())
+        low = {k: x / total for k, x in low.items()} if total > 1e-6 else {"neck_01": 1.0}
+        t = _smooth(*HAIR_HEAD_RAMP, v.co.z)
+        new = {k: x * (1 - t) for k, x in low.items()}
+        new["Head"] = new.get("Head", 0.0) + t
+        set_weights(obj, v, got, new)
+    rebind(obj, rig)
+
+
+def set_weights(obj, v, old, new, most=4):
+    """Replace a vertex's weights by the `most` largest of `new`, normalised."""
+    top = sorted(new.items(), key=lambda kv: -kv[1])[:most]
+    top = [(k, x) for k, x in top if x > 1e-4]
+    s = sum(x for _, x in top)
+    for name_ in old:
+        obj.vertex_groups[name_].remove([v.index])
+    for name_, x in top:
+        obj.vertex_groups[name_].add([v.index], x / s, "REPLACE")
+
+
+def keep_body_weights(obj, rig):
+    """A piece cut from the body keeps the body's weights, at most four per
+    vertex (a split along the hairline blends two vertices' sets); unused groups go."""
+    names = {g.index: g.name for g in obj.vertex_groups}
+    for v in obj.data.vertices:
+        got = {names[g.group]: g.weight for g in v.groups if g.weight > 0.0}
+        if len(got) > 4 or abs(sum(got.values()) - 1.0) > 1e-4:
+            set_weights(obj, v, got, got)
+    used = set()
+    for v in obj.data.vertices:
+        used |= {g.group for g in v.groups if g.weight > 0.0}
+    for name_ in [g.name for g in obj.vertex_groups if g.index not in used]:
+        obj.vertex_groups.remove(obj.vertex_groups[name_])
+    if any(not v.groups for v in obj.data.vertices):
+        raise SystemExit(f"{obj.name}: vertices carry no weight")
+    rebind(obj, rig)
+
+
+# Maren's own head. The pack gives every woman one face; hers is a local TRELLIS
+# decode of a bald bust drawn from her concept (SOURCE.md), scaled crown to chin
+# onto the pack's head and then eased: where her skull stands outside the pack's
+# under her hair it is pushed just inside, so the scalp cap grown from that skull
+# covers it, and under her collar her neck is drawn onto the pack's, whose
+# weights it takes. Both moves are smoothed over the mesh: a dense head laid
+# flat on the pack's coarse faces shades as those faces, lumps and glints.
+FACE_SRC = "maren-head-v1.glb"
+FACE_CROWN_Z, FACE_CHIN_Z = 0.5019, -0.125  # the donor's landmarks, in its own units
+FACE_BACK_Y = 0.265             # back of its skull
+FACE_MID_X = -0.0015
+FACE_INSIDE = 0.002             # under the hair: inside the pack's skull, below the cap's 3 mm
+FACE_PIN_REACH = 0.02           # skull farther than this from the pack's is not pushed toward it
+FACE_THIN = 0.02                # a surface with its own far side this close is an ear, not skull
+FACE_NECK = (1.47, 1.54)        # her neck lies on the pack's below the first height, is her own above the second
+FACE_CUT_Z = 1.45               # and it ends here, inside the collar
+FACE_SMOOTH = (12, 4)           # smoothing passes that keep the skull inside, then passes that only smooth
+FACE_AGREE = 0.8                # normals this close are the same patch of skull
+FACE_FOLD = 0.3                 # a face whose normal agrees with a neighbour's less than this is folded over
+# Her reference was drawn lit: at its own brightness the hideout's fires burn her
+# face out to white. Linear, picked live in the hideout.
+FACE_GAIN = 0.45
+FACE_BONES = ("Head", "neck_01", "spine_03", "clavicle_l", "clavicle_r")
+
+
+def unfold(bm):
+    """Collapse the slivers a decimation leaves lying face-down in a smooth
+    surface: each is one triangle lit from the wrong side, a white fleck on a
+    forehead under the game's hard sun. Returns how many edges went."""
+    gone = 0
+    for _ in range(6):
+        bm.normal_update()
+        edges = set()
+        for f in bm.faces:
+            near = [g for e in f.edges for g in e.link_faces if g is not f]
+            if (near and min(f.normal.dot(g.normal) for g in near) < FACE_FOLD
+                    and f.calc_area() <= min(g.calc_area() for g in near)):
+                edges.add(min(f.edges, key=lambda e: e.calc_length()))
+        if not edges:
+            break
+        gone += len(edges)
+        bmesh.ops.collapse(bm, edges=list(edges), uvs=True)
+        bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.calc_area() < 1e-12], context="FACES")
+    return gone
+
+
+def thin_at(bvh, p, n):
+    """True where a surface has its own far side within `FACE_THIN` behind `p`."""
+    return bvh.ray_cast(p - n * 0.0005, -n, FACE_THIN)[0] is not None
+
+
+def build_face(rig, body, look="maren"):
+    """`helmet.<look>.face`: the generated head on the pack's skull and neck."""
+    objs = import_gltf(FACE_SRC, root=GEAR_SRC)
+    meshes = [o for o in objs if o.type == "MESH" and o.data.materials]
+    if len(meshes) != 1:
+        raise SystemExit(f"{FACE_SRC}: expected one mesh, got {len(meshes)}")
+    face = meshes[0]
+    for other in objs:
+        if other is not face:
+            drop(other)
+    bake_transform(face)
+    me = face.data
+    if "custom_normal" in me.attributes:
+        me.attributes.remove(me.attributes["custom_normal"])
+    grows_at, head = scalp_region(body, bpy.data.objects[f"base.{BODY}.hair"])
+    scale = head["dims"].z / (FACE_CROWN_Z - FACE_CHIN_Z)
+    seat = Vector((head["centre"].x, head["hi"].y, head["hi"].z))
+    me.transform(Matrix.Translation(seat) @ Matrix.Scale(scale, 4)
+                 @ Matrix.Translation(-Vector((FACE_MID_X, FACE_BACK_Y, FACE_CROWN_Z))))
+
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    # The importer splits a vertex along every UV seam: welded, both halves move as one.
+    bmesh.ops.remove_doubles(bm, verts=list(bm.verts), dist=1e-6)
+    folds = unfold(bm)
+    bm.normal_update()
+    bm.verts.index_update()
+    bm.verts.ensure_lookup_table()
+    own = mathutils.bvhtree.BVHTree.FromBMesh(bm)
+    stock = bvh_of(body, body.matrix_world)
+    # Skull meets skull: her ears are not drawn onto the pack's head, nor her skull onto its ears.
+    def skull(hit, n):
+        return grows_at(hit, n) and not thin_at(stock, hit, n)
+
+    asked, need, thin = {}, {}, set()
+    for v in bm.verts:
+        hit, n, _, dist = stock.find_nearest(v.co)
+        if thin_at(own, v.co, v.normal):
+            thin.add(v.index)
+            continue
+        down = 1.0 - _smooth(*FACE_NECK, v.co.z)
+        if down > 0.0:
+            asked[v.index] = (hit - v.co) * down
+        elif dist <= FACE_PIN_REACH and v.normal.dot(n) > 0.5 and skull(hit, n):
+            out = (v.co - hit).dot(n) + FACE_INSIDE
+            if out > 0.0:
+                need[v.index] = (n.copy(), out)
+                asked[v.index] = n * -out
+    if not asked:
+        raise SystemExit(f"{FACE_SRC}: no vertex found the pack's skull or neck")
+    ring = {v.index: [e.other_vert(v).index for e in v.link_edges] for v in bm.verts}
+    move = {i: asked.get(i, Vector()) for i in ring}
+    for step in range(sum(FACE_SMOOTH)):
+        move = {i: sum((move[k] for k in near), move[i].copy()) / (len(near) + 1) for i, near in ring.items()}
+        if step < FACE_SMOOTH[0]:
+            for i, (n, out) in need.items():
+                short = out + move[i].dot(n)
+                if short > 0.0:
+                    move[i] -= n * short
+    for v in bm.verts:
+        v.co += move[v.index]
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if all(v.co.z < FACE_CUT_Z for v in f.verts)],
+                     context="FACES")
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    folds += unfold(bm)
+    bm.normal_update()
+    # What the cap has to cover: how far her skull still stands outside the pack's
+    # where hair grows. Facing the same way only: in the crease behind the pack's
+    # ear the nearest point is the ear's root, not the skull under hers.
+    proud, where = 0.0, None
+    for v in bm.verts:
+        hit, n, _, _ = stock.find_nearest(v.co)
+        if (v.index not in thin and v.normal.dot(n) > FACE_AGREE and skull(hit, n)
+                and (v.co - hit).dot(n) > proud):
+            proud, where = (v.co - hit).dot(n), v.co.copy()
+    if proud >= HAIR_SCALP_OFFSET:
+        raise SystemExit(f"{FACE_SRC}: skull stands {proud * 1000:.1f} mm outside the pack's at "
+                         f"{[round(c, 3) for c in where]}, through the scalp cap")
+    deepest = max(m.length for m in move.values())
+    counts = (len(asked) - len(need), len(need), len(thin))
+    bm.to_mesh(me)
+    bm.free()
+    for poly in me.polygons:
+        poly.use_smooth = True
+    face.name = me.name = f"helmet.{look}.face"
+    mat = me.materials[0]
+    mat.name = f"{look}_face"
+    mat.use_backface_culling = True
+    tone(face, 1.0, FACE_GAIN ** (1 / 2.2))
+    skin_by_transfer(face, body, rig, FACE_BONES)
+    keep_body_weights(face, rig)
+    tris = sum(len(p.vertices) - 2 for p in me.polygons)
+    print(f"fitted {face.name}: {tris} tris, scale {scale:.4f}, neck {counts[0]}, skull pushed in {counts[1]}, "
+          f"thin {counts[2]}, deepest move {deepest * 1000:.1f} mm, skull at most {proud * 1000:.2f} mm outside the pack's, "
+          f"{folds} folds collapsed")
+    return {face.name: {
+        "source": FACE_SRC, "bone": "Head", "fit": "skull_warp",
+        "vertices": len(me.vertices), "triangles": tris,
+        "deform_bones": sorted(g.name for g in face.vertex_groups),
+        "scale": round(scale, 5), "neck": counts[0], "skull_pushed_in": counts[1], "thin": counts[2],
+        "deepest_move_mm": round(deepest * 1000, 2), "skull_outside_pack_mm": round(proud * 1000, 2),
+        "folds_collapsed": folds,
+    }}
+
+
+def bare_ears(scalp, body):
+    """Cut the cap off the pack's ears: under her own face they are not drawn,
+    and the cap over them stood out above hers as a ledge."""
+    stock = bvh_of(body, body.matrix_world)
+    bm = bmesh.new()
+    bm.from_mesh(scalp.data)
+    bm.normal_update()
+    ears = [f for f in bm.faces
+            if thin_at(stock, f.calc_center_median() - f.normal * HAIR_SCALP_OFFSET, f.normal)]
+    bmesh.ops.delete(bm, geom=ears, context="FACES")
+    # A rim the ray slipped past is left as shards: the cap is its one largest piece.
+    left, pieces = set(bm.faces), []
+    while left:
+        piece, edge = set(), [left.pop()]
+        while edge:
+            f = edge.pop()
+            piece.add(f)
+            for g in (g for v in f.verts for g in v.link_faces if g in left):
+                left.discard(g)
+                edge.append(g)
+        pieces.append(piece)
+    shards = [f for piece in sorted(pieces, key=len)[:-1] for f in piece]
+    bmesh.ops.delete(bm, geom=shards, context="FACES")
+    ears += shards
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    bm.to_mesh(scalp.data)
+    bm.free()
+    scalp.data.update()
+    print(f"  {scalp.name}: {len(ears)} faces off the pack's ears")
+    return {"ear_faces_cut": len(ears),
+            "triangles": sum(len(p.vertices) - 2 for p in scalp.data.polygons),
+            "vertices": len(scalp.data.vertices)}
+
+
+# Maren's capelet over her shoulders. Its tiers lie on the deltoid closer than
+# the lace stands off the skin, and nearest-surface weights ramp clavicle to
+# upper arm across six centimetres, so the drawn arm and its lace came through
+# the capelet in blotches and the tiers folded where the arm drops from T-pose.
+MAREN_SHOULDER_AIR = 0.004      # capelet clearance over the lace, round each upper arm
+MAREN_SHOULDER_BAND = 0.01      # cell length along the upper arm
+MAREN_SHOULDER_SECTORS = 24     # cells round it
+MAREN_SHOULDER_RINGS = 3        # a push fades out over this many edge rings
+MAREN_SHOULDER_REACH = 0.12     # along the upper arm from the shoulder joint
+MAREN_SHOULDER_FROM = (1.33, 0.10)  # lowest height, least |x| a capelet vertex is cleared at
+MAREN_SHOULDER_SIGMA = 0.03     # weight blur radius over the shoulders
+MAREN_SHOULDER_BLUR = ((1.33, 1.38), (0.04, 0.07))  # blur fades in over these heights, |x|
+
+
+def clear_shoulders(mesh, rig, under):
+    """Stand a gown off what is drawn under it round each upper arm.
+
+    Per cell along and round the upper arm, every gown vertex nearer the axis
+    than the farthest point of `under` in that cell (dilated one cell) plus
+    `MAREN_SHOULDER_AIR` moves out along its own radial; the push fades over
+    `MAREN_SHOULDER_RINGS` edge rings, as `enclose_legs` does for the boots.
+    """
+    M = mesh.matrix_world
+    inv = M.inverted()
+    bm = bmesh.new()
+    bm.from_mesh(mesh.data)
+    bm.verts.ensure_lookup_table()
+    world = [M @ v.co for v in bm.verts]
+    push, out = [0.0] * len(world), [None] * len(world)
+    z0, x0 = MAREN_SHOULDER_FROM
+    band, sectors = MAREN_SHOULDER_BAND, MAREN_SHOULDER_SECTORS
+    for side, sx in (("l", 1.0), ("r", -1.0)):
+        bone = rig.data.bones[f"upperarm_{side}"]
+        head = rig.matrix_world @ bone.head_local
+        axis = (rig.matrix_world @ bone.tail_local - head).normalized()
+        fwd = axis.cross(Vector((0.0, 0.0, 1.0))).normalized()
+        up = fwd.cross(axis).normalized()
+
+        def frame(p):
+            t = (p - head).dot(axis)
+            return t, p - head - axis * max(0.0, t)
+
+        def cell(t, d):
+            a = math.atan2(d.dot(up), d.dot(fwd)) % (2 * math.pi)
+            return int(math.floor(t / band)), int(a / (2 * math.pi) * sectors) % sectors
+
+        reach = {}
+        for o in under:
+            for v in o.data.vertices:
+                p = o.matrix_world @ v.co
+                if p.x * sx < x0 - 0.02 or p.z < z0 - 0.02:
+                    continue
+                t, d = frame(p)
+                if t <= MAREN_SHOULDER_REACH + band * 3:
+                    k = cell(t, d)
+                    reach[k] = max(reach.get(k, 0.0), d.length)
+        grown = {}
+        for (k, s), r in reach.items():
+            for dk in (-1, 0, 1):
+                for ds in (-1, 0, 1):
+                    key = (k + dk, (s + ds) % sectors)
+                    grown[key] = max(grown.get(key, 0.0), r)
+        for i, p in enumerate(world):
+            if p.x * sx < x0 or p.z < z0:
+                continue
+            t, d = frame(p)
+            need = grown.get(cell(t, d))
+            if t > MAREN_SHOULDER_REACH or d.length < 1e-6 or need is None:
+                continue
+            out[i] = d.normalized()
+            push[i] = max(0.0, need + MAREN_SHOULDER_AIR - d.length)
+    inside = sum(1 for d in push if d > 0.0)
+    for _ in range(MAREN_SHOULDER_RINGS):
+        spread = list(push)
+        for v in bm.verts:
+            if out[v.index] is None:
+                continue
+            ring = max((push[e.other_vert(v).index] for e in v.link_edges), default=0.0)
+            spread[v.index] = max(push[v.index], ring * 0.5)
+        push = spread
+    moved, deepest = 0, 0.0
+    for i, v in enumerate(bm.verts):
+        if push[i] > 0.0 and out[i] is not None:
+            v.co = inv @ (world[i] + out[i] * push[i])
+            moved += 1
+            deepest = max(deepest, push[i])
+    bm.to_mesh(mesh.data)
+    bm.free()
+    mesh.data.update()
+    return {"shoulders_cleared_vertices": moved, "shoulders_inside_vertices": inside,
+            "shoulders_clear_max_move_mm": round(deepest * 1000, 1)}
+
+
+def blur_shoulder_weights(mesh, most=4):
+    """Blur a gown's bone weights in space over the shoulders, side by side.
+
+    Neighbours by distance, not by edge: the capelet's tiers are separate
+    shells, and a tier weighted off its own nearest skin crosses the tier over
+    it when the arm drops. Each side reads its own side only, or the spine
+    hands one clavicle to the other shoulder.
+    """
+    sigma = MAREN_SHOULDER_SIGMA
+    (z0, z1), (x0, x1) = MAREN_SHOULDER_BLUR
+
+    def ramp(v, a, b):
+        t = max(0.0, min(1.0, (v - a) / (b - a)))
+        return t * t * (3.0 - 2.0 * t)
+
+    M = mesh.matrix_world
+    verts = mesh.data.vertices
+    world = [M @ v.co for v in verts]
+    names = {g.index: g.name for g in mesh.vertex_groups}
+    old = [{names[g.group]: g.weight for g in v.groups if g.weight > 0.0} for v in verts]
+    tree = mathutils.kdtree.KDTree(len(verts))
+    for i, p in enumerate(world):
+        tree.insert(p, i)
+    tree.balance()
+    blurred = 0
+    for v in verts:
+        p = world[v.index]
+        m = ramp(p.z, z0, z1) * ramp(abs(p.x), x0, x1)
+        if m <= 0.0:
+            continue
+        acc, total = {}, 0.0
+        for _co, j, d in tree.find_range(p, 2.5 * sigma):
+            if world[j].x * p.x <= 0.0:
+                continue
+            g = math.exp(-0.5 * (d / sigma) ** 2)
+            total += g
+            for b, w in old[j].items():
+                acc[b] = acc.get(b, 0.0) + g * w
+        new = {b: (1.0 - m) * old[v.index].get(b, 0.0) + m * acc.get(b, 0.0) / total
+               for b in set(old[v.index]) | set(acc)}
+        set_weights(mesh, v, old[v.index], new, most)
+        blurred += 1
+    return {"shoulders_blurred_vertices": blurred, "shoulders_blur_sigma_mm": sigma * 1000}
+
+
 def main():
     clear_scene()
     spec = next(s for s in LOOKS if s["look"] == BODY)
@@ -5083,6 +6495,12 @@ def main():
     rig = bpy.data.objects[RIG]
     body = bpy.data.objects[f"base.{BODY}.body"]
     fitted = build_rigid_gear(rig, body)
+    # Maren wears the Stalker knee boots under her skirt (`CARTOGRAPHER_LOOKS`,
+    # render/meshes.ts): what is left of it round the front split has to clear both.
+    gown = bpy.data.objects.get("chest.maren.gown")
+    if gown is not None:
+        legs = [bpy.data.objects[f"boots.stalker.boot_{s}"] for s in "lr"]
+        fitted["chest.maren.gown"].update(enclose_legs(gown, body, legs, rig))
     # Every helmet hides the hair; the ember cowl is open enough to show it, so
     # a copy tucked inside the cowl ships as a part of that helmet look. It takes
     # the cowl's weights, or Head-rigid tips swing out through the nape while
@@ -5124,9 +6542,31 @@ def main():
                     reach=SOFT_BACKING_REACH,
                     keep=lambda co, x=arm_edge: abs(co.x) <= x))
             continue
+        # Maren's gown welds closed, so it has no tears to plug: taken out to the
+        # nearest cloth where her bust stands past the decode, the backing came
+        # through it as two black cups. Matte cloth.
         fitted.update(build_gorget(rig, body, worn, f"chest.{look}.backing", "torso",
                                    fill=shell, shell=shell, metallic=metallic,
-                                   near=BACKING_NEAR, reach=SOFT_BACKING_REACH))
+                                   near=None if look == "maren" else BACKING_NEAR,
+                                   reach=SOFT_BACKING_REACH,
+                                   cloth=GOWN_BACKING if look == "maren" else None))
+        # Her dress is sleeveless and parted in front: her arms and legs stay
+        # drawn (`COVERED_BY_LOOK`, render/rig.ts), under lace, not backing.
+        if look == "maren":
+            fitted.update(build_lace(rig, body, look))
+            # Before the hair, which hangs on the gown as it ends up.
+            gown = bpy.data.objects[shell]
+            fitted[shell].update(clear_shoulders(gown, rig, [bpy.data.objects[f"chest.{look}.lace"]]))
+            fitted[shell].update(blur_shoulder_weights(gown))
+            # Her own head, before the hair that has to clear its ears.
+            fitted.update(build_face(rig, body, look))
+            # Her hair hangs on the fitted gown and its collar plate.
+            fitted.update(build_hair(rig, body, [bpy.data.objects[shell],
+                                                 bpy.data.objects[f"chest.{look}.gorget"],
+                                                 bpy.data.objects[f"helmet.{look}.face"]], look))
+            fitted[f"helmet.{look}.scalp"].update(bare_ears(bpy.data.objects[f"helmet.{look}.scalp"], body))
+            print(f"dulled {dull(look, MAREN_SPECULAR)}")
+            continue
         # A decoded coat is holed at the shoulder caps and the crotch, and the
         # skin under a hole is drawn; the backing stands under those too.
         # An arm is backed everywhere inboard of the sleeve cut, hole or not,
@@ -5146,8 +6586,7 @@ def main():
                                        fill=shell, shell=shell, metallic=metallic,
                                        near=None if keep else BACKING_NEAR,
                                        reach=SOFT_BACKING_REACH, keep=keep,
-                                       ride=region.startswith("leg"),
-                                       cloth=GOWN_BACKING if look == "maren" and region.startswith("leg") else None))
+                                       ride=region.startswith("leg")))
     # The trousers are parked. They were the body's own legs pushed four
     # millimetres out and called leather, standing in for leg armour the chest
     # slot did not have; the harness carries real cuisses and greaves now, so
