@@ -5489,6 +5489,9 @@ HAIR_BEHIND_L = ((1.67, -0.06), (1.60, 0.005), (1.535, 0.005), (1.475, 0.10))
 HAIR_NECK_HUG = (0.065, math.radians(0), math.radians(30), 1.51, 1.535, 1.57, 1.60)
 HAIR_SHELF_BACK = 0.6
 HAIR_LOCK_BACK = 0.03           # a strand leaving the skull on her right forward of this joins the lock
+HAIR_FRINGE = 0.7               # how far the hair over her forehead is combed sideways instead of back
+HAIR_FRAME_EVERY = 2            # on her left, one strand in this many frames her face instead
+HAIR_FRAME_TIPS = (1.555, 1.62)  # and ends between her jaw and her cheekbone
 HAIR_SIDE_EASE = (0.07, 0.10)   # past the shoulder line the side limit closes in from this much wider over this drop
 HAIR_SIDE_MAX = 0.118          # below the shoulder, inboard of the upper arm hanging in the idle
 HAIR_SHOULDER_Z = 1.44
@@ -5760,10 +5763,14 @@ def hair_comb(p, head):
     top = _smooth(1.665, 1.73, p.z)
     back = _smooth(head["centre"].y, head["centre"].y + 0.07, p.y)
     front = 1.0 - _smooth(head["centre"].y - 0.07, head["centre"].y, p.y)
-    side = s * (1.6 * top * (1 - back) + 0.25)
+    # Over her forehead it falls sideways off the part and down round her face,
+    # not straight back: combed back, the hairline is a bare rectangle.
+    fringe = HAIR_FRINGE * front * top
+    side = s * (1.6 * top * (1 - back) + 0.25 + 0.8 * fringe)
     # Her left is tucked behind the ear, so it sweeps further back on the way down.
-    return Vector((side, 0.3 + 0.8 * back + 0.9 * front * top + (0.7 if s > 0 else 0.0),
-                   -(1.2 * (1 - top) + 0.4 * back)))
+    away = 0.3 + 0.8 * back + 0.9 * front * top + (0.7 if s > 0 else 0.0)
+    return Vector((side, away * (1 - fringe) - 0.2 * fringe,
+                   -(1.2 * (1 - top) + 0.4 * back + 0.6 * fringe)))
 
 
 def grow_strand(root, normal, lift, gap, rng, head, skin, shells):
@@ -5861,8 +5868,15 @@ def grow_strand(root, normal, lift, gap, rng, head, skin, shells):
                 pts.append(p)
                 continue
             release = len(pts) - 1
-            lock = p.x < 0.0 and p.y < head["centre"].y + HAIR_LOCK_BACK
+            fore = p.y < head["centre"].y + HAIR_LOCK_BACK
+            # On her left the same strands frame her face: every other one falls in
+            # front of the ear and ends at the jaw, short of the shoulder kept bare.
+            frame = fore and p.x > 0.0 and int(root.z * 2e3) % HAIR_FRAME_EVERY == 0
+            lock = fore and (p.x < 0.0 or frame)
             tip = rng.uniform(*(HAIR_LOCK_TIPS if lock else HAIR_TIPS)) - HAIR_HEM_V * behind
+            if frame:
+                tip = HAIR_FRAME_TIPS[0] + (tip - HAIR_LOCK_TIPS[0]) / (HAIR_LOCK_TIPS[1] - HAIR_LOCK_TIPS[0]) * (
+                    HAIR_FRAME_TIPS[1] - HAIR_FRAME_TIPS[0])
         # Which side of the shoulder it falls: decided in the first few
         # centimetres off the skull, then gravity alone.
         near = (len(pts) - 1 - release) * HAIR_STEP < HAIR_SIDE_REACH
