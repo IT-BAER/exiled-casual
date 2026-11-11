@@ -661,7 +661,7 @@ describe("GameView", () => {
       { k: "device", action: "select" },
       { k: "device", action: "activate" },
       { k: "atlas", node: node.id, tier: atlasNodeTier(atlasGraph(0), node.id), stone: 1 },
-      { k: "device", action: "close" },
+      { k: "device", action: "close", secs: expect.any(Number) },
     ]);
     track.mockRestore();
   });
