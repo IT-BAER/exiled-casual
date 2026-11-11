@@ -97,7 +97,8 @@ export type TelemetryEvent =
   | { k: "error"; t: number; src: ErrorSource; msg: string; stack?: string; url?: string }
   /** The page went away: where it was, and whether a loading plate was up. Older clients send it bare. */
   | { k: "end"; t: number; view?: View; area?: Area; loading?: boolean }
-  | { k: "device"; t: number; action: DeviceAction }
+  /** `secs` on a close is how long the panel stayed open (whole seconds). */
+  | { k: "device"; t: number; action: DeviceAction; secs?: number }
   /** The graphics preset in force at boot, or after the auto guard stepped it down (`stepped`). `auto` is the auto-preset toggle. */
   | { k: "gfx"; t: number; preset: (typeof GFX_PRESETS)[number]; auto: boolean; stepped?: boolean }
   /** A map opened from the Atlas: which node, its tier, and the tier of the stone spent on it. */
@@ -253,7 +254,10 @@ function parseEvent(e: unknown): TelemetryEvent | null {
     }
     case "device": {
       const action = oneOf(e.action, DEVICE_ACTIONS);
-      return action ? { k: "device", t, action } : null;
+      if (!action) return null;
+      const out: Obj = { k: "device", t, action };
+      opt(out, "secs", int(e.secs, 0, 86_400));
+      return out as TelemetryEvent;
     }
     case "gfx": {
       const preset = oneOf(e.preset, GFX_PRESETS), auto = bool(e.auto);

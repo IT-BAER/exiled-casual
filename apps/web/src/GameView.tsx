@@ -394,8 +394,14 @@ export function GameView({
   }, [panelOpen]);
   // The device's panel state, not the ways it changes: there are six ways to close it.
   const panelWas = useRef(false);
+  const panelOpenedAt = useRef(0);
   useEffect(() => {
-    if (panelOpen !== panelWas.current) telemetry.track({ k: "device", action: panelOpen ? "open" : "close" });
+    if (panelOpen !== panelWas.current) {
+      if (panelOpen) panelOpenedAt.current = performance.now();
+      telemetry.track(panelOpen
+        ? { k: "device", action: "open" }
+        : { k: "device", action: "close", secs: Math.round((performance.now() - panelOpenedAt.current) / 1000) });
+    }
     panelWas.current = panelOpen;
   }, [panelOpen]);
   // Clear the cell reference once the item moves away (consumed, moved, or picked up).

@@ -84,6 +84,7 @@ describe("parseBatch", () => {
       { k: "beat", t: 17, view: "game", active: 30, area: "map", kills: 14, explored: 37 },
       { k: "waystone", t: 18, tier: 2 },
       { k: "rareKill", t: 19, tier: 1, biome: "coast", hard: true },
+      { k: "device", t: 20, action: "close", secs: 42 },
       { k: "gfx", t: 21, preset: "low", auto: true },
       { k: "gfx", t: 22, preset: "custom", auto: false },
       { k: "gfx", t: 23, preset: "low", auto: true, stepped: true },
@@ -114,6 +115,7 @@ describe("parseBatch", () => {
       { k: "loadPhase", t: 7, phase: "models", ms: -1 },
       { k: "roster", t: 8, characters: 2, oldestAge: "ancient" },
       { k: "end", t: 9, view: "lobby", loading: "yes" },
+      { k: "device", t: 10, action: "close", secs: -3 },
       { k: "gfx", t: 11, preset: "ludicrous", auto: true },
       { k: "gfx", t: 12, preset: "low" },
     ]));
@@ -123,6 +125,7 @@ describe("parseBatch", () => {
       { k: "createFail", t: 4, reason: "short" },
       { k: "roster", t: 8, characters: 2 },
       { k: "end", t: 9 },
+      { k: "device", t: 10, action: "close" },
     ]);
   });
 
