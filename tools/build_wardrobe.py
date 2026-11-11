@@ -5448,15 +5448,18 @@ HAIR_PART_X = 0.022             # the part, on her left of the midline (+X)
 HAIR_LAYERS = (
     # lift over the skull, clearance off body and gown once hanging,
     # root spacing, card width at the root
-    (0.008, 0.007, 0.015, 0.030),
-    (0.016, 0.011, 0.019, 0.026),
-    (0.026, 0.015, 0.026, 0.022),
+    (0.006, 0.007, 0.015, 0.030),
+    (0.010, 0.011, 0.019, 0.026),
+    (0.015, 0.015, 0.026, 0.022),
 )
 HAIR_SCALP_OFFSET = 0.003
 HAIR_RIM_SPLITS = 2             # times the faces astride the hairline are split before the cut
-HAIR_FACE = (0.10, 0.34)        # her face: chin, of head height; half-width, of head width
+HAIR_CHIN = 0.10                # her chin, of head height
 HAIR_BUN_REACH = 0.03           # a scalp vertex grows hair where the pack's buns lie over it
-HAIR_FRONT = (0.85, 0.79)       # front hairline, mid-forehead and temple, of head height
+# Front hairline: mid-forehead, of head height; where it comes down to the
+# sideburn, of head width; how square the corner between. The corner sits over
+# the brow's end: wider or rounder, her temples are bare and the forehead high.
+HAIR_FRONT = (0.85, 0.34, 4.0)
 HAIR_SIDEBURN_Z = 1.645         # in front of the ear the buns' side lock runs to the jaw
 HAIR_STEP = 0.006               # guide strand growth
 HAIR_SEGMENT = 0.02             # card segment along the strand: six or more to a wave
@@ -5469,7 +5472,11 @@ HAIR_SIDE_REACH = 0.08
 HAIR_SMOOTH_PASSES = 4
 HAIR_ROOT_LIFT = 0.004          # where a strand leaves the scalp, just over the cap
 HAIR_ROOT_RAMP = 0.05           # and how far along it reaches its layer's lift
-HAIR_RIM = (0.004, 0.006, 0.016)  # the front hairline: cap held back, root spacing along it, card width
+HAIR_ROOT_TAPER = (0.4, 0.04)   # a card's width at its root, and how far along it is full: a square end is a step in the hairline
+HAIR_RIM = (0.004, 0.006, 0.016, 0.0015)  # the front hairline: cap held back, root spacing along it, card width, root lift
+# At the front hairline the layers lie this close to flat, and stand at their
+# lift from this far behind it: stacked to the edge they are a visor over her brow.
+HAIR_EDGE = (0.25, 0.06)
 HAIR_HEM_V = 0.03               # the middle of her back hangs this much longer
 HAIR_REST_REACH = 0.04          # a card within this of a surface lies along it
 HAIR_UNDER = 0.9                # the darker half of the atlas, for the under layer
@@ -5495,7 +5502,7 @@ HAIR_FRAME_TIPS = (1.555, 1.62)  # and ends between her jaw and her cheekbone
 HAIR_SIDE_EASE = (0.07, 0.10)   # past the shoulder line the side limit closes in from this much wider over this drop
 HAIR_SIDE_MAX = 0.118          # below the shoulder, inboard of the upper arm hanging in the idle
 HAIR_SHOULDER_Z = 1.44
-HAIR_WAVE = (0.018, 0.13, 0.18)  # amplitude, wavelength range of the hanging length
+HAIR_WAVE = (0.026, 0.13, 0.18)  # amplitude, wavelength range of the hanging length
 HAIR_WAVE_GROW = 0.18           # hanging length over which a wave reaches its amplitude
 HAIR_WAVE_OUT = 0.5             # share of the amplitude that also stands the crest off her
 HAIR_LOCKS = 16                 # strands round the head that wave as one lock
@@ -5539,22 +5546,33 @@ def dull(look, factor):
     return sorted(m.name for m in mats)
 
 
-def bvh_except(body, regions):
-    """A world BVH over the body without the faces touching `regions`."""
+def bvh_except(body, regions, head=None):
+    """A world BVH over the body without the faces touching `regions`. With
+    `head`, a mesh drawn in place of the body's own head and neck, those go
+    too and it stands in for them."""
     bm = bmesh.new()
     bm.from_mesh(body.data)
     cores = region_cores(body, bm)
     bm.free()
     drop = set().union(*(cores[r] for r in regions))
+    # The head is the remainder no region claims (`split_body_regions`).
+    drawn = None if head is None else set().union(*(c for r, c in cores.items() if r != "neck"))
     M = body.matrix_world
     verts = [M @ v.co for v in body.data.vertices]
     tris = []
     for poly in body.data.polygons:
         idx = list(poly.vertices)
-        if any(i in drop for i in idx):
+        if any(i in drop for i in idx) or (drawn is not None and not any(i in drawn for i in idx)):
             continue
         for k in range(1, len(idx) - 1):
             tris.append((idx[0], idx[k], idx[k + 1]))
+    if head is not None:
+        base = len(verts)
+        verts += [head.matrix_world @ v.co for v in head.data.vertices]
+        for poly in head.data.polygons:
+            idx = list(poly.vertices)
+            for k in range(1, len(idx) - 1):
+                tris.append((base + idx[0], base + idx[k], base + idx[k + 1]))
     return mathutils.bvhtree.BVHTree.FromPolygons(verts, tris)
 
 
@@ -5651,12 +5669,13 @@ def scalp_region(body, buns):
         if sum(g.weight for g in v.groups if g.group == gi) >= 0.5:
             head[v.index] = (M @ v.co, (N @ v.normal).normalized())
     lo, hi, dims, c = bbox([p for p, _ in head.values()])
-    half = dims.x * HAIR_FACE[1]
+    half = dims.x * HAIR_FRONT[1]
+    top = lo.z + dims.z * HAIR_FRONT[0]
     bvh = bvh_of(buns, buns.matrix_world)
 
     def hairline(x):
-        t = min(1.0, abs(x - c.x) / half) ** 2
-        return lo.z + dims.z * (HAIR_FRONT[0] + (HAIR_FRONT[1] - HAIR_FRONT[0]) * t)
+        t = min(1.0, abs(x - c.x) / half) ** HAIR_FRONT[2]
+        return HAIR_SIDEBURN_Z + (top - HAIR_SIDEBURN_Z) * (1.0 - t) ** (1 / HAIR_FRONT[2])
 
     def grows_at(p, n, back=0.0):
         front = p.y < c.y
@@ -5668,13 +5687,14 @@ def scalp_region(body, buns):
 
     centre = Vector((c.x, c.y, lo.z + 0.55 * dims.z))
     return grows_at, {"lo": lo, "hi": hi, "dims": dims, "centre": centre, "half": half,
-                      "chin": lo.z + dims.z * HAIR_FACE[0], "hairline": hairline}
+                      "chin": lo.z + dims.z * HAIR_CHIN, "hairline": hairline}
 
 
-def build_scalp(body, grows_at, look):
-    """The opaque cap: her own scalp, pushed off along the normals, on the
-    body's own weights. Welded first: the head is split down its UV seams,
-    and two halves pushed apart leave a crack of skin along the part."""
+def build_scalp(body, grows_at, look, skull):
+    """The opaque cap: the pack's scalp laid on `skull`, the head she is drawn
+    with, and stood off it, on the body's own weights. Welded first: the head
+    is split down its UV seams, and two halves pushed apart leave a crack of
+    skin along the part."""
     obj = body.copy()
     obj.data = body.data.copy()
     obj.name = obj.data.name = f"helmet.{look}.scalp"
@@ -5702,10 +5722,13 @@ def build_scalp(body, grows_at, look):
         bmesh.ops.subdivide_edges(bm, edges=list(rim), cuts=1, use_grid_fill=True)
     bm.normal_update()
     keep = {f for f in bm.faces if grows_at(f.calc_center_median(), f.normal, HAIR_RIM[0])}
-    for v in {v for f in keep for v in f.verts}:
-        v.co += v.normal * HAIR_SCALP_OFFSET
     bmesh.ops.delete(bm, geom=[f for f in bm.faces if f not in keep], context="FACES")
     bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
+    # Her head is smaller than the pack's at the brow and temples: a cap left on
+    # the pack's stands out over her forehead as a helmet's rim.
+    for v in bm.verts:
+        hit, n, _, _ = skull.find_nearest(v.co)
+        v.co = hit + n * HAIR_SCALP_OFFSET
     bm.to_mesh(obj.data)
     bm.free()
     for layer in list(obj.data.uv_layers):
@@ -5773,9 +5796,10 @@ def hair_comb(p, head):
                    -(1.2 * (1 - top) + 0.4 * back + 0.6 * fringe)))
 
 
-def grow_strand(root, normal, lift, gap, rng, head, skin, shells):
+def grow_strand(root, normal, lift, gap, start, rng, head, skin, shells):
     """One guide strand as a polyline, and the index where it leaves the skull.
-    It joins the lock when it leaves the skull on her right, forward of her ear."""
+    It leaves its root `start` over the skin. It joins the lock when it leaves
+    the skull on her right, forward of her ear."""
 
     def tangent(vec, n):
         t = vec - n * vec.dot(n)
@@ -5850,7 +5874,7 @@ def grow_strand(root, normal, lift, gap, rng, head, skin, shells):
     # Longest down the middle of her back, so the ends make a soft V.
     behind = _smooth(0.0, 0.06, root.y - head["centre"].y) * max(0.0, 1 - abs(root.x) / 0.07)
     lock = tip = None
-    p = root + normal * HAIR_ROOT_LIFT
+    p = root + normal * start
     d = tangent(hair_comb(p, head), normal)
     pts = [p]
     release = None
@@ -5861,7 +5885,8 @@ def grow_strand(root, normal, lift, gap, rng, head, skin, shells):
             if n.z >= HAIR_RELEASE_NZ:
                 # It rises off the scalp to its layer, or the hairline is a ledge.
                 rise = _smooth(0.0, HAIR_ROOT_RAMP, len(pts) * HAIR_STEP)
-                q = face(hit + n * (HAIR_ROOT_LIFT + (lift - HAIR_ROOT_LIFT) * rise))
+                rise *= HAIR_EDGE[0] + (1 - HAIR_EDGE[0]) * _smooth(0.0, HAIR_EDGE[1], head["front"].find(hit)[2])
+                q = face(hit + n * (start + (lift - start) * rise))
                 step = q - p
                 d = (step.normalized() * 0.65 + tangent(hair_comb(q, head), n) * 0.35).normalized()
                 p = q
@@ -5932,16 +5957,18 @@ def neck_mid_y(body):
     return (min(ys) + max(ys)) / 2
 
 
-def build_hair(rig, body, shells, look="maren"):
-    """Strand cards and a scalp cap, `helmet.<look>.tresses` and `.scalp`."""
+def build_hair(rig, body, face, shells, look="maren"):
+    """Strand cards and a scalp cap, `helmet.<look>.tresses` and `.scalp`, grown
+    on `face`, the head she is drawn with: the pack's own is hidden under it."""
     rng = np.random.default_rng(HAIR_SEED)
     buns = bpy.data.objects[f"base.{BODY}.hair"]
     grows_at, head = scalp_region(body, buns)
     head["neck_y"] = neck_mid_y(body)
-    scalp = build_scalp(body, grows_at, look)
+    skull = bvh_of(face, face.matrix_world)
+    scalp = build_scalp(body, grows_at, look, skull)
     # Without her arms: they stand out level in the bind pose and hang beside
     # her in every clip, so hair laid over them would float off her shoulders.
-    skin = bvh_except(body, HAIR_FREE_REGIONS)
+    skin = bvh_except(body, HAIR_FREE_REGIONS, face)
     shell_bvhs = [bvh_of(s, s.matrix_world) for s in shells]
     obstacles = (skin, *shell_bvhs)
     centre = head["centre"]
@@ -5985,20 +6012,27 @@ def build_hair(rig, body, shells, look="maren"):
     lengths = []
     # The cap stops short of the front hairline and a close row of narrow cards
     # is rooted on the line: their ragged roots are the hairline, not a mesh edge.
-    body_bvh = bvh_of(body, body.matrix_world)
+    body_bvh = bvh_except(body, (), face)
     rim = []
     x = -head["half"]
     while x < head["half"]:
         z = head["hairline"](x) + rng.uniform(0.0, 0.004)
-        hit, n, _, _ = body_bvh.ray_cast(Vector((x, centre.y - 0.3, z)), Vector((0.0, 1.0, 0.0)))
+        hit, n, _, _ = skull.ray_cast(Vector((x, centre.y - 0.3, z)), Vector((0.0, 1.0, 0.0)))
         if hit is not None:
             rim.append((hit, n))
-        x += HAIR_RIM[1] * rng.uniform(0.7, 1.3)
+        # Spaced along the line, which runs near upright down the temple.
+        slope = (head["hairline"](x + 1e-4) - head["hairline"](x)) / 1e-4
+        x += max(2e-4, HAIR_RIM[1] * rng.uniform(0.7, 1.3) / math.hypot(1.0, slope))
+    head["front"] = mathutils.kdtree.KDTree(len(rim))
+    for i, (hit, _) in enumerate(rim):
+        head["front"].insert(hit, i)
+    head["front"].balance()
     for layer, (lift, gap, spacing, width) in enumerate((*HAIR_LAYERS, (*HAIR_LAYERS[0][:2], 0.0, HAIR_RIM[2]))):
         roots = rim if layer == len(HAIR_LAYERS) else sample_roots(scalp, rng, spacing)[0]
         per_layer.append(len(roots))
         for root, normal in roots:
-            pts, release = grow_strand(root, normal, lift, gap, rng, head, skin, shell_bvhs)
+            start = HAIR_RIM[3] if layer == len(HAIR_LAYERS) else HAIR_ROOT_LIFT
+            pts, release = grow_strand(root, normal, lift, gap, start, rng, head, skin, shell_bvhs)
             if len(pts) < 3:
                 continue
             seg = [0.0]
@@ -6057,9 +6091,14 @@ def build_hair(rig, body, shells, look="maren"):
                                      (0, HAIR_COLUMNS))[layer]))
             u0, u1 = (col + 0.03) / HAIR_COLUMNS, (col + 0.97) / HAIR_COLUMNS
             wide = width * rng.uniform(0.8, 1.2)
+            # A root on her left ear grows no card: it runs in under her jaw. On her right the same
+            # cards hang behind the ear and cover her neck. Draws taken, so no other card moves.
+            if layer < len(HAIR_LAYERS) and root.x > 0.0 and thin_at(skull, *skull.find_nearest(root)[:2]):
+                continue
             base = len(verts)
             for j, (p, tan, out, s, w) in enumerate(rows):
                 half = wide * (1 - 0.6 * (s / total) ** 2) / 2
+                half *= HAIR_ROOT_TAPER[0] + (1 - HAIR_ROOT_TAPER[0]) * _smooth(0.0, HAIR_ROOT_TAPER[1], s)
                 # Each edge stops short of anything it would cut into.
                 edge = [half, half]
                 for e, sgn in enumerate((-1.0, 1.0)):
@@ -6325,15 +6364,14 @@ def build_face(rig, body, look="maren"):
     }}
 
 
-def bare_ears(scalp, body):
-    """Cut the cap off the pack's ears: under her own face they are not drawn,
-    and the cap over them stood out above hers as a ledge."""
-    stock = bvh_of(body, body.matrix_world)
+def bare_ears(scalp, face):
+    """Cut the cap off her ears: a cap laid on her head lies on them too."""
+    own = bvh_of(face, face.matrix_world)
     bm = bmesh.new()
     bm.from_mesh(scalp.data)
     bm.normal_update()
     ears = [f for f in bm.faces
-            if thin_at(stock, f.calc_center_median() - f.normal * HAIR_SCALP_OFFSET, f.normal)]
+            if thin_at(own, f.calc_center_median() - f.normal * HAIR_SCALP_OFFSET, f.normal)]
     bmesh.ops.delete(bm, geom=ears, context="FACES")
     # A rim the ray slipped past is left as shards: the cap is its one largest piece.
     left, pieces = set(bm.faces), []
@@ -6353,7 +6391,7 @@ def bare_ears(scalp, body):
     bm.to_mesh(scalp.data)
     bm.free()
     scalp.data.update()
-    print(f"  {scalp.name}: {len(ears)} faces off the pack's ears")
+    print(f"  {scalp.name}: {len(ears)} faces off her ears")
     return {"ear_faces_cut": len(ears),
             "triangles": sum(len(p.vertices) - 2 for p in scalp.data.polygons),
             "vertices": len(scalp.data.vertices)}
@@ -6572,13 +6610,13 @@ def main():
             gown = bpy.data.objects[shell]
             fitted[shell].update(clear_shoulders(gown, rig, [bpy.data.objects[f"chest.{look}.lace"]]))
             fitted[shell].update(blur_shoulder_weights(gown))
-            # Her own head, before the hair that has to clear its ears.
+            # Her own head, before the hair that grows on it.
             fitted.update(build_face(rig, body, look))
+            face = bpy.data.objects[f"helmet.{look}.face"]
             # Her hair hangs on the fitted gown and its collar plate.
-            fitted.update(build_hair(rig, body, [bpy.data.objects[shell],
-                                                 bpy.data.objects[f"chest.{look}.gorget"],
-                                                 bpy.data.objects[f"helmet.{look}.face"]], look))
-            fitted[f"helmet.{look}.scalp"].update(bare_ears(bpy.data.objects[f"helmet.{look}.scalp"], body))
+            fitted.update(build_hair(rig, body, face, [bpy.data.objects[shell],
+                                                       bpy.data.objects[f"chest.{look}.gorget"]], look))
+            fitted[f"helmet.{look}.scalp"].update(bare_ears(bpy.data.objects[f"helmet.{look}.scalp"], face))
             print(f"dulled {dull(look, MAREN_SPECULAR)}")
             continue
         # A decoded coat is holed at the shoulder caps and the crotch, and the

@@ -103,10 +103,11 @@ def main():
         if not r["fit_metadata"]:
             failures.append(f"{name}: no entry in {os.path.basename(fit_path)}")
 
-    # The bare head the helmet piece is worn on: its body's remainder mesh.
+    # The bare head the helmet piece is worn on: its look's own head where it
+    # brings one (the body's is hidden under that), else the body's remainder mesh.
     helmet = objs.get(a.helmet)
     look = next((n.split(".")[1] for n in objs if n.startswith("base.") and n.endswith(".body")), None)
-    head = objs.get(f"base.{look}.body") if look else None
+    head = objs.get(".".join(a.helmet.split(".")[:2] + ["face"])) or (objs.get(f"base.{look}.body") if look else None)
     if helmet is not None and head is not None:
         bvh = world_bvh(head)
         zs = [(head.matrix_world @ v.co).z for v in head.data.vertices]
