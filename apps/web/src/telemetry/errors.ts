@@ -33,7 +33,10 @@ export const reportError = createErrorReporter(telemetry);
  * message; for anything else Chrome's event reads "Uncaught " and nothing more.
  */
 export function thrownText(v: unknown): string {
-  const type = typeof v === "object" && v !== null ? (v.constructor?.name || "Object") : typeof v;
+  let type: string = typeof v;
+  try {
+    if (typeof v === "object" && v !== null) type = v.constructor?.name || "Object";
+  } catch { /* a revoked Proxy throws on any property read */ }
   let text = "";
   try {
     text = typeof v === "string" ? v : v instanceof Event ? v.type : JSON.stringify(v) ?? String(v);
@@ -43,12 +46,21 @@ export function thrownText(v: unknown): string {
   return `[${type}] ${text}`;
 }
 
+/** `instanceof` that cannot throw: a revoked Proxy throws on the prototype read. */
+function isError(v: unknown): boolean {
+  try {
+    // Not every engine makes DOMException an Error subclass.
+    return v instanceof Error || (typeof DOMException !== "undefined" && v instanceof DOMException);
+  } catch {
+    return false;
+  }
+}
+
 /** `window` error and unhandledrejection. Returns the remover. */
 export function installErrorCapture(report = reportError): () => void {
   const onError = (e: ErrorEvent) => {
     const v = e.error as unknown;
-    // Not every engine makes DOMException an Error subclass.
-    const err = v instanceof Error || (typeof DOMException !== "undefined" && v instanceof DOMException) ? (v as Error) : null;
+    const err = isError(v) ? (v as Error) : null;
     // Edge reports a DOMException's event message as a bare "Uncaught ".
     const msg = err
       ? (e.message.trim() && e.message.trim() !== "Uncaught" ? e.message : `Uncaught ${err.name}: ${err.message}`)
@@ -57,7 +69,8 @@ export function installErrorCapture(report = reportError): () => void {
   };
   const onRejection = (e: PromiseRejectionEvent) => {
     const r = e.reason as unknown;
-    report("promise", r instanceof Error ? r.message : r == null ? String(r) : thrownText(r), r instanceof Error ? r.stack : undefined);
+    const err = isError(r) ? (r as Error) : null;
+    report("promise", err ? err.message : r == null ? String(r) : thrownText(r), err?.stack);
   };
   window.addEventListener("error", onError);
   window.addEventListener("unhandledrejection", onRejection);

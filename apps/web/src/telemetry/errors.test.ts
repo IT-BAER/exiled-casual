@@ -47,6 +47,12 @@ describe("error capture", () => {
     expect(fire(loop)[1]).toBe("Uncaught [Object] [object Object]");
   });
 
+  it("still reports a value whose every property access throws", () => {
+    const { proxy, revoke } = Proxy.revocable({}, {});
+    revoke();
+    expect(fire(proxy)[1]).toBe("Uncaught [object] ");
+  });
+
   it("records a rejected non-Error the same way", () => {
     const report = vi.fn();
     const remove = installErrorCapture(report);
