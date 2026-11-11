@@ -238,7 +238,18 @@ describe("the Atlas spans a 1-100 character's climb", () => {
     // moving alone fails here.
     expect(monsterTierScale(7)).toEqual({ lifeMilli: 5550, dmgMilli: 7030 });
     expect(monsterTierScale(12).dmgMilli).toBe(21680);
-    expect(monsterTierScale(ATLAS_NODE_COUNT - 1)).toEqual({ lifeMilli: 10100, dmgMilli: 23020 });
+    expect(monsterTierScale(ATLAS_NODE_COUNT - 1)).toEqual({ lifeMilli: 10100, dmgMilli: 30060 });
+  });
+
+  it("holds tiers 0-12 at the numbers every replay and golden was recorded on", () => {
+    expect(Array.from({ length: 13 }, (_, t) => monsterTierScale(t).dmgMilli)).toEqual(
+      [1000, 1170, 1380, 1790, 2560, 3690, 5180, 7030, 9240, 11810, 14740, 18030, 21680]);
+  });
+
+  it("keeps pressing through the top stone, then holds the pressure term", () => {
+    expect([13, 14, 15].map((t) => monsterTierScale(t).dmgMilli)).toEqual([25690, 30060, 34790]);
+    // Past tier 15 only the character sheet asks (its reference hit at level 98+).
+    expect(monsterTierScale(16).dmgMilli).toBe(1000 + 150 * 16 + 20 * 256 + 160 * 13 * 13);
   });
 
   it("hits softly early: the first stone a character owns adds under a fifth to a hit", () => {

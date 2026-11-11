@@ -59,11 +59,12 @@ export function areaLevel(tier: number): number {
 // ladder in balance.test.ts holds. Damage is a square curve, untouched through
 // tiers 1-2, where a fresh character already dies (simulation/src/playtest.ts).
 // From tier 3 a second square term presses: without it a kit bot died 0 times per
-// map at tiers 6-12; 160 gave 0.1-0.25 at maps 6-15. Measured through tier 12
-// only, so the term stops growing there.
+// map at tiers 6-12; 160 gave 0.1-0.25 at maps 6-15. It grows through the top stone
+// (WAYSTONE_MAX_TIER): held at 12, a forced tier 13 stone died no more than a 12
+// (playtest-tier-sweep.ts). Past 15 only the character sheet asks, so it holds there.
 const PRESSURE_PER_TIER_SQ = 160;
 const PRESSURE_FROM_TIER = 2;
-const PRESSURE_MEASURED_TO_TIER = 12;
+const PRESSURE_MEASURED_TO_TIER = 15;
 
 export function monsterTierScale(tier: number): { lifeMilli: number; dmgMilli: number } {
   const pressed = Math.max(0, Math.min(tier, PRESSURE_MEASURED_TO_TIER) - PRESSURE_FROM_TIER);

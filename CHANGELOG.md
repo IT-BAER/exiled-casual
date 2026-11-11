@@ -12,6 +12,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ### Changed
 
+- Tier 13, 14 and 15 maps are harder than tier 12: their monsters hit about
+  1.2, 1.4 and 1.6 times as hard as a tier 12 monster, where before all three hit
+  about as hard as tier 12. Tier 12 and below are unchanged.
 - Varkis and Maren stand square behind the middle of their tables, facing you.
 - The Atlas is a torn, stained parchment sheet lying on crimson velvet, with the
   world printed on it, instead of a painting that stops at a hard edge.
