@@ -14,9 +14,10 @@
  */
 import { setDownloaded } from "../load-progress";
 import { modelUrl } from "../render/model-url";
+import { FEMALE_WARDROBE } from "../preview";
 
 /** The models `loadPlayerRig` will ask for, by the same URLs, or the cache misses. */
-export const MENU_STAGE_MODELS = [modelUrl("/models/wardrobe.glb"), modelUrl("/models/wardrobe-female.glb"), modelUrl("/models/anim-library.glb")] as const;
+export const MENU_STAGE_MODELS = [modelUrl("/models/wardrobe.glb"), modelUrl(FEMALE_WARDROBE), modelUrl("/models/anim-library.glb")] as const;
 
 interface Warmers {
   chunk: () => Promise<unknown>;
