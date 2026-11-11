@@ -748,6 +748,16 @@ describe("creature instances", () => {
    * apart tears into. `group` names a vertex's group by its strongest bone.
    */
   async function tornEdges(id: string, clip: string, group: (bone: string) => string | null): Promise<number> {
+    let torn = 0;
+    await eachEdge(id, clip, (r0, r1, a, b) => {
+      const ga = group(a), gb = group(b);
+      if (ga !== null && gb !== null && ga !== gb && r1 > 2 * r0 + 0.03) torn++;
+    });
+    return torn;
+  }
+
+  /** Every edge of a creature's skinned meshes at every frame of a clip: rest and posed length, and each end's strongest bone. */
+  async function eachEdge(id: string, clip: string, visit: (rest: number, pose: number, boneA: string, boneB: string) => void): Promise<void> {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     const engine = new NullEngine();
@@ -761,7 +771,6 @@ describe("creature instances", () => {
       expect(g, `${id}|${clip}`).toBeDefined();
       g!.start(false);
       g!.pause();
-      let torn = 0;
       for (let f = g!.from; f <= g!.to; f++) {
         g!.goToFrame(f);
         scene.render();
@@ -770,23 +779,21 @@ describe("creature instances", () => {
           m.skeleton!.prepare(true);
           const rest = m.getPositionData(false, false)!, pose = m.getPositionData(true, true)!;
           const idx = m.getIndices()!, mi = m.getVerticesData("matricesIndices")!, mw = m.getVerticesData("matricesWeights")!;
-          const of = (v: number) => {
+          const top = (v: number) => {
             let k0 = 0;
             for (let k = 1; k < 4; k++) if (mw[4 * v + k]! > mw[4 * v + k0]!) k0 = k;
-            return group(m.skeleton!.bones[mi[4 * v + k0]!]!.name);
+            return m.skeleton!.bones[mi[4 * v + k0]!]!.name;
           };
           const len = (p: ArrayLike<number>, a: number, b: number) =>
             Math.hypot(p[3 * a]! - p[3 * b]!, p[3 * a + 1]! - p[3 * b + 1]!, p[3 * a + 2]! - p[3 * b + 2]!);
           for (let t = 0; t < idx.length; t += 3) {
             for (const [a, b] of [[idx[t]!, idx[t + 1]!], [idx[t + 1]!, idx[t + 2]!], [idx[t + 2]!, idx[t]!]] as const) {
-              const ga = of(a), gb = of(b);
-              if (ga !== null && gb !== null && ga !== gb && len(pose, a, b) > 2 * len(rest, a, b) + 0.03) torn++;
+              visit(len(rest, a, b), len(pose, a, b), top(a), top(b));
             }
           }
         }
       }
       g!.stop();
-      return torn;
     } finally {
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
@@ -805,6 +812,23 @@ describe("creature instances", () => {
       for (const clip of SLAMS.has(id) ? ["attack", "slam"] : ["attack"]) {
         expect(await tornEdges(id, clip, group), `${id}: arm-to-flank edges stretched past 2x through the ${clip}`).toBe(0);
       }
+    }
+  });
+
+  /**
+   * Shoulder-height torso skin carries hips and spine weight, so a torso that
+   * tips back or twists through a raise moves the arm fully and that skin only
+   * partly: an upper-arm edge to the chest grew +0.28 m in the Cinder Warden's
+   * slam, +0.22 m in the Hoarfrost Spitter's throw. Their raises keep the torso
+   * near rest (`SLAB_RAISE`, `THROW_COCK` in `rig_humanoid.py`).
+   */
+  it("keeps the shoulder skin with a raised arm through the warden slam and the spitter throw", async () => {
+    for (const [id, clip, bound] of [["monster.cinder_warden.v1", "slam", 0.22], ["monster.hoarfrost_spitter.v1", "attack", 0.18]] as const) {
+      let worst = 0;
+      await eachEdge(id, clip, (r0, r1, a, b) => {
+        if ([a, b].some((n) => n.startsWith("arm_upper")) && [a, b].some((n) => /^(chest|clavicle|spine|neck)/.test(n))) worst = Math.max(worst, r1 - r0);
+      });
+      expect(worst, `${id}: an upper-arm edge to the torso grew ${worst.toFixed(3)} m through the ${clip}`).toBeLessThan(bound);
     }
   });
 

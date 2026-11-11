@@ -769,8 +769,10 @@ HOOK_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (4, HOOK_COIL, (0, 0.02, -0.03)),
 # Slab slam: the slab swung up and out over the right shoulder, slammed onto the
 # floor ahead with the free hand joining it. Straight overhead, with the left
 # hand up beside it, tore the arms from the head and flank (+0.42 m, 580 sides).
-SLAB_RAISE = pose(spine=(HUNCH - 0.30, 0, 0), chest=(-0.10, 0, 0),
-                  arm_upper_r=(-1.00, 1.60, 0), arm_lower_r=(-0.30, 0, 0),
+# The torso stays near rest through the raise: shoulder-height skin carries hips
+# and spine weight, so a tip-back stretched the shoulder (+0.28 m; now +0.20 m).
+SLAB_RAISE = pose(spine=(HUNCH - 0.05, 0, 0), chest=(0.05, 0, 0),
+                  arm_upper_r=(-0.60, 1.60, 0), arm_lower_r=(-0.30, 0, 0),
                   legL_hip=(-0.10, 0, 0), legR_hip=(0.10, 0, 0))
 SLAB_DOWN = pose(spine=(HUNCH + 0.35, 0, 0), chest=(0.30, 0, 0), neck=(-0.40, 0, 0),
                  arm_upper_r=(-1.65, 0.10, 0), arm_lower_r=(-0.05, 0, 0),
@@ -778,7 +780,7 @@ SLAB_DOWN = pose(spine=(HUNCH + 0.35, 0, 0), chest=(0.30, 0, 0), neck=(-0.40, 0,
                  legL_hip=(-0.55, 0, 0), legL_knee=(0.70, 0, 0),
                  legR_hip=(0.30, 0, 0), legR_knee=(0.35, 0, 0), legR_ankle=(-0.20, 0, 0))
 SLAB_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (12, SLAB_RAISE, (0, 0.03, 0.0)),
-             (15, {**SLAB_RAISE, "arm_upper_r": (-1.08, 1.60, 0)}, (0, 0.035, 0.0)),
+             (15, {**SLAB_RAISE, "arm_upper_r": (-0.68, 1.60, 0)}, (0, 0.035, 0.0)),
              (19, SLAB_DOWN, (0, -0.10, -0.10), "in"), (22, SLAB_DOWN, (0, -0.10, -0.10)),
              (36, ATTACK_REST, (0, 0, -0.02))]
 # Double-fist hammer: both fists raised up and out, a beat held, smashed down
@@ -809,10 +811,11 @@ GRAB_KEYS = [(0, ATTACK_REST, (0, 0, -0.02)), (4, GRAB_COIL, (0, 0.03, -0.03)),
              (8, GRAB_HIT, (0, -0.10, -0.06), "in"), (10, GRAB_HIT, (0, -0.10, -0.06)),
              (22, ATTACK_REST, (0, 0, -0.02))]
 # Overarm throw: the hand cocked behind the head, whipped forward, released early, checked low.
-THROW_COCK = pose(spine=(HUNCH - 0.15, 0, -0.35), chest=(0.0, 0, -0.25),
-                  arm_upper_r=(-2.40, 0.50, 0), arm_lower_r=(-1.60, 0, 0),
-                  arm_upper_l=(-0.90, -0.20, 0), legL_hip=(-0.25, 0, 0), legR_hip=(0.15, 0, 0))
-THROW_RELEASE = pose(spine=(HUNCH + 0.10, 0, 0.25), chest=(0.15, 0, 0.20),
+# Little torso lean or twist, as in SLAB_RAISE: a deep cock stretched the shoulder (+0.22 m; now +0.16 m).
+THROW_COCK = pose(spine=(HUNCH - 0.05, 0, -0.20), chest=(0.05, 0, -0.10),
+                  arm_upper_r=(-1.70, 0.50, 0), arm_lower_r=(-1.60, 0, 0),
+                  arm_upper_l=(-0.55, -0.20, 0), legL_hip=(-0.25, 0, 0), legR_hip=(0.15, 0, 0))
+THROW_RELEASE = pose(spine=(HUNCH + 0.05, 0, 0.12), chest=(0.12, 0, 0.10),
                      arm_upper_r=(-1.50, 0.50, 0), arm_lower_r=(-0.05, 0, 0), hand_r=(-0.40, 0, 0),
                      arm_upper_l=(0.30, -0.20, 0), legL_hip=(-0.40, 0, 0), legL_knee=(0.40, 0, 0),
                      legR_hip=(0.20, 0, 0))
