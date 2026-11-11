@@ -51,6 +51,9 @@ export const BIOME_IDS = ["vaal_stone", "desert", "swamp", "forest", "coast"] as
 export const DEVICE_ACTIONS = ["open", "select", "socket", "activate", "close"] as const;
 export type DeviceAction = (typeof DEVICE_ACTIONS)[number];
 
+/** The graphics presets, plus a hand-made mix of the knobs; mirrors `GRAPHICS_PRESETS` in apps/web/src/settings.ts. */
+export const GFX_PRESETS = ["low", "medium", "high", "ultra", "custom"] as const;
+
 export const RESPAWNS = ["checkpoint", "hideout"] as const;
 
 /** Why a create screen was left with a name the rule refused. The name itself never leaves the device. */
@@ -95,6 +98,8 @@ export type TelemetryEvent =
   /** The page went away: where it was, and whether a loading plate was up. Older clients send it bare. */
   | { k: "end"; t: number; view?: View; area?: Area; loading?: boolean }
   | { k: "device"; t: number; action: DeviceAction }
+  /** The graphics preset in force at boot, or after the auto guard stepped it down (`stepped`). `auto` is the auto-preset toggle. */
+  | { k: "gfx"; t: number; preset: (typeof GFX_PRESETS)[number]; auto: boolean; stepped?: boolean }
   /** A map opened from the Atlas: which node, its tier, and the tier of the stone spent on it. */
   | { k: "atlas"; t: number; node: string; tier: number; stone: number }
   /** Walked through a portal into an area. */
@@ -249,6 +254,13 @@ function parseEvent(e: unknown): TelemetryEvent | null {
     case "device": {
       const action = oneOf(e.action, DEVICE_ACTIONS);
       return action ? { k: "device", t, action } : null;
+    }
+    case "gfx": {
+      const preset = oneOf(e.preset, GFX_PRESETS), auto = bool(e.auto);
+      if (!preset || auto === undefined) return null;
+      const out: Obj = { k: "gfx", t, preset, auto };
+      if (e.stepped === true) out.stepped = true;
+      return out as TelemetryEvent;
     }
     case "atlas": {
       const node = oneOf(e.node, ATLAS_NODE_IDS), tier = int(e.tier, 0, 100), stone = int(e.stone, 0, 100);

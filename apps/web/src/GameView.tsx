@@ -1156,6 +1156,7 @@ export function GameView({
       if (!next) return;
       onSettingsChangeRef.current?.({ ...s, graphics: next });
       const name = presetOf(next) ?? "";
+      telemetry.track({ k: "gfx", preset: presetOf(next) ?? "custom", auto: true, stepped: true });
       setGraphicsNote(`Graphics lowered to ${name.charAt(0).toUpperCase()}${name.slice(1)} to hold the frame rate.`);
     }, 1000);
     return () => window.clearInterval(timer);

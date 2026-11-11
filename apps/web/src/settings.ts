@@ -310,13 +310,16 @@ export function stepDown(g: GraphicsSettings): GraphicsSettings | null {
 }
 
 /**
- * Starting preset from the WebGL renderer string. An integrated GPU starts at
- * Medium (an Arc 140T ran the all-on frame at 22-37 fps); unknown starts at High.
+ * Starting preset from the WebGL renderer string. Intel UHD/Iris/HD start at Low (first-map
+ * leavers ran them at 26-27 fps); an Arc 140T starts at Medium (22-37 fps all-on); unknown at High.
  */
 export function presetForRenderer(renderer: string): GraphicsPreset {
   if (SOFTWARE_RENDERER.test(renderer)) return "low";
   if (/nvidia|geforce|quadro/i.test(renderer)) return "ultra";
-  if (/intel/i.test(renderer)) return /arc\(tm\)? [ab]\d{3}/i.test(renderer) ? "ultra" : "medium";
+  if (/intel/i.test(renderer)) {
+    if (/uhd|iris|hd graphics/i.test(renderer)) return "low";
+    return /arc\(tm\)? [ab]\d{3}/i.test(renderer) ? "ultra" : "medium";
+  }
   if (/amd|radeon/i.test(renderer)) return /\brx\b|radeon pro/i.test(renderer) ? "ultra" : "medium";
   if (/mali|adreno|powervr/i.test(renderer)) return "low";
   return "high";

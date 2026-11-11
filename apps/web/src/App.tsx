@@ -45,7 +45,7 @@ const MenuStage = React.lazy(reloadOnChunkError(() => import("./menu/MenuStage")
 const AssetViewer = import.meta.env.DEV
   ? React.lazy(() => import("./dev/AssetViewer").then((m) => ({ default: m.AssetViewer })))
   : null;
-import { DEFAULT_SETTINGS, type ControlMode, type Settings } from "./settings";
+import { DEFAULT_SETTINGS, type ControlMode, presetOf, type Settings } from "./settings";
 import { setTitle } from "./title";
 import { setDebugLogging } from "./debug";
 import { applyCursor, trackCursorPress } from "./cursor";
@@ -197,6 +197,7 @@ export function App(): React.ReactElement {
       setRoster(r);
       trackRoster(r);
       const s = settingsOf(r, gpuRenderer());
+      telemetry.track({ k: "gfx", preset: presetOf(s.graphics) ?? "custom", auto: s.graphics.auto });
       setSettings(
         harness && first !== null && CONTROL !== null
           ? { ...s, ui: { ...s.ui, controls: { ...s.ui.controls, [first]: CONTROL } } }

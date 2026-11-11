@@ -224,7 +224,13 @@ describe("graphics presets and auto-detect", () => {
   it("tiers a GPU off the renderer string", () => {
     const cases: [string, GraphicsPreset][] = [
       ["ANGLE (Intel, Intel(R) Arc(TM) 140T GPU (16GB) Direct3D11 vs_5_0 ps_5_0, D3D11)", "medium"],
-      ["ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)", "medium"],
+      ["ANGLE (Intel, Intel(R) UHD Graphics 620 Direct3D11 vs_5_0 ps_5_0, D3D11)", "low"],
+      ["ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)", "low"],
+      ["ANGLE (Intel, Intel(R) UHD Graphics 730 Direct3D11 vs_5_0 ps_5_0, D3D11)", "low"],
+      ["ANGLE (Intel, Intel(R) Iris(R) Xe Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)", "low"],
+      ["Intel(R) Iris(TM) Plus Graphics 640", "low"],
+      ["Intel Iris OpenGL Engine", "low"],
+      ["ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0, D3D11)", "low"],
       ["ANGLE (Intel, Intel(R) Arc(TM) A770 Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)", "ultra"],
       ["ANGLE (AMD, AMD Radeon(TM) Graphics Direct3D11 vs_5_0 ps_5_0, D3D11)", "medium"],
       ["ANGLE (AMD, AMD Radeon RX 7800 XT Direct3D11 vs_5_0 ps_5_0, D3D11)", "ultra"],
@@ -241,7 +247,7 @@ describe("graphics presets and auto-detect", () => {
     const got = sanitize(undefined, "ANGLE (Intel, Intel(R) Arc(TM) 140T GPU)").graphics;
     expect(presetOf(got)).toBe("medium");
     expect(got.auto).toBe(true);
-    expect(sanitize({ sound: { muted: true } }, "Intel(R) UHD Graphics").graphics.shadows).toBe(GRAPHICS_PRESETS.medium.shadows);
+    expect(sanitize({ sound: { muted: true } }, "Intel(R) UHD Graphics").graphics.shadows).toBe(GRAPHICS_PRESETS.low.shadows);
   });
 
   it("saved graphics are never re-detected, and an old save is not auto", () => {

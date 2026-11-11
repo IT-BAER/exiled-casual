@@ -84,6 +84,9 @@ describe("parseBatch", () => {
       { k: "beat", t: 17, view: "game", active: 30, area: "map", kills: 14, explored: 37 },
       { k: "waystone", t: 18, tier: 2 },
       { k: "rareKill", t: 19, tier: 1, biome: "coast", hard: true },
+      { k: "gfx", t: 21, preset: "low", auto: true },
+      { k: "gfx", t: 22, preset: "custom", auto: false },
+      { k: "gfx", t: 23, preset: "low", auto: true, stepped: true },
     ];
     const b = (parseBatch(batch(sent)) as { ok: true; batch: Batch }).batch;
     expect(b.dropped).toBe(0);
@@ -111,6 +114,8 @@ describe("parseBatch", () => {
       { k: "loadPhase", t: 7, phase: "models", ms: -1 },
       { k: "roster", t: 8, characters: 2, oldestAge: "ancient" },
       { k: "end", t: 9, view: "lobby", loading: "yes" },
+      { k: "gfx", t: 11, preset: "ludicrous", auto: true },
+      { k: "gfx", t: 12, preset: "low" },
     ]));
     const b = (r as { ok: true; batch: Batch }).batch;
     // The create failure survives without the name it was sent with; a bad optional on end is dropped, not fatal.
