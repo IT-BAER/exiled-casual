@@ -592,6 +592,20 @@ describe("what worn gear hides of the body", () => {
     expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "leather" }).has("leg_l")).toBe(true);
   });
 
+  /** Maren's dress is sleeveless and parted in front: her lace sleeves and stockings lie on her own skin. */
+  it("leaves Maren's arms and legs drawn under her dress while it still closes her trunk", () => {
+    const maren = hiddenBaseParts({ ...BASE_LOOKS, base: "female", chest: "maren" });
+    for (const part of ["torso", "collar"]) expect(maren.has(part), part).toBe(true);
+    for (const part of ["leg_l", "leg_r", "arm_l", "arm_r"]) expect(maren.has(part), part).toBe(false);
+    expect(hiddenBaseParts({ ...BASE_LOOKS, chest: "ember" }).has("leg_l")).toBe(true);
+  });
+
+  /** Maren's helmet look is her own head: face, neck and scalp in one piece, so the pack's head goes with its buns. */
+  it("takes the whole stock head and neck under Maren's own face", () => {
+    expect([...hiddenBaseParts({ ...BASE_LOOKS, base: "female", helmet: "maren" })].sort())
+      .toEqual(["body", "brows", "eyes", "hair", "neck"]);
+  });
+
   /**
    * The suits' shins were open shells, so a suit ends below the knee and the
    * bare shin runs from under its hem to the foot; a boot closes both.
@@ -651,11 +665,11 @@ describe.each(WARDROBES)("wardrobe asset $file", ({ file, body, root }) => {
       "gloves.ironsworn.gauntlet_l", "gloves.ironsworn.gauntlet_r",
       "gloves.stalker.glove_l", "gloves.stalker.glove_r",
       "gloves.ember.wrap_l", "gloves.ember.wrap_r",
-      // Maren's own look, on her body only (`bodies` in build_wardrobe.py).
+      // Maren's own look, on her body only (`bodies` in build_wardrobe.py): no
+      // limb backings, her arms and legs are drawn under her lace.
       ...(body === "female" ? [
-        "helmet.maren.tresses", "chest.maren.gown", "chest.maren.gorget", "chest.maren.backing",
-        "chest.maren.backing_arm_l", "chest.maren.backing_arm_r",
-        "chest.maren.backing_leg_l", "chest.maren.backing_leg_r",
+        "helmet.maren.face", "helmet.maren.tresses", "helmet.maren.scalp", "chest.maren.gown", "chest.maren.gorget", "chest.maren.backing",
+        "chest.maren.lace", "chest.maren.cuffs",
       ] : []),
     ].sort());
   });

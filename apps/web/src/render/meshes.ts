@@ -1904,7 +1904,7 @@ function buildVendor(scene: Scene, root: Mesh): void {
 }
 
 /** A hideout person: contact blob, hover ring and the wardrobe rig in `looks`. */
-function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", looks: Looks): RigActor | null {
+function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", looks: Looks, idleName?: string): RigActor | null {
   // He is a man standing on a floor before he is a thing to click, and the mark
   // below is a hover cue, not a shadow. While the sun cast, that read fine; with
   // it gone the ring was the only thing under him and it looked like a contact
@@ -1934,7 +1934,7 @@ function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", loo
 
   // The man himself. Null when the models have not loaded (headless tests, a
   // failed fetch), which leaves the ring standing on its own.
-  const rig = attachRig(scene, root, isBody(looks.base) ? looks.base : "male");
+  const rig = attachRig(scene, root, isBody(looks.base) ? looks.base : "male", idleName);
   if (rig) {
     rig.setLooks(looks);
     rig.setLocomotion(0); // stand and breathe; he never goes anywhere
@@ -1946,35 +1946,41 @@ function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", loo
 
 /**
  * Maren, the cartographer: the female body in her own look, which no item base
- * maps to - a dark velvet gown and long red hair, the hair worn in the helmet
- * slot so the body's own buns are hidden the way any helmet hides them. Bare
- * hands, and the Ember slippers: dark cloth, so where the skirt panels part at a
- * turn the gap reads as shadow, not as the tan of a leather boot.
+ * maps to - a black sleeveless dress with a grey caped collar over lace, and
+ * long red hair worn in the helmet slot so the body's own buns are hidden the
+ * way any helmet hides them. Bare hands, and the Stalker's knee boots, shaded
+ * black, showing where the overskirt parts in front.
  */
 export const CARTOGRAPHER_LOOKS: Looks = {
-  ...looksForEquipment({ boots: { baseId: "base.ember_slippers" } }, "female"),
+  ...looksForEquipment({ boots: { baseId: "base.stalker_boots" } }, "female"),
   helmet: "maren",
   chest: "maren",
 };
 
-/** Her hair colour, linear like the glTF base colour it replaces (the pack's brown is 0.34, 0.19, 0.10). */
-export const CARTOGRAPHER_HAIR = new Color3(0.6, 0.05, 0.02);
-
-/** Multiplies her slippers' cloth, so it reads as the gown's dark rather than as tan. */
-export const CARTOGRAPHER_SLIPPERS = new Color3(0.16, 0.11, 0.11);
+/** Her idle: `Idle_Loop` rests her hands up to 26 mm inside her own thighs, this take never touches them. */
+export const CARTOGRAPHER_IDLE = "Rig|Idle_Talking_Loop";
 
 /**
- * The cartographer. Her brows get material CLONES tinted red, and her slippers
- * clones shaded dark: the wardrobe's materials are shared by every rig built
- * from it, the player's too.
+ * Multiplies the pack's tan skin on her drawn hands, arms and legs to the pale tone of her own face
+ * (`helmet.maren.face`): mean linear base colour 0.26, 0.16, 0.12 against the pack's 0.40, 0.18, 0.08,
+ * times 0.85, picked live in the hideout: her open hands face its light and read whiter than her face.
+ */
+export const CARTOGRAPHER_SKIN = new Color3(0.56, 0.76, 1.2);
+
+/** Multiplies her boots' tan leather, so it reads as black. */
+export const CARTOGRAPHER_BOOTS = new Color3(0.14, 0.13, 0.13);
+
+/**
+ * The cartographer. Her boots get material CLONES shaded black and the pack's
+ * skin she still shows clones in her face's tone: the wardrobe's materials are
+ * shared by every rig built from it, the player's too.
  */
 function buildCartographer(scene: Scene, root: Mesh): void {
-  if (!buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS)) return;
+  if (!buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS, CARTOGRAPHER_IDLE)) return;
   const clones = new Map<Material, Material>();
   for (const mesh of root.getChildMeshes()) {
     const [slot, , part] = mesh.name.split(".");
-    const shade = slot === "base" && (part === "hair" || part === "brows") ? CARTOGRAPHER_HAIR
-      : slot === "boots" ? CARTOGRAPHER_SLIPPERS : null;
+    const shade = slot === "base" ? CARTOGRAPHER_SKIN : slot === "boots" ? CARTOGRAPHER_BOOTS : null;
     if (!shade || !mesh.material) continue;
     let tinted = clones.get(mesh.material);
     if (!tinted) {

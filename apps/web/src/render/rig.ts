@@ -690,6 +690,12 @@ export const BASE_LOOKS: Looks = {
  */
 const SKIRTED_CHEST: ReadonlySet<string> = new Set(["stalker", "ember", "maren"]);
 
+/**
+ * How far inside the chain ring a look's cloth hangs, added to every leg capsule while it is worn.
+ * The ring is the Ember robe's; the gown's back hangs a median 31-38mm inside it and showed the leg.
+ */
+const SKIRT_INSET: Readonly<Record<string, number>> = { maren: 0.03 };
+
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
   gloves: ["hand_l", "hand_r"],
@@ -698,12 +704,25 @@ const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   chest: ["torso", "collar", "leg_l", "leg_r"],
 };
 
+/**
+ * Looks that close other pieces than their slot does. Maren's dress is
+ * sleeveless and parted in front, so her arms and legs stay drawn and her lace
+ * (`chest.maren.lace`, `chest.maren.cuffs`) lies on that skin. Her helmet look
+ * is her own head (`helmet.maren.face`: face, ears and neck in one piece), so
+ * the pack's head (`body`, what the region split leaves), eyes, brows and neck go.
+ */
+const COVERED_BY_LOOK: Partial<Record<Slot, Readonly<Record<string, readonly string[]>>>> = {
+  helmet: { maren: ["hair", "body", "eyes", "brows", "neck"] },
+  chest: { maren: ["torso", "collar"] },
+};
+
 /** The `<slot>.<look>.<part>` pieces the worn gear replaces. */
 export function hiddenBaseParts(looks: Looks): ReadonlySet<string> {
   const hidden = new Set<string>();
   for (const [slot, parts] of Object.entries(COVERED_BY)) {
-    if (looks[slot as Slot] === null) continue;
-    for (const part of parts) hidden.add(part);
+    const look = looks[slot as Slot];
+    if (look === null) continue;
+    for (const part of COVERED_BY_LOOK[slot as Slot]?.[look] ?? parts) hidden.add(part);
   }
   return hidden;
 }
@@ -1644,10 +1663,13 @@ export class RigActor {
   private readonly aimed = new Quaternion();
   /** Rotation of the current bone's parent, relative to the pelvis. */
   private readonly cumulative = new Quaternion();
-  constructor(scene: Scene, host: Mesh, body: Body = "male") {
+  /** The library take this body stands on in place of `CLIP_NAME.idle`, if any. */
+  private readonly idleName: string | undefined;
+  constructor(scene: Scene, host: Mesh, body: Body = "male", idleName?: string) {
     this.scene = scene;
     this.host = host;
     this.body = body;
+    this.idleName = idleName;
     this.pivot = new TransformNode(`${host.name}-rig`, scene);
     this.pivot.parent = host;
     this.pivot.rotation.y = RIG_YAW;
@@ -1687,8 +1709,9 @@ export class RigActor {
   /** A boot is wider than the shin, so the cloth is pushed out of the boot. */
   private fitColliders(): void {
     const booted = this.looks.boots !== null;
+    const inset = SKIRT_INSET[this.looks.chest ?? ""] ?? 0;
     for (const collider of this.colliders) {
-      collider.radius = booted ? collider.worn : collider.bare;
+      collider.radius = (booted ? collider.worn : collider.bare) + inset;
       collider.offset = booted ? collider.shaft : collider.bareShaft;
       collider.tailOffset = booted ? collider.toe ?? collider.shaft : collider.bareShaft && NO_SHIFT;
     }
@@ -2405,7 +2428,8 @@ export class RigActor {
       return swayOnto(a, anchor, STRIKE_LEG_SHARE_OF[clip] ?? STRIKE_LEG_SHARE);
     };
     for (const clip of Object.keys(CLIP_NAME) as RigClip[]) {
-      const source = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME[clip]);
+      const name = clip === "idle" && this.idleName ? this.idleName : CLIP_NAME[clip];
+      const source = loaded.anims.animationGroups.find((g) => g.name === name);
       if (!source) continue;
 
       // Retarget by bone name. Rotation keyframes are shared with the source
@@ -2848,9 +2872,9 @@ export interface RigParts {
  * Build a skinned player under `host`, or return null when the assets are not
  * loaded (headless tests, a failed fetch) so the caller can fall back.
  */
-export function attachRig(scene: Scene, host: Mesh, body: Body = "male"): RigActor | null {
+export function attachRig(scene: Scene, host: Mesh, body: Body = "male", idleName?: string): RigActor | null {
   if (!isRigReady(scene, body)) return null;
-  return new RigActor(scene, host, body);
+  return new RigActor(scene, host, body, idleName);
 }
 
 /** The rig on an actor root, if it has one. */
