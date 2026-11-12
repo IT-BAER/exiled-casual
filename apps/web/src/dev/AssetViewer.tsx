@@ -57,7 +57,8 @@ import { Timeline } from "./viewer/Timeline";
 function kindOf(id: string): SubjectKind {
   if (id === CHARACTER_SUBJECT.id) return "character";
   if (id === PET_SUBJECT.id) return "pet";
-  return VIEWER_SUBJECTS.find((s) => s.id === id)?.group === "Creatures" ? "creature" : "prop";
+  const group = VIEWER_SUBJECTS.find((s) => s.id === id)?.group;
+  return group === "NPCs" ? "npc" : group === "Creatures" ? "creature" : "prop";
 }
 
 /** The slots that differ from the opening look: all a link has to carry. */
@@ -298,9 +299,10 @@ export function AssetViewer({ onExit }: { onExit: () => void }): React.ReactElem
     const g = (Object.keys(GAIT_KEYS) as GaitId[]).find((id) => GAIT_KEYS[id] === e.key);
     const s = Object.keys(SHOT_KEYS).find((id) => SHOT_KEYS[id] === e.key);
     const toggle = (Object.keys(TOGGLE_KEYS) as (keyof ViewToggles)[]).find((id) => TOGGLE_KEYS[id].toLowerCase() === k);
-    if (g && kind === "character") motion(g, dir);
+    const rigged = kind === "character" || kind === "npc";
+    if (g && rigged) motion(g, dir);
     else if (g && kind === "creature") creature(g === "idle" ? "idle" : "walk");
-    else if (s && kind === "character") shot(s);
+    else if (s && rigged) shot(s);
     else if (e.key === " ") { e.preventDefault(); v?.setPaused(!(timeline?.paused ?? false)); }
     else if (e.key === ",") v?.step(-1);
     else if (e.key === ".") v?.step(1);

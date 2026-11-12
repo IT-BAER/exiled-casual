@@ -56,6 +56,16 @@ describe("subject groups", () => {
     expect(PET_ACTIONS).toEqual(PET_CLIPS);
     expect(parseViewerState("?viewer&subject=pet&clip=pet:relaxed").subject).toBe("pet");
   });
+
+  it("lists the hideout NPCs, Maren and Varkis, under their own group after the pet", () => {
+    const labels = SUBJECT_GROUPS.map((g) => g.label);
+    expect(labels.indexOf("NPCs")).toBe(labels.indexOf("Pet") + 1);
+    const npcs = SUBJECT_GROUPS.find((g) => g.label === "NPCs")!;
+    expect(npcs.subjects.map((s) => s.id)).toEqual(["cartographer", "vendor"]);
+    expect(npcs.subjects[0]!.label).toContain("Maren");
+    expect(npcs.subjects[1]!.label).toContain("Varkis");
+    expect(parseViewerState("?viewer&subject=cartographer").subject).toBe("cartographer");
+  });
 });
 
 describe("character clips", () => {

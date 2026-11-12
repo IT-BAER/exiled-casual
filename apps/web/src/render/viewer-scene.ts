@@ -67,6 +67,7 @@ import {
 import { DEFAULT_SETTINGS } from "../settings";
 import {
   CHARACTER_SUBJECT,
+  NPC_SUBJECTS,
   PET_SUBJECT,
   bossSummon,
   bossTell,
@@ -90,6 +91,7 @@ import {
   libraryClips,
   loadPlayerRig,
   resetPlayerRig,
+  rigOf,
   BASE_LOOKS,
   NO_LOOKS,
   SLOTS,
@@ -800,6 +802,11 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         rig = attachRig(scene, host);
         if (rig !== null && looks !== null) rig.setLooks(looks);
         rig?.standSettled();
+      } else if (NPC_SUBJECTS.some((s) => s.id === id)) {
+        // The hideout's own build: her look per PREVIEW_MAREN, her idle, her tinted clones.
+        const npc = makeMesh(scene, id as "cartographer" | "vendor", `viewer-npc-${id}`);
+        npc.parent = host;
+        rig = rigOf(npc);
       } else if ((PROP_KINDS as readonly string[]).includes(id)) {
         attachProp(scene, host, id as PropKind, true);
       } else if (id === PET_SUBJECT.id) {
@@ -819,7 +826,8 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     },
     setLooks(next) {
       looks = next;
-      rig?.setLooks(next);
+      // An NPC wears her own look; the panel's dress is the character's.
+      if (subjectId === CHARACTER_SUBJECT.id) rig?.setLooks(next);
       if (toggles.skeleton || toggles.grid) frame();
     },
     vocabulary() {

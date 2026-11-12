@@ -32,6 +32,20 @@ describe("Inspector actions loop", () => {
   });
 });
 
+describe("Inspector NPC", () => {
+  it("plays an NPC's clips like the character's but never dresses her", () => {
+    const onShot = vi.fn();
+    const onRaw = vi.fn();
+    render(<Inspector {...props({ kind: "npc", onShot, onRaw, rawClips: ["Rig|Idle_Talking_Loop"] })} />);
+    expect(screen.queryByRole("heading", { name: "Looks" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Class" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Cast/ }));
+    expect(onShot).toHaveBeenCalledWith("cast");
+    fireEvent.click(screen.getByRole("button", { name: "Idle Talking Loop" }));
+    expect(onRaw).toHaveBeenCalledWith("Rig|Idle_Talking_Loop");
+  });
+});
+
 describe("Inspector creature tells", () => {
   it("offers only the tells this creature has, and plays the one pressed", () => {
     const onCreature = vi.fn();

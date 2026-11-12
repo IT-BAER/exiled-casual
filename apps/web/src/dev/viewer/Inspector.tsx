@@ -19,7 +19,8 @@ import {
 import type { SubjectStats, ViewToggles } from "../../render/viewer-scene";
 import { Icon } from "./icons";
 
-export type SubjectKind = "character" | "creature" | "pet" | "prop";
+/** An NPC is a character in her own fixed look: the same clips, no dressing. */
+export type SubjectKind = "character" | "npc" | "creature" | "pet" | "prop";
 export type GaitId = (typeof GAITS)[number]["id"];
 export type DirId = (typeof DIRECTIONS_8)[number]["id"];
 
@@ -90,7 +91,7 @@ export function Inspector(p: InspectorProps): React.ReactElement {
         </button>
       </div>
       <div className="av-scroll" style={{ padding: 0 }}>
-        {p.kind === "character" && <CharacterSections {...p} />}
+        {(p.kind === "character" || p.kind === "npc") && <CharacterSections {...p} />}
         {p.kind === "creature" && <CreatureSection {...p} />}
         {p.kind === "pet" && <PetSection {...p} />}
         <ViewSection {...p} />
@@ -108,6 +109,7 @@ function CharacterSections(p: InspectorProps): React.ReactElement {
 
   return (
     <>
+      {p.kind === "character" && <>
       <section className="av-section">
         <h3 className="av-h">Class</h3>
         <div className="av-chips">
@@ -133,6 +135,7 @@ function CharacterSections(p: InspectorProps): React.ReactElement {
           );
         })}
       </section>
+      </>}
 
       <section className="av-section">
         <h3 className="av-h">Motion <small>keys 1 to 3</small></h3>

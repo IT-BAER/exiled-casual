@@ -14,12 +14,13 @@ import { skillFx } from "./skills";
 import { SPAWNABLE, type Spawnable } from "./gallery";
 import { looksForEquipment } from "./gear-looks";
 import { SKILL_CLIP_IDS, SKILL_CLIPS, SLOTS, type Looks, type RigClip, type Slot } from "./rig";
+import { CARTOGRAPHER_NAME, CARTOGRAPHER_TITLE, VENDOR_NAME, VENDOR_TITLE } from "../npc";
 
 /** What can stand on the turntable. */
 export interface ViewerSubject {
   id: string;
   label: string;
-  group: Spawnable["group"] | "Character" | "Pet";
+  group: Spawnable["group"] | "Character" | "Pet" | "NPCs";
 }
 
 /** The character is subject zero: it is the reason the screen exists. */
@@ -27,8 +28,14 @@ export const CHARACTER_SUBJECT: ViewerSubject = { id: "character", label: "Chara
 /** The companion cat is not spawnable (the gallery never stands one), so it is listed by hand. */
 export const PET_SUBJECT: ViewerSubject = { id: "pet", label: "Celestial Cat", group: "Pet" };
 
+/** The hideout people, by their `makeMesh` kind, so the viewer builds them as the hideout does. */
+export const NPC_SUBJECTS: readonly ViewerSubject[] = [
+  { id: "cartographer", label: `${CARTOGRAPHER_NAME}, ${CARTOGRAPHER_TITLE}`, group: "NPCs" },
+  { id: "vendor", label: `${VENDOR_NAME}, ${VENDOR_TITLE}`, group: "NPCs" },
+];
+
 /** Everything that can stand on the turntable, flat. */
-export const VIEWER_SUBJECTS: readonly ViewerSubject[] = [CHARACTER_SUBJECT, PET_SUBJECT, ...SPAWNABLE];
+export const VIEWER_SUBJECTS: readonly ViewerSubject[] = [CHARACTER_SUBJECT, PET_SUBJECT, ...NPC_SUBJECTS, ...SPAWNABLE];
 
 export interface SubjectGroup {
   id: string;
@@ -52,7 +59,7 @@ const PROP_GROUP: Partial<Record<(typeof PROP_KINDS)[number], string>> = {
   orbAlchemy: "Ground drops", orbEmbers: "Ground drops", waystone: "Ground drops", goldPile: "Ground drops",
 };
 
-const GROUP_ORDER = ["Character", "Pet", "Creatures", "Hideout", "Containers", "Beach", "Desert", "Ground drops", "Other props"];
+const GROUP_ORDER = ["Character", "Pet", "NPCs", "Creatures", "Hideout", "Containers", "Beach", "Desert", "Ground drops", "Other props"];
 
 function groupOf(s: ViewerSubject): string {
   if (s.group !== "Props") return s.group;
