@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { ErrorBoundary, ErrorNote } from "./ErrorBoundary";
 import { gpuRenderer } from "./gpu";
 import { telemetry } from "./telemetry/client";
 import { installErrorCapture } from "./telemetry/errors";
@@ -91,7 +92,19 @@ const boot = document.getElementById("boot");
 void logoPainted.then(() => {
   createRoot(root).render(
     <StrictMode>
-      <App />
+      {/* Catches a throw in App's own render; each screen has its own boundary inside. */}
+      <ErrorBoundary
+        name="app"
+        fallback={() => (
+          <ErrorNote
+            cover
+            text="The game hit an error and it was reported."
+            actions={[{ label: "Reload", onClick: () => window.location.reload() }]}
+          />
+        )}
+      >
+        <App />
+      </ErrorBoundary>
     </StrictMode>,
   );
   requestAnimationFrame(() => requestAnimationFrame(() => telemetry.track({ k: "load", menuMs: Math.round(performance.now()) })));

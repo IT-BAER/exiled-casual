@@ -47,7 +47,7 @@ export function thrownText(v: unknown): string {
 }
 
 /** `instanceof` that cannot throw: a revoked Proxy throws on the prototype read. */
-function isError(v: unknown): boolean {
+export function isError(v: unknown): boolean {
   try {
     // Not every engine makes DOMException an Error subclass.
     return v instanceof Error || (typeof DOMException !== "undefined" && v instanceof DOMException);

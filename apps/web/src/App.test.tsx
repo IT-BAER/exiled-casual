@@ -21,6 +21,22 @@ vi.mock("./menu/MenuStage", () => ({
 const warm = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 const warmGame = vi.hoisted(() => vi.fn((_w: { chunk: () => Promise<unknown>; worker: string }) => Promise.resolve()));
 vi.mock("./menu/warm-stage", () => ({ warmMenuStage: warm, warmGame }));
+// The real menu, unless a test arms a throw in its commit phase (a layout effect,
+// where the translated-page NotFoundError was raised).
+const menuThrows = vi.hoisted(() => ({ on: false }));
+vi.mock("./menu/MainMenu", async (load) => {
+  const real = await load<typeof import("./menu/MainMenu")>();
+  const React = await import("react");
+  return {
+    ...real,
+    MainMenu: (p: Parameters<typeof real.MainMenu>[0]) => {
+      React.useLayoutEffect(() => {
+        if (menuThrows.on) throw new Error("commit failed");
+      });
+      return React.createElement(real.MainMenu, p);
+    },
+  };
+});
 
 import { App } from "./App";
 import { telemetry } from "./telemetry/client";
@@ -294,5 +310,28 @@ describe("App routing", () => {
     const row = await screen.findByTestId("row-migrated-1");
     expect(row.textContent).toMatch(/Exile/);
     expect(row.textContent).toMatch(/Level 21/);
+  });
+});
+
+describe("App error boundary", () => {
+  afterEach(() => {
+    menuThrows.on = false;
+    vi.restoreAllMocks();
+  });
+
+  it("a screen that throws while committing shows a way out, not an empty page, and reports it", async () => {
+    const track = vi.spyOn(telemetry, "track");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    menuThrows.on = true;
+    const container = document.body.appendChild(document.createElement("div"));
+    // Without a boundary React rethrows here and unmounts the root.
+    try { render(<App />, { container }); } catch { /* asserted below */ }
+    await waitFor(() => expect(container.childElementCount).toBeGreaterThan(0));
+    const note = await screen.findByTestId("error-note");
+    expect(note.textContent).toMatch(/something went wrong/i);
+    expect(screen.getByRole("button", { name: /reload/i })).toBeTruthy();
+    expect(track).toHaveBeenCalledWith(
+      expect.objectContaining({ k: "error", src: "react", msg: expect.stringContaining("commit failed") }),
+    );
   });
 });
