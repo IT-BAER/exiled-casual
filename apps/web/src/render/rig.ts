@@ -690,11 +690,12 @@ export const BASE_LOOKS: Looks = {
  */
 const SKIRTED_CHEST: ReadonlySet<string> = new Set(["stalker", "ember", "maren"]);
 
+
 /**
- * How far inside the chain ring a look's cloth hangs, added to every leg capsule while it is worn.
- * The ring is the Ember robe's; the gown's back hangs a median 31-38mm inside it and showed the leg.
+ * Looks whose cloth hangs as at bind relative to the rig, not tilted with the pelvis: her lady stance
+ * rolls the pelvis 7.7 degrees, which tucked the gown's back-left panel into the free calf.
  */
-const SKIRT_INSET: Readonly<Record<string, number>> = { maren: 0.03 };
+const PLUMB_CHEST: ReadonlySet<string> = new Set(["maren"]);
 
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
@@ -1652,6 +1653,11 @@ export class RigActor {
   private cloth: Observer<Scene> | null = null;
   /** Solving cloth nobody can see is the one cost worth a flag. */
   private coatVisible = false;
+  private plumb = false;
+  /** The coat's hang, waist to hem, in the pelvis's frame and in the rig's at bind. */
+  private readonly hangPelvis = new Vector3(0, -1, 0);
+  private readonly hangPivot = new Vector3(0, -1, 0);
+  private readonly untilt = new Quaternion();
 
   // Per-frame scratch, so the cloth does not allocate 300 vectors a frame.
   private readonly anchorsWorld: Vector3[] = [];
@@ -1710,9 +1716,8 @@ export class RigActor {
   /** A boot is wider than the shin, so the cloth is pushed out of the boot. */
   private fitColliders(): void {
     const booted = this.looks.boots !== null;
-    const inset = SKIRT_INSET[this.looks.chest ?? ""] ?? 0;
     for (const collider of this.colliders) {
-      collider.radius = (booted ? collider.worn : collider.bare) + inset;
+      collider.radius = booted ? collider.worn : collider.bare;
       collider.offset = booted ? collider.shaft : collider.bareShaft;
       collider.tailOffset = booted ? collider.toe ?? collider.shaft : collider.bareShaft && NO_SHIFT;
     }
@@ -1720,6 +1725,7 @@ export class RigActor {
 
   private applyLooks(): void {
     this.coatVisible = SKIRTED_CHEST.has(this.looks.chest ?? "");
+    this.plumb = PLUMB_CHEST.has(this.looks.chest ?? "");
     this.fitColliders();
     this.bowString?.setEnabled(this.looks.weapon1 === BOW_LOOK);
     const hidden = hiddenBaseParts(this.looks);
@@ -2654,6 +2660,13 @@ export class RigActor {
     }
     this.fitColliders();
 
+    const top = chains.reduce((s, c) => s.addInPlace(c.anchor), new Vector3());
+    const hem = chains.reduce((s, c) => s.addInPlace(c.rests[SKIRT_JOINTS - 1]!), new Vector3());
+    this.hangPelvis.copyFrom(hem.subtractInPlace(top)).normalize();
+    Vector3.TransformNormalToRef(this.hangPelvis, pelvis.getWorldMatrix(), this.hangPivot);
+    Vector3.TransformNormalToRef(this.hangPivot, Matrix.Invert(this.pivot.computeWorldMatrix(true)), this.hangPivot);
+    this.hangPivot.normalize();
+
     this.pelvis = pelvis;
     this.skirtChains = chains;
     this.skirt = new SkirtSim(chains.length, SKIRT_JOINTS, chains[0]!.joints[1]!.position.length());
@@ -2676,11 +2689,21 @@ export class RigActor {
 
     pelvis.computeWorldMatrix(true);
     const world = pelvis.getWorldMatrix();
+    // Plumb: each chain's rest pose turns about its anchor by the pelvis's tilt off the hang it had at bind.
+    if (this.plumb) {
+      Vector3.TransformNormalToRef(this.hangPelvis, world, this.local);
+      Vector3.TransformNormalToRef(this.hangPivot, this.pivot.computeWorldMatrix(true), this.relative);
+      Quaternion.FromUnitVectorsToRef(this.local.normalize(), this.relative.normalize(), this.untilt);
+    }
     for (let i = 0; i < this.skirtChains.length; i++) {
       const chain = this.skirtChains[i]!;
-      Vector3.TransformCoordinatesToRef(chain.anchor, world, this.anchorsWorld[i]!);
+      const anchor = this.anchorsWorld[i]!;
+      Vector3.TransformCoordinatesToRef(chain.anchor, world, anchor);
       for (let j = 0; j < SKIRT_JOINTS; j++) {
-        Vector3.TransformCoordinatesToRef(chain.rests[j]!, world, this.restsWorld[i * SKIRT_JOINTS + j]!);
+        const rest = this.restsWorld[i * SKIRT_JOINTS + j]!;
+        Vector3.TransformCoordinatesToRef(chain.rests[j]!, world, rest);
+        if (!this.plumb) continue;
+        rest.subtractInPlace(anchor).applyRotationQuaternionInPlace(this.untilt).addInPlace(anchor);
       }
     }
     for (const collider of this.colliders) {
