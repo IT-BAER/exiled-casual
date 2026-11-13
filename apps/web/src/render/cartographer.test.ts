@@ -409,6 +409,107 @@ describe("Maren's body", () => {
     }
   }, 300_000);
 
+  it("hangs her gown from the hips in one smooth fall, no panel kicked out over the bent knee or the free boot", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      await loadPlayerRig(scene, ["female"], { anims: file("anim-library.glb"), wardrobes: { female: file("wardrobe-female.glb") } });
+      const root = makeMesh(scene, "cartographer", "maren");
+      const rig = rigOf(root)!;
+      const nodes = new Map(root.getDescendants(false).map((d) => [d.name, d as TransformNode]));
+      // Each chain as seven points down the cloth: the waist, five joint heads, and the hem at the last bone's tail.
+      const chains: TransformNode[][] = [];
+      for (let c = 0; nodes.has(`skirt_${c}_01`); c++) chains.push([1, 2, 3, 4, 5, 6].map((j) => nodes.get(`skirt_${c}_0${j}`)!));
+      expect(chains.length).toBe(32);
+      const segment = chains[0]![1]!.position.length();
+      const points = (chain: TransformNode[]) => {
+        const out = chain.map((b) => b.computeWorldMatrix(true) && b.getAbsolutePosition().clone());
+        out.push(Vector3.TransformCoordinates(new Vector3(0, segment, 0), chain[5]!.getWorldMatrix()));
+        return out;
+      };
+      const bends = () => chains.map((chain) => {
+        const p = points(chain);
+        let worst = 0;
+        for (let j = 1; j + 1 < p.length; j++) {
+          const above = p[j]!.subtract(p[j - 1]!), below = p[j + 1]!.subtract(p[j]!);
+          worst = Math.max(worst, Math.acos(Math.min(1, Vector3.Dot(above, below) / (above.length() * below.length()))));
+        }
+        return (worst * 180) / Math.PI;
+      });
+      // Standing she is still: the cloth takes its shape in the first second and the loop only breathes.
+      for (let i = 0; i < 90; i++) { rig.setLocomotion(0); scene.render(); }
+      let sharpest = 0, at = -1;
+      for (let f = 0; f < 150; f++) {
+        rig.setLocomotion(0);
+        scene.render();
+        if (f % 10) continue;
+        bends().forEach((b, c) => { if (b > sharpest) { sharpest = b; at = c; } });
+      }
+      // Bind bends run to 9 degrees. The tilted rest and the thigh inset kicked panels out at the free hip and the
+      // hem; with both gone the sharpest fold is 36, at chain 29, which this pins.
+      expect(sharpest, JSON.stringify({ sharpest, chain: at })).toBeLessThan(40);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+      resetPlayerRig();
+    }
+  }, 300_000);
+
+  it("walks without her gown drawn inside her legs", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      await loadPlayerRig(scene, ["female"], { anims: file("anim-library.glb"), wardrobes: { female: file("wardrobe-female.glb") } });
+      const root = makeMesh(scene, "cartographer", "maren");
+      const rig = rigOf(root)!;
+      const nodes = new Map(root.getDescendants(false).map((d) => [d.name, d as TransformNode]));
+      const chains: TransformNode[][] = [];
+      for (let c = 0; nodes.has(`skirt_${c}_01`); c++) chains.push([1, 2, 3, 4, 5, 6].map((j) => nodes.get(`skirt_${c}_0${j}`)!));
+      expect(chains.length).toBe(32);
+      const segment = chains[0]![1]!.position.length();
+      // The capsules the solver keeps the cloth out of, which stand for the legs and boots as drawn.
+      const legs = (rig as unknown as { colliders: { a: Vector3; b: Vector3; radius: number }[] }).colliders;
+      expect(legs.length).toBe(6);
+      const near = (p: Vector3, a: Vector3, b: Vector3) => {
+        const ab = b.subtract(a);
+        const t = Math.min(1, Math.max(0, Vector3.Dot(p.subtract(a), ab) / ab.lengthSquared()));
+        return Vector3.Distance(p, a.add(ab.scale(t)));
+      };
+      for (let i = 0; i < 60; i++) { rig.setLocomotion(2); scene.render(); }
+      let deepest = 0;
+      for (let f = 0; f < 120; f++) {
+        rig.setLocomotion(2);
+        scene.render();
+        for (const chain of chains) {
+          // The bones as drawn: each joint's head, then the last bone's tail at the hem.
+          const p = chain.map((b) => b.computeWorldMatrix(true) && b.getAbsolutePosition().clone());
+          p.push(Vector3.TransformCoordinates(new Vector3(0, segment, 0), chain[5]!.getWorldMatrix()));
+          for (let j = 1; j < p.length; j++) {
+            for (let k = 0; k <= 8; k++) {
+              const s = Vector3.Lerp(p[j - 1]!, p[j]!, k / 8);
+              for (const leg of legs) deepest = Math.max(deepest, leg.radius - near(s, leg.a, leg.b));
+            }
+          }
+        }
+      }
+      // A contact that only shoved a segment's end stretched it to 1.6x, and the bones drawn at
+      // their own length below it fell back into the leg: 2 cm and deeper 859 times over a stride.
+      expect(deepest).toBeLessThan(0.02);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+      resetPlayerRig();
+    }
+  }, 300_000);
+
   it("turns her head toward the player beside her, never more than 40 degrees off her body", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;

@@ -290,6 +290,11 @@ const placeFree = new Vector3();
 const placeAbove = new Vector3();
 
 const sweptCorner = new Vector3();
+// `swing` and `atLength` write `swingEdge`, `swingPush` and `scratch`.
+const swingFrom = new Vector3();
+const swingPrevious = new Vector3();
+const swingEdge = new Vector3();
+const swingPush = new Vector3();
 
 /**
  * The box a limb sweeps through between `sweepStart` and `sweepEnd`, grown by
@@ -393,6 +398,13 @@ function closestOnSegment(
   }
   out.copyFrom(p2).addInPlace(scratchD2.scaleInPlace(t));
   return s;
+}
+
+/** Put `point` `length` from `base`, on the line it is on. */
+function atLength(point: Vector3, base: Vector3, length: number): void {
+  swingEdge.copyFrom(point).subtractInPlace(base);
+  const at = swingEdge.length();
+  if (at > 1e-9) point.copyFrom(base).addInPlace(swingEdge.scaleInPlace(length / at));
 }
 
 /**
@@ -705,15 +717,50 @@ export class SkirtSim {
     if (this.boxes.length < colliders.length * 6) this.boxes = new Float64Array(colliders.length * 6);
     for (let k = 0; k < colliders.length; k++) sweptBox(colliders[k]!, sweepStart, sweepEnd, this.boxes, k * 6);
     for (let chain = 0; chain < this.anchors.length; chain++) {
+      // Once a contact swings a joint, every joint below follows it at the segment length.
+      let follow = false;
       for (let j = 0; j < n; j++) {
         const i = chain * n + j;
         const base = j === 0 ? anchors[chain]! : this.points[i - 1]!;
-        if (this.collideSegment(
-          base, this.points[i]!, this.previous[i]!, i, colliders, sweepStart, sweepEnd,
-        )) moved = true;
+        const end = this.points[i]!;
+        const previous = this.previous[i]!;
+        if (follow) {
+          // `previous` moves with it, so following adds no velocity.
+          swingFrom.copyFrom(end);
+          atLength(end, base, this.segment);
+          previous.addInPlace(swingFrom.negateInPlace().addInPlace(end));
+        }
+        swingFrom.copyFrom(end);
+        swingPrevious.copyFrom(previous);
+        if (!this.collideSegment(base, end, previous, i, colliders, sweepStart, sweepEnd)) continue;
+        moved = true;
+        follow = true;
+        this.swing(base, end, previous);
       }
     }
     return moved;
+  }
+
+  /**
+   * Turn the push `collideSegment` gave `end` (from `swingFrom`) into a swing about `base`.
+   * The rig draws every bone at its bind length, so a stretched segment is drawn short and
+   * the cloth below it fell back into the leg: 2cm and deeper 859 times over her walk.
+   * Only the push across the segment turns it; the part along it would only stretch it,
+   * or, pointing at the base, be magnified by the renormalisation. Keeps `CONTACT_ABSORB`
+   * of the move out of the velocity and caps the rest at `MAX_CONTACT_PUSH`, which
+   * repeated pushes would otherwise add up past.
+   */
+  private swing(base: Vector3, end: Vector3, previous: Vector3): void {
+    swingEdge.copyFrom(swingFrom).subtractInPlace(base);
+    swingPush.copyFrom(end).subtractInPlace(swingFrom);
+    const edge = swingEdge.lengthSquared();
+    if (edge > 1e-12) swingPush.subtractInPlace(scratch.copyFrom(swingEdge).scaleInPlace(Vector3.Dot(swingPush, swingEdge) / edge));
+    end.copyFrom(swingEdge.addInPlace(swingPush).addInPlace(base));
+    atLength(end, base, this.segment);
+    previous.copyFrom(swingPrevious).addInPlace(scratch.copyFrom(end).subtractInPlace(swingFrom).scaleInPlace(CONTACT_ABSORB));
+    scratch.copyFrom(end).subtractInPlace(previous);
+    const speed = scratch.length();
+    if (speed > MAX_CONTACT_PUSH) previous.copyFrom(end).subtractInPlace(scratch.scaleInPlace(MAX_CONTACT_PUSH / speed));
   }
 
   /**

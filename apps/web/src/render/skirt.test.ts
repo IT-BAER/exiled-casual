@@ -257,6 +257,40 @@ describe("SkirtSim", () => {
     expect(worst).toBeLessThan(0.02);
   });
 
+  it("swings a panel a shin pushes at its own length, so the cloth as drawn stays off the shin", () => {
+    // The rig draws each bone at its bind length down the solved direction. A
+    // contact that only shoves a segment's end stretches it (to 1.6x on her walk),
+    // and every joint drawn below falls back short of where the solver cleared
+    // it: here the drawn panel sat 4cm inside the shin it had been pushed off.
+    // Six joints as shipped; a shin whose top stands 10cm below the waist walks
+    // across the panel's line at 2 units/s and stops 2cm past it.
+    const joints = 6, seg = 0.1445, radius = 0.1;
+    const anchors = [new Vector3(0, 1, 0)];
+    const rests = Array.from({ length: joints }, (_, j) => new Vector3(0, 1 - seg * (j + 1), 0));
+    const sim = new SkirtSim(1, joints, seg);
+    for (let i = 0; i < 60; i++) sim.step(FRAME, anchors, rests, []);
+    const top = 0.897, bottom = 0.447;
+    const drawn = () => {
+      const p = [anchors[0]!];
+      for (let j = 0; j < joints; j++) p.push(p[j]!.add(sim.direction(0, j, anchors[0]!, new Vector3()).scale(seg)));
+      return p;
+    };
+    let worst = 0;
+    for (let f = 0; f < 90; f++) {
+      const x = Math.max(-0.02, 0.4 - f * 2 * FRAME);
+      const shin = { a: new Vector3(x, top, 0), b: new Vector3(x, bottom, 0), radius };
+      sim.step(FRAME, anchors, rests, [shin]);
+      const p = drawn();
+      for (let j = 1; j < p.length; j++) {
+        for (let k = 0; k <= 20; k++) {
+          const s = Vector3.Lerp(p[j - 1]!, p[j]!, k / 20);
+          worst = Math.max(worst, radius - Math.hypot(s.x - x, Math.max(0, s.y - top, bottom - s.y), s.z));
+        }
+      }
+    }
+    expect(worst).toBeLessThan(0.02);
+  });
+
   it("catches a boot that crosses the coat between solver samples", () => {
     const sim = new SkirtSim(1, 2, SEGMENT);
     const { anchors, rests } = pose(0);
