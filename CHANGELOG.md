@@ -10,6 +10,8 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+## [0.7.9] - 2026-11-13
+
 ### Changed
 
 - Tier 13, 14 and 15 maps are harder than tier 12: their monsters hit about
