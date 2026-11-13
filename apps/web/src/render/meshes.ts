@@ -1958,8 +1958,14 @@ export const CARTOGRAPHER_LOOKS: Looks = {
   chest: "maren",
 };
 
-/** Her idle: `Idle_Loop` rests her hands up to 26 mm inside her own thighs, this take never touches them. */
-export const CARTOGRAPHER_IDLE = "Rig|Idle_Talking_Loop";
+/**
+ * Her idle (`tools/build_lady_idle.py`): `Idle_Loop`'s breathing with her hands folded at the waist
+ * and her gaze level. `Idle_Loop` rests her hands inside her thighs; the talking take bows her head.
+ */
+export const CARTOGRAPHER_IDLE = "Rig|Idle_Lady_Loop";
+
+/** How far she turns her head to watch the player: past it she would show the camera her profile. */
+export const CARTOGRAPHER_LOOK_MAX = (40 * Math.PI) / 180;
 
 /**
  * Multiplies the pack's tan skin on her drawn hands, arms and legs to the pale tone of her own face
@@ -2003,6 +2009,7 @@ function buildCartographer(scene: Scene, root: Mesh): void {
     ? buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS, CARTOGRAPHER_IDLE)
     : buildNpc(scene, root, "cartographer", RELEASED_CARTOGRAPHER_LOOKS);
   if (!npc) return;
+  if (PREVIEW_MAREN) npc.setLookMax(CARTOGRAPHER_LOOK_MAX);
   const clones = new Map<Material, Material>();
   for (const mesh of root.getChildMeshes()) {
     const [slot, , part] = mesh.name.split(".");
