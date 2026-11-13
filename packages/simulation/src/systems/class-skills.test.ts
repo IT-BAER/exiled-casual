@@ -2,6 +2,7 @@
 // def at gem level 1 in a small world, asserting the behaviour that defines it.
 import { describe, it, expect } from "vitest";
 import { fp } from "@exiled/fixed-point";
+import { effectiveSkill } from "@exiled/rules";
 import { resBlock } from "@exiled/content-schema";
 import { MONSTERS, SKILLS } from "@exiled/content-runtime";
 import { Simulation } from "../loop";
@@ -324,9 +325,10 @@ describe("Emberbound", () => {
     const out = r.mob(14, 0);
     r.cast("flammability", 8, 0);
     for (const m of [a, b]) {
-      expect(activeStatuses(r.w, m, r.sim.tick)[0]).toMatchObject({ id: "flammable", damageTakenPct: 25, damageTakenType: FIRE });
+      expect(activeStatuses(r.w, m, r.sim.tick)[0]).toMatchObject({ id: "flammable", damageTakenPct: 60, damageTakenType: FIRE });
     }
     expect(r.statuses(out)).toEqual([]);
+    expect(effectiveSkill(SKILLS.get("skill.flammability.v1")!, 10).effects[0]).toMatchObject({ damageTakenPct: 75 });
   });
 
   it("Solar Orb hovers at the aim and pulses fire through what stands under it", () => {
@@ -352,7 +354,9 @@ describe("Emberbound", () => {
   it("Herald of Ash leaves burning ground where a kill falls", () => {
     const r = rig();
     r.cast("herald_of_ash", 0, 0);
-    expect(r.buff("herald_of_ash")).toMatchObject({ damagePct: 15, reservePct: 25 });
+    expect(r.buff("herald_of_ash")).toMatchObject({ damagePct: 15, reservePct: 25, damageTakenPct: -20 });
+    // damageResolve multiplies every hit by (100 + this) / 100: Iron Resolve's shape at its gem 10.
+    expect(damageTakenPct(r.w, r.p, FIRE, r.sim.tick)).toBe(-20);
     const m = r.mob(2, 0, 1);
     r.cast("ember_nova", 2, 0);
     r.steps(2);

@@ -18,6 +18,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Maren has a new look: her own face, regrown hair, a dark gown with lace and
   knee boots. She stands with her hands folded at the waist and turns her head
   to watch you.
+- The Emberbound holds her own on tier 13-15 bosses: Mantle of Embers also makes
+  you take 20% less damage from every hit, and Kindling Hex makes cursed enemies
+  take 60% more fire damage (75% from gem level 10) instead of 25% (35%).
 - Varkis and Maren stand square behind the middle of their tables, facing you.
 - The Atlas is a torn, stained parchment sheet lying on crimson velvet, with the
   world printed on it, instead of a painting that stops at a hard edge.
