@@ -6208,17 +6208,18 @@ def keep_body_weights(obj, rig):
     rebind(obj, rig)
 
 
-# Maren's own head. The pack gives every woman one face; hers is a local TRELLIS
-# decode of a bald bust drawn from her concept (SOURCE.md), scaled crown to chin
+# Maren's own head. The pack gives every woman one face; hers is a local TripoSG
+# shape of a bald bust drawn from her concept, textured by projecting that drawing
+# (SOURCE.md), scaled crown to chin
 # onto the pack's head and then eased: where her skull stands outside the pack's
 # under her hair it is pushed just inside, so the scalp cap grown from that skull
 # covers it, and under her collar her neck is drawn onto the pack's, whose
 # weights it takes. Both moves are smoothed over the mesh: a dense head laid
 # flat on the pack's coarse faces shades as those faces, lumps and glints.
-FACE_SRC = "maren-head-v1.glb"
-FACE_CROWN_Z, FACE_CHIN_Z = 0.5019, -0.125  # the donor's landmarks, in its own units
-FACE_BACK_Y = 0.265             # back of its skull
-FACE_MID_X = -0.0015
+FACE_SRC = "maren-head-triposg-v1.glb"
+FACE_CROWN_Z, FACE_CHIN_Z = 0.5006, -0.1263  # the donor's landmarks, in its own units
+FACE_BACK_Y = 0.2922            # back of its skull
+FACE_MID_X = -0.0077
 FACE_INSIDE = 0.002             # under the hair: inside the pack's skull, below the cap's 3 mm
 FACE_PIN_REACH = 0.02           # skull farther than this from the pack's is not pushed toward it
 FACE_THIN = 0.02                # a surface with its own far side this close is an ear, not skull

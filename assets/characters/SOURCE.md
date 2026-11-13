@@ -216,9 +216,10 @@ the rest pose and the idle clip.
 ## Maren's look (`chest.maren.*`, `helmet.maren.*`)
 
 Her own look, on the female body only (`"bodies": ("female",)` in `RIGID_GEAR`):
-no item base maps to it, so the male wardrobe does not carry it. The gown and
-the head are local TRELLIS.2 decodes (`--res 512`, seed 42, about two minutes
-each) of references made with `/codex-imagegen` from her concept; the lace is a
+no item base maps to it, so the male wardrobe does not carry it. The gown is a
+local TRELLIS.2 decode (`--res 512`, seed 42, about two minutes) and the head a
+local TripoSG shape, both of references made with `/codex-imagegen` from her
+concept; the lace is a
 BlenderKit material; the hair is grown in the build with no donor. Job folder
 `review/3d/maren-zana/` (gitignored, BM-PC only): references, prep scripts and
 the completion ledger. Every Maren material is dulled to a tenth of a
@@ -253,17 +254,23 @@ strength the hideout's fires wash her black gown grey-brown and her hair pale.
   (`ae5d9a16-d846-4def-a1a2-a2cbe92bc8c2`, royalty free, 1K), kept as
   `assets/props/source/mat-black-floral-lace.blend`; it ships no opacity map, so
   alpha is taken from its height map (`LACE_ALPHA` 0.65 net, 0.97 motif).
-- `maren-head-v1.glb` -> `helmet.maren.face` (`build_face`): her own head, face,
-  ears and neck in one piece, so the pack's head, eyes, brows and neck are
-  hidden while she wears it (`COVERED_BY_LOOK` in `render/rig.ts`). Decoded from
-  a bald bust reference of her concept. The decode is opened as a WHOLE bust
-  (`tools/open_volume.py --res 384 --radius 1`) and cropped afterwards with
-  caps: cropped first, the opening's flood fill entered through the cuts and
-  left a hollow double-walled shell. Rebuilt at 12 000 triangles (fidelity p99
-  0.00040, normal p5 0.984), no normal map. TRELLIS's own texture was washed
-  out, so the atlas (repacked, coverage 0.60) is the front reference projected
-  with one smoothed scale and offset per image row, and the decode's
-  gain-matched albedo wherever the reference does not see. `build_face` scales
+- `maren-head-triposg-v1.glb` -> `helmet.maren.face` (`build_face`): her own head,
+  face, ears and neck in one piece, so the pack's head, eyes, brows and neck are
+  hidden while she wears it (`COVERED_BY_LOOK` in `render/rig.ts`). Shape from
+  TripoSG (VAST-AI-Research, MIT, repo `fc5c409`, weights `VAST-AI/TripoSG`, seed
+  42, 50 steps, run locally) of the bald bust reference
+  `review/3d/maren-zana/maren-head-reference-v1-clean.png`, without RMBG-1.4 or
+  the `diso` mesher (both non-commercial): the reference's own alpha and the
+  scikit-image extractor. Picked by the owner on 13 Nov 2026 over the TRELLIS.2
+  decode (`maren-head-v1.glb`, kept) and Pixal3D after in-game close-ups
+  (`review/3d/maren-zana/gen-compare/`). The shape is put into the TRELLIS
+  decode's frame, opened as a WHOLE bust (`tools/open_volume.py --res 384
+  --radius 1`) and cropped afterwards with caps: cropped first, the opening's
+  flood fill enters through the cuts and leaves a hollow double-walled shell.
+  Rebuilt at 12 000 triangles (fidelity p99 0.00041, normal p5 0.984), no normal map. TripoSG
+  makes no texture, so the atlas is the front reference projected with one
+  smoothed scale and offset per image row, and one skin tone gain-matched to it
+  wherever the reference does not see. `build_face` scales
   it crown to chin onto the pack's head (0.3646 m per donor unit), collapses
   the folded slivers the decimation left (one was a white fleck on her forehead
   under the game's sun), pushes her skull just inside the pack's where hair

@@ -1873,11 +1873,11 @@
   ]
  },
  "helmet.maren.face": {
-  "source": "maren-head-v1.glb",
+  "source": "maren-head-triposg-v1.glb",
   "bone": "Head",
   "fit": "skull_warp",
-  "vertices": 5864,
-  "triangles": 11607,
+  "vertices": 5901,
+  "triangles": 11693,
   "deform_bones": [
    "Head",
    "clavicle_l",
@@ -1886,19 +1886,19 @@
    "spine_03"
   ],
   "scale": 0.36458,
-  "neck": 1521,
-  "skull_pushed_in": 1580,
-  "thin": 110,
-  "deepest_move_mm": 8.56,
-  "skull_outside_pack_mm": 1.42,
-  "folds_collapsed": 19
+  "neck": 1542,
+  "skull_pushed_in": 1727,
+  "thin": 147,
+  "deepest_move_mm": 9.09,
+  "skull_outside_pack_mm": 0.67,
+  "folds_collapsed": 14
  },
  "helmet.maren.tresses": {
   "source": "body",
   "bone": "Head",
   "fit": "grown",
-  "vertices": 21898,
-  "triangles": 21092,
+  "vertices": 22394,
+  "triangles": 21570,
   "deform_bones": [
    "Head",
    "clavicle_l",
@@ -1907,14 +1907,14 @@
    "spine_02",
    "spine_03"
   ],
-  "cards": 403,
+  "cards": 412,
   "roots_per_layer": [
-   189,
-   120,
-   63,
+   193,
+   121,
+   64,
    35
   ],
-  "lifted_off_skin": 279,
+  "lifted_off_skin": 318,
   "strand_m_mean": 0.523,
   "on_skull_m_mean": 0.037,
   "layers": [
@@ -1937,20 +1937,20 @@
     0.022
    ]
   ],
-  "atlas_coverage": 0.484,
+  "atlas_coverage": 0.498,
   "alpha_cutoff": 0.3
  },
  "helmet.maren.scalp": {
   "source": "body",
   "bone": "Head",
   "fit": "body_offset",
-  "vertices": 1017,
-  "triangles": 1584,
+  "vertices": 1080,
+  "triangles": 1638,
   "deform_bones": [
    "Head",
    "neck_01"
   ],
   "offset_mm": 3.0,
-  "ear_faces_cut": 261
+  "ear_faces_cut": 211
  }
 }
