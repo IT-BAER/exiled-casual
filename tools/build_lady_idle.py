@@ -1,19 +1,24 @@
 """Add Maren's standing idle to `anim-library.glb` as `Rig|Idle_Lady_Loop`.
 
-`Idle_Loop` rests her hands inside her thighs and `Idle_Talking_Loop` gestures with
-her head bent to her hands, which the steep game camera reads as a scowl. This take
-keeps `Idle_Loop`'s breathing body (pelvis, spine, clavicles, legs) and replaces the
-arms, hands, fingers, neck and head: her hands folded in front of her at the waist,
-the right laid over the back of the left, and her gaze lifted level. The runtime
-gaze turns the head toward the player on top of it.
+`Idle_Loop` rests her hands inside her thighs and stands a man's wide, square stance;
+`Idle_Talking_Loop` gestures with her head bent to her hands, which the steep game
+camera reads as a scowl. This take keeps `Idle_Loop`'s breathing chest (spine,
+clavicles) and replaces the rest: a lady's stance held still (weight on her right
+leg, that hip up and out over it, the left foot ahead and turned out with its knee
+bent in, feet close), her hands folded in front of her at the waist, the right laid
+over the back of the left, and her gaze lifted level. The runtime gaze turns the head
+toward the player on top of it.
 
 Authored on `wardrobe-female.glb`'s own skeleton, like `build_bow_clip.py` on the
 male one: the runtime writes node-local rotations by bone name, so authoring on her
 nodes is authoring what plays. `Idle_Loop` is grafted onto a copy of the wardrobe and
-imported, so frame N in Blender is her body as the runtime plays it (pelvis
-translation left out: it only moves her whole). Per frame the wrists are held fixed
-on her belly (`spine_01`'s frame) by two-bone IK from wherever the breathing
-clavicles put the shoulders. Before writing, every Nth frame is measured: no hand
+imported, with the pelvis translation this take holds (`HIP_SHIFT`, `HIP_DROP`) written
+the way `rig.ts` `remapHips` plays it, so frame N in Blender is her body as the
+runtime shows it. Pelvis and legs are one pose for the whole loop: the runtime calms
+an idle's hips and legs toward their first key, which leaves a held pose where it is,
+so the soles cannot slide. Per frame the wrists are held fixed on her belly
+(`spine_01`'s frame) by two-bone IK from wherever the breathing clavicles put the
+shoulders. Before writing, every Nth frame is measured: no hand
 vertex may sit deeper than `GATE` behind her gown, lace, cuffs, legs or other hand.
 
 The clip spliced in shares `Idle_Loop`'s keys for every bone it does not replace.
@@ -31,7 +36,7 @@ import sys
 import tempfile
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 from mathutils.bvhtree import BVHTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,7 +55,27 @@ FPS = 30
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 ARM_BONES = {side: (f"upperarm_{side}", f"lowerarm_{side}", f"hand_{side}") for side in ("l", "r")}
 FINGER_BONES = {side: tuple(f"{f}_{i:02d}_{side}" for f in FINGERS for i in (1, 2, 3)) for side in ("l", "r")}
-KEYED = ("neck_01", "Head") + tuple(b for s in ("l", "r") for b in ARM_BONES[s] + FINGER_BONES[s])
+LEG_BONES = ("pelvis", "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r")
+KEYED = ("spine_02", "neck_01", "Head") + LEG_BONES + tuple(b for s in ("l", "r") for b in ARM_BONES[s] + FINGER_BONES[s])
+
+# Her stance, in her bind frame (metres; she faces -Y, her left is +X, up +Z), weight on
+# `STAND`. The pelvis moves out over the standing foot and down, and tilts that hip up;
+# the free hip comes a little forward. Ankles are placed from her bind ankles, at their
+# bind height, so the soles stay on the floor.
+STAND = "r"
+HIP_SHIFT = 0.04
+HIP_DROP = 0.022
+HIP_ROLL = math.radians(6.0)
+HIP_YAW = math.radians(5.0)
+# The chest leans back the other way, so her shoulders stand over her feet again.
+CHEST_ROLL = math.radians(5.0)
+# Ankle (inward from its bind x toward her midline, forward), metres; toe turned out, radians.
+STAND_ANKLE = (0.065, 0.0)
+FREE_ANKLE = (0.07, 0.09)
+STAND_TOE_OUT = math.radians(8.0)
+FREE_TOE_OUT = math.radians(22.0)
+# Knee poles: forward, the free knee also in toward the standing one.
+FREE_KNEE_IN = 0.45
 
 # Where the hands rest, in her bind frame (metres; she faces -Y, her left is +X, up +Z).
 # The palm centre of the under (left) hand sits below the navel, clear of the gown's
@@ -140,10 +165,72 @@ def graft_idle():
             sampler[key] = remap[sampler[key]]
         samplers.append(sampler)
         channels.append({"sampler": len(samplers) - 1, "target": {"node": joints[name], "path": "rotation"}})
+    span = max(lib["accessors"][source["samplers"][0]["input"]]["max"])
+    _, held = held_hips(lib, doc, joints)
+    times, blob = append_floats(doc, blob, [0.0, span], "SCALAR")
+    values, blob = append_floats(doc, blob, [tuple(held), tuple(held)], "VEC3")
+    samplers.append({"input": times, "output": values, "interpolation": "LINEAR"})
+    channels.append({"sampler": len(samplers) - 1, "target": {"node": joints["pelvis"], "path": "translation"}})
     doc["animations"] = [{"name": SOURCE, "channels": channels, "samplers": samplers}]
     doc["buffers"][0]["byteLength"] = len(blob) + (-len(blob) % 4)
     write_raw_glb(POSED, doc, blob)
     return len(channels)
+
+
+def append_floats(doc, blob, values, kind):
+    """Append a float accessor (`SCALAR` or `VEC3`) holding `values`; returns (index, grown blob)."""
+    flat = [c for v in values for c in (v if kind == "VEC3" else (v,))]
+    width = 3 if kind == "VEC3" else 1
+    blob += b"\0" * (-len(blob) % 4)
+    doc["bufferViews"].append({"buffer": 0, "byteOffset": len(blob), "byteLength": 4 * len(flat)})
+    blob += struct.pack(f"<{len(flat)}f", *flat)
+    columns = [flat[i::width] for i in range(width)]
+    doc["accessors"].append({
+        "bufferView": len(doc["bufferViews"]) - 1, "componentType": 5126, "count": len(values), "type": kind,
+        "min": [min(c) for c in columns], "max": [max(c) for c in columns],
+    })
+    return len(doc["accessors"]) - 1, blob
+
+
+def node_world(doc, index):
+    """World matrix of glTF node `index` (its parents' TRS composed down from the scene)."""
+    parent = {c: i for i, n in enumerate(doc["nodes"]) for c in n.get("children", [])}
+    chain = []
+    while index is not None:
+        chain.append(index)
+        index = parent.get(index)
+    world = Matrix.Identity(4)
+    for i in reversed(chain):
+        node = doc["nodes"][i]
+        if "matrix" in node:
+            m = node["matrix"]
+            local = Matrix([m[0:4], m[4:8], m[8:12], m[12:16]]).transposed()
+        else:
+            x, y, z, w = node.get("rotation", (0.0, 0.0, 0.0, 1.0))
+            sx, sy, sz = node.get("scale", (1.0, 1.0, 1.0))
+            local = (Matrix.Translation(node.get("translation", (0.0, 0.0, 0.0)))
+                     @ Quaternion((w, x, y, z)).to_matrix().to_4x4() @ Matrix.Diagonal((sx, sy, sz, 1.0)))
+        world = world @ local
+    return world
+
+
+def held_hips(lib, doc, joints):
+    """
+    The pelvis translation this take holds: (library value, wardrobe value). `remapHips`
+    plays a library key `v` as `outfitRest + (v - animRest) * |outfitRest| / |animRest|` in
+    the pelvis's parent frame, so the wanted offset off her bind pose is inverted through it.
+    """
+    pelvis = joints["pelvis"]
+    outfit = Vector(doc["nodes"][pelvis].get("translation", (0.0, 0.0, 0.0)))
+    lib_pelvis = next(i for i, n in enumerate(lib["nodes"]) if n.get("name") == "pelvis"
+                      and any(c["target"]["node"] == i for a in lib["animations"] if a["name"] == SOURCE for c in a["channels"]))
+    anim = Vector(lib["nodes"][lib_pelvis].get("translation", (0.0, 0.0, 0.0)))
+    side = -1.0 if STAND == "r" else 1.0
+    # Blender (x, y, z) is glTF (x, z, -y).
+    offset = Vector((side * HIP_SHIFT, -HIP_DROP, 0.0))
+    parent = next(i for i, n in enumerate(doc["nodes"]) if pelvis in n.get("children", []))
+    local = node_world(doc, parent).to_3x3().inverted() @ offset
+    return anim + local * (anim.length / outfit.length), outfit + local
 
 
 # --- posing -------------------------------------------------------------------
@@ -177,6 +264,11 @@ class Rest:
         world, pb = arm.matrix_world, arm.pose.bones
         head_of = lambda n: world @ pb[n].head
         self.rot = {b.name: (world @ b.matrix).to_3x3().normalized() for b in pb}
+        self.ankle = {s: head_of(f"foot_{s}") for s in ("l", "r")}
+        self.leg_len = {s: ((head_of(f"calf_{s}") - head_of(f"thigh_{s}")).length,
+                            (head_of(f"foot_{s}") - head_of(f"calf_{s}")).length) for s in ("l", "r")}
+        self.leg_dir = {s: ((head_of(f"calf_{s}") - head_of(f"thigh_{s}")).normalized(),
+                            (head_of(f"foot_{s}") - head_of(f"calf_{s}")).normalized()) for s in ("l", "r")}
         self.belly = (world @ pb["spine_01"].matrix).copy()
         self.len = {s: ((head_of(f"lowerarm_{s}") - head_of(f"upperarm_{s}")).length,
                         (head_of(f"hand_{s}") - head_of(f"lowerarm_{s}")).length) for s in ("l", "r")}
@@ -203,6 +295,47 @@ def set_world(arm, name, rot, head):
     pb = arm.pose.bones[name]
     pb.matrix = arm.matrix_world.inverted() @ (Matrix.Translation(head) @ rot.to_4x4())
     bpy.context.view_layer.update()
+
+
+def pose_stance(arm, rest, first_pelvis):
+    """
+    Hold her hips and legs in the stance (`STAND` and the constants under it): the pelvis
+    from its first idle pose, tilted and turned; the chest kept where the idle breathes it,
+    leaned back; each leg by two-bone IK to its ankle with the knee toward its pole and the
+    foot flat, turned out. Returns the ankle each leg misses by, metres.
+    """
+    world, pb = arm.matrix_world, arm.pose.bones
+    head_of = lambda n: world @ pb[n].head
+    chest = (world @ pb["spine_02"].matrix).copy()
+    pb["pelvis"].matrix_basis = first_pelvis
+    bpy.context.view_layer.update()
+    side = -1.0 if STAND == "r" else 1.0
+    # The standing hip up: for a stand on her right, a turn about +Y lifts -X.
+    turn(pb["pelvis"], Vector((0.0, -side, 0.0)), HIP_ROLL, world)
+    turn(pb["pelvis"], Vector((0.0, 0.0, 1.0)), side * HIP_YAW, world)
+    set_world(arm, "spine_02", chest.to_3x3().normalized(), head_of("spine_02"))
+    turn(pb["spine_02"], Vector((0.0, side, 0.0)), CHEST_ROLL, world)
+
+    miss = {}
+    for leg in ("l", "r"):
+        out = 1.0 if leg == "l" else -1.0
+        standing = leg == STAND
+        inward, ahead = STAND_ANKLE if standing else FREE_ANKLE
+        ankle = rest.ankle[leg] + Vector((-out * inward, -ahead, 0.0))
+        hip = head_of(f"thigh_{leg}")
+        pole = Vector((0.0, -1.0, 0.0)) if standing else Vector((-out * FREE_KNEE_IN, -1.0, 0.0)).normalized()
+        thigh_len, calf_len = rest.leg_len[leg]
+        knee = elbow_at(hip, ankle, thigh_len, calf_len, pole)
+        ahead_axis = Vector((0.0, -1.0, 0.0))
+        thigh = basis((knee - hip).normalized(), pole) @ basis(rest.leg_dir[leg][0], ahead_axis).inverted() @ rest.rot[f"thigh_{leg}"]
+        calf = basis((ankle - knee).normalized(), pole) @ basis(rest.leg_dir[leg][1], ahead_axis).inverted() @ rest.rot[f"calf_{leg}"]
+        toe = STAND_TOE_OUT if standing else FREE_TOE_OUT
+        foot = Matrix.Rotation(out * toe, 3, "Z") @ rest.rot[f"foot_{leg}"]
+        set_world(arm, f"thigh_{leg}", thigh, hip)
+        set_world(arm, f"calf_{leg}", calf, head_of(f"calf_{leg}"))
+        set_world(arm, f"foot_{leg}", foot, head_of(f"foot_{leg}"))
+        miss[leg] = (head_of(f"foot_{leg}") - ankle).length
+    return miss
 
 
 def lift_gaze(arm, rest):
@@ -340,12 +473,14 @@ def build():
         for name, basis_m in body[frame].items():
             pb[name].matrix_basis = basis_m
         bpy.context.view_layer.update()
+        misses = pose_stance(arm, rest, body[first]["pelvis"])
+        assert max(misses.values()) < 0.002, f"ankles miss their marks: {misses}"
         pitch = lift_gaze(arm, rest)
         bends = {s: pose_arm(arm, rest, s) for s in ("l", "r")}
         if frame == first:
             at = lambda n: tuple(round(c, 3) for c in arm.matrix_world @ pb[n].head)
             print(f"frame {frame}: idle gaze pitch {math.degrees(pitch):+.1f} deg, wrist bend l {bends['l']:.0f} r {bends['r']:.0f} deg")
-            for n in ("lowerarm_l", "hand_l", "middle_01_l", "lowerarm_r", "hand_r", "middle_01_r"):
+            for n in ("thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r", "hand_l", "hand_r"):
                 print(f"  {n} at {at(n)}")
         for name in order:
             q = pb[name].rotation_quaternion
@@ -389,12 +524,20 @@ def splice():
     assert sorted(fresh) == sorted(KEYED), sorted(set(KEYED) - set(fresh))
 
     channels, samplers = [], []
+    span = max(doc["accessors"][source["samplers"][0]["input"]]["max"])
+    wardrobe, _ = read_glb(WARDROBE)
+    joints = {wardrobe["nodes"][j]["name"]: j for skin in wardrobe["skins"] for j in skin["joints"]}
+    held, _ = held_hips(doc, wardrobe, joints)
     for channel in source["channels"]:
         name = named(doc, channel)
         if channel["target"]["path"] == "rotation" and name in fresh:
             sampler = dict(taken["samplers"][fresh.pop(name)["sampler"]])
             for key in ("input", "output"):
                 sampler[key], blob = copy_accessor(add, extra, sampler[key], doc, blob)
+        elif channel["target"]["path"] == "translation" and name == "pelvis":
+            times, blob = append_floats(doc, blob, [0.0, span], "SCALAR")
+            values, blob = append_floats(doc, blob, [tuple(held), tuple(held)], "VEC3")
+            sampler = {"input": times, "output": values, "interpolation": "LINEAR"}
         else:
             sampler = dict(source["samplers"][channel["sampler"]])
         samplers.append(sampler)

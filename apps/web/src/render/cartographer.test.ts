@@ -283,6 +283,132 @@ describe("Maren's body", () => {
     }
   }, 180_000);
 
+  /**
+   * A lady's stance, not a man's: feet close, one ahead, the weight on one leg with that hip up
+   * and over it, the free knee bent in. Measured on her joints in her own frame over a whole loop;
+   * the soles stay planted, and no leg or boot stands out through her gown.
+   */
+  it("stands on one leg with her feet close and the free knee in, planted, her legs inside her gown", async () => {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    try {
+      engine = new NullEngine();
+      engine.getDeltaTime = () => 16;
+      const { scene } = createScene(engine);
+      scene.useConstantAnimationDeltaTime = true;
+      new FreeCamera("eye", new Vector3(0, 2, -6), scene);
+      await loadPlayerRig(scene, ["female"], { anims: file("anim-library.glb"), wardrobes: { female: file("wardrobe-female.glb") } });
+      const root = makeMesh(scene, "cartographer", "maren");
+      const rig = rigOf(root)!;
+      const frame = () => { rig.setLocomotion(0); scene.render(); };
+      for (let i = 0; i < 60; i++) frame();
+      const bone = (name: string) => {
+        const n = root.getDescendants(false).find((d) => d.name === name) as TransformNode;
+        n.computeWorldMatrix(true);
+        return n.getAbsolutePosition().clone();
+      };
+      const worldOf = (m: Mesh) => {
+        const p = m.getPositionData(true, true)!;
+        const out: Vector3[] = [];
+        for (let i = 0; i < p.length; i += 3) out.push(Vector3.TransformCoordinatesFromFloatsToRef(p[i]!, p[i + 1]!, p[i + 2]!, m.getWorldMatrix(), new Vector3()));
+        return out;
+      };
+      const drawn = (test: RegExp) => root.getChildMeshes().filter((m): m is Mesh => m instanceof Mesh && m.isEnabled() && test.test(m.name));
+
+      // Her frame: lateral from her right hip joint to her left, forward across it on the floor.
+      const lateral = bone("thigh_l").subtract(bone("thigh_r"));
+      lateral.y = 0;
+      lateral.normalize();
+      const forward = Vector3.Cross(lateral, Vector3.Up()).normalize();
+      const toes = bone("ball_l").subtract(bone("foot_l")).add(bone("ball_r").subtract(bone("foot_r")));
+      if (Vector3.Dot(forward, toes) < 0) forward.scaleInPlace(-1);
+      const lat = (v: Vector3) => Vector3.Dot(v, lateral);
+      const fwd = (v: Vector3) => Vector3.Dot(v, forward);
+
+      const ankles = { l: bone("foot_l"), r: bone("foot_r") };
+      const knees = { l: bone("calf_l"), r: bone("calf_r") };
+      const hips = { l: bone("thigh_l"), r: bone("thigh_r") };
+      // The standing leg is the one whose hip is higher; the hips lean out over it.
+      const stand = hips.l.y > hips.r.y ? "l" : "r";
+      const free = stand === "l" ? "r" : "l";
+      const hipMid = lat(hips.l.add(hips.r).scale(0.5));
+      const straight = lat(hips[free]) + (lat(ankles[free]) - lat(hips[free])) * ((hips[free].y - knees[free].y) / (hips[free].y - ankles[free].y));
+      // Every length in hip spacings: the joint-to-joint width of her hips, 0.222 m on her bind skeleton.
+      const unit = Vector3.Distance(hips.l, hips.r);
+      const m = {
+        stand,
+        ankleGap: Math.abs(lat(ankles.l) - lat(ankles.r)),
+        freeAhead: fwd(ankles[free]) - fwd(ankles[stand]),
+        kneeGap: Math.abs(lat(knees.l) - lat(knees.r)),
+        hipTilt: Math.abs(hips.l.y - hips.r.y),
+        hipsOverStand: Math.abs(hipMid - lat(ankles[stand])),
+        hipsOverFree: Math.abs(hipMid - lat(ankles[free])),
+        kneeIn: Math.abs(straight - hipMid) - Math.abs(lat(knees[free]) - hipMid),
+      };
+      const detail = JSON.stringify({ ...m, unit });
+      expect(m.ankleGap / unit, detail).toBeLessThan(0.6);
+      expect(m.freeAhead / unit, detail).toBeGreaterThan(0.25);
+      expect(m.kneeGap / unit, detail).toBeLessThan(0.65);
+      expect(m.hipTilt / unit, detail).toBeGreaterThan(0.05);
+      expect(m.hipsOverStand, detail).toBeLessThan(m.hipsOverFree);
+      expect(m.kneeIn / unit, detail).toBeGreaterThan(0.02);
+
+      const start = { l: ankles.l.clone(), r: ankles.r.clone() };
+      const pelvis = root.getDescendants(false).find((d) => d.name === "pelvis") as TransformNode;
+      const gown = drawn(/^chest\.maren\.gown/);
+      const legs = drawn(/^(base\.female\.(leg|shin)_[lr]|boots\.)/);
+      expect(gown.length).toBeGreaterThan(0);
+      expect(legs.length).toBeGreaterThan(0);
+      let slide = 0, sole = 0, through = 0;
+      for (let f = 0; f < 160; f++) {
+        frame();
+        for (const side of ["l", "r"] as const) slide = Math.max(slide, Vector3.Distance(bone(`foot_${side}`), start[side]));
+        if (f % 32) continue;
+        const floor = root.getAbsolutePosition().y;
+        const legPoints = legs.flatMap(worldOf);
+        sole = Math.max(sole, Math.abs(Math.min(...legPoints.map((v) => v.y)) - floor));
+        // Out through the gown: a leg vertex farther from her axis than the gown on the same ray.
+        const c = pelvis.getAbsolutePosition();
+        const tris = gown.flatMap((g) => {
+          const p = worldOf(g), idx = g.getIndices()!;
+          const t: [Vector3, Vector3, Vector3][] = [];
+          for (let i = 0; i < idx.length; i += 3) t.push([p[idx[i]!]!, p[idx[i + 1]!]!, p[idx[i + 2]!]!]);
+          return t;
+        });
+        const hem = Math.min(...tris.flat().map((v) => v.y));
+        for (const v of legPoints) {
+          if (v.y < hem + 0.02 || v.y > c.y) continue;
+          const d = new Vector3(v.x - c.x, 0, v.z - c.z);
+          const r = d.length();
+          d.scaleInPlace(1 / r);
+          let gownAt = -1;
+          for (const [a, b, e] of tris) {
+            if (v.y < Math.min(a.y, b.y, e.y) || v.y > Math.max(a.y, b.y, e.y)) continue;
+            const e1 = b.subtract(a), e2 = e.subtract(a);
+            const q = Vector3.Cross(d, e2);
+            const det = Vector3.Dot(e1, q);
+            if (Math.abs(det) < 1e-12) continue;
+            const o = new Vector3(c.x, v.y, c.z).subtractInPlace(a);
+            const u = Vector3.Dot(o, q) / det;
+            const k = Vector3.Cross(o, e1);
+            const w = Vector3.Dot(d, k) / det;
+            if (u < 0 || w < 0 || u + w > 1) continue;
+            gownAt = Math.max(gownAt, Vector3.Dot(e2, k) / det);
+          }
+          if (gownAt > 0) through = Math.max(through, r - gownAt);
+        }
+      }
+      // About 3 mm of slide, 15 mm off the floor and 4 mm out through the gown, in her own size.
+      const loop = JSON.stringify({ slide, sole, through, unit });
+      expect(slide / unit, loop).toBeLessThan(0.014);
+      expect(sole / unit, loop).toBeLessThan(0.07);
+      expect(through / unit, loop).toBeLessThan(0.018);
+    } finally {
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+      resetPlayerRig();
+    }
+  }, 300_000);
+
   it("turns her head toward the player beside her, never more than 40 degrees off her body", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
