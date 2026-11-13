@@ -803,7 +803,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
         if (rig !== null && looks !== null) rig.setLooks(looks);
         rig?.standSettled();
       } else if (NPC_SUBJECTS.some((s) => s.id === id)) {
-        // The hideout's own build: her look per PREVIEW_MAREN, her idle, her tinted clones.
+        // The hideout's own build: her look, her idle, her tinted clones.
         const npc = makeMesh(scene, id as "cartographer" | "vendor", `viewer-npc-${id}`);
         npc.parent = host;
         rig = rigOf(npc);

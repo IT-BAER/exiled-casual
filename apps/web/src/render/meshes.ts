@@ -29,7 +29,6 @@ import { groundMaterial } from "./ground-fx";
 import { hasRim, HIT_TINT, HIT_ALPHA, type Tier } from "./rim";
 import { BROOD_ABILITY } from "./boss-tells";
 import { playSfxAt } from "../audio/sfx";
-import { PREVIEW_MAREN } from "../preview";
 import type { SnapshotEntity } from "@exiled/protocol";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "telegraphLane" | "telegraphRing" | "broodMark" | "chargePath" | "portal" | "mapDevice" | "stash" | "vendor" | "cartographer" | "container" | "groundItem" | "gold";
@@ -1977,25 +1976,8 @@ export const CARTOGRAPHER_SKIN = new Color3(0.56, 0.76, 1.2);
 /** Multiplies her boots' tan leather, so it reads as black. */
 export const CARTOGRAPHER_BOOTS = new Color3(0.14, 0.13, 0.13);
 
-/** Maren as v0.7.8 shipped her, on the released wardrobe: velvet gown, her old hair, the Ember slippers. */
-export const RELEASED_CARTOGRAPHER_LOOKS: Looks = {
-  ...looksForEquipment({ boots: { baseId: "base.ember_slippers" } }, "female"),
-  helmet: "maren",
-  chest: "maren",
-};
-
-/** Her brows in v0.7.8, linear like the glTF base colour it replaces (the pack's brown is 0.34, 0.19, 0.10). */
-export const RELEASED_CARTOGRAPHER_HAIR = new Color3(0.6, 0.05, 0.02);
-
-/** Multiplies her v0.7.8 slippers' cloth, so it reads as the gown's dark rather than as tan. */
-export const RELEASED_CARTOGRAPHER_SLIPPERS = new Color3(0.16, 0.11, 0.11);
-
 /** The tint a part of hers takes on a clone of its material, or null. */
-function cartographerShade(slot: string | undefined, part: string | undefined): Color3 | null {
-  if (!PREVIEW_MAREN) {
-    return slot === "base" && (part === "hair" || part === "brows") ? RELEASED_CARTOGRAPHER_HAIR
-      : slot === "boots" ? RELEASED_CARTOGRAPHER_SLIPPERS : null;
-  }
+function cartographerShade(slot: string | undefined): Color3 | null {
   return slot === "base" ? CARTOGRAPHER_SKIN : slot === "boots" ? CARTOGRAPHER_BOOTS : null;
 }
 
@@ -2005,15 +1987,13 @@ function cartographerShade(slot: string | undefined, part: string | undefined): 
  * shared by every rig built from it, the player's too.
  */
 function buildCartographer(scene: Scene, root: Mesh): void {
-  const npc = PREVIEW_MAREN
-    ? buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS, CARTOGRAPHER_IDLE)
-    : buildNpc(scene, root, "cartographer", RELEASED_CARTOGRAPHER_LOOKS);
+  const npc = buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS, CARTOGRAPHER_IDLE);
   if (!npc) return;
-  if (PREVIEW_MAREN) npc.setLookMax(CARTOGRAPHER_LOOK_MAX);
+  npc.setLookMax(CARTOGRAPHER_LOOK_MAX);
   const clones = new Map<Material, Material>();
   for (const mesh of root.getChildMeshes()) {
     const [slot, , part] = mesh.name.split(".");
-    const shade = cartographerShade(slot, part);
+    const shade = cartographerShade(slot);
     if (!shade || !mesh.material) continue;
     let tinted = clones.get(mesh.material);
     if (!tinted) {

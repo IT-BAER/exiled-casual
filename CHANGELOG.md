@@ -15,6 +15,9 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 - Tier 13, 14 and 15 maps are harder than tier 12: their monsters hit about
   1.2, 1.4 and 1.6 times as hard as a tier 12 monster, where before all three hit
   about as hard as tier 12. Tier 12 and below are unchanged.
+- Maren has a new look: her own face, regrown hair, a dark gown with lace and
+  knee boots. She stands with her hands folded at the waist and turns her head
+  to watch you.
 - Varkis and Maren stand square behind the middle of their tables, facing you.
 - The Atlas is a torn, stained parchment sheet lying on crimson velvet, with the
   world printed on it, instead of a painting that stops at a hard edge.

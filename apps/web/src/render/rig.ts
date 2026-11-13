@@ -23,7 +23,6 @@ import { MeshoptDecoder } from "meshoptimizer/decoder";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 import { modelUrl } from "./model-url";
-import { FEMALE_WARDROBE, PREVIEW_MAREN } from "../preview";
 
 /**
  * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
@@ -609,7 +608,7 @@ export function speedRatioFor(clip: RigClip, speed: number): number {
  */
 const WARDROBE_URL: Record<Body, string> = {
   male: modelUrl("/models/wardrobe.glb"),
-  female: modelUrl(FEMALE_WARDROBE),
+  female: modelUrl("/models/wardrobe-female.glb"),
 };
 
 // The served wardrobe is meshopt-packed (`tools/pack_wardrobe.mjs`). Babylon's
@@ -695,7 +694,7 @@ const SKIRTED_CHEST: ReadonlySet<string> = new Set(["stalker", "ember", "maren"]
  * How far inside the chain ring a look's cloth hangs, added to every leg capsule while it is worn.
  * The ring is the Ember robe's; the gown's back hangs a median 31-38mm inside it and showed the leg.
  */
-const SKIRT_INSET: Readonly<Record<string, number>> = PREVIEW_MAREN ? { maren: 0.03 } : {};
+const SKIRT_INSET: Readonly<Record<string, number>> = { maren: 0.03 };
 
 const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
   helmet: ["hair"],
@@ -711,12 +710,11 @@ const COVERED_BY: Partial<Record<Slot, readonly string[]>> = {
  * (`chest.maren.lace`, `chest.maren.cuffs`) lies on that skin. Her helmet look
  * is her own head (`helmet.maren.face`: face, ears and neck in one piece), so
  * the pack's head (`body`, what the region split leaves), eyes, brows and neck go.
- * The released wardrobe (v0.7.8) has neither: there her gown covers her legs.
  */
-const COVERED_BY_LOOK: Partial<Record<Slot, Readonly<Record<string, readonly string[]>>>> = PREVIEW_MAREN ? {
+const COVERED_BY_LOOK: Partial<Record<Slot, Readonly<Record<string, readonly string[]>>>> = {
   helmet: { maren: ["hair", "body", "eyes", "brows", "neck"] },
   chest: { maren: ["torso", "collar"] },
-} : {};
+};
 
 /** The `<slot>.<look>.<part>` pieces the worn gear replaces. */
 export function hiddenBaseParts(looks: Looks): ReadonlySet<string> {
