@@ -16,6 +16,7 @@ import { deviceBeckon } from "./props";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
 import { rigOf } from "./rig";
+import { PREVIEW_MAREN } from "../preview";
 import type { ReactionClip, RigClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { characterClass } from "@exiled/content-runtime";
@@ -867,6 +868,11 @@ export class SnapshotRenderer {
       }
       if (e.kind === "vendor" || e.kind === "cartographer") {
         updateVendor(mesh, this.hoveredEntityId === e.id);
+      }
+      if (e.kind === "cartographer" && PREVIEW_MAREN && this.playerId !== null) {
+        // Maren watches the player; her rig clamps how far her head turns.
+        const him = this.meshes.get(this.playerId);
+        if (him) rigOf(mesh)?.setAimTarget(him.position.x, him.position.z);
       }
       if (e.kind === "container") {
         updateContainer(mesh, this.hoveredEntityId === e.id, e.opened === true);

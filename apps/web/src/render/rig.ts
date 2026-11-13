@@ -550,8 +550,8 @@ export function spinePitch(gait: Gait | null, moveRel: number, actionFree: numbe
   return sideways - backpedal;
 }
 
-export function lookOffset(lookYaw: number, bodyYaw: number): number {
-  return Math.max(-LOOK_MAX, Math.min(LOOK_MAX, wrapPi(-(lookYaw - bodyYaw))));
+export function lookOffset(lookYaw: number, bodyYaw: number, max = LOOK_MAX): number {
+  return Math.max(-max, Math.min(max, wrapPi(-(lookYaw - bodyYaw))));
 }
 export function actionRatio(authoredSeconds: number, windowSeconds: number | undefined): number {
   if (!(authoredSeconds > 0) || !(windowSeconds !== undefined && windowSeconds > 0)) return 1;
@@ -1619,6 +1619,7 @@ export class RigActor {
   /** World-space aim target (x = Babylon x, z = Babylon z). */
   private aimTarget: { x: number; z: number } | null = null;
   private lookYaw: number | null = null;
+  private lookMax = LOOK_MAX;
   /** The gaze's current turn off the chest, eased (bone yaw, radians). */
   private look = 0;
   /** Observer that applies aim rotation after the animation system runs. */
@@ -1758,6 +1759,11 @@ export class RigActor {
   /** The yaw the body is turning to while it moves, which the head looks along; null to watch the cursor. */
   setLookYaw(yaw: number | null): void {
     this.lookYaw = yaw;
+  }
+
+  /** Farthest the head turns off the chest to look where it is moving or at its aim (radians, at most `LOOK_MAX`). */
+  setLookMax(max: number): void {
+    this.lookMax = Math.min(max, LOOK_MAX);
   }
 
   setMoveAngle(rel: number, yawStep = 0): void {
@@ -2398,7 +2404,7 @@ export class RigActor {
       } else {
         // The eyes lead: where the body is turning to while it moves, the cursor while it stands.
         const yaw = this.lookYaw ?? aimYaw;
-        if (yaw !== null) want = lookOffset(yaw, bodyYaw);
+        if (yaw !== null) want = lookOffset(yaw, bodyYaw, this.lookMax);
       }
       this.look += (want - this.look) * (1 - Math.exp(-dt / LOOK_EASE_SEC));
       if (Math.abs(this.look) < 1e-4) return;
