@@ -667,7 +667,7 @@ describe("skill unlocks and growth", () => {
     },
     "skill.flammability.v1": {
       own: { field: "radiusFixed", perMille: 20 },
-      breakpoints: [{ atLevel: 10, patch: { damageTakenPct: 35 } }],
+      breakpoints: [{ atLevel: 10, patch: { damageTakenPct: 75 } }],
     },
     "skill.solar_orb.v1": {
       own: { field: "durationTicks", perMille: 25 },

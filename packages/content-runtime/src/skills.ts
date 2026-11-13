@@ -875,7 +875,7 @@ const SKILL_DEFS: SkillDef[] = [
     growth: {
       // PoE2's curse grows 1.5 -> 3.1 m over twenty levels (poe2db.tw).
       perLevel: { damagePct: 6, manaPct: 4, own: { field: "radiusFixed", perMille: 20 } },
-      breakpoints: [{ atLevel: 10, text: "Cursed enemies take 35% more fire damage", patch: { damageTakenPct: 35 } }],
+      breakpoints: [{ atLevel: 10, text: "Cursed enemies take 75% more fire damage", patch: { damageTakenPct: 75 } }],
     },
     effects: [
       {
@@ -887,8 +887,9 @@ const SKILL_DEFS: SkillDef[] = [
         statusId: "flammable",
         // PoE2's 6 s curse (poe2db.tw).
         durationTicks: 180,
-        // PoE2's -23% fire resistance (poe2db.tw), as fire damage taken.
-        damageTakenPct: 25,
+        // PoE2's -23% fire resistance as fire damage taken was 25 (35 at gem 10). At tier 15 her
+        // boss fights then ran 52 s to Ironsworn's 20 and she died 1.6 times a map (forced-tier sweep).
+        damageTakenPct: 60,
         damageTakenType: "fire",
       },
     ],
@@ -973,7 +974,7 @@ const SKILL_DEFS: SkillDef[] = [
   {
     id: "skill.herald_of_ash.v1",
     name: "Mantle of Embers",
-    description: "An aura of cinders: while it holds a quarter of your mana, you deal more damage and every kill leaves burning ground.",
+    description: "An aura of cinders: while it holds a quarter of your mana, you deal more damage, take less damage from every hit, and every kill leaves burning ground.",
     classId: "class.emberbound",
     manaCostFixed: 0,
     cooldownTicks: 30,
@@ -992,6 +993,8 @@ const SKILL_DEFS: SkillDef[] = [
         reserveManaPct: 25,
         // Our own.
         damagePct: 15,
+        // Iron Resolve's at its gem 10: without it a tier 15 boss slam took her whole pool (forced-tier sweep).
+        damageTakenPct: -20,
         onKillGround: {
           // PoE2's 1.2 m explosion and 3 s ignite (poe2db.tw), widened to 1.5.
           radiusFixed: fp(1.5),

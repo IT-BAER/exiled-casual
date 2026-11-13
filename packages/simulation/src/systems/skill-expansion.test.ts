@@ -627,6 +627,7 @@ describe("describeSkills lines", () => {
       "Area radius is 2 metres", "Inflicts Flammable for 4 seconds", "Flammable enemies take 25% increased Fire Damage",
     ]);
     expect(effectLines({ type: "travel", distanceFixed: fp(3), ticks: 6, direction: "away" })).toEqual(["Leaps back 3 metres"]);
+    expect(effectLines(SKILLS.get("skill.herald_of_ash.v1")!.effects[0]!)).toContain("20% reduced Damage taken");
     expect(effectLines({
       type: "spawnProjectile", speedPerSecFixed: 1, radiusFixed: 1, maxRangeFixed: 1, damage: FIRE(1),
       chainCount: 3, chainRangeFixed: fp(6),
