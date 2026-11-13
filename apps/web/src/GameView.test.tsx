@@ -149,6 +149,20 @@ vi.mock("./input/bindings", () => ({
     return { detach: () => {}, onSnapshot: () => {}, approach: () => {}, getAim: () => ({ x: 0, y: 0 }) };
   },
 }));
+// The real buff bar, unless a test arms a throw in its commit phase.
+const buffThrows = vi.hoisted(() => ({ on: false }));
+vi.mock("./hud/BuffBar", async (load) => {
+  const real = await load<typeof import("./hud/BuffBar")>();
+  return {
+    ...real,
+    BuffBar: (p: Parameters<typeof real.BuffBar>[0]) => {
+      React.useLayoutEffect(() => {
+        if (buffThrows.on) throw new Error("buff bar commit failed");
+      });
+      return React.createElement(real.BuffBar, p);
+    },
+  };
+});
 
 import { GameView } from "./GameView";
 import { FADE_MS } from "./LoadingScreen";
@@ -187,8 +201,8 @@ beforeAll(() => {
 });
 
 /** Mount GameView and push one snapshot in, which is what gates every panel's render. */
-function mountWithSnapshot(props: Partial<React.ComponentProps<typeof GameView>> = {}) {
-  const utils = render(<GameView {...props} />);
+function mountWithSnapshot(props: Partial<React.ComponentProps<typeof GameView>> = {}, container?: HTMLElement) {
+  const utils = render(<GameView {...props} />, container ? { container } : {});
   act(() => {
     hoisted.worker?.onmessage?.({
       data: { type: "snapshot", snapshot: { ...makeSnap(), entities: [DROP] } },
@@ -213,6 +227,26 @@ describe("GameView", () => {
   it("keeps page translation out of the game, which rewrites text React still owns", () => {
     const { container } = render(<GameView />);
     expect((container.firstElementChild as HTMLElement).getAttribute("translate")).toBe("no");
+  });
+
+  it("a HUD part that throws while committing takes down itself, not the canvas or the rest of the HUD", () => {
+    const track = vi.spyOn(telemetry, "track");
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    buffThrows.on = true;
+    try {
+      const container = document.body.appendChild(document.createElement("div"));
+      // Without a boundary React rethrows here and unmounts the whole game.
+      try { mountWithSnapshot({}, container); } catch { /* asserted below */ }
+      expect(container.querySelector("canvas")).not.toBeNull();
+      expect(screen.getByTestId(`loot-label-${DROP.id}`)).toBeTruthy();
+      expect(track).toHaveBeenCalledWith(
+        expect.objectContaining({ k: "error", src: "react", msg: expect.stringContaining("buff bar commit failed") }),
+      );
+    } finally {
+      buffThrows.on = false;
+      track.mockRestore();
+      quiet.mockRestore();
+    }
   });
 
   it("draws the loot plates by default and not when the UI tab turns them off", () => {

@@ -26,6 +26,7 @@ import { pickTip } from "./tips";
 import { InfoScreen, CREDITS_TEXT } from "./menu/InfoScreen";
 import { OptionsPanel } from "./menu/OptionsPanel";
 import { reloadOnChunkError } from "./chunk-reload";
+import { ErrorBoundary, ErrorNote } from "./ErrorBoundary";
 
 /**
  * The two screens that own a Babylon engine, split out of the entry bundle.
@@ -349,8 +350,41 @@ export function App(): React.ReactElement {
     <ScreenFade screen={screen.kind === "mode" ? "menu" : screen.kind === "create" ? "select" : screen.kind} />
   );
 
+  const exitGame = () => {
+    // The worker saved past the menu's boot copy; rows and Export read this one.
+    // Settings stay the menu's own: a change from the last 400ms is not on disk yet.
+    void readRoster()
+      .then((r) => setRoster((prev) => putSettings(r, prev.settings)))
+      .catch((e: unknown) => setError(String(e instanceof Error ? e.message : e)));
+    setScreen({ kind: "select" });
+  };
+
+  // One boundary per screen, at the same tree position on every screen so a switch
+  // between screens keeps their shared children; `resetKey` clears a failure on leaving.
+  const leave =
+    screen.kind === "game"
+      ? { label: "Characters", onClick: exitGame }
+      : screen.kind === "menu"
+        ? null
+        : { label: "Main Menu", onClick: () => setScreen({ kind: "menu" }) };
+  const guard = (tree: React.ReactElement) => (
+    <ErrorBoundary
+      name={`screen:${screen.kind}`}
+      resetKey={screen.kind}
+      fallback={() => (
+        <ErrorNote
+          cover
+          text="This screen hit an error and it was reported."
+          actions={[...(leave ? [leave] : []), { label: "Reload", onClick: () => window.location.reload() }]}
+        />
+      )}
+    >
+      {tree}
+    </ErrorBoundary>
+  );
+
   if (screen.kind === "game") {
-    return (
+    return guard(
       // The plate covers the chunk arriving as well as the world being built:
       // GameView raises its own the moment it mounts, so the two are continuous
       // and the player sees one screen rather than a gap and then a screen.
@@ -368,14 +402,7 @@ export function App(): React.ReactElement {
             fresh={screen.fresh}
             settings={settings}
             onSettingsChange={changeSettings}
-            onExit={() => {
-              // The worker saved past the menu's boot copy; rows and Export read this one.
-              // Settings stay the menu's own: a change from the last 400ms is not on disk yet.
-              void readRoster()
-                .then((r) => setRoster((prev) => putSettings(r, prev.settings)))
-                .catch((e: unknown) => setError(String(e instanceof Error ? e.message : e)));
-              setScreen({ kind: "select" });
-            }}
+            onExit={exitGame}
             onLoadFailed={() => {
               setError("This character's save could not be loaded. Nothing was changed.");
               setScreen({ kind: "select" });
@@ -388,7 +415,7 @@ export function App(): React.ReactElement {
   }
 
   if (screen.kind === "viewer" && AssetViewer) {
-    return (
+    return guard(
       <>
         <React.Suspense fallback={null}>
           <AssetViewer onExit={() => setScreen({ kind: "menu" })} />
@@ -399,7 +426,7 @@ export function App(): React.ReactElement {
   }
 
   if (screen.kind === "info") {
-    return (
+    return guard(
       <>
         <InfoScreen title="About" body={CREDITS_TEXT} onBack={() => setScreen({ kind: "menu" })} />
         {fade}
@@ -409,7 +436,7 @@ export function App(): React.ReactElement {
 
   if (screen.kind === "select" || screen.kind === "create") {
     const cap = capFor(mode);
-    return (
+    return guard(
       <>
         {/* One stage for both screens. Rendered here rather than inside either,
             because React reconciles by tree position: a stage owned by the
@@ -499,7 +526,7 @@ export function App(): React.ReactElement {
     );
   }
 
-  return (
+  return guard(
     <>
       <MainMenu
         characterCount={rows.length}

@@ -11,6 +11,7 @@ import { setGroundPatch } from "./render/ground-patch";
 import { buildSea, stirSea } from "./render/sea";
 import type { WakeBody } from "./render/wake";
 import { Presence } from "./presence";
+import { ErrorBoundary, PanelBoundary } from "./ErrorBoundary";
 import { buildHideoutDecor, clearHideoutDecor } from "./render/hideout";
 import { updateAtlasModel } from "./render/atlas-model";
 import { attachHideoutEdit, type HideoutEditState } from "./input/hideout-edit";
@@ -1225,23 +1226,34 @@ export function GameView({
       {/* Stays mounted with the plates off: the drop CUE is played from inside
           LootLabels, and a HUD toggle that also silenced every drop would be a
           bug wearing a setting's clothes. */}
-      <LootLabels
-        snapshot={snapshot}
-        project={project}
-        afterFrame={afterFrame}
-        onPick={pick ?? undefined}
-        plates={settings.ui.lootLabels}
-      />
-      <NpcLabels snapshot={snapshot} project={project} afterFrame={afterFrame} />
-      {settings.ui.monsterHealthBars && (
-        <MonsterHealthBars
+      {/* The canvas sits outside every boundary: one failed HUD part costs that part.
+          Layers over the world fail silently (reported); panels leave a note. */}
+      <ErrorBoundary name="loot-labels">
+        <LootLabels
           snapshot={snapshot}
           project={project}
           afterFrame={afterFrame}
-          worldPos={entityWorldPos}
+          onPick={pick ?? undefined}
+          plates={settings.ui.lootLabels}
         />
+      </ErrorBoundary>
+      <ErrorBoundary name="npc-labels">
+        <NpcLabels snapshot={snapshot} project={project} afterFrame={afterFrame} />
+      </ErrorBoundary>
+      {settings.ui.monsterHealthBars && (
+        <ErrorBoundary name="monster-bars">
+          <MonsterHealthBars
+            snapshot={snapshot}
+            project={project}
+            afterFrame={afterFrame}
+            worldPos={entityWorldPos}
+          />
+        </ErrorBoundary>
       )}
-      <BuffBar snapshot={snapshot} />
+      <ErrorBoundary name="buff-bar">
+        <BuffBar snapshot={snapshot} />
+      </ErrorBoundary>
+      <PanelBoundary name="hud">
       <Hud
         snapshot={snapshot}
         hoveredEntityId={hoveredEntityId}
@@ -1273,16 +1285,20 @@ export function GameView({
           onReset: () => sendIntent({ kind: "resetHideoutLayout" }),
         }}
       />
+      </PanelBoundary>
       {settings.ui.minimap && (
-        <Minimap
-          layout={areaLayout}
-          player={snapshot?.player ?? null}
-          overlay={overlayMapOpen}
-          overlayOpacity={settings.ui.overlayMapOpacity}
-        />
+        <ErrorBoundary name="minimap">
+          <Minimap
+            layout={areaLayout}
+            player={snapshot?.player ?? null}
+            overlay={overlayMapOpen}
+            overlayOpacity={settings.ui.overlayMapOpacity}
+          />
+        </ErrorBoundary>
       )}
-      {statsOpen && <DebugStats engineRef={engineRef} sceneRef={sceneRef} />}
+      {statsOpen && <ErrorBoundary name="debug-stats"><DebugStats engineRef={engineRef} sceneRef={sceneRef} /></ErrorBoundary>}
       {spawnerOpen && (
+        <ErrorBoundary name="asset-spawner">
         <AssetSpawner
           standing={spawned}
           onSpawn={(id) => {
@@ -1297,8 +1313,10 @@ export function GameView({
           onSim={sendSpawn}
           onClose={() => setSpawnerOpen(false)}
         />
+        </ErrorBoundary>
       )}
       <Presence open={panelOpen && !!snapshot}>{snapshot && (
+        <PanelBoundary name="atlas" onClose={closeAtlas}>
         <PreparationPanel
           atlasSeed={snapshot.atlasSeed}
           completedNodes={snapshot.completedNodes}
@@ -1309,8 +1327,10 @@ export function GameView({
           onClose={closeAtlas}
           onActivate={activateMap}
         />
+        </PanelBoundary>
       )}</Presence>
       <Presence open={inventoryOpen && !!snapshot}>{snapshot && (
+        <PanelBoundary name="inventory" onClose={closeInventory}>
         <InventoryPanel
           inventory={snapshot.inventory}
           {...(stashOpen ? { stash: snapshot.stash } : {})}
@@ -1337,12 +1357,16 @@ export function GameView({
           onRefused={onTransferRefused}
           onClose={closeInventory}
         />
+        </PanelBoundary>
       )}</Presence>
       {/* After the inventory so it paints above that panel's backdrop when both are open. */}
       <Presence open={characterOpen && !!snapshot}>{snapshot && (
-        <CharacterPanel player={snapshot.player} onClose={() => setCharacterOpen(false)} />
+        <PanelBoundary name="character" onClose={() => setCharacterOpen(false)}>
+          <CharacterPanel player={snapshot.player} onClose={() => setCharacterOpen(false)} />
+        </PanelBoundary>
       )}</Presence>
       <Presence open={passivesOpen && !!snapshot}>{snapshot && (
+        <PanelBoundary name="passives" onClose={closePassives}>
         <PassiveTreePanel
           open={passivesOpen}
           classId={snapshot.player.classId ?? DEFAULT_CLASS_ID}
@@ -1351,8 +1375,10 @@ export function GameView({
           onIntent={sendIntent}
           onClose={closePassives}
         />
+        </PanelBoundary>
       )}</Presence>
       <Presence open={gameMenuOpen}>
+        <PanelBoundary name="game-menu" onClose={() => setGameMenuOpen(false)}>
         <GameMenu
           onResume={() => setGameMenuOpen(false)}
           // Closing the menu first is this file's existing rule: overlays do not
@@ -1361,11 +1387,17 @@ export function GameView({
           onReport={(kind) => { setGameMenuOpen(false); setFeedback(kind); }}
           onExit={onExit}
         />
+        </PanelBoundary>
       </Presence>
       <Presence open={feedback !== null}>
-        {feedback && <FeedbackDialog kind={feedback} onClose={() => setFeedback(null)} />}
+        {feedback && (
+          <PanelBoundary name="feedback" onClose={() => setFeedback(null)}>
+            <FeedbackDialog kind={feedback} onClose={() => setFeedback(null)} />
+          </PanelBoundary>
+        )}
       </Presence>
       <Presence open={optionsOpen}>
+        <PanelBoundary name="options" onClose={() => setOptionsOpen(false)}>
         <OptionsPanel
           settings={settings}
           onChange={onSettingsChange ?? (() => {})}
@@ -1373,8 +1405,10 @@ export function GameView({
           dock={{ bottom: BAR_H, clear: ORB_RISE }}
           characterId={characterId === "" ? undefined : characterId}
         />
+        </PanelBoundary>
       </Presence>
       {fresh && characterId !== "" && !Object.hasOwn(settings.ui.controls, characterId) && (
+        <PanelBoundary name="controls">
         <ControlsDialog
           keybinds={settings.ui.keybinds}
           onPick={(mode) => onSettingsChange?.({
@@ -1382,10 +1416,12 @@ export function GameView({
             ui: { ...settings.ui, controls: { ...settings.ui.controls, [characterId]: mode } },
           })}
         />
+        </PanelBoundary>
       )}
       {/* Last in the tree, so it paints over every other overlay: nothing behind
           it is a decision the player can still act on. */}
       {snapshot && !snapshot.player.alive && (
+        <PanelBoundary name="death">
         <DeathScreen
           portalsLeft={snapshot.portalsLeft}
           inMap={snapshot.area === "map" && snapshot.mapOpen}
@@ -1404,6 +1440,7 @@ export function GameView({
             setOptionsOpen(false);
           }}
         />
+        </PanelBoundary>
       )}
     </div>
   );
