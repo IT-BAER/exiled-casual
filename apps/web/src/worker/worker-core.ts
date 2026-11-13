@@ -229,9 +229,11 @@ export class WorkerCore {
   /**
    * One tick while the clock is stopped, and only for a waiting intent: a point
    * spent in the paused passive tree still has to reach the sim through a tick.
+   * Tick 1 is taken even when idle: the loading plate pauses the sim, and a
+   * renderer with no snapshot never draws, so the plate would never lift.
    */
   stepPaused(): Snapshot[] {
-    if (this.pending.length === 0) return [];
+    if (this.pending.length === 0 && this.sim.tick > 0) return [];
     this.accMs = 0;
     return this.advance(MS_PER_TICK);
   }

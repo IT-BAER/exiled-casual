@@ -61,13 +61,14 @@ import { warmSkillLooks } from "./render/skills/warm-looks";
 import { CLASS_LOOKS, SKILL_LOOKS } from "./render/skills";
 import { warmBossFx } from "./render/boss-fx";
 import { warmEntityLooks, warmProjectiles } from "./render/meshes";
+import { paceShaderLinks } from "./render/link-pacing";
 import { Minimap } from "./hud/Minimap";
 import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
 import { DeathRecap } from "./hud/DeathRecap";
 import { Divider, FramedPanel, GOLD, MenuButton, DISPLAY, SERIF } from "./menu/frames";
 import { LoadingScreen, LOADING_ART, FADE_MS } from "./LoadingScreen";
-import { READY_CAP_MS, settleGate, warmDoneGate } from "./settle";
+import { READY_CAP_MS, SETTLE_CAP_MS, settleGate, warmDoneGate } from "./settle";
 import { createLoadClock } from "./load-phases";
 import { reloadPage } from "./chunk-reload";
 import { beginLoad, setLoadPart } from "./load-progress";
@@ -497,6 +498,8 @@ export function GameView({
       powerPreference: "high-performance",
       doNotHandleContextLost: true,
     });
+    // Before any material: first-visit shader finalizes in link order, one wait per task (render/link-pacing.ts).
+    const links = paceShaderLinks(engine);
     // A lost GL context (GPU reset, driver update, too many live contexts) leaves
     // a dead canvas. We skip Babylon's in-place restore on purpose (the scene
     // rebuilds cleanly from a reload, and the restore machinery is bookkeeping on
@@ -928,7 +931,9 @@ export function GameView({
       // `harness` is already "done" in normal play, so this costs nothing there,
       // and it gives up on its own after twenty seconds (HARNESS_GIVE_UP_TICKS)
       // rather than hanging on a black plate.
-      if (settled?.(performance.now()) && harness === "done") {
+      // A program not yet finalized would finalize after the lift, mid-play; the plate waits for it, never past both caps.
+      const linksDone = links.pending() === 0 || (areaAt !== null && frameMs - areaAt >= READY_CAP_MS + SETTLE_CAP_MS);
+      if (settled?.(performance.now()) && harness === "done" && linksDone) {
         settled = null;
         plateUp = false;
         setPlateHold(false);

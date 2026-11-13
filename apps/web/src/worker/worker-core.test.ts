@@ -87,6 +87,12 @@ describe("WorkerCore", () => {
     expect(core.stepPaused()).toEqual([]);
   });
 
+  it("a sim paused before its first tick still takes tick 1, once, so the plate has a world to draw", () => {
+    const core = new WorkerCore(42);
+    expect(core.stepPaused().map((s) => s.tick)).toEqual([1]);
+    expect(core.stepPaused()).toEqual([]);
+  });
+
   it("a pushed moveTo intent moves the player toward the target", () => {
     const core = new WorkerCore(42);
     // Player spawns at origin (0,0); target is +x/+y, so both coords must increase.
