@@ -677,3 +677,15 @@ The Stalker wears a quiver on the back now, and every unique carries one mod no 
 rares glow hotter and always drop a rare item; the first rare of a new map is one. After a boss the
 objective names the next map, and the Map Device glows until it is opened. Monsters hit harder from
 tier 3 and bosses carry more life from tier 4, so defences and flasks matter in the later maps.
+
+## 2026-11-13 · Maren's new look
+
+<table>
+<tr>
+<td width="50%"><img src="screenshots/2026-11-13-maren-new-look-hideout.jpeg" alt="Maren behind her Atlas table in the hideout, hands folded at the waist, lit by a brazier" width="100%"><br><sub>Maren at her Atlas table.</sub></td>
+<td width="50%"><img src="screenshots/2026-11-13-maren-new-look-close.jpeg" alt="Close view of Maren's face, long auburn hair, dark gown with a red bow and lace sleeves" width="100%"><br><sub>Her own face, hair and lace.</sub></td>
+</tr>
+</table>
+
+Maren, the cartographer, has her own face now, with regrown hair, a dark gown with lace and knee
+boots. She stands with her hands folded at the waist and turns her head to watch you.
