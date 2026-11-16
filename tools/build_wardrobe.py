@@ -4503,6 +4503,29 @@ def build_skirt_bones(rig, columns, centre, segment):
     return made
 
 
+def chain_weights(bones, p):
+    """Each bone's weight on one chain (`bones`: world (head, tail), waist to hem) for cloth at
+    `p`: the nearest bone by projection, peaking at each bone's middle. Peaked at the tails, cloth
+    halfway down a bone rode the one above, and on a joint a leg bent it cut the corner into the leg."""
+    best, s = math.inf, 0.0
+    for n, (head, tail) in enumerate(bones):
+        axis = tail - head
+        k = min(1.0, max(0.0, (p - head).dot(axis) / axis.length_squared))
+        d = (p - (head + axis * k)).length
+        if d < best:
+            best, s = d, n + k
+    weights = [0.0] * len(bones)
+    x = s - 0.5
+    n = math.floor(x)
+    if n < 0:
+        weights[0] = 1.0
+    elif n >= len(bones) - 1:
+        weights[-1] = 1.0
+    else:
+        weights[n], weights[n + 1] = 1.0 - (x - n), x - n
+    return weights
+
+
 def skin_skirt(mesh, body, rig, clear, floor, hip=False):
     """Hand the cloth below the hips to the skirt chains.
 
@@ -4556,8 +4579,9 @@ def skin_skirt(mesh, body, rig, clear, floor, hip=False):
     names = ["pelvis"] + [SKIRT_JOINT.format(i=i, n=n + 1)
                           for i in range(SKIRT_CHAINS) for n in range(SKIRT_JOINTS)]
     groups = {n: mesh.vertex_groups.get(n) or mesh.vertex_groups.new(name=n) for n in names}
-    knots = [SKIRT_PINNED + (1.0 - SKIRT_PINNED) * (n + 1) / SKIRT_JOINTS
-             for n in range(SKIRT_JOINTS)]
+    spans = [[(rig.matrix_world @ rig.data.bones[SKIRT_JOINT.format(i=i, n=n + 1)].head_local,
+               rig.matrix_world @ rig.data.bones[SKIRT_JOINT.format(i=i, n=n + 1)].tail_local)
+              for n in range(SKIRT_JOINTS)] for i in range(SKIRT_CHAINS)]
     step = 2.0 * math.pi / SKIRT_CHAINS
     above = [v for v in mesh.data.vertices if (M @ v.co).z >= top_z] if hip else []
     tree = mathutils.kdtree.KDTree(len(above))
@@ -4576,16 +4600,6 @@ def skin_skirt(mesh, body, rig, clear, floor, hip=False):
         r = math.hypot(p.x - pelvis_head.x, p.y - pelvis_head.y)
         pinned = max(pinned, min(1.0, max(0.0, (SKIRT_AXIS_OUT - r) /
                                           (SKIRT_AXIS_OUT - SKIRT_AXIS_IN))))
-        weights = [0.0] * SKIRT_JOINTS
-        if t <= knots[0]:
-            weights[0] = 1.0
-        elif t >= knots[-1]:
-            weights[-1] = 1.0
-        else:
-            n = next(k for k in range(SKIRT_JOINTS - 1) if t < knots[k + 1])
-            f = (t - knots[n]) / (knots[n + 1] - knots[n])
-            weights[n], weights[n + 1] = 1.0 - f, f
-        weights = [w * (1.0 - pinned) for w in weights]
         theta = math.atan2(p.y - pelvis_head.y, p.x - pelvis_head.x) % (2 * math.pi)
         exact = theta / step
         near = math.floor(exact)
@@ -4598,10 +4612,10 @@ def skin_skirt(mesh, body, rig, clear, floor, hip=False):
                              ((near + 1) % SKIRT_CHAINS, blend)):
             if share <= 0.0:
                 continue
-            for n, w in enumerate(weights):
+            for n, w in enumerate(chain_weights(spans[chain], p)):
                 if w > 0.0:
                     groups[SKIRT_JOINT.format(i=chain, n=n + 1)].add(
-                        [v.index], w * share, "REPLACE")
+                        [v.index], w * (1.0 - pinned) * share, "REPLACE")
     rebind(mesh, rig)
     print(f"  {mesh.name}: {len(cloth)} cloth vertices on {SKIRT_CHAINS} chains, "
           f"hip {top_z:.3f} hem {hem_z:.3f}")

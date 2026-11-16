@@ -459,7 +459,7 @@ describe("Maren's body", () => {
     }
   }, 300_000);
 
-  it("walks without her gown drawn inside her legs", async () => {
+  it("walks without her gown drawn inside her legs or a boot showing through its back", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     try {
@@ -484,11 +484,65 @@ describe("Maren's body", () => {
         const t = Math.min(1, Math.max(0, Vector3.Dot(p.subtract(a), ab) / ab.lengthSquared()));
         return Vector3.Distance(p, a.add(ab.scale(t)));
       };
+      const worldOf = (m: Mesh) => {
+        const p = m.getPositionData(true, true)!;
+        const out: Vector3[] = [];
+        for (let i = 0; i < p.length; i += 3) out.push(Vector3.TransformCoordinatesFromFloatsToRef(p[i]!, p[i + 1]!, p[i + 2]!, m.getWorldMatrix(), new Vector3()));
+        return out;
+      };
+      const drawn = (test: RegExp) => root.getChildMeshes().filter((m): m is Mesh => m instanceof Mesh && m.isEnabled() && test.test(m.name));
+      const gown = drawn(/^chest\.maren\.gown/);
+      const legMeshes = drawn(/^(base\.female\.(leg|shin)_[lr]|boots\.)/);
+      expect(gown.length).toBeGreaterThan(0);
+      expect(legMeshes.length).toBeGreaterThan(0);
+      const bone = (name: string) => {
+        const n = nodes.get(name)!;
+        n.computeWorldMatrix(true);
+        return n.getAbsolutePosition().clone();
+      };
       for (let i = 0; i < 60; i++) { rig.setLocomotion(2); scene.render(); }
-      let deepest = 0;
+      let deepest = 0, back = 0;
       for (let f = 0; f < 120; f++) {
         rig.setLocomotion(2);
         scene.render();
+        if (f % 15 === 0) {
+          // Out through the back of the gown: a leg vertex behind her hips, farther from her axis than the gown on its ray.
+          const lateral = bone("thigh_l").subtract(bone("thigh_r"));
+          lateral.y = 0;
+          const forward = Vector3.Cross(lateral, Vector3.Up()).normalize();
+          const toes = bone("ball_l").subtract(bone("foot_l")).add(bone("ball_r").subtract(bone("foot_r")));
+          if (Vector3.Dot(forward, toes) < 0) forward.scaleInPlace(-1);
+          const c = bone("pelvis");
+          const tris = gown.flatMap((g) => {
+            const p = worldOf(g), idx = g.getIndices()!;
+            const t: [Vector3, Vector3, Vector3][] = [];
+            for (let i = 0; i < idx.length; i += 3) t.push([p[idx[i]!]!, p[idx[i + 1]!]!, p[idx[i + 2]!]!]);
+            return t;
+          });
+          const hem = Math.min(...tris.flat().map((v) => v.y));
+          for (const v of legMeshes.flatMap(worldOf)) {
+            if (v.y < hem + 0.02 || v.y > c.y) continue;
+            const d = new Vector3(v.x - c.x, 0, v.z - c.z);
+            if (Vector3.Dot(d, forward) > 0) continue;
+            const r = d.length();
+            d.scaleInPlace(1 / r);
+            let gownAt = -1;
+            for (const [a, b, e] of tris) {
+              if (v.y < Math.min(a.y, b.y, e.y) || v.y > Math.max(a.y, b.y, e.y)) continue;
+              const e1 = b.subtract(a), e2 = e.subtract(a);
+              const q = Vector3.Cross(d, e2);
+              const det = Vector3.Dot(e1, q);
+              if (Math.abs(det) < 1e-12) continue;
+              const o = new Vector3(c.x, v.y, c.z).subtractInPlace(a);
+              const u = Vector3.Dot(o, q) / det;
+              const k = Vector3.Cross(o, e1);
+              const w = Vector3.Dot(d, k) / det;
+              if (u < 0 || w < 0 || u + w > 1) continue;
+              gownAt = Math.max(gownAt, Vector3.Dot(e2, k) / det);
+            }
+            if (gownAt > 0) back = Math.max(back, r - gownAt);
+          }
+        }
         for (const chain of chains) {
           // The bones as drawn: each joint's head, then the last bone's tail at the hem.
           const p = chain.map((b) => b.computeWorldMatrix(true) && b.getAbsolutePosition().clone());
@@ -504,6 +558,9 @@ describe("Maren's body", () => {
       // A contact that only shoved a segment's end stretched it to 1.6x, and the bones drawn at
       // their own length below it fell back into the leg: 2 cm and deeper 859 times over a stride.
       expect(deepest).toBeLessThan(0.02);
+      // Skirt weights peaked at each bone's tail: cloth on a joint her calf bent followed the bone
+      // above and cut the corner, and the trailing boot showed up to 9.7 cm through her back.
+      expect(back).toBeLessThan(0.02);
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
       resetPlayerRig();
