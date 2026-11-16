@@ -10,6 +10,11 @@ writes `apps/web/src/news.generated.ts`, and a test fails if the two disagree.
 
 ## [Unreleased]
 
+### Fixed
+
+- Maren's gown and the Emberbound robe no longer show a boot through the back
+  of the skirt while walking.
+
 ## [0.7.9] - 2026-11-13
 
 ### Changed
