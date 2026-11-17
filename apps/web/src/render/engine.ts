@@ -32,7 +32,8 @@ import { SEA_MESH_NAME } from "./sea";
 import { HIDEOUT_EDGE_NAME } from "./hideout";
 import { createHaze, createMotes } from "./haze";
 import { FLAME_MESH, FLAME_TONGUE } from "./flames";
-import { createFireLights, LIGHT_POOL, setFireLightZoom, updateFireLights } from "./lights";
+import { createFireLights, setFireLightZoom, updateFireLights } from "./lights";
+import { capMaterialLights } from "./light-cap";
 import { cullShadowCasters } from "./shadow-cull";
 import { glowFollowsErosion } from "./ground-fx";
 
@@ -96,22 +97,7 @@ export const MAP_FILL_INTENSITY = 0.18;
 // It is a pool the player carries between other people's fires, which is what it
 // reads as in PoE, and turning it down is what lets a brazier be seen at all.
 export const TORCH_INTENSITY = 175;
-/** Every light that can stand in a room at once: the fill, the sun, the torch,
- *  the hit flash and the solar orb's light (skill-fx.ts) and the whole brazier pool. Materials are capped to
- *  exactly this, see `createScene` — Babylon's own default of four drops the rest without a word. */
-const SCENE_LIGHTS = 5 + LIGHT_POOL;
-/**
- * The light cap on every material in the scene, also run by hand before a readiness
- * check that comes ahead of the next frame: a material readied at Babylon's four and
- * raised later lists its lights in another order, a second compile of the same shader.
- */
-export function capMaterialLights(scene: Scene): void {
-  for (const m of scene.materials) {
-    if ("maxSimultaneousLights" in m) {
-      (m as unknown as { maxSimultaneousLights: number }).maxSimultaneousLights = SCENE_LIGHTS;
-    }
-  }
-}
+export { capMaterialLights };
 /** Where the pool stops. GLTF falloff windows the inverse square to this, so the
  *  edge is defined instead of trailing off across the whole map.
  *

@@ -5,6 +5,7 @@ import { BROOD_ABILITY } from "./boss-tells";
 import { FxPool, fxPools } from "./fx-pool";
 import { slamDebris } from "./slam-debris";
 import { dustPuff, emberBurst, FALLBACK_FX, flash, type FxProfile } from "./skill-fx";
+import { capMaterialLights } from "./light-cap";
 
 /** What a boss's marks do when they land, fired by the renderer as a mark leaves the snapshot on its impact
  *  tick and keyed by its `ability` like the sound. Real geometry and the shared pools only, no billboard or sprite. */
@@ -479,6 +480,7 @@ export class BossFx {
       this.beams.push({ outer, core, age: -1 });
     }
     // All of it starts disabled, so compile now (behind the loading plate), not on the first landing.
+    capMaterialLights(scene);
     char.forceCompilation(this.scorch);
     for (const f of this.fissures) f.mat.forceCompilation(f.molten);
     gold.forceCompilation(this.beams[0]!.outer);

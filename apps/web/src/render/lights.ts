@@ -19,6 +19,7 @@ import {
 } from "./flames";
 import { LEDGE_MESH_PREFIX, isScatterDressing } from "./rocks";
 import { cullShadowCasters } from "./shadow-cull";
+import { LIGHT_POOL } from "./light-cap";
 
 /**
  * The fires the world is lit by, as opposed to the one the player carries.
@@ -50,8 +51,7 @@ import { cullShadowCasters } from "./shadow-cull";
  * painted braziers (`menu/atmos.tsx`), which is where the numbers came from.
  */
 
-/** How many bowls may be lit at once. Babylon's default per-material cap. */
-export const LIGHT_POOL = 4;
+export { LIGHT_POOL };
 
 /** Name every pooled light takes, so a rebuild can find them again. */
 const POOL_PREFIX = "firelight-";

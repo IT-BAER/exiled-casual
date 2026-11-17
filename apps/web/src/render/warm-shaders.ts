@@ -1,4 +1,5 @@
 import type { AbstractMesh, AssetContainer, Material } from "@babylonjs/core";
+import { capMaterialLights } from "./light-cap";
 
 /**
  * Compile a loaded container's shaders now, behind the loading plate.
@@ -24,6 +25,8 @@ export async function warmContainer(container: AssetContainer): Promise<void> {
   for (const mesh of container.meshes) {
     if (mesh.material && !rep.has(mesh.material)) rep.set(mesh.material, mesh);
   }
+  // Outside `scene.materials` the frame's sweep never caps these: warm the variant instances draw.
+  capMaterialLights({ materials: [...rep.keys()] });
   await Promise.all(
     [...rep].map(([material, mesh]) => material.forceCompilationAsync(mesh).catch(() => {})),
   );

@@ -1,5 +1,6 @@
 import { Color3, Material, Matrix, Mesh, MeshBuilder, PBRMaterial, Quaternion, StandardMaterial, Vector3, VertexData } from "@babylonjs/core";
 import type { GlowLayer, Scene } from "@babylonjs/core";
+import { capMaterialLights } from "./light-cap";
 
 /**
  * What Ground Slam breaks out of the floor: rock chunks and dirt clods thrown up
@@ -196,6 +197,7 @@ export class SlamDebris {
     const glow = scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
     for (const c of this.cracks) glow?.addExcludedMesh(c.mesh);
     // The cracks start disabled, so compile now (behind the loading plate), not on the first slam.
+    capMaterialLights(scene);
     crackMat.forceCompilation(this.cracks[0]!.mesh);
     scene.onBeforeRenderObservable.add(() => this.step(Math.min(0.05, scene.getEngine().getDeltaTime() / 1000)));
   }

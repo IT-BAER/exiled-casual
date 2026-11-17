@@ -30,6 +30,7 @@ import { hasRim, HIT_TINT, HIT_ALPHA, type Tier } from "./rim";
 import { BROOD_ABILITY } from "./boss-tells";
 import { playSfxAt } from "../audio/sfx";
 import type { SnapshotEntity } from "@exiled/protocol";
+import { capMaterialLights } from "./light-cap";
 
 export type MeshKind = "player" | "monster" | "rare" | "boss" | "projectile" | "groundArea" | "telegraph" | "telegraphLane" | "telegraphRing" | "broodMark" | "chargePath" | "portal" | "mapDevice" | "stash" | "vendor" | "cartographer" | "container" | "groundItem" | "gold";
 
@@ -2387,6 +2388,8 @@ export function warmProjectiles(scene: Scene): void {
       part.alwaysSelectAsActiveMesh = true;
       part.computeWorldMatrix(true);
     }
+    // Readies every material in the scene now, ahead of the next frame's light cap.
+    capMaterialLights(scene);
     scene.executeWhenReady(() => mesh.dispose());
   }
 }

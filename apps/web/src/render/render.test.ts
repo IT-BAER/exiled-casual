@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   Animation,
   AnimationGroup,
+  AssetContainer,
   Camera,
   Constants,
   ImageProcessingConfiguration,
@@ -10,6 +11,7 @@ import {
   MeshBuilder,
   NullEngine,
   ParticleSystem,
+  PBRMaterial,
   PointLight,
   Scene,
   Skeleton,
@@ -17,15 +19,17 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
-import { applyAtmosphere, BETA_AT_DEFAULT, capMaterialLights, createScene, VOID_COLOR } from "./engine";
+import { applyAtmosphere, BETA_AT_DEFAULT, createScene, VOID_COLOR } from "./engine";
 import { applyBiomeTint } from "./level";
 import { LIGHT_POOL } from "./lights";
 import { HAZE_HEIGHT, HAZE_MAX_SIZE, HAZE_NAME, MOTES_NAME, moteDrift, moteDriftBasis } from "./haze";
 import { BIOMES } from "@exiled/content-runtime";
 import { blowFrom, cancelTurnedAction, castSkillOf, reactionFor, SnapshotRenderer, syncActionAnimation, syncRollAnimation } from "./renderer";
-import { makeMesh, updateTelegraph, VENDOR_LOOKS, warmEntityLooks } from "./meshes";
+import { makeMesh, updateTelegraph, VENDOR_LOOKS, warmEntityLooks, warmProjectiles } from "./meshes";
 import { hitSparkle } from "./hit-sparkle";
-import { ARROW_NAME, STRIKE_IMPACT } from "./skill-fx";
+import { ARROW_NAME, STRIKE_IMPACT, warmSkillFx } from "./skill-fx";
+import { warmBossFx } from "./boss-fx";
+import { warmContainer } from "./warm-shaders";
 import { fxPools } from "./fx-pool";
 import type { Snapshot } from "@exiled/protocol";
 import { testPlayer, testStats } from "../test-fixtures";
@@ -331,17 +335,41 @@ describe("how many lights a surface may take", () => {
     expect(scene.lights.length).toBe(3 + LIGHT_POOL);
   });
 
-  it("caps a material made since the last frame on demand, before the plate's first readiness check", () => {
-    // Readied at four and raised to nine later, a material's defines list its
-    // lights in another order than a fresh clone's: same shader, a second
-    // compile, and Sunder's first cast stalled 0.2-0.5 s on exactly that.
+  it("warms an area's effects with every scene light, so none compiles twice", () => {
+    // The warm-ups build and force-compile in one task, before the next frame's sweep:
+    // readied at Babylon's four and raised to nine later, each was a second compile.
     engine = new NullEngine();
     const { scene } = createScene(engine);
-    scene.render();
-    const late = new StandardMaterial("late-probe", scene);
-    expect(late.maxSimultaneousLights).toBe(4);
-    capMaterialLights(scene);
-    expect(late.maxSimultaneousLights).toBeGreaterThanOrEqual(5 + LIGHT_POOL);
+    warmSkillFx(scene);
+    warmBossFx(scene);
+    warmProjectiles(scene);
+    const caps = Object.keys((engine as unknown as { _compiledEffects: Record<string, unknown> })._compiledEffects)
+      .map((key) => /MAXLIGHTCOUNT (\d+)/.exec(key)?.[1])
+      .filter((cap) => cap !== undefined)
+      .map(Number);
+    expect(caps.length).toBeGreaterThan(0);
+    expect(Math.min(...caps)).toBeGreaterThanOrEqual(5 + LIGHT_POOL);
+  });
+
+  it("warms a held-out container's materials with every scene light, the variant its instances draw", async () => {
+    // Out of `scene.materials`, a container's material missed the sweep: the warm-up
+    // compiled a four-light shader nothing draws, and the real one waited for first sight.
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const mesh = MeshBuilder.CreateBox("held-out", {}, scene);
+    mesh.material = new PBRMaterial("held-out-mat", scene);
+    const container = new AssetContainer(scene);
+    scene.removeMesh(mesh);
+    scene.removeMaterial(mesh.material);
+    container.meshes.push(mesh);
+    container.materials.push(mesh.material);
+    await warmContainer(container);
+    const caps = Object.keys((engine as unknown as { _compiledEffects: Record<string, unknown> })._compiledEffects)
+      .map((key) => /MAXLIGHTCOUNT (\d+)/.exec(key)?.[1])
+      .filter((cap) => cap !== undefined)
+      .map(Number);
+    expect(caps.length).toBeGreaterThan(0);
+    expect(Math.min(...caps)).toBeGreaterThanOrEqual(5 + LIGHT_POOL);
   });
 });
 
