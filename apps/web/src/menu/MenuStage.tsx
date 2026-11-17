@@ -12,25 +12,37 @@
  */
 import React from "react";
 import { createMenuStage, type MenuStage as Stage } from "../render/menu-scene";
+import { DEFAULT_SETTINGS, type GraphicsSettings } from "../settings";
 import { looksForClass } from "./class-looks";
 
-export function MenuStage({ classId }: { classId: string | null }): React.ReactElement {
-  const ref = React.useRef<HTMLCanvasElement>(null);
+export function MenuStage({ classId, graphics = DEFAULT_SETTINGS.graphics }: {
+  classId: string | null;
+  /** The saved settings, so the game's warmed programs carry the game's defines. */
+  graphics?: GraphicsSettings;
+}): React.ReactElement {
+  const ref = React.useRef<HTMLDivElement>(null);
   const stageRef = React.useRef<Stage | null>(null);
   /** What was standing here last, so a departure can be told from an empty hall. */
   const wasThere = React.useRef<string | null>(classId);
 
   React.useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
+    const host = ref.current;
+    if (!host) return;
     let dead = false;
-    void createMenuStage(canvas)
+    void createMenuStage(host)
       .then((stage) => {
         if (dead) { stage?.dispose(); return; }
         stageRef.current = stage;
         // The wardrobe takes seconds: dress whoever is chosen NOW, not at mount.
         const now = wasThere.current;
         stage?.setLooks(now === null ? null : looksForClass(now));
+        // After the stage's own wardrobe import (menu-scene.ts: no texture across it),
+        // the game's hideout programs, on the same GL context. See render/warm-game.ts.
+        if (stage) {
+          void import("../render/warm-game")
+            .then((m) => m.startGameWarm({ classId: now, graphics }))
+            .catch(() => undefined);
+        }
       })
       // No WebGL, no wardrobe, no stage. The screen is still a screen.
       .catch(() => undefined);
@@ -64,7 +76,7 @@ export function MenuStage({ classId }: { classId: string | null }): React.ReactE
   }, [classId]);
 
   return (
-    <canvas
+    <div
       ref={ref}
       data-testid="menu-stage"
       aria-hidden

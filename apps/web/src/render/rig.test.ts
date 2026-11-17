@@ -1665,6 +1665,21 @@ describe("a body is its own wardrobe", () => {
     for (const t of targets) expect(under(t, "Armature_female"), `${t.name} under ${rootOf(t)}`).toBe(true);
   }));
 
+  it("a second scene's load leaves the first scene's rig dressable", () => withFiles(async () => {
+    engine = new NullEngine();
+    const sources = () => ({ anims: file("anim-library.glb"), wardrobes: { female: file("wardrobe-female.glb") } });
+    const menu = createScene(engine).scene;
+    const warm = createScene(engine).scene;
+    await loadPlayerRig(menu, ["female"], sources());
+    await loadPlayerRig(warm, ["female"], sources());
+    expect(isRigReady(menu, "female")).toBe(true);
+    expect(isRigReady(warm, "female")).toBe(true);
+    resetPlayerRig(warm);
+    const rig = attachRig(menu, new Mesh("her", menu), "female")!;
+    rig.setLooks({ ...BASE_LOOKS, base: "female", chest: "ember" });
+    expect(shown(menu, "chest.ember.robe")).toBe(true);
+  }));
+
   it("re-dresses onto the other body when the base look names it", () => withFiles(async () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

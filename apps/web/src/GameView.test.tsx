@@ -41,6 +41,7 @@ vi.mock("@babylonjs/core", () => ({
     // Captured rather than dropped: the loading plate comes down on a PAINTED
     // frame, so a suite that never runs one would sit under the plate forever.
     runRenderLoop = (fn: () => void) => { hoisted.frame = fn; };
+    stopRenderLoop = vi.fn();
     resize = vi.fn();
     dispose = vi.fn();
     getRenderWidth = () => 1920;
@@ -65,6 +66,7 @@ vi.mock("./render/engine", () => ({
       executeWhenReady: (fn: () => void) => { hoisted.ready = fn; },
       // buildSea sweeps the last run's strip before deciding whether to build.
       getMeshByName: () => null,
+      dispose: vi.fn(),
     },
     camera: { viewport: { toGlobal: vi.fn() }, setTarget: vi.fn() },
     detachZoom: vi.fn(),
@@ -96,6 +98,7 @@ vi.mock("./render/renderer", () => ({
   PROP_YAW_SHIFT: 0,
 }));
 vi.mock("./render/atlas-model", () => ({ updateAtlasModel: vi.fn() }));
+vi.mock("./render/warm-game", () => ({ endGameWarm: vi.fn() }));
 vi.mock("./input/hideout-edit", () => ({
   attachHideoutEdit: () => ({ setActive: vi.fn(), onSnapshot: vi.fn(), moved: () => ({}), detach: vi.fn() }),
 }));

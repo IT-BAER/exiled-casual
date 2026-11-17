@@ -18,20 +18,40 @@ import type { Engine } from "@babylonjs/core/Engines/engine";
 export interface LinkPacing {
   /** Programs linked and not yet finalized. */
   pending(): number;
+  /**
+   * While on, every effect created is HELD: its program links, so the GPU process
+   * compiles it, but nothing finalizes it and it waits outside the line until
+   * `release`. Decided when the effect is created, because Babylon links after an
+   * await and polls on a 16 ms timer of its own, outside any render.
+   */
+  hold(on: boolean): void;
+  /** Run `fn` (the menu's own render) with any effect it creates left unheld. */
+  exempt<T>(fn: () => T): T;
+  /** Programs linked under a hold and not yet released. */
+  held(): number;
+  /** Back into the line in link order, ahead of anything linked since; ends the hold. */
+  release(): void;
 }
 
 interface PipelineContext {
   isParallelCompiled?: boolean;
   _isDisposed?: boolean;
+  /** The effect's key, stamped by Babylon before the link (`createAndPreparePipelineContext`). */
+  _name?: string;
 }
 
 type Prepare = (ctx: PipelineContext, ...rest: unknown[]) => void;
 type Compiled = (ctx: PipelineContext) => boolean;
+type CreateEffect = (...args: unknown[]) => { _key?: string };
 
 interface Hooks {
   _preparePipelineContextAsync?: Prepare;
   _isRenderingStateCompiled?: Compiled;
+  createEffect?: CreateEffect;
 }
+
+/** How Babylon names a program after its effect's key. */
+const programName = (key: string): string => key.replace(/\r/g, "").replace(/\n/g, "|");
 
 export function paceShaderLinks(
   engine: Engine,
@@ -41,11 +61,23 @@ export function paceShaderLinks(
   const hooks = engine as unknown as Hooks;
   const prepare = hooks._preparePipelineContextAsync;
   const compiled = hooks._isRenderingStateCompiled;
-  if (typeof prepare !== "function" || typeof compiled !== "function") return { pending: () => 0 };
+  const create = hooks.createEffect;
+  if (typeof prepare !== "function" || typeof compiled !== "function" || typeof create !== "function") {
+    return { pending: () => 0, hold: () => {}, exempt: (fn) => fn(), held: () => 0, release: () => {} };
+  }
 
   /** Linked and not yet finalized, oldest first. */
   const order: PipelineContext[] = [];
   const inLine = new Set<PipelineContext>();
+  /** Link order, so a release can put held programs back where the GPU queued them. */
+  const linkSeq = new WeakMap<PipelineContext, number>();
+  let nextSeq = 0;
+  let holding = false;
+  let exempting = false;
+  /** Effects seen, so a cache hit is never mistaken for a new effect. */
+  const seen = new WeakSet<object>();
+  const heldNames = new Set<string>();
+  const heldSet = new Set<PipelineContext>();
   /** When the oldest became the oldest: one that is never polled again is let go after `releaseMs`. */
   let frontSince = now();
   /** Time this task spent finalizing; a timer resets it, so it never carries into the next task. */
@@ -57,12 +89,24 @@ export function paceShaderLinks(
     frontSince = now();
   };
 
+  hooks.createEffect = (...args) => {
+    const effect = create.apply(engine, args);
+    if (!seen.has(effect)) {
+      seen.add(effect);
+      if (holding && !exempting && effect._key !== undefined) heldNames.add(programName(effect._key));
+    }
+    return effect;
+  };
   hooks._preparePipelineContextAsync = (ctx, ...rest) => {
     if (order.length === 0) frontSince = now();
     prepare.call(engine, ctx, ...rest);
-    if (ctx.isParallelCompiled) { order.push(ctx); inLine.add(ctx); }
+    if (!ctx.isParallelCompiled) return;
+    linkSeq.set(ctx, nextSeq++);
+    if (ctx._name !== undefined && heldNames.has(ctx._name)) heldSet.add(ctx);
+    else { order.push(ctx); inLine.add(ctx); }
   };
   hooks._isRenderingStateCompiled = (ctx) => {
+    if (heldSet.has(ctx)) return false;
     while (order.length > 0 && order[0] !== ctx && (order[0]!._isDisposed || now() - frontSince >= releaseMs)) dropFront();
     const tracked = inLine.has(ctx);
     if (tracked && (order[0] !== ctx || spent >= budgetMs)) return false;
@@ -86,5 +130,24 @@ export function paceShaderLinks(
     return ok;
   };
 
-  return { pending: () => order.length };
+  return {
+    pending: () => order.length,
+    hold: (on) => { holding = on; },
+    exempt: (fn) => {
+      const was = exempting;
+      exempting = true;
+      try { return fn(); } finally { exempting = was; }
+    },
+    held: () => heldSet.size,
+    release: () => {
+      holding = false;
+      heldNames.clear();
+      const back = [...heldSet].filter((c) => !c._isDisposed);
+      heldSet.clear();
+      for (const c of back) inLine.add(c);
+      order.push(...back);
+      order.sort((a, b) => linkSeq.get(a)! - linkSeq.get(b)!);
+      frontSince = now();
+    },
+  };
 }

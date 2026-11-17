@@ -1363,7 +1363,8 @@ interface LoadedRig {
   wardrobes: Map<Body, AssetContainer>;
 }
 
-let loaded: LoadedRig | null = null;
+/** Per scene: the menu stage, the menu's game warm-up and the game can all hold one. */
+const loadedBy = new Map<Scene, LoadedRig>();
 /**
  * The load in flight, AND the scene it is loading into.
  *
@@ -1400,7 +1401,7 @@ export function loadPlayerRig(
   bodies: readonly Body[] = ["male"],
   sources: RigSources = { anims: ANIM_URL, wardrobes: WARDROBE_URL },
 ): Promise<void> {
-  const missing = () => bodies.filter((b) => loaded?.scene !== scene || !loaded.wardrobes.has(b));
+  const missing = () => bodies.filter((b) => !loadedBy.get(scene)?.wardrobes.has(b));
   if (missing().length === 0) return Promise.resolve();
   if (pending?.scene === scene && bodies.every((b) => pending!.bodies.includes(b))) return pending.promise;
 
@@ -1413,23 +1414,21 @@ export function loadPlayerRig(
     .then(async () => {
       const need = missing();
       if (need.length === 0) return;
-      const fresh = loaded?.scene !== scene;
+      const have = loadedBy.get(scene);
       const [anims, ...wardrobes] = await Promise.all([
-        fresh ? LoadAssetContainerAsync(sources.anims, scene) : loaded!.anims,
+        have ? have.anims : LoadAssetContainerAsync(sources.anims, scene),
         ...need.map((b) => {
           const source = sources.wardrobes[b];
           if (source === undefined) throw new Error(`no wardrobe source for the ${b} body`);
           return LoadAssetContainerAsync(source, scene);
         }),
       ]);
-      const into: LoadedRig = fresh ? { scene, anims, wardrobes: new Map() } : loaded!;
+      const into: LoadedRig = have ?? { scene, anims, wardrobes: new Map() };
       need.forEach((b, i) => into.wardrobes.set(b, wardrobes[i]!));
-      loaded = into;
+      loadedBy.set(scene, into);
     })
-    .catch(() => {
-      // A body that failed to arrive leaves the ones already here alone.
-      if (loaded?.scene !== scene) loaded = null;
-    })
+    // A body that failed to arrive leaves the ones already here alone.
+    .catch(() => undefined)
     .finally(() => {
       if (pending?.promise === promise) pending = null;
     });
@@ -1440,17 +1439,17 @@ export function loadPlayerRig(
 }
 
 export function isRigReady(scene: Scene, body: Body = "male"): boolean {
-  return loaded !== null && loaded.scene === scene && loaded.wardrobes.has(body);
+  return loadedBy.get(scene)?.wardrobes.has(body) ?? false;
 }
 
 /** Every take in this scene's animation library, by name. Empty before it lands. */
 export function libraryClips(scene: Scene): string[] {
-  return loaded?.scene === scene ? loaded.anims.animationGroups.map((g) => g.name) : [];
+  return loadedBy.get(scene)?.anims.animationGroups.map((g) => g.name) ?? [];
 }
 
 /** This scene's wardrobe import for a body, or null before it lands. Never a second import. */
 export function wardrobeFor(scene: Scene, body: Body = "male"): AssetContainer | null {
-  return loaded?.scene === scene ? loaded.wardrobes.get(body) ?? null : null;
+  return loadedBy.get(scene)?.wardrobes.get(body) ?? null;
 }
 
 /**
@@ -1464,8 +1463,8 @@ export function wardrobeFor(scene: Scene, body: Body = "male"): AssetContainer |
  * wants.
  */
 export function resetPlayerRig(scene?: Scene): void {
-  if (scene !== undefined && loaded !== null && loaded.scene !== scene) return;
-  loaded = null;
+  if (scene === undefined) loadedBy.clear();
+  else loadedBy.delete(scene);
   if (scene === undefined || pending?.scene === scene) pending = null;
 }
 
@@ -2063,7 +2062,7 @@ export class RigActor {
    */
   playRaw(name: string): AnimationGroup | null {
     this.stopRaw();
-    const source = loaded?.anims.animationGroups.find((g) => g.name === name);
+    const source = loadedBy.get(this.scene)?.anims.animationGroups.find((g) => g.name === name);
     if (!source) return null;
     const group = new AnimationGroup(`${this.host.name}-raw`, this.scene);
     for (const { animation, target } of source.targetedAnimations) {
@@ -2245,6 +2244,7 @@ export class RigActor {
 
   private build(): void {
     this.teardown();
+    const loaded = loadedBy.get(this.scene);
     if (!loaded) return;
 
     const wardrobe = loaded.wardrobes.get(this.body);

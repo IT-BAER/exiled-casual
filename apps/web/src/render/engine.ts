@@ -626,7 +626,9 @@ export function createScene(engine: Engine): SceneHandle {
     setFireLightZoom(zoom);
   };
   applyFraming();
-  engine.onResizeObservable.add(applyFraming);
+  // The engine outlives the scene (shared-engine.ts).
+  const framing = engine.onResizeObservable.add(applyFraming);
+  scene.onDisposeObservable.add(() => engine.onResizeObservable.remove(framing));
 
   const setZoom = (notches: number): void => {
     targetHalf = Math.min(

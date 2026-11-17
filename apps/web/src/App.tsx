@@ -447,7 +447,7 @@ export function App(): React.ReactElement {
             adds the figure standing in it. A spinner over a backdrop would be a
             worse wait than an empty hall that fills in. */}
         <React.Suspense fallback={null}>
-          <MenuStage classId={screen.kind === "create" ? newClassId : selectedClassId} />
+          <MenuStage classId={screen.kind === "create" ? newClassId : selectedClassId} graphics={settings.graphics} />
         </React.Suspense>
         {screen.kind === "select" ? (
           <CharacterSelect

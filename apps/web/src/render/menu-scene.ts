@@ -35,6 +35,7 @@ import {
 import { attachRig, BODIES, loadPlayerRig, resetPlayerRig, type Looks, type RigActor } from "./rig";
 import { buildSkyEnvironment, GROUND_COLOR, SKY_COLOR } from "./environment";
 import { dissolveAway, dissolveIn, primeDissolve } from "./dissolve";
+import { mountSharedCanvas, sharedGl } from "./shared-engine";
 
 /**
  * The scene's floor height. Arbitrary: the camera is solved from the painting
@@ -387,12 +388,16 @@ export function lightHall(scene: Scene): Light[] {
 }
 
 /**
- * Build the stage on `canvas`, or resolve null when the wardrobe could not be
- * fetched. Null is not an error: the select screen keeps its backdrop and its
- * roster, and loses only the figure — which is exactly what happens headlessly.
+ * Build the stage in `place` on the page's one GL canvas (shared-engine.ts), or
+ * resolve null when the wardrobe could not be fetched. Null is not an error: the
+ * select screen keeps its backdrop and its roster, and loses only the figure.
  */
-export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuStage | null> {
-  const engine = new Engine(canvas, true, { alpha: true, premultipliedAlpha: false });
+export async function createMenuStage(place: HTMLElement): Promise<MenuStage | null> {
+  // `links.exempt`: the game warm-up (warm-game.ts) holds what it links; never the figure's.
+  const { canvas, engine, links } = sharedGl();
+  const unmount = mountSharedCanvas(place);
+  // The game's resolution setting stays on the engine after a session.
+  engine.setHardwareScalingLevel(1);
   const scene = new Scene(engine);
   // Transparent, so the painted hall behind the canvas IS the background.
   scene.clearColor = new Color4(0, 0, 0, 0);
@@ -410,7 +415,8 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   // window resize: at creation the canvas may not have its layout size yet.
   let framed = "";
   const frame = () => {
-    const box = canvas.parentElement ?? canvas;
+    // The backdrop covers the host's parent, not the 68vw host the canvas sits in.
+    const box = place.parentElement ?? place;
     const sizes = [canvas.clientWidth, canvas.clientHeight, box.clientWidth, box.clientHeight] as const;
     if (sizes.join() === framed || sizes.some((n) => n === 0)) return;
     framed = sizes.join();
@@ -516,7 +522,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
   contact.material = contactMat;
 
 
-  const render = () => { frame(); scene.render(); };
+  const render = () => { frame(); links.exempt(() => scene.render()); };
   engine.runRenderLoop(render);
 
   const onResize = () => engine.resize();
@@ -568,14 +574,14 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
         }
       }
       if (arrived) {
-        void primeDissolve(dressed);
+        void links.exempt(() => primeDissolve(dressed));
         return;
       }
       arrived = true;
       // Nothing to see until the shader is compiled, which is the whole reason
       // the prime is awaited rather than fired off: with the plugin attached
       // late he is drawn solid for a few frames and only then starts eroding.
-      void primeDissolve(dressed, 1).then(() => {
+      void links.exempt(() => primeDissolve(dressed, 1)).then(() => {
         shadowMat.alpha = 0;
         contactMat.alpha = 0;
         return dissolveIn(scene, dressed, (gone) => {
@@ -603,7 +609,7 @@ export async function createMenuStage(canvas: HTMLCanvasElement): Promise<MenuSt
       // one is using.
       resetPlayerRig(scene);
       scene.dispose();
-      engine.dispose();
+      unmount();
     },
   };
 }

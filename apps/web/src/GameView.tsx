@@ -62,7 +62,8 @@ import { warmSkillLooks } from "./render/skills/warm-looks";
 import { CLASS_LOOKS, SKILL_LOOKS } from "./render/skills";
 import { warmBossFx } from "./render/boss-fx";
 import { warmEntityLooks, warmProjectiles } from "./render/meshes";
-import { paceShaderLinks } from "./render/link-pacing";
+import { mountSharedCanvas, sharedGl } from "./render/shared-engine";
+import { endGameWarm } from "./render/warm-game";
 import { Minimap } from "./hud/Minimap";
 import { BuffBar } from "./hud/BuffBar";
 import { DebugStats } from "./hud/DebugStats";
@@ -156,7 +157,8 @@ export function GameView({
   fresh = false,
   lab,
 }: GameViewProps = {}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** Where the page's one GL canvas (render/shared-engine.ts) is shown while the game is up. */
+  const hostRef = useRef<HTMLDivElement>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [hoveredEntityId, setHoveredEntityId] = useState<number | null>(null);
   // Edit Hideout (input/hideout-edit.ts): whether the mode is on, and what it holds.
@@ -412,8 +414,12 @@ export function GameView({
   }, [snapshot]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const host = hostRef.current;
+    if (!host) return;
+    // The menu's warm-up hands its programs over before this scene asks for any.
+    endGameWarm();
+    const { canvas, engine, links } = sharedGl();
+    const unmountCanvas = mountSharedCanvas(host);
 
     // Spawn sim worker
     const worker = new Worker(
@@ -492,15 +498,6 @@ export function GameView({
     // one that is still on the wire when it fires.
     void preloadSfx(CORE_SFX);
 
-    // Babylon engine + render loop
-    // Ask for the discrete GPU on dual-GPU laptops; context-loss recovery is a
-    // reload anyway, so skip the bookkeeping Babylon does to support it.
-    const engine = new Engine(canvas, true, {
-      powerPreference: "high-performance",
-      doNotHandleContextLost: true,
-    });
-    // Before any material: first-visit shader finalizes in link order, one wait per task (render/link-pacing.ts).
-    const links = paceShaderLinks(engine);
     // A lost GL context (GPU reset, driver update, too many live contexts) leaves
     // a dead canvas. We skip Babylon's in-place restore on purpose (the scene
     // rebuilds cleanly from a reload, and the restore machinery is bookkeeping on
@@ -1121,7 +1118,10 @@ export function GameView({
       stopMusic();
       sceneRef.current = null;
       engineRef.current = null;
-      engine.dispose();
+      // The engine is the page's (shared-engine.ts): only this scene and its loop go.
+      engine.stopRenderLoop();
+      scene.dispose();
+      unmountCanvas();
       worker.terminate();
       workerRef.current = null;
     };
@@ -1201,10 +1201,7 @@ export function GameView({
     // translate="no": Safari and Edge translation swap text nodes React still holds,
     // and the next insert beside one throws NotFoundError (three crashes, 0.6-0.7).
     <div translate="no" style={{ position: "relative", width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <canvas
-        ref={canvasRef}
-        style={{ width: "100%", height: "100%", display: "block" }}
-      />
+      <div ref={hostRef} style={{ width: "100%", height: "100%" }} />
       {/* First in the tree and highest in z: the canvas underneath it is still
           being built, and the HUD below is reading a snapshot from the area the
           player just left. */}
