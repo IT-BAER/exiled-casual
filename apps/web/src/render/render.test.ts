@@ -1349,6 +1349,37 @@ describe("SnapshotRenderer — new kinds", () => {
     expect(mesh!.scaling.x).toBeCloseTo(3.5);
   });
 
+  it.each(["cartographer", "vendor"] as const)("%s watches the player only across her table or while talking", (kind) => {
+    engine = new NullEngine();
+    const { scene } = createScene(engine);
+    const renderer = new SnapshotRenderer(scene);
+    const snap = (tick: number, inRange: boolean) => makeSnapshot({
+      tick, area: "hideout", entities: [{ id: 9, kind, x: 6, y: 0, inRange }],
+    });
+    renderer.apply(null, snap(1, false), 1);
+    const rig = {
+      setAimTarget: vi.fn(), clearAimTarget: vi.fn(), setLooks: () => {}, dispose: () => {},
+      setLocomotion: () => {}, setMoveAngle: () => {}, setLookYaw: () => {}, setFacing: () => {}, update: () => {},
+    };
+    scene.getMeshByName("entity-9")!.metadata = { rig };
+    const watched = (tick: number, inRange: boolean): boolean => {
+      rig.setAimTarget.mockClear();
+      rig.clearAimTarget.mockClear();
+      renderer.apply(null, snap(tick, inRange), 1);
+      expect(rig.setAimTarget.mock.calls.length + rig.clearAimTarget.mock.calls.length).toBe(1);
+      return rig.setAimTarget.mock.calls.length === 1;
+    };
+
+    expect(watched(2, false), "across the room").toBe(false);
+    expect(watched(3, true), "across her table").toBe(true);
+    renderer.setTalkingTo(kind);
+    expect(watched(4, false), "her window open").toBe(true);
+    renderer.setTalkingTo(kind === "vendor" ? "cartographer" : "vendor");
+    expect(watched(5, false), "the other one's window").toBe(false);
+    renderer.setTalkingTo(null);
+    expect(watched(6, false), "window shut").toBe(false);
+  });
+
   it("draws a charge as a narrow path from the brute to where it lands, not a disc", () => {
     engine = new NullEngine();
     const { scene } = createScene(engine);

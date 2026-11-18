@@ -612,7 +612,7 @@ describe("Maren's body", () => {
     }
   }, 60_000);
 
-  it("watches the player: the renderer hands her rig his position every frame", async () => {
+  it("watches the player across her table: the renderer hands her rig his position every frame", async () => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     try {
@@ -628,7 +628,7 @@ describe("Maren's body", () => {
           flasks: { lifeCharges: 7, lifeMax: 7, manaCharges: 7, manaMax: 7 }, stats: testStats(),
         },
         area: "hideout", portalsLeft: 0, mapOpen: false, areaTier: 0, atlasSeed: 0, completedNodes: [],
-        entities: [{ id: 9, kind: "cartographer", x: -4, y: 0, yaw: Math.PI, inRange: false }],
+        entities: [{ id: 9, kind: "cartographer", x: -4, y: 0, yaw: Math.PI, inRange: true }],
         inventory: { cols: 12, rows: 5, items: [] }, stash: { cols: 12, rows: 12, items: [] },
         vendor: { cols: 12, rows: 12, items: [] }, shards: {}, equipment: {},
       } as unknown as Snapshot);

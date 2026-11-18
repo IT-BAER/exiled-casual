@@ -2157,6 +2157,11 @@ export class RigActor {
     this.aimTarget = { x: worldX, z: worldZ };
   }
 
+  /** Stop aiming: the head eases back to the body's facing. */
+  clearAimTarget(): void {
+    this.aimTarget = null;
+  }
+
   dispose(): void {
     this.teardown();
     this.pivot.dispose();

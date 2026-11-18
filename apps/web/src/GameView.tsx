@@ -182,6 +182,10 @@ export function GameView({
   // The window's state, not the click: he speaks only for a window that really opened or closed.
   useEffect(() => { varkis.window(vendorOpen && shop === undefined); }, [varkis, vendorOpen, shop]);
   useEffect(() => { maren.window(vendorOpen && shop === "maps"); }, [maren, vendorOpen, shop]);
+  // Whoever is talking to him watches him, wherever he stands.
+  useEffect(() => {
+    rendererRef.current?.setTalkingTo(!vendorOpen ? null : shop === "maps" ? "cartographer" : "vendor");
+  }, [vendorOpen, shop]);
   const [characterOpen, setCharacterOpen] = useState(false);
   // The passive tree (P). Fullscreen, like PoE's own, and render-only until a
   // node is clicked — the sim owns whether that click is allowed.

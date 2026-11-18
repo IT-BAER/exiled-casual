@@ -89,6 +89,7 @@ vi.mock("./render/renderer", () => ({
     setAim = vi.fn();
     setPet = vi.fn();
     setMapDeviceBeckon = vi.fn();
+    setTalkingTo = vi.fn();
     cameraShake = () => ({ x: 0, z: 0 });
     wadingBodies = () => [];
     overridePlacement = vi.fn();

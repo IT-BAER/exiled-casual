@@ -385,6 +385,8 @@ export class SnapshotRenderer {
   /** Entity id the mouse is hovering; drives mesh highlight, NOT inRange. */
   private hoveredEntityId: number | null = null;
   private beckonDevice = false;
+  /** The hideout keeper whose window is open, who watches the player wherever he stands. */
+  private talkingTo: "vendor" | "cartographer" | null = null;
   /** The monster wearing the red hover outline; cleared before its mesh becomes a corpse. */
   private outlinedId: number | null = null;
   /** Monsters glowing through a heavy wind-up; cleared when it lands or they die. */
@@ -439,6 +441,11 @@ export class SnapshotRenderer {
   /** Breathe the Map Device's glow while the objective points at it (hud/first-map.ts). */
   setMapDeviceBeckon(on: boolean): void {
     this.beckonDevice = on;
+  }
+
+  /** Whose shop window is open: Varkis's shelf (`vendor`), Maren's maps (`cartographer`), or nobody's. */
+  setTalkingTo(kind: "vendor" | "cartographer" | null): void {
+    this.talkingTo = kind;
   }
 
   /** Show or put away the companion cat (`ui.pet`). */
@@ -868,10 +875,13 @@ export class SnapshotRenderer {
       if (e.kind === "vendor" || e.kind === "cartographer") {
         updateVendor(mesh, this.hoveredEntityId === e.id);
       }
-      if (e.kind === "cartographer" && this.playerId !== null) {
-        // Maren watches the player; her rig clamps how far her head turns.
-        const him = this.meshes.get(this.playerId);
-        if (him) rigOf(mesh)?.setAimTarget(him.position.x, him.position.z);
+      if (e.kind === "vendor" || e.kind === "cartographer") {
+        // A keeper watches the player only across their table (the interact reach) or
+        // while their window is open; their rig clamps how far the head turns.
+        const him = this.playerId !== null ? this.meshes.get(this.playerId) : undefined;
+        const rig = rigOf(mesh);
+        if (him && (e.inRange || this.talkingTo === e.kind)) rig?.setAimTarget(him.position.x, him.position.z);
+        else rig?.clearAimTarget();
       }
       if (e.kind === "container") {
         updateContainer(mesh, this.hoveredEntityId === e.id, e.opened === true);

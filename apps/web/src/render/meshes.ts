@@ -1939,6 +1939,7 @@ function buildNpc(scene: Scene, root: Mesh, kind: "vendor" | "cartographer", loo
   if (rig) {
     rig.setLooks(looks);
     rig.setLocomotion(0); // stand and breathe; he never goes anywhere
+    rig.setLookMax(NPC_LOOK_MAX);
   }
 
   root.metadata = { markMat, interactKind: kind, ...(rig ? { rig } : {}) };
@@ -1964,8 +1965,8 @@ export const CARTOGRAPHER_LOOKS: Looks = {
  */
 export const CARTOGRAPHER_IDLE = "Rig|Idle_Lady_Loop";
 
-/** How far she turns her head to watch the player: past it she would show the camera her profile. */
-export const CARTOGRAPHER_LOOK_MAX = (40 * Math.PI) / 180;
+/** How far a keeper turns the head to watch the player: past it they would show the camera a profile. */
+export const NPC_LOOK_MAX = (40 * Math.PI) / 180;
 
 /**
  * Multiplies the pack's tan skin on her drawn hands, arms and legs to the pale tone of her own face
@@ -1999,7 +2000,6 @@ function cartographerShade(slot: string | undefined, part: string | undefined): 
 function buildCartographer(scene: Scene, root: Mesh): void {
   const npc = buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS, CARTOGRAPHER_IDLE);
   if (!npc) return;
-  npc.setLookMax(CARTOGRAPHER_LOOK_MAX);
   const clones = new Map<Material, Material>();
   for (const mesh of root.getChildMeshes()) {
     const [slot, , part] = mesh.name.split(".");
