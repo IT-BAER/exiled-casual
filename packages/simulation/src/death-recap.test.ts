@@ -102,4 +102,11 @@ describe("summarizeHits", () => {
     expect(r.sources[0]).toMatchObject({ species: "a", element: "cold" });
     expect(r.byElement).toEqual({ fire: 14, cold: 30 });
   });
+
+  it("a source that dealt two elements lists each part, most first, so its row agrees with the tip", () => {
+    const r = summarizeHits([hit(1, "a", 10.4, 0), hit(2, "a", 30, 2), hit(3, "b", 0.3, 0), hit(4, "b", 5, 1)], 100);
+    expect(r.sources[0]!.parts).toEqual([{ element: "cold", damage: 30 }, { element: "fire", damage: 10 }]);
+    // A part that rounds to nothing is not shown as "0 Fire".
+    expect(r.sources[1]!.parts).toEqual([{ element: "physical", damage: 5 }]);
+  });
 });

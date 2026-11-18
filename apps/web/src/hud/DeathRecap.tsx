@@ -108,6 +108,9 @@ export function DeathRecap({ recap, stats, inMap = false, portalsLeft = 0 }: {
       {recap.sources.map((s) => {
         const el = ELEMENT[s.element];
         const share = recap.total > 0 ? Math.round((s.damage * 100) / recap.total) : 0;
+        // Each element on its own: one sum under the largest element read as
+        // "199 Physical" beside a tip that rightly said fire did the most.
+        const parts = s.parts?.length ? s.parts : [{ element: s.element, damage: s.damage }];
         return (
           <div key={`${s.species}|${s.rare}`} data-testid="recap-source"
             style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
@@ -115,8 +118,12 @@ export function DeathRecap({ recap, stats, inMap = false, portalsLeft = 0 }: {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                 <span>{sourceName(s.species, s.rare)} <span style={{ color: "#7d7469" }}>{hitsLabel(s.species, s.hits)}</span></span>
-                <span style={{ color: el.tint, whiteSpace: "nowrap" }}>
-                  <ElementIcon of={s.element} size={16} /> {s.damage} {el.label}
+                <span style={{ whiteSpace: "nowrap" }}>
+                  {parts.map((p, i) => (
+                    <span key={p.element} style={{ color: ELEMENT[p.element].tint, marginLeft: i > 0 ? 8 : 0 }}>
+                      <ElementIcon of={p.element} size={16} /> {p.damage} {ELEMENT[p.element].label}
+                    </span>
+                  ))}
                 </span>
               </div>
               <div style={{ height: 4, marginTop: 4, background: "rgba(255,255,255,0.06)" }}>

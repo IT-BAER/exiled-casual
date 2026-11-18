@@ -46,11 +46,13 @@ export function summarizeHits(hits: readonly RecapHit[], maxLife: number): Death
     .filter((g) => Math.round(g.damage) > 0)
     .sort((a, b) => b.damage - a.damage)
     .slice(0, 3)
-    .map(({ perElement, ...s }) => ({
-      ...s,
-      damage: Math.round(s.damage),
-      element: [...perElement].reduce((a, b) => (b[1] > a[1] ? b : a))[0],
-    }));
+    .map(({ perElement, ...s }) => {
+      const parts = [...perElement]
+        .sort((a, b) => b[1] - a[1])
+        .map(([element, d]) => ({ element, damage: Math.round(d) }))
+        .filter((p) => p.damage > 0);
+      return { ...s, damage: Math.round(s.damage), element: parts[0]?.element ?? s.element, parts };
+    });
   for (const k of Object.keys(byElement) as MonsterElement[]) byElement[k] = Math.round(byElement[k]!);
   return {
     killingBlow: {

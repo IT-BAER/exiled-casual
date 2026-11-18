@@ -54,6 +54,20 @@ describe("DeathRecap", () => {
     expect(missing).toEqual([]);
   });
 
+  it("a source that dealt two elements shows each part with its icon, not the sum under one element", () => {
+    const base = recap();
+    render(<DeathRecap recap={{ ...base, sources: [
+      { species: HUSK, rare: false, damage: 199, hits: 5, element: "physical",
+        parts: [{ element: "physical", damage: 150 }, { element: "chaos", damage: 49 }] },
+    ] }} stats={stats()} />);
+    const row = screen.getByTestId("recap-source");
+    expect(row.textContent).toContain("150 Physical");
+    expect(row.textContent).toContain("49 Chaos");
+    expect(row.textContent).not.toContain("199");
+    expect([...row.querySelectorAll("img[data-element]")].map((i) => i.getAttribute("src")))
+      .toEqual(["/hud/elements/physical.webp", "/hud/elements/chaos.webp"]);
+  });
+
   it("lists the top sources with hit counts, a rare marked as rare, a burn as Burning", () => {
     render(<DeathRecap recap={recap()} stats={stats()} />);
     const rows = screen.getAllByTestId("recap-source");

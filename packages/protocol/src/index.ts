@@ -175,6 +175,8 @@ export interface DeathRecapSource {
   hits: number;
   /** The element it dealt most. */
   element: MonsterElement;
+  /** Its damage per element, most first; a part that rounds to 0 is left out. */
+  parts?: { element: MonsterElement; damage: number }[];
 }
 
 /** What killed him, over the last seconds before the killing blow. Display integers. */
