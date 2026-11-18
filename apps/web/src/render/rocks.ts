@@ -407,7 +407,7 @@ export function scatterLedge(
   return [
     ...scatter(far, LEDGE_FAR),
     ...scatter(near, LEDGE_NEAR),
-    ...scatter(front, LEDGE_FRONT),
+    ...scatter(front, { ...LEDGE_FRONT, outwardHalfCell: 0.25 }),
   ];
 }
 

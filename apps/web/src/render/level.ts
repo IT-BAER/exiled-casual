@@ -234,6 +234,12 @@ function wallMaterial(scene: Scene, tilesetId: string, sea = false): PBRMaterial
  *  frame. Depth out there is free; it is the FRAME it costs. */
 const LEDGE_ROWS = [1.15, 2.3];
 
+/** How far a fitted stone may reach past the cell face. Collision keeps the whole
+ *  0.5 body disc (combat-sim.ts) on floor, so 0.3 still stops 0.2 short of his centre. */
+const STONE_FACE_SLACK = 0.3;
+/** A fitted stone narrower than a cell and a half is dropped, not drawn as a pebble. */
+const MIN_FIT_WIDTH = 0.75;
+
 /** The scrub over the ledge.
  *
  *  Dry marram, not lawn: `strand-map-layout2.png` runs its whole coastline in a
@@ -1086,6 +1092,47 @@ export function buildLevel(
   const clear = (ps: RockPlacement[]): RockPlacement[] => keepClear.length === 0 ? ps : ps.filter(
     (p) => keepClear.every((k) => Math.hypot(p.x - k.x, p.z - k.y) > CONTAINER_CLEAR + p.width / 2),
   );
+  // A stone the camera sees from above covers its whole width, and collision stops
+  // a body at the cell face: shrink any stone whose disc reaches past that face, or
+  // the player stands half inside rock at a bend (the coast ledge rows behind the
+  // front run, thin dune blobs with no outward normal).
+  const nearestFloor = (x: number, z: number, radius: number): { d: number; fx: number; fz: number } => {
+    const gx = Math.round((x - originX) / cellSize);
+    const gz = Math.round((z - originY) / cellSize);
+    const reach = Math.ceil(radius / cellSize) + 1;
+    let best = { d: Infinity, fx: 0, fz: 0 };
+    for (let dy = -reach; dy <= reach; dy++)
+      for (let dx = -reach; dx <= reach; dx++) {
+        if (!isFloor(gx + dx, gz + dy)) continue;
+        const fx = originX + (gx + dx) * cellSize;
+        const fz = originY + (gz + dy) * cellSize;
+        const d = Math.hypot(fx - x, fz - z);
+        if (d < best.d) best = { d, fx, fz };
+      }
+    return best;
+  };
+  /** Radius a stone may have at distance `d` from a floor cell centre. */
+  const allowed = (d: number): number => d - cellSize / 2 + STONE_FACE_SLACK;
+  const fitToFloor = (ps: RockPlacement[], push: boolean): RockPlacement[] => ps.flatMap((p) => {
+    let { x, z } = p;
+    const r = p.width / 2;
+    // A one-sided run (the ledge) is pushed off the nearest floor first, which
+    // keeps it whole; a blob has floor all round, so pushing walks it off its own
+    // cells and it is shrunk in place instead.
+    for (let pass = 0; push && pass < 2; pass++) {
+      const n = nearestFloor(x, z, r);
+      const over = r - allowed(n.d);
+      if (over <= 0 || n.d === 0) break;
+      x += ((x - n.fx) / n.d) * over;
+      z += ((z - n.fz) / n.d) * over;
+    }
+    const fit = 2 * allowed(nearestFloor(x, z, r).d);
+    if (p.width <= fit) return [{ ...p, x, z }];
+    // A pocket too tight for a stone: its neighbours already cover the cells.
+    if (fit < MIN_FIT_WIDTH) return [];
+    const k = fit / p.width;
+    return [{ ...p, x, z, width: fit, height: p.height * k, y: p.y * k }];
+  });
   if (rocky) {
     // Walked as a ring rather than folded into the sweep above: that sweep scans
     // horizontal runs and skips ahead past them, so it cannot see a single cell
@@ -1127,8 +1174,8 @@ export function buildLevel(
       const behind = ledgeCells.flatMap((c) =>
         LEDGE_ROWS.map((d) => ({ ...c, x: c.x + (c.nx ?? 0) * d, z: c.z + (c.nz ?? 0) * d })),
       );
-      buildRocks(scene, clear(scatterLedge(behind, ledgeCells)), stone, LEDGE_MESH_PREFIX);
-      buildRocks(scene, clear(scatterDune(rockCells, cellSize)), stone, DUNE_MESH_PREFIX);
+      buildRocks(scene, clear(fitToFloor(scatterLedge(behind, ledgeCells), true)), stone, LEDGE_MESH_PREFIX);
+      buildRocks(scene, clear(fitToFloor(scatterDune(rockCells, cellSize), false)), stone, DUNE_MESH_PREFIX);
       // Sparser than a dungeon floor: `beach-map.jpg` keeps its open sand almost
       // clean of loose stone, and at the dungeon spacing the pebbles read as
       // dirt across the whole beach.
