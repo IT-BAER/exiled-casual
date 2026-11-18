@@ -47,7 +47,9 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
     # Drawn over the loading plate, never over the game: PoE darkens the corners
     # of a wallpaper so the band and the tip are what the eye lands on.
     # Drawn `cover` full-bleed; the master's 2048 is its cap. Lossy, as above.
-    "loading_vignette_v1": ("loading_vignette.webp", None, 90),
+    # v2 is v1 with its painted gold frame inpainted away: `cover` cropped that
+    # frame's top and bottom off on wide screens, so the frame is its own layer.
+    "loading_vignette_v2": ("loading_vignette.webp", None, 90),
     # Stretched to its row: about 680 px under a dialog, the full width over the
     # passive tree. The master's own width, never an upscale.
     "divider_v1": ("divider.webp", None, None),
@@ -125,6 +127,55 @@ def frame_slice(im: Image.Image) -> tuple[int, int, int, int]:
     return left, top, right, bottom
 
 
+# The loading plate's gold frame, assembled from ONE generated top-left corner.
+# Drawn as a nine-slice over the visible area, so all four corners show at any
+# aspect and the lines stay crisp instead of being a stretched painting.
+FRAME_CORNER = "loading_frame_corner_v1"
+FRAME_SLICE = 384
+
+
+def build_loading_frame() -> str | None:
+    """Mirror the corner into a four-corner nine-slice source; returns the slice line."""
+    src = SRC / f"{FRAME_CORNER}.png"
+    if not src.is_file():
+        return None
+    im = crop_to_alpha(Image.open(src).convert("RGBA"))
+    a = im.getchannel("A").point(lambda v: 255 if v > ALPHA_FLOOR else 0)
+    w, h = im.size
+    # The straight lines run the length of the image: a row lit across most of
+    # the far half is the top line, a column likewise the left line. Grown by
+    # 3 px so their anti-aliased fringe never counts as ornament.
+    px = a.load()
+    far_x, far_y = range(w // 2, w), range(h // 2, h)
+    lit_rows = [y for y in range(h) if sum(1 for x in far_x if px[x, y]) > len(far_x) * 0.6]
+    lit_cols = [x for x in range(w) if sum(1 for y in far_y if px[x, y]) > len(far_y) * 0.6]
+    line_rows = {y + d for y in lit_rows for d in range(-3, 4)}
+    line_cols = {x + d for x in lit_cols for d in range(-3, 4)}
+    reach = 0
+    for y in range(h):
+        for x in range(w):
+            if px[x, y] and y not in line_rows and x not in line_cols:
+                reach = max(reach, x, y)
+    # Corner slice = where the flourish ends plus a margin; the half-arm after it
+    # is plain line, so the mirrored halves meet on straight gold.
+    corner = reach + 24
+    quad = im.crop((0, 0, corner + 32, corner + 32))
+    q = quad.width
+    full = Image.new("RGBA", (2 * q, 2 * q))
+    full.paste(quad, (0, 0))
+    full.paste(quad.transpose(Image.FLIP_LEFT_RIGHT), (q, 0))
+    full.paste(quad.transpose(Image.FLIP_TOP_BOTTOM), (0, q))
+    full.paste(quad.transpose(Image.ROTATE_180), (q, q))
+    # A 1440p panel draws the corner about 250 px; 384 keeps headroom. Lossy with
+    # a lossless alpha: the textured gold is 860 KiB lossless at native size.
+    scale = FRAME_SLICE / corner
+    size = round(full.width * scale)
+    full = full.resize((size, size), Image.LANCZOS)
+    out = DST / "loading_frame.webp"
+    full.save(out, quality=92, alpha_quality=100, method=6)
+    return f"{out.name:26} {size}x{size}  {out.stat().st_size // 1024} KiB  border-image-slice {FRAME_SLICE}"
+
+
 def main() -> int:
     if not SRC.is_dir():
         print(f"no masters at {SRC}", file=sys.stderr)
@@ -132,6 +183,11 @@ def main() -> int:
     DST.mkdir(parents=True, exist_ok=True)
 
     missing: list[str] = []
+    line = build_loading_frame()
+    if line is None:
+        missing.append(FRAME_CORNER)
+    else:
+        print(line)
     for stem, (out_name, width, quality) in PLAN.items():
         src = SRC / f"{stem}.png"
         if not src.is_file():

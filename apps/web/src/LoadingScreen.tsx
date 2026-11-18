@@ -118,6 +118,26 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
             background: "linear-gradient(180deg, transparent 62%, rgba(5,6,8,0.75) 100%)",
           }}
         />
+        {/* The gold frame is its own nine-slice, not part of the vignette: the
+            vignette is drawn `cover`, which crops a painted frame's top and bottom
+            on any screen wider than 16:9. This one FITS the area, so all four
+            corners show, and stays crisp. Slice 384 is printed by
+            `tools/build_menu_textures.py`. Above the foot gradient so it is not dimmed. */}
+        <div
+          data-testid="loading-frame"
+          aria-hidden
+          style={{
+            position: "absolute",
+            inset: "clamp(6px, 1.2vh, 18px)",
+            boxSizing: "border-box",
+            borderStyle: "solid",
+            borderWidth: "clamp(96px, 20vh, 260px)",
+            borderImageSource: "url(/textures/ui/menu/loading_frame.webp)",
+            borderImageSlice: 384,
+            borderImageRepeat: "stretch",
+            pointerEvents: "none",
+          }}
+        />
       </div>
 
       {/* The rule, in the bottom bar's own pairing: a warm hairline closed
