@@ -196,15 +196,17 @@ const RIM_INTENSITY = 4.6;
  * flat sky environment alone and read grey and washed out.
  */
 const KEY_COLOR = new Color3(1.0, 0.66, 0.38);
-const KEY_INTENSITY = 8;
+const KEY_INTENSITY = 20;
 const KEY_OFFSET = new Vector3(1.6, 2.0, 2.6);
 
 /**
- * The sky cube's share, lower than the game's: at the game's 1.0 it outweighed
- * every direct light here and flattened him. It stays above zero because the
- * plate's metal samples it for its specular lobe.
+ * The sky cube's share, far below the game's. It is light from every direction
+ * at once, so whatever it adds lands on the shadow side as much as the lit one:
+ * at 0.4 it was most of his brightness (all hall lights off: median luma 33 of
+ * 43) and he read grey and washed out. It stays above zero because the plate's
+ * metal samples it for its specular lobe.
  */
-const MENU_ENVIRONMENT_INTENSITY = 0.4;
+const MENU_ENVIRONMENT_INTENSITY = 0.1;
 
 /** Where a floor-level or body point lands, as a fraction down the backdrop image. */
 function imageY(y: number, z: number): number {

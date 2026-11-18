@@ -702,3 +702,17 @@ boots. She stands with her hands folded at the waist and turns her head to watch
 Maren's Atlas table and Varkis' counter now run down the room, a few degrees off true, with each
 keeper behind the outer side. Varkis no longer hides under the mana orb. The map on Maren's table
 is painted at a much higher resolution, with inked borders, coast, surf and hill shading.
+
+## 2026-11-18 · Character select lit by the hall's fire
+
+<table>
+<tr>
+<td width="33%"><img src="screenshots/2026-11-18-select-lit-ironsworn.jpeg" alt="Ironsworn on the character select floor, plate armour lit warm from the side by the hall's fire" width="100%"><br><sub>Ironsworn.</sub></td>
+<td width="33%"><img src="screenshots/2026-11-18-select-lit-stalker.jpeg" alt="Stalker on the character select floor in dark leathers with a bow, lit warm from the side" width="100%"><br><sub>Stalker.</sub></td>
+<td width="33%"><img src="screenshots/2026-11-18-select-lit-emberbound.jpeg" alt="Emberbound on the character select floor in a long dark robe, lit warm from the side" width="100%"><br><sub>Emberbound.</sub></td>
+</tr>
+</table>
+
+The character on the select screen no longer looks washed out. Most of his light came from a flat
+grey sky that lit his shadow side as much as his lit side. Now the hall's fire is his main light,
+so his armour and skin keep their colour and his shadows stay dark.
