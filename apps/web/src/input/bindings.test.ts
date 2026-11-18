@@ -341,6 +341,44 @@ describe("attachBindings hold-to-move", () => {
     c.remove();
   });
 
+  describe("g key with a full bag", () => {
+    // A 2x1 bag, both cells taken: a Wisdom pile and a ring.
+    const fullBag = (): Snapshot["inventory"] => ({
+      cols: 2, rows: 1, items: [
+        { x: 0, y: 0, w: 1, h: 1, rarity: "normal", name: "Scroll of Wisdom", itemClass: "currency", baseId: "currency.wisdom", lines: [], count: 5 },
+        { x: 1, y: 0, w: 1, h: 1, rarity: "magic", name: "Ember Loop", itemClass: "ring", baseId: "base.ember_loop", lines: [] },
+      ],
+    });
+    const press = (entities: Partial<Snapshot["entities"][number]>[]) => {
+      const w = { postMessage: vi.fn() };
+      const c = document.createElement("canvas");
+      document.body.appendChild(c);
+      const { detach: d, onSnapshot } = attachBindings(c, w as unknown as Worker, fakeScene());
+      onSnapshot({ ...makeSnap(entities), inventory: fullBag() });
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "g", bubbles: true }));
+      d();
+      c.remove();
+      return w.postMessage;
+    };
+
+    it("passes over a nearer item that cannot fit for currency that stacks onto its pile", () => {
+      const post = press([
+        { id: 60, kind: "groundItem", x: 0.5, y: 0, inRange: true, baseId: "base.stalker_leathers", itemClass: "body" },
+        { id: 61, kind: "groundItem", x: 1.5, y: 0, inRange: true, baseId: "currency.wisdom", itemClass: "currency" },
+      ]);
+      expect(post).toHaveBeenCalledWith({ type: "intent", intent: { kind: "pickupItem", entityId: 61 } });
+      expect(intentCount(post, "pickupItem")).toBe(1);
+    });
+
+    it("still sends the nearest when nothing in range fits, so the refusal shows Inventory Full", () => {
+      const post = press([
+        { id: 60, kind: "groundItem", x: 0.5, y: 0, inRange: true, baseId: "base.stalker_leathers", itemClass: "body" },
+        { id: 62, kind: "groundItem", x: 1.5, y: 0, inRange: true, baseId: "currency.alchemy", itemClass: "currency" },
+      ]);
+      expect(post).toHaveBeenCalledWith({ type: "intent", intent: { kind: "pickupItem", entityId: 60 } });
+    });
+  });
+
   it("g key ignores ground items that are not in range", () => {
     const w = { postMessage: vi.fn() };
     const c = document.createElement("canvas");

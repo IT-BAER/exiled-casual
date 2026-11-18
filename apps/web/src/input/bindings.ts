@@ -4,11 +4,29 @@ import { isTextEntry } from "./text-entry";
 import { dodgeIntent, heldToMoveIntent, keyToIntent, pointerToWorld } from "./intents";
 import type { AbstractMesh, Node, Scene } from "@babylonjs/core";
 import { DEFAULT_KEYBINDS, MOVE_SOCKET, type ControlMode, type Keybinds } from "../settings";
-import { SKILLS } from "@exiled/content-runtime";
+import { SKILLS, baseOf, canonicalBaseId } from "@exiled/content-runtime";
 import { Y_LIFT } from "../render/meshes";
 import { dlog } from "../debug";
 
 // ponytail: thin DOM glue — all key→intent mapping lives in intents.ts
+
+/**
+ * Would the sim's pickup take this ground item (`systems/pickup.ts`)? Currency
+ * joins its pile, anything else needs a free rectangle. A base the client cannot
+ * size counts as 1x1: the sim still decides.
+ */
+function bagCanTake(inv: Snapshot["inventory"], e: SnapshotEntity): boolean {
+  const id = e.baseId ? canonicalBaseId(e.baseId) : "";
+  if (e.itemClass === "currency" && inv.items.some((p) => p.baseId && canonicalBaseId(p.baseId) === id)) return true;
+  let w = 1, h = 1;
+  try { ({ w, h } = baseOf(id)); } catch { /* currency, waystones and unknown bases are 1x1 */ }
+  for (let y = 0; y <= inv.rows - h; y++) {
+    for (let x = 0; x <= inv.cols - w; x++) {
+      if (!inv.items.some((p) => x < p.x + p.w && x + w > p.x && y < p.y + p.h && y + h > p.y)) return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Lab spawn keys. Keyed on `event.code`, not `event.key`: the numpad digits
@@ -423,9 +441,14 @@ export function attachBindings(
     // next durable change persists that. A stray keypress emptied a real
     // character's inventory and equipment. The message still exists for the
     // worker; nothing in the game may bind a key to it.
-    // Pickup: the nearest in-range ground item (sim re-checks range).
+    // Pickup: the nearest in-range ground item the bag can take (sim re-checks
+    // range and room). If none fits, the nearest anyway: its refusal is what
+    // shows Inventory Full.
     if (k === binds().pickup && k !== "" && latestSnap) {
-      const items = latestSnap.entities.filter((e) => e.kind === "groundItem" && e.inRange);
+      const inRange = latestSnap.entities.filter((e) => e.kind === "groundItem" && e.inRange);
+      const inv = latestSnap.inventory;
+      const takeable = inRange.filter((e) => bagCanTake(inv, e));
+      const items = takeable.length > 0 ? takeable : inRange;
       if (items.length > 0) {
         const px = latestSnap.player.x, py = latestSnap.player.y;
         const nearest = items.reduce((a, b) =>
