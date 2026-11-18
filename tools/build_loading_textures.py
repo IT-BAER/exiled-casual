@@ -51,6 +51,18 @@ BOOT_SIZE = (1280, 720)
 BOOT_QUALITY = 72
 
 
+# Per-plate levels (black, white, gamma) on 0..255, applied to the master. hideout_v3
+# comes out of the generator hazy (luma p5 17, sd 26); this puts it back on hideout_v2's
+# tone (p5 ~3, p95 ~106, sd ~35, mean ~38) with 0.3% crushed and 0.6% blown.
+TONE: dict[str, tuple[int, int, float]] = {"hideout": (12, 180, 1.3)}
+
+
+def tone(im: Image.Image, levels: tuple[int, int, float]) -> Image.Image:
+    black, white, gamma = levels
+    lut = [round(255 * min(1.0, max(0.0, (v - black) / (white - black))) ** gamma) for v in range(256)]
+    return im.convert("RGB").point(lut * 3)
+
+
 def newest_master(biome: str) -> pathlib.Path | None:
     """The highest-numbered `<biome>_v<N>.png`. Versions are kept, never overwritten."""
     found = sorted(SRC.glob(f"{biome}_v*.png"))
@@ -94,7 +106,8 @@ def main() -> int:
     for biome in PLATES:
         master = newest_master(biome)
         assert master is not None
-        with Image.open(master) as im:
+        with Image.open(master) as raw:
+            im = tone(raw, TONE[biome]) if biome in TONE else raw
             plate = to_plate(im, TARGET)
             dest = OUT / f"{biome}.jpg"
             plate.save(dest, "JPEG", quality=QUALITY, optimize=True, progressive=True)

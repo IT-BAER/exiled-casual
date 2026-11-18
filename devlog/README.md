@@ -731,7 +731,7 @@ in the hideout's firelight.
 
 ## 2026-11-18 · A sharper hideout loading screen
 
-<img src="screenshots/2026-11-18-hideout-loading-plate.jpeg" alt="Before and after of the hideout loading screen: the old 1672x941 painting on the left, the new 2560x1440 painting of the same hall with brazier, chest and Atlas table on the right, with native-size crops below" width="100%"><br><sub>Before (left) and after (right), with native-size crops below.</sub>
+<img src="screenshots/2026-11-18-hideout-loading-plate.jpeg" alt="Before and after of the hideout loading screen: the old 1672x941 painting on the left, the new 2560x1440 painting of the same hall with brazier, chest and Atlas table on the right, with native-size crops below" width="100%"><br><sub>Before (left) and after (right), with the brazier corner below.</sub>
 
 The hideout loading screen is a new painting at 2560x1440, so it stays sharp at 1440p. Nine other
 full-screen images (menu and select backdrops, the Atlas sheet, the loading vignette and more) are
