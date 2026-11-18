@@ -114,12 +114,13 @@ export const HIDEOUT_SERVICES: Readonly<Record<HideoutServiceId, { x: number; z:
   // Up-left of the arrival spot, between Maren's corner and the device: on the
   // walk to both and 2 below the nearest portal slot. STASH_CHEST_W 1.20.
   stash: { ...at(-3.6, 2.1), yaw: 0.25, block: 0.4 },
-  // Straight behind the middle of his counter on the right flank, facing the
-  // camera (PI) square on like the counter: his legs are behind timber and his
-  // hands are over the wares. The room around the two stalls stays organic.
-  vendor: { ...at(5.7, 0.45), yaw: 3.14159, block: 0.28 },
-  // Straight behind the middle of her atlas table on the left flank.
-  cartographer: { ...at(-5.6, 0.45), yaw: 3.14159, block: 0.28 },
+  // Behind his counter on the right flank, on its outer long side a little above
+  // the middle, facing across it into the room: the counter stands between him
+  // and the player. 0.95 out from the counter's axis and 0.3 toward its head, as
+  // literals (see the tables below); turned with the counter.
+  vendor: { ...at(6.48, -1.27), yaw: 3.14159 + deg(96), block: 0.28 },
+  // Behind her atlas table on the left flank, the mirror of his.
+  cartographer: { ...at(-6.36, -1.43), yaw: 3.14159 - deg(96), block: 0.28 },
 };
 
 export const HIDEOUT_SERVICE_IDS = Object.keys(HIDEOUT_SERVICES) as HideoutServiceId[];
@@ -136,10 +137,12 @@ export const HIDEOUT_SERVICE_IDS = Object.keys(HIDEOUT_SERVICES) as HideoutServi
 export const HIDEOUT_DECOR: readonly Decor[] = [
   // Maren's map room. A big table, half again a trestle's length, with her
   // Atlas standing on it in relief; a rug under the lot and her books behind her.
-  // Turned off the screen square, like everything here: a room somebody lives in
-  // is not laid out on a grid.
+  // Both long tables run DOWN the frame a few degrees off true (45 + tilt;
+  // SCREEN_SQUARE + 90 is straight down), bottoms leaning in toward the room and
+  // off the globes, their tops a step below the device's row. Positions are
+  // literals: a Math.cos here would reach the collision.
   {
-    id: "carto-table", kind: "table", ...at(-5.6, -0.55), yaw: SCREEN_SQUARE,
+    id: "carto-table", kind: "table", ...at(-5.38, -1.63), yaw: deg(39),
     scale: { x: 1.45, z: 1.4 }, top: TABLE_TOP,
     extras: [
       { kind: "atlasModel", dx: 0, dz: 0.02 },
@@ -149,7 +152,7 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
       { kind: "scrollWisdom", dx: 1.3, dz: -0.42, yaw: 0.6 },
     ],
   },
-  { id: "rug-carto", kind: "rug", ...at(-5.75, -0.25), yaw: deg(306), scale: { x: 1.5, z: 1.75 } },
+  { id: "rug-carto", kind: "rug", ...at(-5.7, -1.6), yaw: deg(36), scale: { x: 1.5, z: 1.75 } },
   { id: "bookshelf-maps", kind: "bookshelf", ...at(-6.95, 1.7), yaw: deg(300) },
   { id: "crate-carto", kind: "crate", ...at(-8.25, 0.35), yaw: SCREEN_SQUARE + 0.5 },
   { id: "barrel-carto", kind: "barrel", ...at(-8.0, -0.95), yaw: 0 },
@@ -158,7 +161,8 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
   // Varkis's stall: a counter with his wares laid out on it, a rug to stand
   // the stall on and his stock stacked behind him.
   {
-    id: "vendor-counter", kind: "table", ...at(5.7, -0.5), yaw: SCREEN_SQUARE, top: TABLE_TOP,
+    id: "vendor-counter", kind: "table", ...at(5.5, -1.47), yaw: deg(51),
+    scale: { x: 1.3, z: 1 }, top: TABLE_TOP,
     extras: [
       { kind: "orbTransmutation", dx: -0.82, dz: -0.12 },
       { kind: "orbAugmentation", dx: -0.62, dz: 0.12 },
@@ -171,7 +175,7 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
       { kind: "candles", dx: 0.98, dz: 0.28, yaw: 0.9 },
     ],
   },
-  { id: "rug-stall", kind: "rug", ...at(5.8, -0.15), yaw: deg(322), scale: { x: 1.15, z: 1.6 } },
+  { id: "rug-stall", kind: "rug", ...at(5.9, -1.45), yaw: deg(52), scale: { x: 1.35, z: 1.6 } },
   { id: "crate-stall", kind: "crate", ...at(7.3, 1.65), yaw: SCREEN_SQUARE + 0.9 },
   { id: "barrel-stall", kind: "barrel", ...at(4.25, 1.25), yaw: 0 },
   { id: "crate-stall-2", kind: "crate", ...at(8.05, 0.05), yaw: SCREEN_SQUARE - 0.6 },
@@ -278,15 +282,12 @@ export function decorDiscs(
 }
 
 /**
- * A piece's own yaw as cos/sin. Only pieces with off-centre discs care, and those
- * all stand on a whole ROT_STEP (hideout.test.ts pins it), so the literal table
- * answers and no transcendental reaches the collision.
+ * A piece's own yaw as cos/sin, snapped to the nearest ROT_STEP so the literal
+ * table answers and no transcendental reaches the collision. A table drawn a few
+ * degrees off a step collides on the step; its discs are two thirds of it anyway.
  */
 function defaultTrig(d: Decor): readonly [number, number] {
-  const degrees = (d.yaw * 180) / Math.PI;
-  return Math.abs(degrees - Math.round(degrees)) < 1e-6 && Math.round(degrees) % ROT_STEP === 0
-    ? rotTrig(Math.round(degrees))
-    : [Math.cos(d.yaw), Math.sin(d.yaw)];
+  return rotTrig(yawToRot(d.yaw));
 }
 
 /**

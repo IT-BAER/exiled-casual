@@ -7,7 +7,7 @@ import type { MonsterDef } from "@exiled/content-schema";
 import { World, type Entity } from "./ecs.js";
 import { areaCollision, buildArea, spillContainer, HIDEOUT_SPAWN } from "./areas.js";
 import { gridCollision } from "./collision.js";
-import type { SessionC, Health, MonsterC, Position, ContainerC, ItemC } from "./components.js";
+import type { SessionC, Health, MonsterC, Position, ContainerC, ItemC, InteractableC } from "./components.js";
 import { grammarForNode } from "./systems/area-transition.js";
 import { AGGRO_RADIUS, WANDER_RADIUS } from "./systems/monster-ai.js";
 import { createCombatSim } from "./combat-sim.js";
@@ -474,10 +474,13 @@ describe("areaCollision", () => {
       const p = at(sx, sy);
       expect(col.isWalkable(p.x, p.y, fp(0.5)), `${sx},${sy}`).toBe(false);
     }
-    // Everything the room is for stays reachable: the spot in front of every portal,
-    // the stash and the vendor (approached from the room's side), and the corners
-    // the columns stand in.
+    // Everything the room is for stays reachable: the spot in front of every portal
+    // and the stash (approached from the room's side), and the corners the columns
+    // stand in. The two shopkeepers stand BEHIND their tables, so the room's side
+    // of them is timber; hideout-edit.test.ts walks a click around to each.
     for (const e of world.query("interactable")) {
+      const kind = world.get<InteractableC>(e, "interactable")!.kind;
+      if (kind === "vendor" || kind === "cartographer") continue;
       const p = world.get<Position>(e, "position")!;
       const toward = (v: number) => v - Math.sign(v) * fp(1.2);
       expect(col.isWalkable(toward(p.x), toward(p.y), fp(0.5)), `${p.x},${p.y}`).toBe(true);

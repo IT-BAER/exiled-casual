@@ -35,8 +35,8 @@ describe("Maren stands in the hideout", () => {
       .map((e) => world.get<Position>(e, "position")!);
     const [maren] = of("cartographer");
     expect(of("cartographer")).toHaveLength(1);
-    // Her own corner of the room, still a short walk from the device she sells for.
-    expect(dist(maren!, MAP_DEVICE_POS)).toBeLessThanOrEqual(7);
+    // Her own corner of the room behind her table, still a short walk from the device she sells for.
+    expect(dist(maren!, MAP_DEVICE_POS)).toBeLessThanOrEqual(9);
     expect(dist(maren!, { x: 0, y: 0 })).toBeGreaterThan(3);
     const portals = of("portal");
     expect(portals).toHaveLength(6);

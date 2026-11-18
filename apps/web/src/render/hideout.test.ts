@@ -29,17 +29,42 @@ describe("hideout decor", () => {
   });
 
   /**
-   * The sim collides against a long piece's discs turned by its yaw, and turns them
-   * with a literal cos/sin table so no engine's Math.cos can move a wall. A piece
-   * whose discs sit off its centre therefore has to stand on a whole step.
+   * The owner's layout: each shop table runs DOWN the frame, a few degrees off
+   * true, with its person behind it on the outer long side, facing across it into
+   * the room. Measured through Babylon's own rotation, so a sign slip shows as a
+   * table across the frame.
    */
-  it("stands every piece with off-centre discs on a whole rotation step", () => {
+  for (const [kind, table] of [["vendor", "vendor-counter"], ["cartographer", "carto-table"]] as const) {
+    it(`runs ${table} down the frame with ${kind} behind it`, () => {
+      const t = HIDEOUT_DECOR.find((d) => d.id === table)!;
+      const npc = HIDEOUT_SERVICES[kind];
+      const along = Vector3.TransformNormal(new Vector3(1, 0, 0), Matrix.RotationY(t.yaw));
+      const dir = toScreen(along.x, along.z);
+      const offTrue = Math.abs((Math.atan2(dir.sx, -dir.sy) * 180) / Math.PI);
+      expect(dir.sy, "runs down").toBeLessThan(0);
+      expect(offTrue, "off true vertical").toBeGreaterThan(2);
+      expect(offTrue, "off true vertical").toBeLessThan(ROT_STEP / 2);
+      // The person stands off the long side away from the room's centre, inside the
+      // table's length, clear of its edge.
+      const rel = toScreen(npc.x - t.x, npc.z - t.z);
+      const lengthwise = Math.abs(rel.sx * dir.sx + rel.sy * dir.sy);
+      const out = (rel.sx * -dir.sy + rel.sy * dir.sx) * Math.sign(toScreen(t.x, t.z).sx);
+      expect(lengthwise, "within the length").toBeLessThan(1.1 * (t.scale?.x ?? 1) - 0.4);
+      expect(out, "behind the outer edge").toBeGreaterThan(0.475 * (t.scale?.z ?? 1) + 0.25);
+      // Facing across it: the camera is PI, a quarter turn toward the room, plus the table's tilt.
+      const across = Math.sign(toScreen(t.x, t.z).sx) * Math.PI / 2;
+      expect(npc.yaw - 3.14159).toBeCloseTo(across + t.yaw - Math.PI / 4, 6);
+    });
+  }
+
+  /** The sim collides on the nearest whole step, so a drawn table may stray at most half of one. */
+  it("collides every long piece within half a rotation step of where it is drawn", () => {
+    const hit = hideoutFootprints();
     for (const d of HIDEOUT_DECOR) {
-      const offCentre = decorDiscs(d, 0, 0, [1, 0]).some((c) => Math.hypot(c.x, c.z) > 1e-9);
-      if (!offCentre) continue;
-      const degrees = (d.yaw * 180) / Math.PI;
-      expect(Math.abs(degrees - Math.round(degrees)), d.id).toBeLessThan(1e-6);
-      expect(Math.abs(Math.round(degrees) % ROT_STEP), d.id).toBe(0);
+      for (const c of decorDiscs(d, d.x, d.z, [Math.cos(d.yaw), Math.sin(d.yaw)])) {
+        const nearest = Math.min(...hit.map((h) => Math.hypot(h.x - c.x, h.z - c.z)));
+        expect(nearest, d.id).toBeLessThan(0.15);
+      }
     }
   });
 

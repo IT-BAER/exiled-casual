@@ -31,6 +31,7 @@ const SHOCK_HOT: Rgb = [0.95, 0.97, 1];
 const MARK: Rgb = [1, 0.18, 0.1];
 const VOLLEY: Rgb = [1, 0.86, 0.55];
 const HASTE: Rgb = [0.3, 0.95, 0.82];
+const SKILL_VFX_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_SKILL_VFX_PREVIEW === "1";
 
 const ARROW = SKILL_FX["skill.snap_shot.v1"]!;
 
@@ -449,9 +450,20 @@ const LIGHTNING_ARROW: ArrowDecor = {
   flight(scene, arrow, head) {
     return electricBody(scene, arrow, head);
   },
-  impact(scene, at, _dx, _dz, _born, src) {
-    // The first body of a cast takes the big burst; every chain link a smaller one.
-    shockHit(scene, at, src === null);
+  impact(scene, at, dx, dz, _born, src) {
+    if (SKILL_VFX_PREVIEW && src === null) {
+      kitFlash(scene, at, 0.74, [0.6, 0.75, 1]);
+      core(scene, at, 0.8, SHOCK_HOT, SHOCK, 0.09);
+      // Carry the arrow's incoming direction through the struck body.
+      const yaw = dx !== 0 || dz !== 0 ? Math.atan2(dx, dz) : undefined;
+      sparks(scene, at, 28, SHOCK_HOT, SHOCK, {
+        ...(yaw === undefined ? {} : { yaw, cone: 0.65 }),
+        speed: [4, 10], up: [0, 0.24], life: [0.08, 0.21], length: 0.25,
+      });
+      fire(scene, shockRing(scene, new Vector3(at.x, 0, at.z), { radius: 1.02, duration: 0.16, colour: SHOCK, lip: 0.16, dust: 0, flash: 0 }));
+    } else {
+      shockHit(scene, at, src === null);
+    }
     if (src === null) {
       // The first body discharges into the floor round it: short forked arcs out, never up.
       for (let i = 0; i < 4; i++) {

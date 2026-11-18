@@ -23,6 +23,7 @@ const DEEP: Rgb = [0.85, 0.2, 0.04];
 const SUN: Rgb = [1, 0.62, 0.18];
 const CURSE: Rgb = [1, 0.4, 0.06];
 const ASH: Rgb = [0.3, 0.28, 0.27];
+const SKILL_VFX_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_SKILL_VFX_PREVIEW === "1";
 
 const floorAt = (x: number, z: number, y = 0) => new Vector3(x, y, z);
 const posOf = (b: ActorRef) => b.node.getAbsolutePosition();
@@ -907,7 +908,19 @@ function meteorBlast(scene: Scene, at: Vector3, blast: number): Fx {
   fx.child(shockRing(scene, at, { radius: blast * 1.25, duration: 0.4, colour: FIRE, lip: 0.5, dust: 10, flash: 0 }));
   fx.child(scorch(scene, at, { radius: blast * 0.75, glow: FIRE, hold: 2.2 }));
   fx.child(fissure(scene, at, { radius: blast * 0.9, colour: FIRE, hold: 1.2 }));
-  for (let i = 0; i < 6; i++) puff(scene, at.x, at.y, at.z, { size: 1, drift: rand(2, 3.5), rise: 0.3 });
+  for (let i = 0; i < 6; i++) {
+    if (SKILL_VFX_PREVIEW) {
+      // Ash moves out along the floor after the hot impact has started to fade.
+      const yaw = ((i + Math.random()) / 6) * TAU;
+      const r = blast * rand(0.18, 0.32);
+      puff(scene, at.x + Math.sin(yaw) * r, at.y, at.z + Math.cos(yaw) * r, {
+        yaw, delay: rand(0.15, 0.23), size: Math.min(0.62, blast * 0.23), drift: rand(0.65, 1.1),
+        rise: rand(0.015, 0.065), life: rand(0.35, 0.55), colour: ASH, alpha: 0.27,
+      });
+    } else {
+      puff(scene, at.x, at.y, at.z, { size: 1, drift: rand(2, 3.5), rise: 0.3 });
+    }
+  }
   return fx;
 }
 

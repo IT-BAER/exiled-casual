@@ -1,4 +1,6 @@
-import { Color3, Mesh, MeshBuilder, PBRMaterial, TransformNode, VertexData, type Scene } from "@babylonjs/core";
+import {
+  Color3, DynamicTexture, Mesh, MeshBuilder, PBRMaterial, Texture, TransformNode, VertexData, type Scene,
+} from "@babylonjs/core";
 import { atlasGraph, mapBaseIdForNode, type AtlasGraphNode } from "@exiled/rules";
 import { mapBase } from "@exiled/content-runtime";
 
@@ -17,8 +19,17 @@ export const ATLAS_MODEL_W = 2.5;
 export const ATLAS_MODEL_D = 1.0;
 
 const NODE = "atlas-model";
-/** Relief resolution: vertices across and deep. */
-const NX = 76, NZ = 32;
+/** Relief resolution: vertices across and deep. Shape only: the colour is the texture. */
+const NX = 128, NZ = 52;
+/**
+ * The painted land, pixels: about 2.4 mm each on the table. Vertex colour at the
+ * relief's own resolution smeared every coast over 3 cm and read as a blur.
+ */
+const TEX_W = 1024, TEX_H = 416;
+/** The places' pull, sampled this coarse and interpolated: it is smooth, the coast is not. */
+const GW = 257, GH = 105;
+/** Below this height a spot is sea. */
+const SHORE = 0.006;
 /** Height of the frame the relief sits in, and the tallest hill above it. */
 const FRAME_H = 0.045;
 const HILL = 0.09;
@@ -32,6 +43,10 @@ const BIOME_TINT: Record<string, readonly [number, number, number]> = {
   vaal_stone: [0.52, 0.50, 0.46],
 };
 const SEA: readonly [number, number, number] = [0.13, 0.25, 0.33];
+const SHALLOWS: readonly [number, number, number] = [0.27, 0.43, 0.46];
+const SURF: readonly [number, number, number] = [0.58, 0.66, 0.6];
+const SAND: readonly [number, number, number] = [0.84, 0.77, 0.58];
+const INK: readonly [number, number, number] = [0.2, 0.15, 0.1];
 
 /** What the model was last built from, so a snapshot only rebuilds it on a change. */
 let current: { seed: number; completed: readonly string[] } | null = null;
@@ -79,39 +94,165 @@ function material(scene: Scene, name: string, build: (m: PBRMaterial) => void): 
   return m;
 }
 
-/** The relief: a height field over the board, coloured by the nearest places' biomes. */
+/**
+ * How much land each spot of the board is, per cell of a GW x GH grid over (u, v):
+ * land where places are, sea toward the edge.
+ */
+function landGrid(nodes: readonly AtlasGraphNode[]): Float32Array {
+  const at = nodes.map(boardXZ);
+  const grid = new Float32Array(GW * GH);
+  for (let j = 0; j < GH; j++) {
+    for (let i = 0; i < GW; i++) {
+      const x = (i / (GW - 1) - 0.5) * ATLAS_MODEL_W, z = (j / (GH - 1) - 0.5) * ATLAS_MODEL_D;
+      let land = 0;
+      for (const p of at) land = Math.max(land, Math.exp(-(((x - p.x) / 0.5) ** 2 + ((z - p.z) / 0.3) ** 2) * 1.6));
+      grid[j * GW + i] = land;
+    }
+  }
+  return grid;
+}
+
+/** The land at (u, v), bilinear. */
+function landAt(grid: Float32Array, u: number, v: number): number {
+  const fx = u * (GW - 1), fz = v * (GH - 1);
+  const i = Math.min(GW - 2, Math.floor(fx)), j = Math.min(GH - 2, Math.floor(fz));
+  const sx = fx - i, sz = fz - j;
+  const a = j * GW + i, c = a + GW;
+  const top = grid[a]! + (grid[a + 1]! - grid[a]!) * sx;
+  const bottom = grid[c]! + (grid[c + 1]! - grid[c]!) * sx;
+  return top + (bottom - top) * sz;
+}
+
+/**
+ * The relief's height at board (x, z): `raw` is the land term before the clamp,
+ * below zero out at sea, and `h` the metres the relief stands up.
+ */
+function heightAt(x: number, z: number, u: number, v: number, land: number, seed: number): { raw: number; h: number; n2: number } {
+  const edge = Math.min(u, 1 - u, v, 1 - v) * 2;
+  const n1 = noise(x * 5, z * 5, seed), n2 = noise(x * 13, z * 13, seed + 7);
+  const raw = Math.min(1, land * 1.25 + (n1 - 0.5) * 0.7) * Math.min(1, edge * 3.5) - 0.18;
+  return { raw, h: Math.max(0, raw) * HILL * (0.65 + 0.7 * n2), n2 };
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/**
+ * The land painted at pixel resolution: the same heights as the relief, plus a
+ * fine wobble on the coast, an inked shoreline with sand inside it, surf and
+ * shallows outside it, each place's biome to an inked border, and hill shading.
+ * Null when there is no canvas
+ * (NullEngine): the model then stands uncoloured, which only tests ever see.
+ */
+function paintAtlas(scene: Scene, grid: Float32Array | null, nodes: readonly AtlasGraphNode[], seed: number): DynamicTexture | null {
+  let tex: DynamicTexture;
+  try {
+    tex = new DynamicTexture(`${NODE}-paint`, { width: TEX_W, height: TEX_H }, scene, true, Texture.TRILINEAR_SAMPLINGMODE);
+  } catch {
+    return null;
+  }
+  const ctx = tex.getContext();
+  const img = ctx.getImageData(0, 0, TEX_W, TEX_H);
+  const px = img.data;
+  if (painted?.seed === seed) {
+    px.set(painted.pixels);
+  } else {
+    paintPixels(px, grid, nodes, seed);
+    painted = { seed, pixels: px.slice() };
+  }
+  ctx.putImageData(img, 0, 0);
+  tex.update();
+  tex.anisotropicFilteringLevel = 8;
+  tex.metadata = { seed };
+  return tex;
+}
+
+/**
+ * The last Atlas painted, so another scene or another visit to the hideout copies
+ * it rather than spending the ~175 ms again.
+ */
+let painted: { seed: number; pixels: Uint8ClampedArray } | null = null;
+
+function paintPixels(px: Uint8ClampedArray, grid: Float32Array | null, nodes: readonly AtlasGraphNode[], seed: number): void {
+  const at = nodes.map((n) => ({ ...boardXZ(n), tint: tintOf(n) }));
+  // First pass: the relief's height per pixel plus a finer rumple, which the
+  // second pass shades by its slope to the next pixel.
+  const n = TEX_W * TEX_H;
+  const raws = new Float32Array(n), hs = new Float32Array(n), n2s = new Float32Array(n), shaded = new Float32Array(n);
+  for (let py = 0; py < TEX_H; py++) {
+    // The canvas's top row is the texture's v = 1 (DynamicTexture.update inverts Y).
+    const v = 1 - py / (TEX_H - 1);
+    for (let pxi = 0; pxi < TEX_W; pxi++) {
+      const u = pxi / (TEX_W - 1);
+      const x = (u - 0.5) * ATLAS_MODEL_W, z = (v - 0.5) * ATLAS_MODEL_D;
+      const { raw, h, n2 } = heightAt(x, z, u, v, grid ? landAt(grid, u, v) : 0, seed);
+      const i = py * TEX_W + pxi;
+      raws[i] = raw; hs[i] = h; n2s[i] = n2;
+      shaded[i] = h + (noise(x * 30, z * 30, seed + 31) - 0.5) * 0.006 + (noise(x * 80, z * 80, seed + 37) - 0.5) * 0.002;
+    }
+  }
+  const step = ATLAS_MODEL_W / (TEX_W - 1);
+  const rgb = [0, 0, 0];
+  for (let py = 0; py < TEX_H; py++) {
+    const v = 1 - py / (TEX_H - 1);
+    for (let pxi = 0; pxi < TEX_W; pxi++) {
+      const u = pxi / (TEX_W - 1);
+      const x = (u - 0.5) * ATLAS_MODEL_W, z = (v - 0.5) * ATLAS_MODEL_D;
+      const i = py * TEX_W + pxi;
+      const raw = raws[i]!, h = hs[i]!, n2 = n2s[i]!;
+      const coast = h + (noise(x * 45, z * 45, seed + 11) - 0.5) * 0.004;
+      if (!grid || coast < SHORE) {
+        const deep = Math.min(1, Math.max(0, -raw / 0.35));
+        const ripple = 0.92 + noise(x * 70, z * 28, seed + 13) * 0.16;
+        const surf = grid && raw > -0.035 ? 0.45 * (1 + raw / 0.035) : 0;
+        for (let k = 0; k < 3; k++) rgb[k] = lerp(lerp(SHALLOWS[k]!, SEA[k]!, deep) * ripple, SURF[k]!, surf);
+      } else {
+        // Each spot belongs to its nearest place, measured through a wobble so the
+        // borders wander; a border between two biomes is inked. A blend of every
+        // place's colour, the old way, read as a smear at any distance.
+        const wx = x + (noise(x * 6, z * 6, seed + 23) - 0.5) * 0.2;
+        const wz = z + (noise(x * 6, z * 6, seed + 29) - 0.5) * 0.12;
+        let best = Infinity, second = Infinity, bi = 0, si = 0;
+        for (let n = 0; n < at.length; n++) {
+          const d = Math.hypot((wx - at[n]!.x) / 0.5, (wz - at[n]!.z) / 0.3);
+          if (d < best) { second = best; si = bi; best = d; bi = n; } else if (d < second) { second = d; si = n; }
+        }
+        const tint = at[bi]!.tint;
+        // Lit from the board's far left by its own slope, per pixel, so a hill
+        // reads as a hill and not a lighter blot. +X is the next pixel, +Z the row above.
+        const gx = pxi + 1 < TEX_W ? (shaded[i + 1]! - shaded[i]!) / step : 0;
+        const gz = py > 0 ? (shaded[i - TEX_W]! - shaded[i]!) / step : 0;
+        const lit = Math.min(1.45, Math.max(0.55, 1 + (gx - gz) * 0.9));
+        const shade = (0.84 + 0.25 * Math.min(1, h / HILL) + (n2 - 0.5) * 0.1) * lit;
+        const sand = coast < SHORE + 0.004 ? 0.55 : 0;
+        for (let k = 0; k < 3; k++) rgb[k] = lerp(tint[k]! * shade, SAND[k]!, sand);
+        if (at[si]!.tint !== tint && second - best < 0.06) for (let k = 0; k < 3; k++) rgb[k] = lerp(rgb[k]!, INK[k]!, 0.6);
+        if (coast < SHORE + 0.0011) for (let k = 0; k < 3; k++) rgb[k] = INK[k]!;
+      }
+      const o = (py * TEX_W + pxi) * 4;
+      // Written as seen: a texture is gamma space, PBR linearises it on read.
+      px[o] = Math.min(255, rgb[0]! * 255);
+      px[o + 1] = Math.min(255, rgb[1]! * 255);
+      px[o + 2] = Math.min(255, rgb[2]! * 255);
+      px[o + 3] = 255;
+    }
+  }
+}
+
+/** The relief: a height field over the board, wearing the painted land. */
 function buildRelief(scene: Scene, parent: TransformNode, nodes: readonly AtlasGraphNode[], seed: number): void {
-  const at = nodes.map((n) => ({ ...boardXZ(n), tint: nodes.length ? tintOf(n) : SEA }));
+  const grid = nodes.length ? landGrid(nodes) : null;
   const positions: number[] = [];
-  const colors: number[] = [];
+  const uvs: number[] = [];
   const indices: number[] = [];
   for (let j = 0; j < NZ; j++) {
     for (let i = 0; i < NX; i++) {
       const u = i / (NX - 1), v = j / (NZ - 1);
       const x = (u - 0.5) * ATLAS_MODEL_W, z = (v - 0.5) * ATLAS_MODEL_D;
-      // Land where places are, sea toward the edge: a coast of noise around them.
-      let land = 0, wsum = 0;
-      const tint = [0, 0, 0];
-      for (const p of at) {
-        const d2 = ((x - p.x) / 0.5) ** 2 + ((z - p.z) / 0.3) ** 2;
-        land = Math.max(land, Math.exp(-d2 * 1.6));
-        const w = 1 / (d2 * d2 + 0.002);
-        wsum += w;
-        for (let k = 0; k < 3; k++) tint[k]! += p.tint[k]! * w;
-      }
-      const edge = Math.min(u, 1 - u, v, 1 - v) * 2;
-      const n1 = noise(x * 5, z * 5, seed), n2 = noise(x * 13, z * 13, seed + 7);
-      const height = Math.max(0, Math.min(1, land * 1.25 + (n1 - 0.5) * 0.7) * Math.min(1, edge * 3.5) - 0.18);
-      const h = nodes.length ? height * HILL * (0.65 + 0.7 * n2) : 0.004;
+      const h = grid ? heightAt(x, z, u, v, landAt(grid, u, v), seed).h : 0.004;
       positions.push(x, FRAME_H + h, z);
-      const sea = h < 0.006;
-      const shade = sea ? 1 : 0.78 + 0.4 * Math.min(1, h / HILL) + (n2 - 0.5) * 0.12;
-      for (let k = 0; k < 3; k++) {
-        const c = sea ? SEA[k]! * (0.85 + n1 * 0.3) : (tint[k]! / wsum) * shade;
-        // The tints are written as seen; PBR wants them linear.
-        colors.push(c * c);
-      }
-      colors.push(1);
+      uvs.push(u, v);
     }
   }
   for (let j = 0; j + 1 < NZ; j++) {
@@ -125,17 +266,24 @@ function buildRelief(scene: Scene, parent: TransformNode, nodes: readonly AtlasG
   const data = new VertexData();
   data.positions = positions;
   data.indices = indices;
-  data.colors = colors;
+  data.uvs = uvs;
   const normals: number[] = [];
   VertexData.ComputeNormals(positions, indices, normals);
   data.normals = normals;
   data.applyToMesh(mesh);
-  mesh.material = material(scene, `${NODE}-relief-mat`, (m) => {
+  const mat = material(scene, `${NODE}-relief-mat`, (m) => {
     m.albedoColor = Color3.White();
     // The table stands away from the fires; a little of its own light keeps the
     // land readable as land and not a dark slab.
     m.emissiveColor = new Color3(0.07, 0.06, 0.05).toLinearSpace();
   });
+  // Painted once per Atlas: a cleared place relights a pin, never the land.
+  const paintKey = grid ? seed : -1;
+  if ((mat.albedoTexture?.metadata as { seed?: number } | null)?.seed !== paintKey) {
+    mat.albedoTexture?.dispose();
+    mat.albedoTexture = paintAtlas(scene, grid, nodes, paintKey);
+  }
+  mesh.material = mat;
   mesh.parent = parent;
 }
 
