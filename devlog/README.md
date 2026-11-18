@@ -689,3 +689,16 @@ tier 3 and bosses carry more life from tier 4, so defences and flasks matter in 
 
 Maren, the cartographer, has her own face now, with regrown hair, a dark gown with lace and knee
 boots. She stands with her hands folded at the waist and turns her head to watch you.
+
+## 2026-11-18 · Shop tables turned toward the room
+
+<table>
+<tr>
+<td width="70%"><img src="screenshots/2026-11-18-hideout-tables-vertical.jpeg" alt="Hideout with Maren's Atlas table on the left and Varkis' counter on the right, both running down the screen, each keeper standing behind the outer side" width="100%"><br><sub>Both tables run down the room.</sub></td>
+<td width="30%"><img src="screenshots/2026-11-18-atlas-table-sharp.jpeg" alt="Close view of the Atlas map on Maren's table, biomes with inked borders, coast and hill shading" width="100%"><br><sub>A sharper Atlas on her table.</sub></td>
+</tr>
+</table>
+
+Maren's Atlas table and Varkis' counter now run down the room, a few degrees off true, with each
+keeper behind the outer side. Varkis no longer hides under the mana orb. The map on Maren's table
+is painted at a much higher resolution, with inked borders, coast, surf and hill shading.

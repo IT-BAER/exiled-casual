@@ -33,9 +33,9 @@ describe("the hideout's default arrangement", () => {
       const npc = HIDEOUT_SERVICES[kind];
       const t = decorById(table)!;
       const screen = (p: { x: number; z: number }) => ({ sx: (p.x + p.z) * Math.SQRT1_2, sy: (p.z - p.x) * Math.SQRT1_2 });
-      // Behind = further up the frame than the table, in line with it.
-      expect(screen(npc).sy).toBeGreaterThan(screen(t).sy + 0.6);
-      expect(Math.abs(screen(npc).sx - screen(t).sx)).toBeLessThan(0.3);
+      // Behind = further out to the flank than the table, level with it.
+      expect(Math.abs(screen(npc).sx)).toBeGreaterThan(Math.abs(screen(t).sx) + 0.6);
+      expect(Math.abs(screen(npc).sy - screen(t).sy)).toBeLessThan(0.5);
       // The canvas click is a routed moveTo at the entity, then an interact once
       // the snapshot reports it in range (input/bindings.ts).
       const target = posOf(g, kind);
