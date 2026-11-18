@@ -1977,15 +1977,24 @@ export const CARTOGRAPHER_SKIN = new Color3(0.56, 0.76, 1.2);
 /** Multiplies her boots' tan leather, so it reads as black. */
 export const CARTOGRAPHER_BOOTS = new Color3(0.14, 0.13, 0.13);
 
+/**
+ * Multiplies her hair (strand atlas and scalp cap) from the atlas's dark auburn to a natural ginger.
+ * Picked live in the hideout: at the game camera across her table its mean goes from sRGB #2d130d to #95361f
+ * (hue 12 degrees, lightness 35 %); a greener gain reads orange under the braziers' orange light.
+ */
+export const CARTOGRAPHER_HAIR = new Color3(7.5, 4.4, 3.0);
+
 /** The tint a part of hers takes on a clone of its material, or null. */
-function cartographerShade(slot: string | undefined): Color3 | null {
+function cartographerShade(slot: string | undefined, part: string | undefined): Color3 | null {
+  if (slot === "helmet") return part === "tresses" || part === "scalp" ? CARTOGRAPHER_HAIR : null;
   return slot === "base" ? CARTOGRAPHER_SKIN : slot === "boots" ? CARTOGRAPHER_BOOTS : null;
 }
 
 /**
- * The cartographer. Her boots get material CLONES shaded black and the pack's
- * skin she still shows clones in her face's tone: the wardrobe's materials are
- * shared by every rig built from it, the player's too.
+ * The cartographer. Her boots get material CLONES shaded black, the pack's
+ * skin she still shows clones in her face's tone, and her hair clones in
+ * ginger: the wardrobe's materials are shared by every rig built from it, the
+ * player's too. A tint multiplies the part's own colour (the scalp has no texture).
  */
 function buildCartographer(scene: Scene, root: Mesh): void {
   const npc = buildNpc(scene, root, "cartographer", CARTOGRAPHER_LOOKS, CARTOGRAPHER_IDLE);
@@ -1994,13 +2003,13 @@ function buildCartographer(scene: Scene, root: Mesh): void {
   const clones = new Map<Material, Material>();
   for (const mesh of root.getChildMeshes()) {
     const [slot, , part] = mesh.name.split(".");
-    const shade = cartographerShade(slot);
+    const shade = cartographerShade(slot, part);
     if (!shade || !mesh.material) continue;
     let tinted = clones.get(mesh.material);
     if (!tinted) {
       tinted = mesh.material.clone(`${root.name}-${slot}-${part}`)!;
-      if (tinted instanceof PBRMaterial) tinted.albedoColor = shade.clone();
-      else if (tinted instanceof StandardMaterial) tinted.diffuseColor = shade.clone();
+      if (tinted instanceof PBRMaterial) tinted.albedoColor = tinted.albedoColor.multiply(shade);
+      else if (tinted instanceof StandardMaterial) tinted.diffuseColor = tinted.diffuseColor.multiply(shade);
       clones.set(mesh.material, tinted);
     }
     mesh.material = tinted;

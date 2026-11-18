@@ -716,3 +716,15 @@ is painted at a much higher resolution, with inked borders, coast, surf and hill
 The character on the select screen no longer looks washed out. Most of his light came from a flat
 grey sky that lit his shadow side as much as his lit side. Now the hall's fire is his main light,
 so his armour and skin keep their colour and his shadows stay dark.
+
+## 2026-11-18 · Maren's ginger hair
+
+<table>
+<tr>
+<td width="60%"><img src="screenshots/2026-11-18-maren-ginger-hideout.jpeg" alt="Hideout from the game camera, Maren with bright ginger hair behind her Atlas table, the player beside it" width="100%"><br><sub>Maren at her table.</sub></td>
+<td width="40%"><img src="screenshots/2026-11-18-maren-ginger-close.jpeg" alt="Close view of Maren with long natural ginger hair, dark gown and red bow" width="100%"><br><sub>Natural ginger, not dark auburn.</sub></td>
+</tr>
+</table>
+
+Maren's hair is now a natural ginger red. Before, it read as a dark auburn that was easy to miss
+in the hideout's firelight.
