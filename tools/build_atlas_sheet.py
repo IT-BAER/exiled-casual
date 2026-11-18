@@ -24,7 +24,11 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "assets" / "ui"
 OUT = ROOT / "apps" / "web" / "public" / "textures" / "ui"
 
-WIDTH = 1600
+# The sheet spans the panel and the cloth covers the screen: 2560 is a 1440p panel.
+# The masters are 1536 wide, so both are upscales (see UPSCALE_SHARPEN).
+WIDTH = 2560
+# Same pass as build_loading_textures.py: puts back the edge the upscale softened.
+UPSCALE_SHARPEN = ImageFilter.UnsharpMask(radius=0.8, percent=55, threshold=3)
 # Below this alpha the master's matte is fringe, not paper.
 ALPHA_FLOOR = 8
 # Softness of the printed edge, as a share of the sheet width.
@@ -41,6 +45,7 @@ def sheet() -> None:
     ys, xs = np.nonzero(alpha > ALPHA_FLOOR)
     img = img.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
     img = img.resize((WIDTH, round(WIDTH * img.height / img.width)), Image.LANCZOS)
+    img = Image.merge("RGBA", (*img.convert("RGB").filter(UPSCALE_SHARPEN).split(), img.getchannel("A")))
     rgba = np.asarray(img).astype(np.float32)
     a = rgba[..., 3] / 255.0
 
@@ -58,7 +63,7 @@ def sheet() -> None:
 
 def backdrop() -> None:
     img = Image.open(SRC / "atlas_backdrop_master_v1.png").convert("RGB")
-    img = img.resize((WIDTH, round(WIDTH * img.height / img.width)), Image.LANCZOS)
+    img = img.resize((WIDTH, round(WIDTH * img.height / img.width)), Image.LANCZOS).filter(UPSCALE_SHARPEN)
     img.save(OUT / "atlas_backdrop_v1.webp", quality=80)
 
 

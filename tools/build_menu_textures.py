@@ -21,15 +21,17 @@ from __future__ import annotations
 import pathlib
 import sys
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 SRC = pathlib.Path(__file__).resolve().parent.parent / "assets" / "menu"
 DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "public" / "textures" / "ui" / "menu"
 
 # master stem -> (output name, target width or None to keep, jpeg/webp quality or None for lossless webp)
 PLAN: dict[str, tuple[str, int | None, int | None]] = {
-    "menu_backdrop_v3": ("menu_backdrop.jpg", None, 86),
-    "select_backdrop_v3": ("select_backdrop.jpg", None, 86),
+    # Drawn `cover` full-bleed, so 2560 wide on a 1440p panel. The masters are at
+    # the generator's cap, so this is an upscale (see UPSCALE_SHARPEN).
+    "menu_backdrop_v3": ("menu_backdrop.jpg", 2560, 86),
+    "select_backdrop_v3": ("select_backdrop.jpg", 2560, 86),
     # WebP, not PNG: the logo is the menu's LCP element, and at q90 it is a
     # quarter of the PNG's 620 KB with no visible loss over the backdrop.
     "logo_v4": ("logo.webp", 1024, 90),
@@ -39,11 +41,16 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
     "portrait_ironsworn_v1": ("portrait_ironsworn.webp", 256, None),
     "portrait_stalker_v1": ("portrait_stalker.webp", 256, None),
     "portrait_emberbound_v1": ("portrait_emberbound.webp", 256, None),
-    "fog_sheet_v1": ("fog_sheet.webp", 512, None),
+    # Tiled at 1180 CSS px. A soft gradient: lossy q90 at full size is a fifth of
+    # the bytes lossless took at 512.
+    "fog_sheet_v1": ("fog_sheet.webp", None, 90),
     # Drawn over the loading plate, never over the game: PoE darkens the corners
     # of a wallpaper so the band and the tip are what the eye lands on.
-    "loading_vignette_v1": ("loading_vignette.webp", 1280, None),
-    "divider_v1": ("divider.webp", 512, None),
+    # Drawn `cover` full-bleed; the master's 2048 is its cap. Lossy, as above.
+    "loading_vignette_v1": ("loading_vignette.webp", None, 90),
+    # Stretched to its row: about 680 px under a dialog, the full width over the
+    # passive tree. The master's own width, never an upscale.
+    "divider_v1": ("divider.webp", None, None),
     # The Options panel's controls. The gems are one plate each rather than a
     # tint of the other: an unlit gem and a lit one differ in more than
     # brightness, and the bezel picks up the glow.
@@ -65,6 +72,10 @@ PLAN: dict[str, tuple[str, int | None, int | None]] = {
 }
 
 ALPHA_FLOOR = 8
+
+# Same pass as build_loading_textures.py: puts back the edge a Lanczos upscale
+# softened. Lanczos here beats the browser's bilinear stretch at draw time.
+UPSCALE_SHARPEN = ImageFilter.UnsharpMask(radius=0.8, percent=55, threshold=3)
 
 # Narrower copies for <img srcset>: stem -> (output name, width). The logo is the
 # menu's LCP element and a phone draws it about 330 device px wide.
@@ -128,7 +139,10 @@ def main() -> int:
             continue
         im = crop_to_alpha(Image.open(src))
         if width is not None and im.width != width:
+            upscale = width > im.width
             im = im.resize((width, max(1, round(im.height * width / im.width))), Image.LANCZOS)
+            if upscale:
+                im = im.filter(UPSCALE_SHARPEN)
 
         out = DST / out_name
         if quality is None:
