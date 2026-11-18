@@ -78,6 +78,11 @@ describe("the objective after a cleared map", () => {
       .toEqual({ quest: "First Map", steps: ["Open the Map Device"], beckon: true });
   });
 
+  it("says to enter a portal once the device has opened the first map, and stops beckoning the device", () => {
+    expect(objectiveFor(DEFAULT_SETTINGS, ID, snap({ player: { level: 1 }, completedNodes: [], mapOpen: true }), false))
+      .toEqual({ quest: "First Map", steps: ["Enter a portal"], beckon: false });
+  });
+
   it("names the next node and tier in the hideout and beckons the device", () => {
     const o = objectiveFor(entered, ID, snap({ activeNodeId: start.id, mapOpen: true }), false);
     expect(o).toMatchObject({ quest: "Next Map", beckon: true });

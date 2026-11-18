@@ -77,7 +77,10 @@ export function objectiveFor(
 ): Objective | null {
   if (where === null || characterId === "") return null;
   if (showsMapPointer(settings, characterId, where)) {
-    return { quest: "First Map", steps: ["Open the Map Device"], beckon: true };
+    // Portals stand open after Activate: the device has done its part.
+    return where.mapOpen
+      ? { quest: "First Map", steps: ["Enter a portal"], beckon: false }
+      : { quest: "First Map", steps: ["Open the Map Device"], beckon: true };
   }
   if (where.completedNodes.length === 0) return null;
   const next = nextNode(where.atlasSeed, where.completedNodes, where.activeNodeId);
