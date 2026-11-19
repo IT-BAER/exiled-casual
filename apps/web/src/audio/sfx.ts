@@ -372,7 +372,10 @@ const VOICES: Record<string, Voice> = {
   "drop-gold-jackpot":        { gain: 0.39, wet: 0.30, vary: 0, takes: 3 },
   "coin-pickup":              { gain: 0.38, wet: 0.08, vary: 0.08, takes: 3 },
   "level-up":                 { gain: 0.36, wet: 0.30, vary: 0 },
-  "container-open":           { gain: 0.368, wet: 0.16, vary: 0.04, takes: 3 },
+  // Mean -19.1 dB: 0.42 lands it at level-up's -26.8 dB effective. map-complete opens on 650 ms of silence.
+  "boss-death":               { gain: 0.42, wet: 0.35, vary: 0 },
+  "map-complete":             { gain: 0.36, wet: 0.30, vary: 0 },
+  "container-open":          { gain: 0.368, wet: 0.16, vary: 0.04, takes: 3 },
 };
 
 export type SfxName = keyof typeof VOICES & string;
@@ -381,7 +384,7 @@ export function sfxCategory(name: string): SoundCategory {
   if (name.startsWith("ambient-")) return "ambience";
   if (name.startsWith("skill-")) return "skills";
   if (/^(ui|item|trade)-/.test(name)) return "interface";
-  if (/^(drop|coin|level|container)-/.test(name)) return "loot";
+  if (/^(drop|coin|level|container|map)-/.test(name)) return "loot";
   // Monsters and Varkis (`npc-`): a voice standing in the room gets the room.
   return "environment";
 }

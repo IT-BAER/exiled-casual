@@ -247,7 +247,11 @@ interface Options {
   coins?: (at: At) => void;
   /** The player's own voice (player-voice.ts): his grunts and cries are its, not this file's. */
   voice?: Pick<PlayerVoice, "observe">;
+  /** A boss's own death sting and the map-complete chime; off until the owner signs them off. */
+  bossRewardCues?: boolean;
 }
+
+const BOSS_REWARD_CUES = import.meta.env.DEV && import.meta.env.VITE_BOSS_REWARD_CUES === "1";
 
 /**
  * A boss ability's cue as its mark shows and as it lands, keyed by the
@@ -296,6 +300,7 @@ export function createSoundscape(opts: Options = {}): Soundscape {
   const stopAllLoops = opts.stopAllLoops ?? stopAllSfxLoops;
   const room = opts.room ?? setRoom;
   const coins = opts.coins ?? playCoinPickup;
+  const rewardCues = opts.bossRewardCues ?? BOSS_REWARD_CUES;
   /** Entity id -> loop key, for everything currently sounding. */
   const sustained = new Map<number, string>();
   let prev: Snapshot | null = null;
@@ -375,7 +380,10 @@ export function createSoundscape(opts: Options = {}): Soundscape {
       let deaths = 0;
       for (const [id, e] of was) {
         if (now.has(id)) continue;
-        if (e.kind === "monster" && deaths < MAX_PER_KIND) {
+        if (e.kind === "monster" && e.boss && rewardCues) {
+          // The payout's own moment (docs/09 rule 4): never one of the pack's capped deaths.
+          play("boss-death", 1, at(e));
+        } else if (e.kind === "monster" && deaths < MAX_PER_KIND) {
           deaths++;
           play(cueFor("monster-death", e.species), 1, at(e));
         } else if (e.kind === "telegraph") {
@@ -572,6 +580,10 @@ export function createSoundscape(opts: Options = {}): Soundscape {
         && ((snap.player.strikeHits ?? 0) > 0 || strikesTheFloor(snap.player.strikeSkill))) {
         play(STRIKE_IMPACT[snap.player.strikeSkill ?? ""] ?? "skill-strike-impact");
       }
+
+      // A node cleared during this visit: the fixed-ratio track paying (docs/09 rule 7).
+      // An area that arrives with more clears is a new world and never diffed against.
+      if (rewardCues && snap.completedNodes.length > before.completedNodes.length) play("map-complete");
 
       // The edge, not the state: a save restored dead or an area entered dead has no
       // previous snapshot to fall from, so it is never heard.

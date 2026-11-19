@@ -1,4 +1,4 @@
-"""Build the layered reward cues (drops, coins, level-up, container) from library parts.
+"""Build the layered reward cues (drops, coins, level-up, container, boss death, map complete) from library parts.
 
 A cue is one recipe or a list of them, a pool of takes: take 1 ships as `<cue>.webm`, take k
 as `<cue>-<k>.webm`. Takes differ ONLY in unpitched layers (coins, latches, thumps, knocks):
@@ -198,6 +198,23 @@ RECIPES = {
         (GONG, 0.10, 2.2, 0, 0, 480, 1400, 0, 0),
         (CHURCH, 15.26, 1.6, 0, -8, 480, 1000, 120, 0),
         (XMAS, 13.40, 1.0, 0, -10, 480, 700, 3000, 0),
+    ],
+    "boss-death": [  # the fall, not a chime: 55 Hz boom, slam and crack, the level-up gong a fourth down as the tail
+        (BOOM3, 0.84, 1.2, st(70, 55), 0, 0, 700, 0, 300),
+        (IMPACT21, 0.01, 0.6, 0, -3, 0, 350, 0, 250),
+        (SLAM, 8.49, 0.5, 0, -6, 10, 300, 60, 0),
+        (STONEHAM, 0.16, 0.25, 0, -10, 0, 150, 800, 0),
+        (GONG, 0.10, 2.2, -5, -8, 60, 1400, 0, 0),
+    ],
+    # map-complete waits 650 ms for the boss's fall and the drop chimes, then a slow Eb major
+    # arpeggio led by the church bell: slower and lower than drop-unique's C#/F#/B at 90-210 ms.
+    "map-complete": [
+        (IMPACT21, 0.01, 0.5, 0, -12, 650, 300, 0, 300),
+        (CHURCH, 15.26, 1.8, st(F_CHURCH, 311.1), -2, 650, 1200, 120, 0),
+        (CLOCK, 41.18, 1.2, st(F_CLOCK, 784.0), -4, 820, 600, 0, 0),
+        (MBOX_A, 0.05, 1.2, st(F_MBOX, 932.3), -4, 990, 600, 0, 0),
+        (CLOCK, 41.18, 1.4, st(F_CLOCK, 1244.5), -6, 1160, 800, 0, 0),
+        (XMAS, 13.40, 1.0, 0, -12, 1160, 700, 3000, 0),
     ],
     "container-open": [[  # latch, then a tight wooden chest lid: mid knock, little low end
         (CHESSLATCH, 0.04, 0.12, 0, -4, 0, 70, 300, 0),

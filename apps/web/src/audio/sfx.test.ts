@@ -225,7 +225,7 @@ describe("sfxCategory", () => {
         ? "skills"
         : /^(ui|item|trade)-/.test(name)
         ? "interface"
-        : /^(drop|coin|level|container)-/.test(name) ? "loot" : "environment";
+        : /^(drop|coin|level|container|map)-/.test(name) ? "loot" : "environment";
       expect(sfxCategory(name), name).toBe(expected);
     }
   });

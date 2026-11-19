@@ -208,6 +208,38 @@ describe("createSoundscape", () => {
       ])).toEqual(["boss-phase-three"]);
     });
 
+    describe("the boss's death and the map's completion (behind the preview flag)", () => {
+      const boss: SnapshotEntity = { id: 3, kind: "monster", x: 0, y: 0, boss: true, bossPhase: 3, life: 1, maxLife: 400, species: "monster.mother_vhal.v1" };
+      const hear = (seq: Snapshot[], rewardCues: boolean): string[] => {
+        const heard: string[] = [];
+        const s = createSoundscape({ play: (n) => heard.push(n), bossRewardCues: rewardCues });
+        s.reset("swamp");
+        for (const it of seq) s.observe(it);
+        return heard;
+      };
+      const kill = [
+        snap({ tick: 1, entities: [boss, monster(4, 2)] }),
+        snap({ tick: 2, entities: [], completedNodes: ["n1"] }),
+      ];
+
+      it("a boss dies with its own sting and the map completes with a chime", () => {
+        expect(hear(kill, true)).toEqual(["boss-death", "monster-death", "map-complete"]);
+      });
+
+      it("without the flag a boss dies as its species and completion is silent", () => {
+        expect(hear(kill, false)).toEqual(["monster-death-bog", "monster-death"]);
+      });
+
+      it("chimes on the edge only, never for clears an area arrived with", () => {
+        expect(hear([
+          snap({ tick: 1, completedNodes: ["n0"] }),
+          snap({ tick: 2, completedNodes: ["n0"] }),
+          snap({ tick: 3, area: "hideout", completedNodes: ["n0", "n1"] }),
+          snap({ tick: 4, area: "hideout", completedNodes: ["n0", "n1"] }),
+        ], true)).toEqual([]);
+      });
+    });
+
     it("every ability the content gives a boss has cues of its own, and no cue names one it lacks", () => {
       const abilities = [...MONSTERS.values()].flatMap((m) => m.boss?.abilities?.map((a) => a.id) ?? []);
       expect(abilities.length).toBeGreaterThan(0);
