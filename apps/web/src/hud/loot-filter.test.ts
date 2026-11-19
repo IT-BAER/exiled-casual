@@ -54,18 +54,18 @@ describe("the loot filter", () => {
 
   it("frames a rare wand as a caster rare and leaves other rares unframed", () => {
     expect(plateStyle(item({ rarity: "rare", itemClass: "wand" }))).toMatchObject({
-      tier: "leveling->rare->caster general", text: RARITY.rare.text, border: "rgb(50, 50, 150)", fontPx: 16,
+      tier: "leveling->rare->caster general", text: RARITY.rare.text, border: "rgb(50, 50, 150)", fontPx: 18,
     });
     expect(plateStyle(item({ rarity: "rare", itemClass: "boots" }))).toMatchObject({
-      tier: "leveling->rare->remaining", text: RARITY.rare.text, border: null, fontPx: 16,
+      tier: "leveling->rare->remaining", text: RARITY.rare.text, border: null, fontPx: 18,
     });
   });
 
-  it("keeps magic and normal gear quieter than anything above them", () => {
+  it("keeps every plate within a pixel of the Waystone's size (owner, 19 Nov)", () => {
     const magic = plateStyle(item({ rarity: "magic", itemClass: "helmet" }));
     const normal = plateStyle(item({ rarity: "normal", itemClass: "helmet" }));
-    expect(magic).toMatchObject({ tier: "leveling->magic->remaining", text: RARITY.magic.text, border: null, fontPx: 14 });
-    expect(normal).toMatchObject({ tier: "default", text: RARITY.normal.text, border: null, fontPx: 13 });
+    expect(magic).toMatchObject({ tier: "leveling->magic->remaining", text: RARITY.magic.text, border: null, fontPx: 17 });
+    expect(normal).toMatchObject({ tier: "default", text: RARITY.normal.text, border: null, fontPx: 17 });
     const rare = plateStyle(item({ rarity: "rare", itemClass: "helmet" }));
     expect(magic.fontPx).toBeLessThan(rare.fontPx);
   });
@@ -75,7 +75,7 @@ describe("the loot filter", () => {
     expect(pile(true)).toEqual({
       tier: "gold stack3", text: "rgb(235, 200, 110)", border: "rgb(235, 200, 110)", bg: "rgb(20, 20, 0)", fontPx: 18,
     });
-    expect(pile(false)).toMatchObject({ tier: "gold anyother", text: "rgb(180, 180, 180)", fontPx: 14 });
+    expect(pile(false)).toMatchObject({ tier: "gold anyother", text: "rgb(180, 180, 180)", fontPx: 17 });
   });
 
   // NeverSink's alphas assume PoE's dark floors; the Strand's sand needs an opaque plate.

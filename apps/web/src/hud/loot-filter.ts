@@ -28,6 +28,12 @@ function rgb(r: number, g: number, b: number, a = 255): string {
 
 /** PoE's font sizes run 18-45 (32 when unset); 40 is the 16px plate this HUD was laid out at. */
 const px = (size: number) => Math.round(size * 0.4);
+/**
+ * Owner's rule (19 Nov): every plate reads at about a Waystone's size. NeverSink
+ * shrinks magic and normal to 35/32, which on this HUD is too small to read; the
+ * tier stays in colour and frame, with one pixel of size left as the hint.
+ */
+const QUIET = px(43);
 
 /** What PoE draws where a block sets nothing: currency's own beige, on black at 240. */
 const CURRENCY_TEXT = rgb(170, 158, 130);
@@ -69,7 +75,7 @@ export function plateStyle(e: SnapshotEntity): PlateStyle {
   if (e.kind === "gold") {
     return e.jackpot
       ? { tier: "gold stack3", text: rgb(235, 200, 110), border: rgb(235, 200, 110), bg: DARK, fontPx: px(45) }
-      : { tier: "gold anyother", text: rgb(180, 180, 180), border: BLACK, bg: rgb(20, 20, 0, 180), fontPx: px(35) };
+      : { tier: "gold anyother", text: rgb(180, 180, 180), border: BLACK, bg: rgb(20, 20, 0, 180), fontPx: QUIET };
   }
   const currency = CURRENCY[e.baseId ?? ""];
   if (currency) return currency;
@@ -79,11 +85,11 @@ export function plateStyle(e: SnapshotEntity): PlateStyle {
       return { tier: "uniques t2", text: rgb(255, 255, 255), border: rgb(255, 255, 255), bg: rgb(175, 96, 37), fontPx: px(45) };
     case "rare":
       return e.itemClass === "wand"
-        ? { tier: "leveling->rare->caster general", text: RARITY.rare.text, border: rgb(50, 50, 150), bg: rgb(43, 43, 100, 210), fontPx: px(40) }
-        : { tier: "leveling->rare->remaining", text: RARITY.rare.text, border: null, bg: rgb(80, 80, 80, 100), fontPx: px(40) };
+        ? { tier: "leveling->rare->caster general", text: RARITY.rare.text, border: rgb(50, 50, 150), bg: rgb(43, 43, 100, 210), fontPx: px(45) }
+        : { tier: "leveling->rare->remaining", text: RARITY.rare.text, border: null, bg: rgb(80, 80, 80, 100), fontPx: px(45) };
     case "magic":
-      return { tier: "leveling->magic->remaining", text: RARITY.magic.text, border: null, bg: DEFAULT_BG, fontPx: px(35) };
+      return { tier: "leveling->magic->remaining", text: RARITY.magic.text, border: null, bg: DEFAULT_BG, fontPx: QUIET };
     default:
-      return { tier: "default", text: RARITY.normal.text, border: null, bg: DEFAULT_BG, fontPx: px(32) };
+      return { tier: "default", text: RARITY.normal.text, border: null, bg: DEFAULT_BG, fontPx: QUIET };
   }
 }
