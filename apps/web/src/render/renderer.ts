@@ -15,7 +15,7 @@ import { animateActor, keepGroundBlobFlat, makeMesh, setDangerGlow, setHitFlash,
 import { deviceBeckon } from "./props";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
-import { rigOf } from "./rig";
+import { POE2_RUN, rigOf } from "./rig";
 import type { ReactionClip, RigClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { characterClass } from "@exiled/content-runtime";
@@ -280,6 +280,11 @@ const TILT_EASE_SEC = 0.13;
 const TURN_OMEGA = 25;
 /** Fastest a body turns (rad/s): a half turn takes at least a quarter second. */
 const TURN_MAX_RATE = 12;
+/**
+ * The player under the PoE2 run (DEV flag): 95 percent in 0.12 s and a half turn
+ * in 0.16 s, so the body keeps up with the sim's own heading (a 180 in five ticks).
+ */
+const PLAYER_TURN = POE2_RUN ? { omega: 40, max: 20 } : { omega: TURN_OMEGA, max: TURN_MAX_RATE };
 
 /**
  * Where the killing blow came FROM, in world space.
@@ -1382,7 +1387,8 @@ export class SnapshotRenderer {
       const wasYaw = mesh.rotation.y;
       const aim = sent ?? Math.atan2(dx, dz);
       const dt = Math.max(this.scene.getEngine().getDeltaTime(), 1) / 1000;
-      const s = springAngle(wasYaw, this.yawVel.get(id) ?? 0, aim, TURN_OMEGA, Math.min(dt, 0.1), TURN_MAX_RATE);
+      const turn = kind === "player" ? PLAYER_TURN : { omega: TURN_OMEGA, max: TURN_MAX_RATE };
+      const s = springAngle(wasYaw, this.yawVel.get(id) ?? 0, aim, turn.omega, Math.min(dt, 0.1), turn.max);
       mesh.rotation.y = s.angle;
       this.yawVel.set(id, s.vel);
       yawStep = mesh.rotation.y - wasYaw;

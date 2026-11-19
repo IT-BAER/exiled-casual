@@ -49,6 +49,7 @@ import {
   resetPlayerRig,
   BODIES,
   speedRatioFor,
+  RUN_PACE,
   BASE_LOOKS,
   NO_LOOKS,
   SLOTS,
@@ -244,6 +245,14 @@ describe("speedRatioFor", () => {
     // over quicker than the ground to match the footstep cues.
     expect(speedRatioFor("run", 3.5)).toBeGreaterThan(1.1);
     expect(speedRatioFor("run", 3.5)).toBeLessThan(1.35);
+  });
+
+  it("turns the PoE2 run over at PoE2's cycle (VITE_POE2_RUN)", () => {
+    // At the player's 3.5 u/s the run's 20-frame (0.667 s) cycle plays at 1.0:
+    // PoE2's run cycle, and two of the soundscape's 10-tick footsteps.
+    const { speed, cadence } = RUN_PACE.poe2;
+    expect(cadence).toBe(1);
+    expect(0.6667 / ((3.5 / speed) * cadence)).toBeCloseTo(0.667, 2);
   });
 
   it("holds the jog through a corner instead of flicking to a walk", () => {
@@ -1248,6 +1257,12 @@ describe("the cast clip drives the weapon arm", () => {
   it("ships every clip the loader asks for", () => {
     const names = new Set(json.animations.map((a: { name: string }) => a.name));
     for (const name of Object.values(CLIP_NAME)) expect(names, name).toContain(name);
+    // Both run sets, whichever VITE_POE2_RUN picked.
+    for (const set of ["Jog", "Run"]) {
+      for (const part of ["Fwd", "Strafe_L", "Strafe_R", "Back", "BackDiag_L", "BackDiag_R"]) {
+        expect(names).toContain(`Rig|${set}_${part}_Loop`);
+      }
+    }
   });
 
   it("carries no buffer data a replaced clip left behind", () => {
@@ -1878,7 +1893,7 @@ describe("the bow is drawn on a runtime string", () => {
 describe("the robe's leg backing stays under its trousers", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
-  it("keeps both leg backings under the trousers at bind and through most of the jog", async () => {
+  it.each(["Rig|Jog_Fwd_Loop", "Rig|Run_Fwd_Loop"])("keeps both leg backings under the trousers at bind and through most of %s", async (clip) => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     engine = new NullEngine();
@@ -1891,8 +1906,8 @@ describe("the robe's leg backing stays under its trousers", () => {
       const mesh = (name: string) => wardrobe.meshes.find((m) => m.name === name) as Mesh;
       const robe = mesh("chest.ember.robe");
       const nodes = new Map(robe.skeleton!.bones.map((b) => [b.name, b.getTransformNode()!]));
-      const jog = lib.animationGroups.find((g) => g.name === CLIP_NAME.run)!;
-      expect(jog, CLIP_NAME.run).toBeDefined();
+      const jog = lib.animationGroups.find((g) => g.name === clip)!;
+      expect(jog, clip).toBeDefined();
       const tracks = jog.targetedAnimations.filter((t) =>
         t.animation.targetProperty === "rotationQuaternion" && nodes.has(t.target.name)
         && !t.target.name.startsWith("skirt_"));
@@ -1988,15 +2003,32 @@ describe("the robe's leg backing stays under its trousers", () => {
       pose(null);
       // 22 and 13 when the tear-rim fallback pushed with no air.
       expect(Math.max(showing("l"), showing("r"))).toBeLessThanOrEqual(1);
+      /** Interior knee angle in degrees, 180 straight. */
+      const knee = (side: "l" | "r") => {
+        const [h, k, a] = ([`thigh_${side}`, `calf_${side}`, `foot_${side}`] as const)
+          .map((n) => nodes.get(n)!.getAbsolutePosition());
+        const cos = h!.subtract(k!).normalize().dot(a!.subtract(k!).normalize());
+        return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI;
+      };
       const jogs: [number, number][] = [];
+      const straight: string[] = [];
       for (let k = 0; k < 6; k++) {
         pose(jog.from + ((jog.to - jog.from) * k) / 6);
-        jogs.push([showing("l"), showing("r")]);
+        const shows = [showing("l"), showing("r")] as [number, number];
+        jogs.push(shows);
+        (["l", "r"] as const).forEach((side, i) => {
+          if (knee(side) >= 115 && shows[i]! > 8) straight.push(`${k}${side}: ${shows[i]} at ${Math.round(knee(side))} deg`);
+        });
       }
-      // Body weights under the trousers: 16 to 83 per leg on every frame. The
-      // frame with a knee raised still shows ~60 at the front of that knee.
-      const clean = jogs.filter(([l, r]) => l <= 8 && r <= 8).length;
-      expect(clean, JSON.stringify(jogs)).toBeGreaterThanOrEqual(4);
+      // Body weights under the trousers: 16 to 83 per leg on every frame. A knee
+      // folded under ~110 degrees shows up to ~70 at its front, under the skirt (at 118
+      // and straighter, 7 at most). The run folds its heel up for longer than the jog,
+      // so only the jog is also held to four clean frames of six.
+      expect(straight, JSON.stringify(jogs)).toEqual([]);
+      if (clip === "Rig|Jog_Fwd_Loop") {
+        const clean = jogs.filter(([l, r]) => l <= 8 && r <= 8).length;
+        expect(clean, JSON.stringify(jogs)).toBeGreaterThanOrEqual(4);
+      }
     } finally {
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }

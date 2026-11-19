@@ -123,13 +123,26 @@ export const REACTION_CLIPS: readonly ReactionClip[] = ["hit", "drink", "open"];
  * target ends the wand there too. The open-palm `Spell_Simple_Shoot` held it up
  * and out to the side.
  */
+/**
+ * DEV flag until signed off: our run built to PoE2's gait traits (`tools/build_run_clip.py`)
+ * instead of the UAL jog, with its own direction clips and pace.
+ */
+export const POE2_RUN = import.meta.env.DEV && import.meta.env.VITE_POE2_RUN === "1";
+const RUN_SET = POE2_RUN ? "Run" : "Jog";
+/**
+ * Each run clip set's authored ground speed (u/s) and cadence trim, see `CLIP_SPEED` and `CADENCE`.
+ * The PoE2 run is authored at the player's 3.5 u/s over a 20-frame cycle, its planted foot
+ * moving back at exactly that speed, so it plays at 1.0 with no slide.
+ */
+export const RUN_PACE = { jog: { speed: 4.0, cadence: 1.32 }, poe2: { speed: 3.5, cadence: 1 } } as const;
+
 export const CLIP_NAME: Record<RigClip, string> = {
   idle: "Rig|Idle_Loop",
   // The eight walks are UAL2's authored takes (`tools/import_ual2_clips.py`).
   // UAL2 has no jog off the forward line: the jog's sidesteps and backpedal are
   // made from it by `tools/build_direction_clips.py`.
   walk: "Rig|Walk_Fwd_Loop",
-  run: "Rig|Jog_Fwd_Loop",
+  run: `Rig|${RUN_SET}_Fwd_Loop`,
   walkFwdL: "Rig|Walk_Fwd_L_Loop",
   walkFwdR: "Rig|Walk_Fwd_R_Loop",
   walkStrafeL: "Rig|Walk_L_Loop",
@@ -137,11 +150,11 @@ export const CLIP_NAME: Record<RigClip, string> = {
   walkBackL: "Rig|Walk_Bwd_L_Loop",
   walkBackR: "Rig|Walk_Bwd_R_Loop",
   walkBack: "Rig|Walk_Bwd_Loop",
-  runStrafeL: "Rig|Jog_Strafe_L_Loop",
-  runStrafeR: "Rig|Jog_Strafe_R_Loop",
-  runBack: "Rig|Jog_Back_Loop",
-  runBackL: "Rig|Jog_BackDiag_L_Loop",
-  runBackR: "Rig|Jog_BackDiag_R_Loop",
+  runStrafeL: `Rig|${RUN_SET}_Strafe_L_Loop`,
+  runStrafeR: `Rig|${RUN_SET}_Strafe_R_Loop`,
+  runBack: `Rig|${RUN_SET}_Back_Loop`,
+  runBackL: `Rig|${RUN_SET}_BackDiag_L_Loop`,
+  runBackR: `Rig|${RUN_SET}_BackDiag_R_Loop`,
   cast: "Rig|Sword_Regular_C",
   // No bow take in the pack: keyed on the wardrobe skeleton by `tools/build_bow_clip.py`.
   bow: "Rig|Bow_Shoot",
@@ -199,25 +212,24 @@ export const clipLoops = (clip: RigClip): boolean => CLIP_LOOPS[clip];
  * leg chain of `anim-library.glb` and taking each foot's travel per cycle:
  * the walk sweeps 0.002 rig units in 1.333s and the jog 0.004 in 0.933, so the
  * jog depicts 2.86x the walk's pace. Anchored on the walk's 1.4, that is 4.0 —
- * which is why the jog looked like it was bounding at the player's 3.5.
+ * The PoE2 run (`tools/build_run_clip.py`) is authored at 3.5.
  */
-const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: 4.0 };
+const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: RUN_PACE[POE2_RUN ? "poe2" : "jog"].speed };
 
 /**
  * Cadence trim. 1.0 paces a clip at exactly its own authored speed, so the
  * planted foot stays planted; anything above it turns the legs over faster
  * than the ground and buys shorter, quicker steps with a little slide.
  *
- * The jog is the compromise line. Its clip depicts 4.0 u/s (measured, see
- * CLIP_SPEED) and the player runs at 3.5, so a literal 1.0 would play it at
- * 0.875 and every step would be a bound. 1.32 (1.25 -> 1.4 -> here on the
- * owner's "match the step sounds" calls; 1.4 overshot slightly) lands the
- * playback at ~1.15 — quicker steps against the same ground speed, at the
- * price of a little more slide. The
- * alternative was the short-stride walk clip driven to 2.5x, which is a
- * power-walk and was rejected on sight.
+ * The jog is the compromise line. Its clip depicts 4.0 u/s and the player runs at
+ * 3.5, so a literal 1.0 would play it at 0.875 and every step would be a bound.
+ * 1.32 (on the owner's "match the step sounds" calls; 1.4 overshot slightly) lands
+ * the playback at ~1.15, at the price of a little slide.
+ *
+ * The PoE2 run needs no trim: its 0.667 s cycle at the player's 3.5 u/s is PoE2's and
+ * two of the soundscape's 10-tick footsteps, and its planted foot moves at that speed.
  */
-const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: 1.32 };
+const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: RUN_PACE[POE2_RUN ? "poe2" : "jog"].cadence };
 
 const MIN_RATIO = 0.5;
 const MAX_RATIO = 1.8;
@@ -318,6 +330,8 @@ const BACKPEDAL_FORWARD = 0.12;
 const UPRIGHT_SIGN = 1;
 /** Time constant the move's yaw off the chest eases over, so the direction blend sweeps. */
 const MOVE_EASE_SEC = 0.08;
+/** Share of a stride past the left plant a PoE2 run starts at from a standstill: mid-stance (`DUTY` / 2 in build_run_clip.py). */
+const RUN_LAUNCH = 0.135;
 /** Crossfade lengths (s): locomotion short so a stop plants the feet, actions softer. */
 const LOCO_BLEND_SEC = 0.14;
 const ACTION_BLEND_SEC = 0.28;
@@ -903,6 +917,12 @@ export const BOW_CARRY = "Rig|Bow_Carry";
  * and holds through strikes, casts, hits and the roll; the buckler swings free.
  */
 export const SHIELD_CARRY = "Rig|Shield_Carry";
+/**
+ * Both bow arms and the upper chest held through a run (`tools/build_run_clip.py`): PoE2's bow
+ * run keeps the bow forward and low, the draw hand by the chest, the shoulders turned toward the
+ * bow. Laid over run clips only, under `POE2_RUN`; the fist stays `BOW_CARRY`'s.
+ */
+export const BOW_RUN_CARRY = "Rig|Bow_RunCarry";
 const SHIELD_LOOK = "towershield";
 const CARRY_EASE_SEC = 0.25;
 const STRING_RADIUS = 0.003;
@@ -1102,18 +1122,20 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * `hold` is how much of the carry is laid on at full weight; the rest of the clip's
  * own arm motion shows through, or a fully held shield reads as bolted on.
  */
-const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean; hold: number }[] = [
+const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean; hold: number; run?: true }[] = [
   { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: new Set<RigClip>([...UPPER_BODY_CLIPS, ...FULL_SKILL_CLIPS]), roll: true, steady: false, idle: false, hold: 1 },
   { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true, idle: true, hold: 0.8 },
+  ...(POE2_RUN ? [{ clip: BOW_RUN_CARRY, worn: (looks: Looks) => looks.weapon1 === BOW_LOOK, yieldsTo: new Set<RigClip>([...UPPER_BODY_CLIPS, ...FULL_SKILL_CLIPS]), roll: true, steady: false, idle: false, hold: 1, run: true as const }] : []),
 ];
 
 /**
- * How much of a clip's hips bounce to keep, PER CLIP. The jog is authored with
- * 26% of hip height of vertical travel, which on this character is a 0.25-unit
- * hop and reads as bounding rather than running. The curve is compressed toward
- * its lowest point rather than toward the rest pose, so the bottom of the stride
- * — where the foot is planted — stays exactly where it was and only the peak
- * comes down. Tuned by eye against the jog: 1.0 bounds like a hop, 0.4 lifeless.
+ * How much of a clip's hips bounce to keep, PER CLIP. The curve is compressed
+ * toward its lowest point rather than toward the rest pose, so the bottom of the
+ * stride — where the foot is planted — stays exactly where it was and only the
+ * peak comes down. The jog's 26% of hip height is a hop on this character: 0.65,
+ * tuned by eye (1.0 bounds, 0.4 lifeless). The PoE2 runs keep all of theirs:
+ * `tools/build_run_clip.py` bakes PoE2's 0.10 of a leg in with the feet re-solved
+ * under it, where this would drag the feet down with the hips.
  *
  * **A standing clip must keep all of it.** Only the legs are retargeted raw;
  * the hips are the one curve this rig rewrites, so shrinking it silently breaks
@@ -1128,10 +1150,11 @@ const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsT
  *
  * Locomotion is exempt on purpose: those clips slide the feet anyway.
  */
+const RUN_BOB = POE2_RUN ? 1 : 0.65;
 export const HIPS_BOB: Record<RigClip, number> = {
-  idle: 1, walk: 0.65, run: 0.65, walkBack: 0.65,
-  runBack: 0.65, runBackL: 0.65, runBackR: 0.65,
-  walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: 0.65, runStrafeR: 0.65,
+  idle: 1, walk: 0.65, run: RUN_BOB, walkBack: 0.65,
+  runBack: RUN_BOB, runBackL: RUN_BOB, runBackR: RUN_BOB,
+  walkStrafeL: 0.65, walkStrafeR: 0.65, runStrafeL: RUN_BOB, runStrafeR: RUN_BOB,
   walkFwdL: 0.65, walkFwdR: 0.65, walkBackL: 0.65, walkBackR: 0.65, cast: 1, bow: 1, strikeA: 1, strikeB: 1, strikeC: 1, heavy: 1, slam: 1, hit: 1, drink: 1, open: 1, roll: 1,
   ...(Object.fromEntries(SKILL_CLIP_IDS.map((c) => [c, 1])) as Record<SkillClip, number>),
 };
@@ -2238,9 +2261,14 @@ export class RigActor {
     const carry = from !== null && gaitOf(from) !== null && gaitOf(clip) !== null && this.active && at !== undefined
       ? framePhaseMatched(from, [this.active.from, this.active.to], at, clip, [group.from, group.to])
       : undefined;
+    // A run from a standstill starts with the left foot under the hips, the right
+    // pushing off behind: the first thing seen is the launch, not a foot landing out front.
+    const launch = carry === undefined && POE2_RUN && gaitOf(clip) === "run"
+      ? group.from + ((((LEFT_PLANT[clip] ?? 0) + RUN_LAUNCH) % 1) * (group.to - group.from))
+      : undefined;
     this.active?.stop();
     group.start(CLIP_LOOPS[clip], group.speedRatio);
-    if (carry !== undefined) group.goToFrame(carry);
+    if ((carry ?? launch) !== undefined) group.goToFrame((carry ?? launch)!);
     // Babylon applies animatables in list order and a start appends: without the
     // sort a leg clip switched mid-swing takes the arms back and cuts the action off.
     this.scene.sortActiveAnimatables();
@@ -2559,7 +2587,8 @@ export class RigActor {
           const { worn, yieldsTo, roll, idle } = carry.spec;
           const idling = idle && this.activeClip === "idle" && !this.isRolling()
             && ![...this.groups].some(([c, g]) => c !== "idle" && g.isPlaying);
-          const busy = idling || (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
+          const walking = carry.spec.run === true && (this.activeClip === null || gaitOf(this.activeClip) !== "run");
+          const busy = idling || walking || (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
           carry.weight = worn(this.looks) && !busy ? Math.min(1, carry.weight + step) : Math.max(0, carry.weight - step);
           if (carry.weight <= 0) continue;
           const weight = carry.weight * carry.spec.hold;
