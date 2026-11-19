@@ -47,7 +47,8 @@ DIRECTIONS = {
     "BackDiag_R": -110,
     "Back": 180,
 }
-GAITS = {"Jog": "Rig|Jog_Fwd_Loop"}
+# "Run" is the jog reshaped toward PoE2 by `build_run_clip.py` (run that first), live behind VITE_POE2_RUN.
+GAITS = {"Jog": "Rig|Jog_Fwd_Loop", "Run": "Rig|Run_Fwd_Loop"}
 # Clips this tool's predecessors wrote and nothing reads any more.
 RETIRED = ()
 # Share of the track's line the knee and foot follow; the rest is the hip's.
@@ -56,6 +57,9 @@ KNEE_FOLLOW = 0.4
 # sidestep, up to three times that on a back diagonal: the source's narrow jog
 # brings the diagonal tracks within 2-5 cm, boot on boot.
 WIDEN = 0.0003
+# The PoE2 run plants its feet near the midline (`TRACK_IN` in build_run_clip.py), so its
+# sidesteps set out further or the knees pass within a few cm.
+RUN_WIDEN = 0.0008
 # At a full backpedal: steps this much shorter, trunk leaning back this far
 # past upright.
 STRIDE_CUT = 0.25
@@ -269,7 +273,7 @@ def build(arm, name, source, degrees, up, forward, rest_pitch):
     across = (spin @ lateral).normalized()
     for i in range(len(LEGS)):
         outward = across if (frames[0][1][i][0] - frames[0][1][1 - i][0]).dot(across) > 0 else -across
-        widen.append(outward * WIDEN * math.sin(abs(yaw)) * (1 + 2 * back))
+        widen.append(outward * (RUN_WIDEN if name.startswith("Rig|Run_") else WIDEN) * math.sin(abs(yaw)) * (1 + 2 * back))
     tracks = [track(frames, i, cycle, spin, stride, neutral[i], widen[i], back, up) for i in range(len(LEGS))]
     # The foot's own forward and the axis its pitch turns about: signed pitch off
     # these runs past vertical, where `pitch_of` folds back and flips the foot.
@@ -366,10 +370,13 @@ def build_all():
     )
 
 
-def splice():
-    names = {clip_name(g, d): source for g, source in GAITS.items() for d in DIRECTIONS}
+def splice(names=None, scratch=SCRATCH, only=None):
+    """Splice `names` (new clip -> the source clip whose keyed channels it keeps) from `scratch` into the master.
+
+    `only` (clip -> node names) narrows a clip further: a one-pose layer keys its own bones and no others."""
+    names = names or {clip_name(g, d): source for g, source in GAITS.items() for d in DIRECTIONS}
     doc, blob = read_glb(ANIMS)
-    add, extra = read_glb(SCRATCH)
+    add, extra = read_glb(scratch)
     clips = [a for a in add.get("animations", []) if a.get("name") in names]
     assert sorted(a["name"] for a in clips) == sorted(names), [a.get("name") for a in add.get("animations", [])]
 
@@ -383,7 +390,8 @@ def splice():
         # never keys overrides that node's rest (an identity root tips him over).
         source = next(a for a in doc["animations"] if a.get("name") == names[clip["name"]])
         keyed = {(doc["nodes"][c["target"]["node"]]["name"], c["target"]["path"]) for c in source["channels"]}
-        channels = [c for c in clip["channels"] if (from_add.get(c["target"].get("node")), c["target"]["path"]) in keyed]
+        channels = [c for c in clip["channels"] if (from_add.get(c["target"].get("node")), c["target"]["path"]) in keyed
+                    and (only is None or clip["name"] not in only or from_add.get(c["target"].get("node")) in only[clip["name"]])]
         used = sorted({c["sampler"] for c in channels})
         samplers = [clip["samplers"][i] for i in used]
         remap = {}
@@ -407,7 +415,7 @@ def splice():
         assert out["channels"], f"{clip['name']}: no channel matched a library node by name"
         doc["animations"].append(out)
     write_glb(ANIMS, doc, compact(doc, blob))
-    os.remove(SCRATCH)
+    os.remove(scratch)
 
 
 def main():
