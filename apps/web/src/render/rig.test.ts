@@ -49,6 +49,7 @@ import {
   resetPlayerRig,
   BODIES,
   speedRatioFor,
+  RUN_PACE,
   BASE_LOOKS,
   NO_LOOKS,
   SLOTS,
@@ -244,6 +245,13 @@ describe("speedRatioFor", () => {
     // over quicker than the ground to match the footstep cues.
     expect(speedRatioFor("run", 3.5)).toBeGreaterThan(1.1);
     expect(speedRatioFor("run", 3.5)).toBeLessThan(1.35);
+  });
+
+  it("turns the PoE2 run over at PoE2's cycle (VITE_POE2_RUN)", () => {
+    // At the player's 3.5 u/s the run's 28-frame (0.933 s) cycle plays in 0.667 s:
+    // PoE2's run cycle, and two of the soundscape's 10-tick footsteps.
+    const { speed, cadence } = RUN_PACE.poe2;
+    expect(0.9333 / ((3.5 / speed) * cadence)).toBeCloseTo(0.667, 2);
   });
 
   it("holds the jog through a corner instead of flicking to a walk", () => {
@@ -1248,6 +1256,12 @@ describe("the cast clip drives the weapon arm", () => {
   it("ships every clip the loader asks for", () => {
     const names = new Set(json.animations.map((a: { name: string }) => a.name));
     for (const name of Object.values(CLIP_NAME)) expect(names, name).toContain(name);
+    // Both run sets, whichever VITE_POE2_RUN picked.
+    for (const set of ["Jog", "Run"]) {
+      for (const part of ["Fwd", "Strafe_L", "Strafe_R", "Back", "BackDiag_L", "BackDiag_R"]) {
+        expect(names).toContain(`Rig|${set}_${part}_Loop`);
+      }
+    }
   });
 
   it("carries no buffer data a replaced clip left behind", () => {
@@ -1878,7 +1892,7 @@ describe("the bow is drawn on a runtime string", () => {
 describe("the robe's leg backing stays under its trousers", () => {
   const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
-  it("keeps both leg backings under the trousers at bind and through most of the jog", async () => {
+  it.each(["Rig|Jog_Fwd_Loop", "Rig|Run_Fwd_Loop"])("keeps both leg backings under the trousers at bind and through most of %s", async (clip) => {
     const original = (globalThis as { FileReader?: unknown }).FileReader;
     (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
     engine = new NullEngine();
@@ -1891,8 +1905,8 @@ describe("the robe's leg backing stays under its trousers", () => {
       const mesh = (name: string) => wardrobe.meshes.find((m) => m.name === name) as Mesh;
       const robe = mesh("chest.ember.robe");
       const nodes = new Map(robe.skeleton!.bones.map((b) => [b.name, b.getTransformNode()!]));
-      const jog = lib.animationGroups.find((g) => g.name === CLIP_NAME.run)!;
-      expect(jog, CLIP_NAME.run).toBeDefined();
+      const jog = lib.animationGroups.find((g) => g.name === clip)!;
+      expect(jog, clip).toBeDefined();
       const tracks = jog.targetedAnimations.filter((t) =>
         t.animation.targetProperty === "rotationQuaternion" && nodes.has(t.target.name)
         && !t.target.name.startsWith("skirt_"));

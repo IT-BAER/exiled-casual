@@ -47,7 +47,8 @@ DIRECTIONS = {
     "BackDiag_R": -110,
     "Back": 180,
 }
-GAITS = {"Jog": "Rig|Jog_Fwd_Loop"}
+# "Run" is the jog reshaped toward PoE2 by `build_run_clip.py` (run that first), live behind VITE_POE2_RUN.
+GAITS = {"Jog": "Rig|Jog_Fwd_Loop", "Run": "Rig|Run_Fwd_Loop"}
 # Clips this tool's predecessors wrote and nothing reads any more.
 RETIRED = ()
 # Share of the track's line the knee and foot follow; the rest is the hip's.
@@ -366,10 +367,11 @@ def build_all():
     )
 
 
-def splice():
-    names = {clip_name(g, d): source for g, source in GAITS.items() for d in DIRECTIONS}
+def splice(names=None, scratch=SCRATCH):
+    """Splice `names` (new clip -> the source clip whose keyed channels it keeps) from `scratch` into the master."""
+    names = names or {clip_name(g, d): source for g, source in GAITS.items() for d in DIRECTIONS}
     doc, blob = read_glb(ANIMS)
-    add, extra = read_glb(SCRATCH)
+    add, extra = read_glb(scratch)
     clips = [a for a in add.get("animations", []) if a.get("name") in names]
     assert sorted(a["name"] for a in clips) == sorted(names), [a.get("name") for a in add.get("animations", [])]
 
@@ -407,7 +409,7 @@ def splice():
         assert out["channels"], f"{clip['name']}: no channel matched a library node by name"
         doc["animations"].append(out)
     write_glb(ANIMS, doc, compact(doc, blob))
-    os.remove(SCRATCH)
+    os.remove(scratch)
 
 
 def main():
