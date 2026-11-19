@@ -81,6 +81,9 @@ export const WORLD_ART: readonly string[] = [
   "/textures/buffs/marked.webp",
   "/textures/buffs/flammable.webp",
   "/textures/buffs/taunted.webp",
+  "/textures/buffs/frozen.webp",
+  "/textures/buffs/shocked.webp",
+  "/textures/buffs/electrocuted.webp",
   // Level dressing: the sea. Wall plates are per biome, under tilesets/.
   "/textures/water/water_normal.jpg",
   // Item icons: one drop is one icon, and a boss drops five at once.

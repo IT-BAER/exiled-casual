@@ -3,9 +3,35 @@ import { describe, it, expect, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import type { Snapshot } from "@exiled/protocol";
-import { BuffBar } from "./BuffBar";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { resolve } from "node:path";
+import { BuffBar, STATUS_ART } from "./BuffBar";
 
 afterEach(cleanup);
+
+/** Every `statusId: "..."` the shipped sim and content name: the statuses a monster can carry. */
+function simStatusIds(): Set<string> {
+  const out = new Set<string>();
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      if (entry === "node_modules" || entry === "dist") continue;
+      const full = resolve(dir, entry);
+      if (statSync(full).isDirectory()) { walk(full); continue; }
+      if (!entry.endsWith(".ts") || entry.includes(".test.")) continue;
+      for (const m of readFileSync(full, "utf8").matchAll(/statusId: "([a-z_]+)"/g)) out.add(m[1]!);
+    }
+  };
+  walk(resolve(__dirname, "../../../../packages"));
+  return out;
+}
+
+describe("STATUS_ART", () => {
+  it("has an icon for every status the sim can put on a monster", () => {
+    const ids = simStatusIds();
+    expect(ids.size).toBeGreaterThan(5);
+    expect([...ids].filter((id) => !STATUS_ART[id])).toEqual([]);
+  });
+});
 
 function snap(buffs: Snapshot["player"]["buffs"]): Snapshot {
   return { player: { buffs } } as unknown as Snapshot;

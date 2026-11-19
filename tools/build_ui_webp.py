@@ -37,7 +37,7 @@ PLAN: list[tuple[Path, Path, int]] = [
     *[(ASSETS / "buffs" / f"{n}.png", PUBLIC / "textures" / "buffs" / f"{n}.webp", 95)
       for n in ("grace", "burning", "poison", "bleeding", "infernal_cry", "blood_rage",
                 "determination", "haste", "herald_of_ash", "scorched", "chilled", "stunned",
-                "marked", "flammable", "taunted")],
+                "marked", "flammable", "taunted", "frozen", "shocked", "electrocuted")],
     # 2x2 sheet drawn at background-size 200%: 83 px per quadrant, so the quadrants stay whole.
     (ASSETS / "ui" / "char_icons_v1.png", PUBLIC / "textures" / "ui" / "char_icons_v1.webp", 166),
     # Skill tile content box (SLOT minus its 1px border).

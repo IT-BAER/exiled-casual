@@ -36,6 +36,10 @@ export const STATUS_ART: Record<string, { icon: string; name: string }> = {
   marked: { icon: "/textures/buffs/marked.webp", name: "Marked" },
   flammable: { icon: "/textures/buffs/flammable.webp", name: "Flammable" },
   taunted: { icon: "/textures/buffs/taunted.webp", name: "Taunted" },
+  // The ailments every hit can inflict (damage-resolve.ts), not a skill's own.
+  frozen: { icon: "/textures/buffs/frozen.webp", name: "Frozen" },
+  shocked: { icon: "/textures/buffs/shocked.webp", name: "Shocked" },
+  electrocuted: { icon: "/textures/buffs/electrocuted.webp", name: "Electrocuted" },
 };
 
 type Buff = NonNullable<Snapshot["player"]["buffs"]>[number];
