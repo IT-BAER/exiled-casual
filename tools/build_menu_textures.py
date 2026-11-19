@@ -21,7 +21,7 @@ from __future__ import annotations
 import pathlib
 import sys
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageChops, ImageFilter
 
 SRC = pathlib.Path(__file__).resolve().parent.parent / "assets" / "menu"
 DST = pathlib.Path(__file__).resolve().parent.parent / "apps" / "web" / "public" / "textures" / "ui" / "menu"
@@ -130,8 +130,13 @@ def frame_slice(im: Image.Image) -> tuple[int, int, int, int]:
 # The loading plate's gold frame, assembled from ONE generated top-left corner.
 # Drawn as a nine-slice over the visible area, so all four corners show at any
 # aspect and the lines stay crisp instead of being a stretched painting.
-FRAME_CORNER = "loading_frame_corner_v1"
+# v2: blackened iron flush to the screen edge, thorns round a cracked stone (owner,
+# 19 Nov: v1's bright thin gold was too prominent and too small).
+FRAME_CORNER = "loading_frame_corner_v2"
 FRAME_SLICE = 384
+# Master px cut off the band's OUTER side: the render's 75 px band read too thick
+# (owner, 19 Nov). Cutting the outside keeps the ornament's size and position.
+FRAME_TRIM = 24
 
 
 def build_loading_frame() -> str | None:
@@ -140,6 +145,7 @@ def build_loading_frame() -> str | None:
     if not src.is_file():
         return None
     im = crop_to_alpha(Image.open(src).convert("RGBA"))
+    im = im.crop((FRAME_TRIM, FRAME_TRIM, im.width, im.height))
     a = im.getchannel("A").point(lambda v: 255 if v > ALPHA_FLOOR else 0)
     w, h = im.size
     # The straight lines run the length of the image: a row lit across most of
@@ -157,15 +163,35 @@ def build_loading_frame() -> str | None:
             if px[x, y] and y not in line_rows and x not in line_cols:
                 reach = max(reach, x, y)
     # Corner slice = where the flourish ends plus a margin; the half-arm after it
-    # is plain line, so the mirrored halves meet on straight gold.
+    # is plain band, so the mirrored halves meet on straight metal. The edge is
+    # TILED (`round`), not stretched: stretched, pitted iron smears into streaks,
+    # so the arm is long enough to tile without a visible beat.
     corner = reach + 24
-    quad = im.crop((0, 0, corner + 32, corner + 32))
+    quad = im.crop((0, 0, corner + 160, corner + 160))
     q = quad.width
+    band = next(y for y in range(h) if y not in lit_rows)
+    # The bottom corners are plain mitred iron: the frame runs round the bottom bar
+    # too, and an ornament there would sit on the tip text (owner, 19 Nov).
+    # Each arm from its own straight run: the render's left band is not as deep
+    # as its top band, so a transposed top band steps where the two meet.
+    band_v = next(x for x in range(w) if x not in lit_cols)
+    strip = quad.crop((corner, 0, q, band + 3))
+    strip_v = quad.crop((0, corner, band_v + 3, q))
+    top = Image.new("RGBA", (q, q))
+    for x in range(0, q, strip.width):
+        top.paste(strip, (x, 0))
+    left = Image.new("RGBA", (q, q))
+    for y in range(0, q, strip_v.height):
+        left.paste(strip_v, (0, y))
+    miter = Image.new("L", (q, q))
+    miter.putdata([255 if y <= x else 0 for y in range(q) for x in range(q)])
+    plain = left.copy()
+    plain.paste(top, (0, 0), ImageChops.multiply(top.getchannel("A"), miter))
     full = Image.new("RGBA", (2 * q, 2 * q))
     full.paste(quad, (0, 0))
     full.paste(quad.transpose(Image.FLIP_LEFT_RIGHT), (q, 0))
-    full.paste(quad.transpose(Image.FLIP_TOP_BOTTOM), (0, q))
-    full.paste(quad.transpose(Image.ROTATE_180), (q, q))
+    full.paste(plain.transpose(Image.FLIP_TOP_BOTTOM), (0, q))
+    full.paste(plain.transpose(Image.ROTATE_180), (q, q))
     # A 1440p panel draws the corner about 250 px; 384 keeps headroom. Lossy with
     # a lossless alpha: the textured gold is 860 KiB lossless at native size.
     scale = FRAME_SLICE / corner
@@ -173,7 +199,10 @@ def build_loading_frame() -> str | None:
     full = full.resize((size, size), Image.LANCZOS)
     out = DST / "loading_frame.webp"
     full.save(out, quality=92, alpha_quality=100, method=6)
-    return f"{out.name:26} {size}x{size}  {out.stat().st_size // 1024} KiB  border-image-slice {FRAME_SLICE}"
+    # The band's depth as a share of the slice: how far the bottom bar's text must
+    # stay off the screen's sides and foot.
+    return (f"{out.name:26} {size}x{size}  {out.stat().st_size // 1024} KiB  "
+            f"border-image-slice {FRAME_SLICE}  band {band / corner:.4f} of the slice")
 
 
 def main() -> int:

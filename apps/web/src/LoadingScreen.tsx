@@ -29,6 +29,10 @@ export const LOADING_ART = "/textures/loading";
  */
 const BAND_H = "clamp(76px, 12vh, 136px)";
 
+/** The frame's drawn corner size, and its iron band's depth as a share of it (printed by `build_menu_textures.py`). */
+const FRAME_W = "clamp(140px, 30vh, 400px)";
+const FRAME_BAND = 0.0947;
+
 /**
  * How long the plate takes to dissolve off the finished world, and how long its
  * owner must therefore keep it mounted past ready. Exported so the two cannot
@@ -118,26 +122,6 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
             background: "linear-gradient(180deg, transparent 62%, rgba(5,6,8,0.75) 100%)",
           }}
         />
-        {/* The gold frame is its own nine-slice, not part of the vignette: the
-            vignette is drawn `cover`, which crops a painted frame's top and bottom
-            on any screen wider than 16:9. This one FITS the area, so all four
-            corners show, and stays crisp. Slice 384 is printed by
-            `tools/build_menu_textures.py`. Above the foot gradient so it is not dimmed. */}
-        <div
-          data-testid="loading-frame"
-          aria-hidden
-          style={{
-            position: "absolute",
-            inset: "clamp(6px, 1.2vh, 18px)",
-            boxSizing: "border-box",
-            borderStyle: "solid",
-            borderWidth: "clamp(96px, 20vh, 260px)",
-            borderImageSource: "url(/textures/ui/menu/loading_frame.webp)",
-            borderImageSlice: 384,
-            borderImageRepeat: "stretch",
-            pointerEvents: "none",
-          }}
-        />
       </div>
 
       {/* The rule, in the bottom bar's own pairing: a warm hairline closed
@@ -174,18 +158,18 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
           height: BAND_H,
           display: "flex",
           alignItems: "center",
-          padding: "0 clamp(20px, 3vw, 64px)",
+          // The iron frame's bottom band covers the foot of the bar; centre above it.
+          padding: `0 clamp(20px, 3vw, 64px) calc(${FRAME_W} * ${FRAME_BAND})`,
           boxSizing: "border-box",
-          // Same stone as the bottom bar, but sliced the other way round from the
-          // HUD's connector: that one drops the side slices because its gilt
-          // corners belong to the panels it runs between. This band runs between
-          // nothing, so it keeps them and ends in a corner. Dropping them here
-          // stretched the ornaments across the full width instead, which at this
-          // band's height reads as a smear rather than as carving.
+          // Same stone as the bottom bar, but its gilt end caps are not drawn
+          // (side widths 0, side slices kept so no ornament stretches along the
+          // edge): the iron frame's side bands are the bar's ends, and a carved cap
+          // inside them read as two borders meeting (owner, 19 Nov).
           borderStyle: "solid",
-          borderWidth: "0.74vw 78px 0.27vw 78px",
+          borderWidth: "0.74vw 0 0.27vw 0",
           borderImageSource: "url(/hud/bar-panel-v3.webp)",
-          borderImageSlice: "26 78 44 78 fill",
+          // Sides cut past the caps' curls (78 left one showing at the right end).
+          borderImageSlice: "26 120 44 120 fill",
         }}
       >
         <div
@@ -228,6 +212,29 @@ export function LoadingScreen({ areaName, tip, wallpaper, leaving }: LoadingScre
           {areaName}
         </div>
       </div>
+
+      {/* The frame is its own nine-slice, not part of the vignette: the vignette
+          is drawn `cover`, which crops a painted frame's top and bottom on any
+          screen wider than 16:9. This one wraps the WHOLE plate, bar included,
+          flush to the screen: ornate corners at the top, plain mitred iron at the
+          foot so nothing sits on the tip. Slice 384 is printed by
+          `tools/build_menu_textures.py`. Last, so it is drawn over the bar's ends. */}
+      <div
+        data-testid="loading-frame"
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          boxSizing: "border-box",
+          borderStyle: "solid",
+          borderWidth: FRAME_W,
+          borderImageSource: "url(/textures/ui/menu/loading_frame.webp)",
+          borderImageSlice: 384,
+          // Tiled: the band is pitted iron, which a stretch smears into streaks.
+          borderImageRepeat: "round",
+          pointerEvents: "none",
+        }}
+      />
     </div>
   );
 }
