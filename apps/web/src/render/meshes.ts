@@ -1284,11 +1284,14 @@ function registerBeamShaders(): void {
     ${NOISE_GLSL}
     void main(void) {
       float h = vUV.y;
+      // pow() of a base that interpolation pushed below 0 is NaN, and NaN under
+      // additive blending paints a black pixel: clamp every base.
+      float facing = max(vFacing, 1e-6);
       // Bright at the floor and run out by the top, slowly enough that the eye
       // watches it go: a fade done by half way reads as a beam someone cut.
-      float fade = pow(1.0 - h, 1.7);
-      float core = pow(vFacing, 14.0);
-      float sheath = pow(vFacing, 1.4);
+      float fade = pow(clamp(1.0 - h, 1e-6, 1.0), 1.7);
+      float core = pow(facing, 14.0);
+      float sheath = pow(facing, 1.4);
       float rise = noise(vec2(vUV.x * 6.0 + uPhase, h * 7.0 - uTime * 0.6 + uPhase), 6.0);
       float fine = noise(vec2(vUV.x * 12.0, h * 15.0 - uTime * 1.1 + uPhase), 12.0);
       float shimmer = 0.7 + 0.45 * rise + 0.15 * fine;
