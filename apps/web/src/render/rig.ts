@@ -131,10 +131,10 @@ export const POE2_RUN = import.meta.env.DEV && import.meta.env.VITE_POE2_RUN ===
 const RUN_SET = POE2_RUN ? "Run" : "Jog";
 /**
  * Each run clip set's authored ground speed (u/s) and cadence trim, see `CLIP_SPEED` and `CADENCE`.
- * The PoE2 run is authored at the player's 3.5 u/s over a 20-frame cycle, its planted foot
- * moving back at exactly that speed, so it plays at 1.0 with no slide.
+ * The PoE2 run is authored at the player's base 4.2 u/s (`baseCasterStats`) over a 20-frame
+ * cycle, its planted foot moving back at exactly that speed, so it plays at 1.0 with no slide.
  */
-export const RUN_PACE = { jog: { speed: 4.0, cadence: 1.32 }, poe2: { speed: 3.5, cadence: 1 } } as const;
+export const RUN_PACE = { jog: { speed: 4.0, cadence: 1.32 }, poe2: { speed: 4.2, cadence: 1 } } as const;
 
 export const CLIP_NAME: Record<RigClip, string> = {
   idle: "Rig|Idle_Loop",
@@ -226,7 +226,7 @@ const CLIP_SPEED: Record<"walk" | "run", number> = { walk: 1.4, run: RUN_PACE[PO
  * 1.32 (on the owner's "match the step sounds" calls; 1.4 overshot slightly) lands
  * the playback at ~1.15, at the price of a little slide.
  *
- * The PoE2 run needs no trim: its 0.667 s cycle at the player's 3.5 u/s is PoE2's and
+ * The PoE2 run needs no trim: its 0.667 s cycle at the player's 4.2 u/s is PoE2's and
  * two of the soundscape's 10-tick footsteps, and its planted foot moves at that speed.
  */
 const CADENCE: Record<"walk" | "run", number> = { walk: 1, run: RUN_PACE[POE2_RUN ? "poe2" : "jog"].cadence };
@@ -923,6 +923,13 @@ export const SHIELD_CARRY = "Rig|Shield_Carry";
  * bow. Laid over run clips only, under `POE2_RUN`; the fist stays `BOW_CARRY`'s.
  */
 export const BOW_RUN_CARRY = "Rig|Bow_RunCarry";
+/**
+ * Share of the bow run carry's chest laid on: PoE2's bow run still swings the shoulders, about
+ * 60 % of the free run's swing, about a mean turned toward the bow. This share fits best (`fit_bow.py`).
+ */
+const BOW_RUN_CHEST_HOLD = 0.6;
+/** Share of the bow run carry laid on the arms: PoE2's bow arm still bobs with the stride (`fit_bow.py`). */
+const BOW_RUN_ARM_HOLD = 0.85;
 const SHIELD_LOOK = "towershield";
 const CARRY_EASE_SEC = 0.25;
 const STRING_RADIUS = 0.003;
@@ -1122,10 +1129,10 @@ export const isLayeredClip = (clip: RigClip): boolean => UPPER_BODY_CLIPS.has(cl
  * `hold` is how much of the carry is laid on at full weight; the rest of the clip's
  * own arm motion shows through, or a fully held shield reads as bolted on.
  */
-const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean; hold: number; run?: true }[] = [
+const CARRIES: readonly { clip: string; worn: (looks: Looks) => boolean; yieldsTo: ReadonlySet<RigClip>; roll: boolean; steady: boolean; idle: boolean; hold: number; run?: true; bones?: Readonly<Record<string, number>> }[] = [
   { clip: BOW_CARRY, worn: (looks) => looks.weapon1 === BOW_LOOK, yieldsTo: new Set<RigClip>([...UPPER_BODY_CLIPS, ...FULL_SKILL_CLIPS]), roll: true, steady: false, idle: false, hold: 1 },
   { clip: SHIELD_CARRY, worn: (looks) => looks.weapon2 === SHIELD_LOOK, yieldsTo: new Set<RigClip>(["drink", "open"]), roll: false, steady: true, idle: true, hold: 0.8 },
-  ...(POE2_RUN ? [{ clip: BOW_RUN_CARRY, worn: (looks: Looks) => looks.weapon1 === BOW_LOOK, yieldsTo: new Set<RigClip>([...UPPER_BODY_CLIPS, ...FULL_SKILL_CLIPS]), roll: true, steady: false, idle: false, hold: 1, run: true as const }] : []),
+  ...(POE2_RUN ? [{ clip: BOW_RUN_CARRY, worn: (looks: Looks) => looks.weapon1 === BOW_LOOK, yieldsTo: new Set<RigClip>([...UPPER_BODY_CLIPS, ...FULL_SKILL_CLIPS]), roll: true, steady: false, idle: false, hold: 1, run: true as const, bones: { spine_03: BOW_RUN_CHEST_HOLD, upperarm_l: BOW_RUN_ARM_HOLD, lowerarm_l: BOW_RUN_ARM_HOLD, upperarm_r: BOW_RUN_ARM_HOLD, lowerarm_r: BOW_RUN_ARM_HOLD } }] : []),
 ];
 
 /**
@@ -1269,6 +1276,50 @@ function headingOf(node: TransformNode): Heading {
     up: Vector3.TransformNormal(Vector3.Up(), m).normalize(),
     fwd: Vector3.TransformNormal(Vector3.Forward(), m).normalize(),
   };
+}
+
+/** The bone's own axis (unit, local) that points most nearly along world `fwd` now. */
+export function faceAxisOf(bone: TransformNode, fwd: Vector3): Vector3 {
+  freshWorld(bone);
+  const m = bone.getWorldMatrix();
+  let best = Vector3.Forward();
+  let score = -Infinity;
+  for (const axis of [Vector3.Right(), Vector3.Up(), Vector3.Forward()]) {
+    const d = Vector3.Dot(Vector3.TransformNormal(axis, m).normalize(), fwd);
+    if (Math.abs(d) > score) {
+      score = Math.abs(d);
+      best = axis.scale(Math.sign(d) || 1);
+    }
+  }
+  return best;
+}
+
+/** Where the bone's `axis` points in world space, flattened onto the floor. */
+export function facingOf(bone: TransformNode, axis: Vector3): Vector3 {
+  freshWorld(bone);
+  const v = Vector3.TransformNormal(axis, bone.getWorldMatrix());
+  v.y = 0;
+  return v.normalize();
+}
+
+/** The turn about world up that takes flat unit `from` onto flat unit `to`, as `atan2(x, z)` grows. */
+export function yawBetween(from: Vector3, to: Vector3): number {
+  return wrapPi(Math.atan2(to.x, to.z) - Math.atan2(from.x, from.z));
+}
+
+/**
+ * +1 when `aimBone` turns this bone the way `yawBetween` counts, -1 when the other way: under
+ * a mirrored root (the glTF loader's handedness flip) a turn in the parent's frame runs backwards.
+ */
+export function aimSense(bone: TransformNode, axis: Vector3): number {
+  const rot = bone.rotationQuaternion;
+  if (!rot) return 1;
+  const saved = rot.clone();
+  const before = facingOf(bone, axis);
+  aimBone(bone, 0.1);
+  const sense = Math.sign(yawBetween(before, facingOf(bone, axis))) || 1;
+  rot.copyFrom(saved);
+  return sense;
 }
 
 const intoHeading = (v: Vector3, h: Heading): Vector3 =>
@@ -1625,7 +1676,7 @@ export class RigActor {
   private bowString: BowString | null = null;
   private stringObserver: Observer<Scene> | null = null;
   /** Per `CARRIES` entry, its pose per bone and how far it is laid over the clips; one observer for all. */
-  private carries: { spec: (typeof CARRIES)[number]; pose: { node: TransformNode; pose: Quaternion }[]; weight: number }[] = [];
+  private carries: { spec: (typeof CARRIES)[number]; pose: { node: TransformNode; pose: Quaternion; share: number }[]; weight: number }[] = [];
   /**
    * A steady carry's arm, and the upper arm's line, the forearm's axis and a side
    * line off it in the pivot's heading, read at bind with the carry laid on: the
@@ -2554,11 +2605,11 @@ export class RigActor {
 
     for (const spec of CARRIES) {
       const carried = loaded.anims.animationGroups.find((g) => g.name === spec.clip);
-      const pose: { node: TransformNode; pose: Quaternion }[] = [];
+      const pose: { node: TransformNode; pose: Quaternion; share: number }[] = [];
       for (const t of carried?.targetedAnimations ?? []) {
         const node = byName.get((t.target as Node).name);
         if (t.animation.targetProperty === ROTATION && node instanceof TransformNode) {
-          pose.push({ node, pose: t.animation.evaluate(carried!.from) as Quaternion });
+          pose.push({ node, pose: t.animation.evaluate(carried!.from) as Quaternion, share: spec.bones?.[node.name] ?? 1 });
         }
       }
       if (pose.length > 0) this.carries.push({ spec, pose, weight: 0 });
@@ -2580,9 +2631,15 @@ export class RigActor {
       };
       steadied.pose.forEach(({ node }, i) => { if (saved[i]) node.rotationQuaternion?.copyFrom(saved[i]!); });
     }
+    // The run turns the head with the stride, off a chest the run carry then partly holds still:
+    // under it the head would swing by all the chest no longer does, so it keeps the run's yaw.
+    const runCarry = this.carries.find((c) => c.spec.run === true);
+    const faceAxis = runCarry && headBone ? faceAxisOf(headBone, headingOf(this.pivot).fwd) : null;
+    const headSense = faceAxis && headBone ? aimSense(headBone, faceAxis) : 1;
     if (this.carries.length > 0) {
       this.carryObserver = this.scene.onAfterAnimationsObservable.add(() => {
         const step = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000 / CARRY_EASE_SEC;
+        const runFacing = faceAxis && headBone && runCarry!.weight > 0 ? facingOf(headBone, faceAxis) : null;
         for (const carry of this.carries) {
           const { worn, yieldsTo, roll, idle } = carry.spec;
           const idling = idle && this.activeClip === "idle" && !this.isRolling()
@@ -2592,9 +2649,9 @@ export class RigActor {
           carry.weight = worn(this.looks) && !busy ? Math.min(1, carry.weight + step) : Math.max(0, carry.weight - step);
           if (carry.weight <= 0) continue;
           const weight = carry.weight * carry.spec.hold;
-          for (const { node, pose } of carry.pose) {
+          for (const { node, pose, share } of carry.pose) {
             const rot = node.rotationQuaternion;
-            if (rot) Quaternion.SlerpToRef(rot, pose, weight, rot);
+            if (rot) Quaternion.SlerpToRef(rot, pose, weight * share, rot);
           }
           if (carry.spec.steady && this.steady) {
             // The arm, and the shield strapped to its forearm, takes the authored pose in the
@@ -2612,6 +2669,9 @@ export class RigActor {
             const sideNow = across(side.getAbsolutePosition().subtract(fore.getAbsolutePosition()), axis);
             swing(fore, sideNow, across(Vector3.Lerp(sideNow, outOfHeading(this.steady.side, h), weight), axis));
           }
+        }
+        if (runFacing && headBone && faceAxis) {
+          aimBone(headBone, headSense * yawBetween(facingOf(headBone, faceAxis), runFacing) * runCarry!.weight * runCarry!.spec.hold);
         }
       });
     }
