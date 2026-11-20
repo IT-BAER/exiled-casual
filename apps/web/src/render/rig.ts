@@ -1271,6 +1271,50 @@ function headingOf(node: TransformNode): Heading {
   };
 }
 
+/** The bone's own axis (unit, local) that points most nearly along world `fwd` now. */
+export function faceAxisOf(bone: TransformNode, fwd: Vector3): Vector3 {
+  freshWorld(bone);
+  const m = bone.getWorldMatrix();
+  let best = Vector3.Forward();
+  let score = -Infinity;
+  for (const axis of [Vector3.Right(), Vector3.Up(), Vector3.Forward()]) {
+    const d = Vector3.Dot(Vector3.TransformNormal(axis, m).normalize(), fwd);
+    if (Math.abs(d) > score) {
+      score = Math.abs(d);
+      best = axis.scale(Math.sign(d) || 1);
+    }
+  }
+  return best;
+}
+
+/** Where the bone's `axis` points in world space, flattened onto the floor. */
+export function facingOf(bone: TransformNode, axis: Vector3): Vector3 {
+  freshWorld(bone);
+  const v = Vector3.TransformNormal(axis, bone.getWorldMatrix());
+  v.y = 0;
+  return v.normalize();
+}
+
+/** The turn about world up that takes flat unit `from` onto flat unit `to`, as `atan2(x, z)` grows. */
+export function yawBetween(from: Vector3, to: Vector3): number {
+  return wrapPi(Math.atan2(to.x, to.z) - Math.atan2(from.x, from.z));
+}
+
+/**
+ * +1 when `aimBone` turns this bone the way `yawBetween` counts, -1 when the other way: under
+ * a mirrored root (the glTF loader's handedness flip) a turn in the parent's frame runs backwards.
+ */
+export function aimSense(bone: TransformNode, axis: Vector3): number {
+  const rot = bone.rotationQuaternion;
+  if (!rot) return 1;
+  const saved = rot.clone();
+  const before = facingOf(bone, axis);
+  aimBone(bone, 0.1);
+  const sense = Math.sign(yawBetween(before, facingOf(bone, axis))) || 1;
+  rot.copyFrom(saved);
+  return sense;
+}
+
 const intoHeading = (v: Vector3, h: Heading): Vector3 =>
   new Vector3(Vector3.Dot(v, h.left), Vector3.Dot(v, h.up), Vector3.Dot(v, h.fwd));
 const outOfHeading = (c: Vector3, h: Heading): Vector3 =>
@@ -2580,9 +2624,15 @@ export class RigActor {
       };
       steadied.pose.forEach(({ node }, i) => { if (saved[i]) node.rotationQuaternion?.copyFrom(saved[i]!); });
     }
+    // The run turns the head with the stride, off a chest the run carry then holds still: under
+    // it the head would swing by all the chest no longer does, so it keeps the yaw the run gave it.
+    const runCarry = this.carries.find((c) => c.spec.run === true);
+    const faceAxis = runCarry && headBone ? faceAxisOf(headBone, headingOf(this.pivot).fwd) : null;
+    const headSense = faceAxis && headBone ? aimSense(headBone, faceAxis) : 1;
     if (this.carries.length > 0) {
       this.carryObserver = this.scene.onAfterAnimationsObservable.add(() => {
         const step = (this.scene.getEngine?.()?.getDeltaTime?.() ?? 16) / 1000 / CARRY_EASE_SEC;
+        const runFacing = faceAxis && headBone && runCarry!.weight > 0 ? facingOf(headBone, faceAxis) : null;
         for (const carry of this.carries) {
           const { worn, yieldsTo, roll, idle } = carry.spec;
           const idling = idle && this.activeClip === "idle" && !this.isRolling()
@@ -2612,6 +2662,9 @@ export class RigActor {
             const sideNow = across(side.getAbsolutePosition().subtract(fore.getAbsolutePosition()), axis);
             swing(fore, sideNow, across(Vector3.Lerp(sideNow, outOfHeading(this.steady.side, h), weight), axis));
           }
+        }
+        if (runFacing && headBone && faceAxis) {
+          aimBone(headBone, headSense * yawBetween(facingOf(headBone, faceAxis), runFacing) * runCarry!.weight * runCarry!.spec.hold);
         }
       });
     }
