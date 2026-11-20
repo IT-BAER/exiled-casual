@@ -326,6 +326,8 @@ export function App(): React.ReactElement {
    * a class nobody owned. `MenuStage` takes the null and empties the hall.
    */
   const selectedClassId = rows.find((c) => c.id === selectedId)?.classId ?? null;
+  /** Whose movement the menu's Options sets: without one the switch only shows a keymap. */
+  const optionsCharacterId = rows.some((c) => c.id === selectedId) ? selectedId ?? undefined : undefined;
 
   /**
    * The line the Suspense plate reads while the game's chunk arrives. Held in
@@ -519,6 +521,7 @@ export function App(): React.ReactElement {
             settings={settings}
             onChange={changeSettings}
             onClose={() => setOptionsOpen(false)}
+            characterId={optionsCharacterId}
           />
         </Presence>
         {fade}
@@ -567,6 +570,7 @@ export function App(): React.ReactElement {
           settings={settings}
           onChange={changeSettings}
           onClose={() => setOptionsOpen(false)}
+          characterId={optionsCharacterId}
         />
       </Presence>
       {fade}

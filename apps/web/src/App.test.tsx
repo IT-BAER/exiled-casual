@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { MemoryKv, emptyRoster, addCharacter, saveRoster, loadRoster, putCharacterState } from "@exiled/persistence";
-import { setKv } from "./save/roster";
+import { setKv, settingsOf } from "./save/roster";
 
 // The game and the 3D stage both build a Babylon engine on mount, and neither
 // exists in jsdom. Stubbing them is also the assertion this file cares about:
@@ -273,6 +273,25 @@ describe("App routing", () => {
     expect(info.textContent).toMatch(/original fan project/i);
     fireEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(await screen.findByTestId("main-menu")).toBeTruthy();
+  });
+
+  it("the main menu's movement switch is the character's, and it stays picked", async () => {
+    await withCharacter();
+    render(<App />);
+    await screen.findByTestId("main-menu");
+    const openKeybinds = async () => {
+      fireEvent.click(screen.getByRole("button", { name: /^options$/i }));
+      fireEvent.click(await screen.findByRole("tab", { name: /keybinds/i }));
+    };
+    await openKeybinds();
+    fireEvent.click(screen.getByRole("radio", { name: "WASD" }));
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+    await waitFor(async () => {
+      const saved = await loadRoster(kv);
+      expect(settingsOf(saved!).ui.controls).toEqual({ vess: "wasd" });
+    });
+    await openKeybinds();
+    expect(screen.getByRole("radio", { name: "WASD" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("?play on an empty roster creates a character, seeds &control, and enters the game", async () => {
