@@ -13,6 +13,10 @@ import {
   ACTION_RATIO_MIN,
   aimAngles,
   aimBone,
+  aimSense,
+  faceAxisOf,
+  facingOf,
+  yawBetween,
   AIM_CHAIN,
   ARM_MAX,
   BOW_CARRY,
@@ -386,6 +390,31 @@ describe("aimBone", () => {
     expect(after.y).toBeCloseTo(before.y, 5);
     const yaw = (v: Vector3) => Math.atan2(v.x, v.z);
     expect(yaw(after) - yaw(before)).toBeCloseTo(0.6, 5);
+  });
+
+  it("turns a head held off a twisted chest back onto the yaw it had: a still chest under the run's head", () => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    // The glTF loader's root mirrors z: a turn in a parent's frame runs backwards under it.
+    const root = new TransformNode("__root__", scene);
+    root.rotationQuaternion = Quaternion.RotationYawPitchRoll(Math.PI, 0, 0);
+    root.scaling.set(1, 1, -1);
+    const chest = new TransformNode("spine_03", scene);
+    chest.parent = root;
+    chest.rotationQuaternion = Quaternion.RotationYawPitchRoll(0.1, 0.35, 0.05);
+    const head = new TransformNode("Head", scene);
+    head.parent = chest;
+    head.position.set(0, 0.3, 0);
+    head.rotationQuaternion = Quaternion.RotationYawPitchRoll(-0.2, -0.3, 0.1);
+    const axis = faceAxisOf(head, new Vector3(0, 0, 1));
+    const sense = aimSense(head, axis);
+    expect(sense).toBe(-1);
+    const run = facingOf(head, axis);
+    // The carry swaps the chest's yaw for another: the head goes with it.
+    chest.rotationQuaternion = Quaternion.RotationYawPitchRoll(-0.45, 0.35, 0.05);
+    expect(Math.abs(yawBetween(facingOf(head, axis), run))).toBeGreaterThan(0.4);
+    aimBone(head, sense * yawBetween(facingOf(head, axis), run));
+    expect(yawBetween(facingOf(head, axis), run)).toBeCloseTo(0, 5);
   });
 });
 

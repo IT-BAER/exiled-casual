@@ -60,6 +60,8 @@ WIDEN = 0.0003
 # The PoE2 run plants its feet near the midline (`TRACK_IN` in build_run_clip.py), so its
 # sidesteps set out further or the knees pass within a few cm.
 RUN_WIDEN = 0.0008
+# ...and a straight backpedal of it too, which no sideways share sets out: its knees pass ~4 cm apart, inside the ankles.
+RUN_BACK_WIDEN = 0.0005
 # At a full backpedal: steps this much shorter, trunk leaning back this far
 # past upright.
 STRIDE_CUT = 0.25
@@ -273,7 +275,8 @@ def build(arm, name, source, degrees, up, forward, rest_pitch):
     across = (spin @ lateral).normalized()
     for i in range(len(LEGS)):
         outward = across if (frames[0][1][i][0] - frames[0][1][1 - i][0]).dot(across) > 0 else -across
-        widen.append(outward * (RUN_WIDEN if name.startswith("Rig|Run_") else WIDEN) * math.sin(abs(yaw)) * (1 + 2 * back))
+        run = name.startswith("Rig|Run_")
+        widen.append(outward * ((RUN_WIDEN if run else WIDEN) * math.sin(abs(yaw)) * (1 + 2 * back) + (RUN_BACK_WIDEN * back if run else 0.0)))
     tracks = [track(frames, i, cycle, spin, stride, neutral[i], widen[i], back, up) for i in range(len(LEGS))]
     # The foot's own forward and the axis its pitch turns about: signed pitch off
     # these runs past vertical, where `pitch_of` folds back and flips the foot.
