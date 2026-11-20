@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect, afterEach } from "vitest";
 import { Animation, FreeCamera, LoadAssetContainerAsync, Mesh, NullEngine, Quaternion, Scene, TransformNode, Vector3, type Node } from "@babylonjs/core";
+import { toNumber } from "@exiled/fixed-point";
+import { baseCasterStats } from "@exiled/rules";
 import { createScene } from "./engine";
 import { ARROW_LENGTH } from "./skill-fx";
 import { makeMesh } from "./meshes";
@@ -13,6 +15,10 @@ import {
   ACTION_RATIO_MIN,
   aimAngles,
   aimBone,
+  aimSense,
+  faceAxisOf,
+  facingOf,
+  yawBetween,
   AIM_CHAIN,
   ARM_MAX,
   BOW_CARRY,
@@ -247,12 +253,13 @@ describe("speedRatioFor", () => {
     expect(speedRatioFor("run", 3.5)).toBeLessThan(1.35);
   });
 
-  it("turns the PoE2 run over at PoE2's cycle (VITE_POE2_RUN)", () => {
-    // At the player's 3.5 u/s the run's 20-frame (0.667 s) cycle plays at 1.0:
+  it("turns the PoE2 run over at PoE2's cycle at the player's base speed (VITE_POE2_RUN)", () => {
+    // The run's 20-frame (0.667 s) cycle plays at 1.0 at the sim's own base move speed:
     // PoE2's run cycle, and two of the soundscape's 10-tick footsteps.
+    const base = toNumber(baseCasterStats().moveSpeedFixed);
     const { speed, cadence } = RUN_PACE.poe2;
     expect(cadence).toBe(1);
-    expect(0.6667 / ((3.5 / speed) * cadence)).toBeCloseTo(0.667, 2);
+    expect(0.6667 / ((base / speed) * cadence)).toBeCloseTo(0.667, 2);
   });
 
   it("holds the jog through a corner instead of flicking to a walk", () => {
@@ -386,6 +393,31 @@ describe("aimBone", () => {
     expect(after.y).toBeCloseTo(before.y, 5);
     const yaw = (v: Vector3) => Math.atan2(v.x, v.z);
     expect(yaw(after) - yaw(before)).toBeCloseTo(0.6, 5);
+  });
+
+  it("turns a head held off a twisted chest back onto the yaw it had: a still chest under the run's head", () => {
+    engine = new NullEngine();
+    const scene = new Scene(engine);
+    // The glTF loader's root mirrors z: a turn in a parent's frame runs backwards under it.
+    const root = new TransformNode("__root__", scene);
+    root.rotationQuaternion = Quaternion.RotationYawPitchRoll(Math.PI, 0, 0);
+    root.scaling.set(1, 1, -1);
+    const chest = new TransformNode("spine_03", scene);
+    chest.parent = root;
+    chest.rotationQuaternion = Quaternion.RotationYawPitchRoll(0.1, 0.35, 0.05);
+    const head = new TransformNode("Head", scene);
+    head.parent = chest;
+    head.position.set(0, 0.3, 0);
+    head.rotationQuaternion = Quaternion.RotationYawPitchRoll(-0.2, -0.3, 0.1);
+    const axis = faceAxisOf(head, new Vector3(0, 0, 1));
+    const sense = aimSense(head, axis);
+    expect(sense).toBe(-1);
+    const run = facingOf(head, axis);
+    // The carry swaps the chest's yaw for another: the head goes with it.
+    chest.rotationQuaternion = Quaternion.RotationYawPitchRoll(-0.45, 0.35, 0.05);
+    expect(Math.abs(yawBetween(facingOf(head, axis), run))).toBeGreaterThan(0.4);
+    aimBone(head, sense * yawBetween(facingOf(head, axis), run));
+    expect(yawBetween(facingOf(head, axis), run)).toBeCloseTo(0, 5);
   });
 });
 
