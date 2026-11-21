@@ -1,7 +1,7 @@
 import { MeshBuilder, Vector3 } from "@babylonjs/core";
 import type { Mesh, Scene, TransformNode } from "@babylonjs/core";
 import {
-  addMat, auraSigil, blendMat, bloodMist, clamp01, cloneOf, core, easeOut, easeOutInv, emberSmoulder, fissure, Fx, fxMesh,
+  addMat, auraSigil, blendMat, bloodMist, chunkPool, clamp01, cloneOf, core, easeOut, easeOutInv, emberSmoulder, fissure, Fx, fxMesh,
   coneWave, Geo, kitFlash, kitPools, landingImpact, leapArcTrail, litMat, puff, rand, rgba, rgbaHue, ribbonTrail, scorch, shockRing, sparks,
   solidMat, TAU, tauntRage, template, throwChunks, type Rgb,
 } from "./kit";
@@ -27,6 +27,7 @@ const EARTH: Rgb = [1, 0.66, 0.34];
 const GOLD: Rgb = [1, 0.74, 0.3];
 const BLOOD: Rgb = [0.85, 0.05, 0.03];
 const STUN: Rgb = [1, 0.93, 0.45];
+const SKILL_VFX_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_SKILL_VFX_PREVIEW === "1";
 
 const yawOf = (x: number, z: number): number => Math.atan2(x, z);
 
@@ -105,6 +106,85 @@ function edgeTpl(scene: Scene, c: Rgb): Mesh {
     g.lathe([{ r: 0.9, y: 0, c: rgba(c, 0) }, { r: 0.97, y: 0, c: rgba(c, 0.55) }, { r: 1, y: 0, c: rgba(c, 1, 1.4) }, { r: 1.025, y: 0, c: rgba(c, 0) }], 64);
     g.lathe([{ r: 0.99, y: 0, c: rgba(c, 0.9, 1.3) }, { r: 1, y: 0.18, c: rgba(c, 0) }], 64);
     return fxMesh(scene, g.mesh(scene, "iron-edge"), addMat(scene));
+  });
+}
+
+type FaultPoint = readonly [x: number, z: number];
+const FAULT_MAIN: readonly FaultPoint[] = [
+  [-0.29, -0.78], [-0.1, -0.5], [-0.18, -0.24], [0.04, -0.08],
+  [-0.04, 0.14], [0.21, 0.35], [0.16, 0.55], [0.34, 0.79],
+];
+const FAULT_BRANCHES: readonly (readonly FaultPoint[])[] = [
+  FAULT_MAIN,
+  [[-0.18, -0.24], [-0.39, -0.29], [-0.59, -0.15], [-0.82, -0.18]],
+  [[0.04, -0.08], [0.3, -0.24], [0.46, -0.18], [0.69, -0.45]],
+  [[-0.04, 0.14], [-0.24, 0.34], [-0.48, 0.35], [-0.59, 0.59]],
+  [[0.21, 0.35], [0.47, 0.31], [0.64, 0.45]],
+];
+
+/** A shadow at the broken floor's edge and a thin exposed edge of dry stone. */
+function quakeFissureTpl(scene: Scene): Mesh {
+  return template(scene, "iron-quake-fissure", () => {
+    const g = new Geo();
+    for (const path of FAULT_BRANCHES) {
+      const points = path.map(([x, z], i) => {
+        const u = i / (path.length - 1);
+        const width = (path === FAULT_MAIN ? 0.047 : 0.031) * (0.53 + 0.75 * Math.sin(Math.PI * u));
+        return [x, z, width, i === path.length - 1 ? 0.22 : 0.96] as const;
+      });
+      g.strip(points.map(([x, z, w, a]) => [x, z, w * 2.2, a * 0.32] as const), [0.042, 0.027, 0.019]);
+      g.strip(points, [0.027, 0.017, 0.014], 0.002);
+      g.strip(points.map(([x, z, w, a]) => [x + w * 0.77, z, w * 0.23, a * 0.68] as const), [0.59, 0.4, 0.23], 0.004);
+    }
+    return fxMesh(scene, g.mesh(scene, "iron-quake-fissure"), blendMat(scene), false);
+  });
+}
+
+function quakeFootprintTpl(scene: Scene): Mesh {
+  return template(scene, "iron-quake-footprint", () => {
+    const g = new Geo();
+    const dust: Rgb = [0.66, 0.51, 0.34];
+    for (let i = 0; i < 10; i++) {
+      const start = i * TAU / 10 + (i % 2) * 0.05;
+      g.lathe([
+        { r: 0.965, y: 0, c: rgba(dust, 0) },
+        { r: 0.986, y: 0, c: rgba(dust, 0.7) },
+        { r: 0.999, y: 0, c: rgba(dust, 0.45) },
+        { r: 1, y: 0, c: rgba(dust, 0) },
+      ], 6, start, start + 0.29 + (i % 3) * 0.07);
+    }
+    return fxMesh(scene, g.mesh(scene, "iron-quake-footprint"), blendMat(scene), false);
+  });
+}
+
+/** Shared faceted slab with a lighter broken surface and darker vertical faces. */
+function quakeSlabTpl(scene: Scene): Mesh {
+  return template(scene, "iron-quake-slab", () => {
+    const g = new Geo();
+    const rim = [
+      [-0.55, 0.12, -0.36], [0.23, 0.24, -0.47], [0.57, 0.09, -0.03],
+      [0.32, 0.19, 0.39], [-0.36, 0.06, 0.44],
+    ] as const;
+    for (const [i, [x, y, z]] of rim.entries()) {
+      const [nx, ny, nz] = rim[(i + 1) % rim.length]!;
+      const top: Rgb = [0.47 + 0.032 * i, 0.36 + 0.023 * i, 0.26 + 0.018 * i];
+      const side: Rgb = [0.23 + 0.023 * i, 0.17 + 0.017 * i, 0.12 + 0.013 * i];
+      const a = g.vert(x, y, z, rgba(top, 1));
+      const b = g.vert(nx, ny, nz, rgba(top, 1));
+      const c = g.vert(-0.02, 0.3, -0.06, rgba(top, 1));
+      g.idx.push(a, b, c);
+      g.quad(
+        g.vert(x, y, z, rgba(side, 1)), g.vert(nx, ny, nz, rgba(side, 1)),
+        g.vert(x * 0.8, -0.28, z * 0.8, rgba(side, 1)), g.vert(nx * 0.8, -0.28, nz * 0.8, rgba(side, 1)),
+      );
+      const base: Rgb = [0.16, 0.12, 0.09];
+      g.idx.push(
+        g.vert(x * 0.8, -0.28, z * 0.8, rgba(base, 1)),
+        g.vert(0, -0.28, 0, rgba(base, 1)),
+        g.vert(nx * 0.8, -0.28, nz * 0.8, rgba(base, 1)),
+      );
+    }
+    return fxMesh(scene, g.mesh(scene, "iron-quake-slab"), solidMat(scene, [1, 1, 1]), false);
   });
 }
 
@@ -652,7 +732,7 @@ const quakeWindup: Windup = (ctx, body, cast) => {
     }
     return true;
   }, 0.05);
-  return group([swell(scene, strike, SEAM, 0.3, 1.4, total, 0.85), tremble], true);
+  return SKILL_VFX_PREVIEW ? tremble : group([swell(scene, strike, SEAM, 0.3, 1.4, total, 0.85), tremble], true);
 };
 
 /** The cone: a wedge of force out of the blade, the earth cracking open along it and holding its glow for the aftershock. */
@@ -663,6 +743,21 @@ function quakeCone(ctx: LookContext, a: AreaState): BurstHandle {
   const half = ((a.arc || 90) / 2) * (Math.PI / 180);
   const strike = new Vector3(a.x + a.dirX * 1.1, 0, a.y + a.dirY * 1.1);
   const L = a.radius;
+  if (SKILL_VFX_PREVIEW) {
+    throwChunks(scene, "rock", strike, { count: 10, yaw, cone: half, speed: [0.8, 2.1], up: [1.4, 3], size: [0.12, 0.3], spread: 0.6 });
+    sparks(scene, new Vector3(strike.x, 0.16, strike.z), 7, HOT, EARTH, {
+      yaw, cone: half, speed: [2, 5], up: [0.05, 0.28], life: [0.12, 0.22], length: 0.15,
+    });
+    for (let i = 0; i < 4; i++) {
+      const angle = yaw + rand(-half, half);
+      puff(scene, strike.x, strike.y, strike.z, { yaw: angle, size: 0.5, drift: 1.6, rise: 0.11, alpha: 0.29 });
+    }
+    return burst([
+      fissure(scene, at, { radius: L * 0.92, yaw, spread: half * 0.65, branches: 3, colour: [0.48, 0.27, 0.13], width: 0.24, grow: 0.14, hold: 0.5, fade: 0.55, embers: 0 }),
+      shake(ctx, 0.45),
+    ]);
+  }
+
   const dur = 0.32;
   kitFlash(scene, strike, 0.75, SEAM);
   // Small: a big hot core at the hammer whites out the body swinging it.
@@ -684,7 +779,25 @@ function quakeCone(ctx: LookContext, a: AreaState): BurstHandle {
 /** The aftershock building: the disc it will cover lights from below, faster and brighter as it nears; rubble hops. */
 function quakeWarn(ctx: LookContext, a: AreaState): FxHandle<AreaState> {
   const scene = ctx.scene;
-  const glow = cloneOf(scene, floorGlowTpl(scene, SEAM), "iron-quake-glow");
+  if (SKILL_VFX_PREVIEW) {
+    const floor = cloneOf(scene, quakeFissureTpl(scene), "iron-quake-fissure");
+    const footprint = cloneOf(scene, quakeFootprintTpl(scene), "iron-quake-footprint");
+    floor.rotation.y = quakeYaw(a);
+    const total = Math.max(0.1, a.impactIn);
+    const place = (s: AreaState) => {
+      const p = clamp01(1 - s.impactIn / total);
+      floor.position.set(s.x, 0.042, s.y);
+      floor.scaling.set(s.radius, 1, s.radius);
+      floor.visibility = 0.42 + 0.51 * p;
+      footprint.position.set(s.x, 0.035, s.y);
+      footprint.scaling.set(s.radius, 1, s.radius);
+      footprint.visibility = 0.7 + 0.22 * p;
+    };
+    place(a);
+    return { update: (_c, s) => place(s), dispose: () => { floor.dispose(); footprint.dispose(); } };
+  }
+
+  const ground = cloneOf(scene, floorGlowTpl(scene, SEAM), "iron-quake-glow");
   const edge = cloneOf(scene, edgeTpl(scene, SEAM), "iron-quake-edge");
   const total = Math.max(0.1, a.impactIn);
   let age = 0, hop = 0, dust = 0, motes = 0;
@@ -693,9 +806,9 @@ function quakeWarn(ctx: LookContext, a: AreaState): FxHandle<AreaState> {
     age += dt;
     const p = clamp01(1 - s.impactIn / total);
     const throb = 0.75 + 0.25 * Math.sin(age * (6 + 26 * p));
-    glow.position.set(s.x, 0.03, s.y);
-    glow.scaling.set(s.radius * 1.05, 1, s.radius * 1.05);
-    glow.visibility = (0.12 + 0.6 * p * p) * throb;
+    ground.position.set(s.x, 0.03, s.y);
+    ground.scaling.set(s.radius * 1.05, 1, s.radius * 1.05);
+    ground.visibility = (0.12 + 0.6 * p * p) * throb;
     edge.position.set(s.x, 0.03, s.y);
     edge.scaling.set(s.radius, 1 + 2 * p, s.radius);
     edge.visibility = (0.2 + 0.8 * p) * throb;
@@ -720,7 +833,7 @@ function quakeWarn(ctx: LookContext, a: AreaState): FxHandle<AreaState> {
     }
   };
   place(a, 0);
-  return { update: (c, s) => place(s, c.dt), dispose: () => { glow.dispose(); edge.dispose(); } };
+  return { update: (c, s) => place(s, c.dt), dispose: () => { ground.dispose(); edge.dispose(); } };
 }
 
 /** One column of molten light shooting up out of the floor, with a fountain of sparks and slag. */
@@ -749,8 +862,84 @@ function geyser(scene: Scene, at: Vector3, height: number, delay: number): Fx {
   return fx;
 }
 
+const quakeYaw = (a: AreaState): number => (a.id * 2.4) % TAU;
+
+/** Every slab and its grit leave the same cracks drawn during the warning. */
+function quakeBreak(ctx: LookContext, a: AreaState): BurstHandle {
+  const scene = ctx.scene;
+  const yaw = quakeYaw(a);
+  const cos = Math.cos(yaw), sin = Math.sin(yaw);
+  const floor = cloneOf(scene, quakeFissureTpl(scene), "iron-quake-fissure");
+  floor.position.set(a.x, 0.042, a.y);
+  floor.scaling.set(a.radius, 1, a.radius);
+  floor.rotation.y = yaw;
+  const settle = new Fx((f) => {
+    floor.visibility = 1 - clamp01((f.age - 0.56) / 1.02);
+    return f.age < 1.58;
+  });
+  settle.own(floor);
+  const tpl = quakeSlabTpl(scene);
+  const grit = chunkPool(scene, "rock");
+  const sites = [
+    FAULT_MAIN[2]!, FAULT_MAIN[4]!, FAULT_MAIN[5]!, FAULT_MAIN[6]!,
+    FAULT_BRANCHES[1]![2]!, FAULT_BRANCHES[2]![2]!, FAULT_BRANCHES[3]![2]!, FAULT_BRANCHES[4]![2]!,
+  ];
+  for (const [i, [x, z]] of sites.entries()) {
+    const dx = x * cos + z * sin, dz = z * cos - x * sin;
+    const along = Math.atan2(dx, dz);
+    const at = new Vector3(a.x + dx * a.radius, 0, a.y + dz * a.radius);
+    const delay = Math.hypot(dx, dz) * 0.18;
+    const size = Math.min(a.radius * 0.31, 1) * rand(0.64, 1);
+    const lift = rand(0.48, 0.88);
+    const flight = rand(0.46, 0.63);
+    const kick = rand(0.23, 0.54);
+    const tilt = i % 2 === 0 ? 1 : -1;
+    const slab = cloneOf(scene, tpl, "iron-quake-slab");
+    slab.hasVertexAlpha = false;
+    slab.scaling.set(size, size, size * rand(0.67, 1.08));
+    slab.setEnabled(false);
+    const rock = new Fx((f) => {
+      const t = f.age - delay;
+      if (t < 0) return true;
+      const p = clamp01(t / flight);
+      const sink = clamp01((t - 0.92) / 0.45);
+      const liftArc = 4 * p * (1 - p);
+      slab.setEnabled(true);
+      slab.position.set(at.x + dx * kick * p, size * 0.24 + lift * liftArc - size * (0.3 * (1 - p) + sink), at.z + dz * kick * p);
+      slab.rotation.set(tilt * (0.16 + 0.62 * liftArc), along + tilt * p * 0.7, -tilt * (0.21 + 0.48 * liftArc) * (1 - 0.7 * p));
+      return sink < 1;
+    });
+    rock.own(slab);
+    settle.child(rock);
+
+    for (let j = 0; j < 2; j++) {
+      grit.emit({
+        x: at.x, y: 0.06, z: at.z, floor: 0, delay,
+        vx: dx * rand(1, 2.2) + rand(-0.4, 0.4), vy: rand(1.1, 2.7), vz: dz * rand(1, 2.2) + rand(-0.4, 0.4),
+        size: rand(0.07, 0.15),
+      });
+    }
+    puff(scene, at.x, at.y, at.z, {
+      yaw: along, delay: delay + 0.03, size: rand(0.42, 0.67), drift: rand(1, 1.85), rise: 0.14,
+      life: rand(0.42, 0.65), colour: [0.47, 0.37, 0.28], alpha: 0.37,
+    });
+    if (i % 2 === 0) {
+      puff(scene, at.x + dx * kick, at.y, at.z + dz * kick, {
+        yaw: along, delay: delay + flight, size: 0.36, drift: 0.72, rise: 0.08, alpha: 0.28, life: 0.4,
+      });
+    }
+    if (i % 2 === 1) {
+      sparks(scene, new Vector3(at.x, 0.13, at.z), 2, HOT, EARTH, {
+        yaw: along, cone: 0.55, speed: [1.5, 3], up: [0.25, 0.55], life: [0.13, 0.25], length: 0.12, delay,
+      });
+    }
+  }
+  return burst([settle, shake(ctx, 1)]);
+}
+
 /** The aftershock: the floor erupts. The class's loudest moment. */
 function quakeAftershock(ctx: LookContext, a: AreaState): BurstHandle {
+  if (SKILL_VFX_PREVIEW) return quakeBreak(ctx, a);
   const scene = ctx.scene;
   const at = new Vector3(a.x, 0, a.y);
   const R = a.radius;

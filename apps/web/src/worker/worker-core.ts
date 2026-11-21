@@ -16,13 +16,15 @@ import {
   applyDevOp,
   devDump,
   equipStartingGear,
+  refit,
+  slotKit,
 } from "@exiled/simulation";
 import type { Simulation, World, Entity, Position, SessionC, InventoryC, SkillsC, ProgressC, ShardsC, EquipmentC, HideoutLayoutC, KvStore } from "@exiled/simulation";
 import type { Intent, Snapshot, SpawnKind, AreaKind, DevOp } from "@exiled/protocol";
 import { CONTENT_VERSION, defaultAttackFor, waystoneItem } from "@exiled/content-runtime";
 import { MOUSE_SLOT_BASE, MOVE_SOCKET, SKILL_SLOT_COUNT } from "@exiled/protocol";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
-import { mapBaseIdForNode, classIdOr, atlasGraph, WAYSTONE_MAX_TIER } from "@exiled/rules";
+import { mapBaseIdForNode, classIdOr, atlasGraph, maxGemLevel, WAYSTONE_MAX_TIER } from "@exiled/rules";
 
 // Wall-clock pacing constant (client-side only) — never fed into the sim.
 // ponytail: float constant is intentional; the accumulator drives integer tick steps.
@@ -75,10 +77,15 @@ export class WorkerCore {
    * from and never written to any save; null in every other session.
    */
   private readonly lab: string | null;
+  /**
+   * `?bot=kit` / `?bot=kit2` (DEV): the bot fights with its class's whole kit, the
+   * first six of it (1) or the six from its seventh on (2). 0 = the two lead skills.
+   */
+  private readonly botKit: 0 | 1 | 2;
   /** Rebuilt on every map entry; its bosses decide when the map counts as cleared. */
   private bot: { bot: Bot; bosses: Entity[] } | null = null;
 
-  constructor(seed: number, kv?: KvStore, characterId = "", bot = false, autopilot = bot, lab?: string) {
+  constructor(seed: number, kv?: KvStore, characterId = "", bot = false, autopilot = bot, lab?: string, botKit: 0 | 1 | 2 = 0) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
     this.seed = seed;
@@ -88,6 +95,7 @@ export class WorkerCore {
     this.botMode = bot;
     this.autopilot = autopilot;
     this.lab = lab ? classIdOr(lab) : null;
+    this.botKit = botKit;
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
@@ -329,7 +337,21 @@ export class WorkerCore {
   /** Collision built from the same world and layout the sim's own was, as the headless runner does. */
   private newBot(session: Entity, s: SessionC): { bot: Bot; bosses: Entity[] } {
     const game = { sim: this.sim, world: this.world, player: this.playerEntity, session, classId: classIdOr(s.classId ?? "") };
-    return { bot: new Bot(game, areaCollision(this.world, "map", this.areaLayout), {}), bosses: this.world.query("boss") };
+    if (this.botKit !== 0) {
+      // The headless kit pilot's own preparation (playtest.ts): gems at the level's
+      // cap, the bag's best pieces worn, the kit socketed. Bot mode never saves.
+      const cap = maxGemLevel(this.world.get<ProgressC>(session, "progress")!.level);
+      const sk = this.world.get<SkillsC>(session, "skills")!;
+      this.world.set<SkillsC>(session, "skills", {
+        ...sk, gems: Object.fromEntries(Object.keys(sk.gems).map((id) => [id, { level: cap, xp: 0 }])),
+      });
+      refit(game, "class");
+      slotKit(game, this.botKit === 2 ? 6 : 0);
+    }
+    return {
+      bot: new Bot(game, areaCollision(this.world, "map", this.areaLayout), this.botKit !== 0 ? { kit: true } : {}),
+      bosses: this.world.query("boss"),
+    };
   }
 
   /** Latest snapshot, or null before the first tick. */

@@ -35,6 +35,7 @@ export { createCombatSim, spawnLabActors } from "./combat-sim";
 export { applyDevOp, devDump } from "./dev-ops";
 export { buildArea, areaCollision, spawnMonster } from "./areas";
 export { Bot } from "./bot";
+export { refit, slotKit } from "./playtest";
 export type { AreaLayout, WalkableGrid, Socket } from "@exiled/mapgen";
 export { registerInteractSystem } from "./systems/interact";
 export { registerPickupSystem } from "./systems/pickup";
