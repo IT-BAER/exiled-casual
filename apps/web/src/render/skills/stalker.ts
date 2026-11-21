@@ -31,6 +31,7 @@ const SHOCK_HOT: Rgb = [0.95, 0.97, 1];
 const MARK: Rgb = [1, 0.18, 0.1];
 const VOLLEY: Rgb = [1, 0.86, 0.55];
 const HASTE: Rgb = [0.3, 0.95, 0.82];
+const SKILL_VFX_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_SKILL_VFX_PREVIEW === "1";
 
 const ARROW = SKILL_FX["skill.snap_shot.v1"]!;
 
@@ -46,6 +47,10 @@ const ICE_FX: FxProfile = {
 const LIGHTNING_FX: FxProfile = {
   ...ARROW, core: new Color3(0.92, 0.95, 1), wake: new Color3(0.6, 0.7, 1), trailWidth: 0.08,
   streakLength: 2.6, streakAlpha: 0.65, motes: 3, flash: 0.5, arrowImpact: "pierce",
+};
+const LIGHTNING_PREVIEW_FX: FxProfile = {
+  ...LIGHTNING_FX, core: new Color3(0.76, 0.91, 1), wake: new Color3(0.25, 0.60, 1), trailWidth: 0.115,
+  streakLength: 3.9, streakAlpha: 0.88, motes: 0.5,
 };
 
 // ── Adapters: kit `Fx` (update(dt)) onto the dispatcher's handles ────────────────
@@ -93,6 +98,8 @@ const floorAt = (n: TransformNode, y = 0): Vector3 => {
 type ChainSrc = Vector3 | null;
 
 interface ArrowDecor {
+  /** The decor supplies the entire hit, including any directional sparks. */
+  ownsImpact?: boolean;
   /** Flight dressing riding `arrow`; returns the run, stopped when the arrow goes. */
   flight(scene: Scene, arrow: Mesh, head: () => Vector3): Fx | null;
   /** The arrow struck something: `at` is where, `dirX/dirZ` the way it flew, `src` the body a chain left. */
@@ -132,6 +139,7 @@ function arrowLook(d: ArrowDecor): ProjectileLook {
         },
         impact(next, s) {
           d.impact(next.scene, head().clone(), s.dirX, s.dirY, born, src);
+          if (d.ownsImpact && arrow.metadata) arrow.metadata.struck = false;
         },
         dispose() {
           for (const r of runs) {
@@ -450,7 +458,6 @@ const LIGHTNING_ARROW: ArrowDecor = {
     return electricBody(scene, arrow, head);
   },
   impact(scene, at, _dx, _dz, _born, src) {
-    // The first body of a cast takes the big burst; every chain link a smaller one.
     shockHit(scene, at, src === null);
     if (src === null) {
       // The first body discharges into the floor round it: short forked arcs out, never up.
@@ -469,6 +476,109 @@ const LIGHTNING_ARROW: ArrowDecor = {
   },
 };
 
+const ARC_BLUE: Rgb = [0.23, 0.50, 1];
+const ARC_WHITE: Rgb = [0.76, 0.91, 1];
+
+type SparkStroke = readonly (readonly [x: number, z: number, halfWidth: number, alpha: number])[];
+
+/** One mesh carries both the sharp filament and its blue fringe. */
+function sketchStroke(g: Geo, points: SparkStroke, tip: Rgb = ARC_WHITE): void {
+  g.strip(points.map(([x, z, w, a]) => [x, z, w * 2.8, a * 0.18] as const), ARC_BLUE);
+  g.strip(points.map(([x, z, w, a]) => [x, z, w * 1.65, a * 0.38] as const), ARC_BLUE, 0.002);
+  g.strip(points, tip, 0.004);
+}
+
+const CHAIN_SPAN = 3;
+
+/** A long, asymmetrical fork anchored at z=0 and z=CHAIN_SPAN. */
+function chainFilament(scene: Scene): Mesh {
+  return template(scene, "stalker-lightning-fork", () => {
+    const g = new Geo();
+    sketchStroke(g, [
+      [0, 0, 0.012, 0.88], [0.20, 0.37, 0.028, 1], [-0.16, 0.74, 0.031, 1],
+      [-0.04, 0.95, 0.024, 0.95], [-0.34, 1.23, 0.034, 1], [0.25, 1.64, 0.030, 1],
+      [0.13, 1.94, 0.022, 0.95], [0.33, 2.26, 0.027, 1], [-0.18, 2.66, 0.025, 0.94],
+      [0, CHAIN_SPAN, 0.011, 0.86],
+    ]);
+    sketchStroke(g, [
+      [0.20, 0.37, 0.021, 0.88], [0.36, 0.46, 0.015, 0.84],
+      [0.29, 0.66, 0.013, 0.62], [0.56, 0.89, 0.008, 0.35], [0.53, 1.02, 0, 0],
+    ], ARC_BLUE);
+    sketchStroke(g, [
+      [0.25, 1.64, 0.021, 0.9], [-0.03, 1.80, 0.017, 0.76],
+      [0.03, 2.02, 0.015, 0.72], [-0.25, 2.18, 0.011, 0.58], [-0.38, 2.51, 0, 0],
+    ], [0.42, 0.64, 1]);
+    return fxMesh(scene, g.mesh(scene, "stalker-lightning-fork"), addMat(scene), false);
+  });
+}
+
+/** The same arc grows behind the arrow and loses light after reaching the next body. */
+function chainLeap(scene: Scene, from: Vector3, head: () => Vector3): Fx {
+  const mesh = cloneOf(scene, chainFilament(scene), "stalker-arc-core");
+  mesh.position.copyFrom(from);
+  const fx = new Fx((f) => {
+    const to = head();
+    const x = to.x - from.x, y = to.y - from.y, z = to.z - from.z;
+    const run = Math.hypot(x, z), span = Math.hypot(run, y);
+    const decay = f.fade ** 1.55;
+    mesh.setEnabled(run > 0.12);
+    mesh.rotation.set(Math.atan2(-y, run), Math.atan2(x, z), Math.sin(f.age * 55) * 0.24);
+    mesh.scaling.set(Math.min(1.4, span / 2.5) * (0.55 + 0.45 * decay), 1, span / CHAIN_SPAN);
+    mesh.visibility = decay * (0.93 + 0.07 * Math.cos(f.age * 69));
+    mesh.computeWorldMatrix(true);
+    return true;
+  }, 0.30);
+  fx.own(mesh);
+  return fx;
+}
+
+function lightningContact(scene: Scene, at: Vector3, yaw: number, first: boolean): void {
+  const contact = template(scene, "stalker-lightning-contact", () => {
+    const g = new Geo();
+    sketchStroke(g, [
+      [-0.10, -0.34, 0, 0], [0.11, -0.11, 0.041, 0.8], [0, 0, 0.078, 1],
+      [-0.11, 0.27, 0.045, 1], [0.09, 0.49, 0.033, 0.95], [-0.03, 0.69, 0.025, 0.72],
+      [0.08, 1.16, 0, 0],
+    ]);
+    sketchStroke(g, [
+      [0, 0, 0.021, 0.95], [0.22, 0.27, 0.019, 0.9], [0.20, 0.43, 0.012, 0.67],
+      [0.38, 0.66, 0, 0],
+    ], ARC_BLUE);
+    return fxMesh(scene, g.mesh(scene, "stalker-lightning-contact"), addMat(scene), false);
+  });
+  const mesh = cloneOf(scene, contact, "stalker-lightning-contact");
+  mesh.position.copyFrom(at);
+  mesh.rotation.y = yaw;
+  const duration = first ? 0.14 : 0.09;
+  const size = first ? 1 : 0.58;
+  const fx = new Fx((f) => {
+    const t = clamp01(f.age / duration);
+    mesh.scaling.set(size * (1 - t * 0.6), 1, size * (0.87 + 0.23 * t));
+    mesh.visibility = (1 - t) ** 1.6;
+    return t < 1;
+  });
+  fx.own(mesh);
+  fire(scene, fx);
+}
+
+const LIGHTNING_PREVIEW: ArrowDecor = {
+  ownsImpact: true,
+  born(scene, _arrow, _at, head, src) {
+    return src ? chainLeap(scene, src, head) : null;
+  },
+  flight(scene, _arrow, head) {
+    return ribbonTrail(scene, head, { colour: ARC_BLUE, life: 0.115, height: 0.08, width: 0.13, lift: -0.04, alpha: 0.64 });
+  },
+  impact(scene, at, dx, dz, _born, src) {
+    const first = src === null;
+    const yaw = Math.atan2(dx, dz);
+    lightningContact(scene, at, yaw, first);
+    sparks(scene, at, first ? 12 : 5, ARC_WHITE, ARC_BLUE, {
+      yaw, cone: first ? 0.58 : 0.42, speed: [4, first ? 9 : 6], up: [-0.05, 0.19],
+      life: [0.08, 0.2], length: 0.18, thick: 0.012,
+    });
+  },
+};
 // ── Escape Shot travel ───────────────────────────────────────────────────────────
 
 const ESCAPE_TRAVEL: TravelLook = {
@@ -965,8 +1075,8 @@ export const STALKER_LOOKS: ClassSkillLooks = {
     "skill.snipers_mark.v1": { cast: MARK_CAST, projectileFx: ARROW, area: MARK_AREA },
     "skill.lightning_arrow.v1": {
       cast: bowCast("bow"),
-      projectileFx: LIGHTNING_FX,
-      projectile: arrowLook(LIGHTNING_ARROW),
+      projectileFx: SKILL_VFX_PREVIEW ? LIGHTNING_PREVIEW_FX : LIGHTNING_FX,
+      projectile: arrowLook(SKILL_VFX_PREVIEW ? LIGHTNING_PREVIEW : LIGHTNING_ARROW),
     },
     "skill.rain_of_arrows.v1": {
       cast: RAIN_CAST,
