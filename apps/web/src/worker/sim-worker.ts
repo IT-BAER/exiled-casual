@@ -18,10 +18,11 @@ self.onmessage = (e: MessageEvent) => {
   if (msg.type === "init") {
     // `lab` (DEV, `?play&lab`) rides outside the protocol type: the guard ignores keys it does not know.
     const lab = import.meta.env.DEV ? (raw as { lab?: unknown }).lab : undefined;
-    // `kit` (DEV, `?bot=kit|kit2`) rides the same way.
+    // `kit` and `gems` (DEV, `?bot=kit|kit2&gems=<n>`) ride the same way.
     const kit = import.meta.env.DEV ? (raw as { kit?: unknown }).kit : undefined;
+    const gems = import.meta.env.DEV ? (raw as { gems?: unknown }).gems : undefined;
     const c = new WorkerCore(msg.seed, undefined, msg.characterId, msg.bot === true || msg.tour === true, msg.tour !== true,
-      typeof lab === "string" ? lab : undefined, kit === 1 || kit === 2 ? kit : 0);
+      typeof lab === "string" ? lab : undefined, kit === 1 || kit === 2 ? kit : 0, typeof gems === "number" && Number.isInteger(gems) ? gems : 0);
     // `core` is assigned only once the saved run is in: the interval's `!core`
     // guard is what keeps a pre-hydration world (no skills, empty bar, a dead
     // left click) from ever reaching the renderer as snapshot 1.

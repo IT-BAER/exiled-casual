@@ -435,14 +435,16 @@ export function GameView({
     const bot = import.meta.env?.DEV === true && query.has("bot");
     // `?bot=kit` / `?bot=kit2`: the bot plays its class's whole kit (worker-core's `botKit`).
     const botKit = bot ? ({ kit: 1, kit2: 2 } as Record<string, number>)[query.get("bot") ?? ""] : undefined;
+    // `&gems=<n>`: the gem level that kit fights at, for a fight that has to last.
+    const botGems = botKit ? Math.trunc(Number(query.get("gems"))) || 0 : 0;
     // ?tour: bot mode's open Atlas and no saving, with the player at the controls.
     const tour = import.meta.env?.DEV === true && query.has("tour");
     // `lab` rides beside the protocol's init: sim-worker reads it in a dev build only.
     const labClass = import.meta.env?.DEV === true ? lab : undefined;
     worker.postMessage({
       type: "init", seed: worldSeed(characterId), characterId, bot, tour, ...(labClass ? { lab: labClass } : {}),
-      ...(botKit ? { kit: botKit } : {}),
-    } satisfies ToWorker & { lab?: string; kit?: number });
+      ...(botKit ? { kit: botKit } : {}), ...(botGems > 0 ? { gems: botGems } : {}),
+    } satisfies ToWorker & { lab?: string; kit?: number; gems?: number });
     /** DEV: `window.__lab`, ready once the lab's scene is drawn and its dummies stand in it. */
     const labState: { ready: boolean } | null = labClass ? { ready: false } : null;
     if (import.meta.env?.DEV && labState) (window as unknown as { __lab?: unknown }).__lab = labState;

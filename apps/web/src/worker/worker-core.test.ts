@@ -247,6 +247,20 @@ describe("WorkerCore", () => {
     expect(socketed.every((s) => s.gemLevel === 20)).toBe(true);
   });
 
+  it("bot kit mode holds every gem at the asked level when one is given", async () => {
+    const core = new WorkerCore(42, new MemoryKv(), "", true, true, "class.stalker", 1, 5);
+    await core.hydrate();
+    core.advance(34);
+    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.the_wrackline", x: 0, y: 0 });
+    advanceUntil(core, (s) => s.entities.some((e) => e.kind === "portal"));
+    const portal = core.snapshot()!.entities.find((e) => e.kind === "portal")!;
+    walkTo(core, portal.x, portal.y);
+    core.pushIntent({ kind: "interact", targetId: portal.id });
+    advanceUntil(core, () => core.getArea() === "map");
+
+    expect(core.snapshot()!.skills!.every((s) => s.gemLevel === 5)).toBe(true);
+  });
+
   // A bar-only change must not be invisible to the
   // durable-state fingerprint, so quitting right after a reorder (no kill, no
   // pickup) silently discarded the swap.

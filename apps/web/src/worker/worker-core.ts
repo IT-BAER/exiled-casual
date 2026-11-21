@@ -82,10 +82,12 @@ export class WorkerCore {
    * first six of it (1) or the six from its seventh on (2). 0 = the two lead skills.
    */
   private readonly botKit: 0 | 1 | 2;
+  /** `&gems=<n>` (DEV, kit mode): the gem level the kit fights at; 0 = the level's cap. */
+  private readonly botGems: number;
   /** Rebuilt on every map entry; its bosses decide when the map counts as cleared. */
   private bot: { bot: Bot; bosses: Entity[] } | null = null;
 
-  constructor(seed: number, kv?: KvStore, characterId = "", bot = false, autopilot = bot, lab?: string, botKit: 0 | 1 | 2 = 0) {
+  constructor(seed: number, kv?: KvStore, characterId = "", bot = false, autopilot = bot, lab?: string, botKit: 0 | 1 | 2 = 0, botGems = 0) {
     // The lab starts empty. Monsters and the boss arrive on the numpad spawn
     // keys, so a model, an animation, or an effect can be looked at in peace.
     this.seed = seed;
@@ -96,6 +98,7 @@ export class WorkerCore {
     this.autopilot = autopilot;
     this.lab = lab ? classIdOr(lab) : null;
     this.botKit = botKit;
+    this.botGems = botGems;
     const { sim, world, playerEntity, layout } = createCombatSim(seed, { area: this.area });
     this.sim = sim;
     this.world = world;
@@ -340,7 +343,8 @@ export class WorkerCore {
     if (this.botKit !== 0) {
       // The headless kit pilot's own preparation (playtest.ts): gems at the level's
       // cap, the bag's best pieces worn, the kit socketed. Bot mode never saves.
-      const cap = maxGemLevel(this.world.get<ProgressC>(session, "progress")!.level);
+      const max = maxGemLevel(this.world.get<ProgressC>(session, "progress")!.level);
+      const cap = this.botGems > 0 ? Math.min(max, this.botGems) : max;
       const sk = this.world.get<SkillsC>(session, "skills")!;
       this.world.set<SkillsC>(session, "skills", {
         ...sk, gems: Object.fromEntries(Object.keys(sk.gems).map((id) => [id, { level: cap, xp: 0 }])),
