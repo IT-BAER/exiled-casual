@@ -227,6 +227,26 @@ describe("WorkerCore", () => {
     expect(kv.writes).toBe(writes);
   });
 
+  it("bot kit mode enters a map with the class kit socketed and every gem at the level's cap", async () => {
+    // The lab stands a level 30 character of the class; a classless world owns no class skill.
+    const core = new WorkerCore(42, new MemoryKv(), "", true, true, "class.stalker", 2);
+    await core.hydrate();
+    core.advance(34);
+    core.pushIntent({ kind: "activateMap", atlasNodeId: "node.the_wrackline", x: 0, y: 0 });
+    advanceUntil(core, (s) => s.entities.some((e) => e.kind === "portal"));
+    const portal = core.snapshot()!.entities.find((e) => e.kind === "portal")!;
+    walkTo(core, portal.x, portal.y);
+    core.pushIntent({ kind: "interact", targetId: portal.id });
+    advanceUntil(core, () => core.getArea() === "map");
+
+    const snap = core.snapshot()!;
+    // The second bar leads with the Stalker kit's last three; a level's own grant leads with Piercing Shot.
+    expect(snap.skillBar!.slice(0, 3)).toEqual(["skill.split_arrow.v1", "skill.ice_shot.v1", "skill.blink.v1"]);
+    const socketed = snap.skills!.filter((s) => snap.skillBar!.includes(s.id));
+    expect(socketed.length).toBeGreaterThan(0);
+    expect(socketed.every((s) => s.gemLevel === 20)).toBe(true);
+  });
+
   // A bar-only change must not be invisible to the
   // durable-state fingerprint, so quitting right after a reorder (no kill, no
   // pickup) silently discarded the swap.

@@ -297,11 +297,13 @@ export function refit(g: Game, mode: "caster" | "class" = "caster"): void {
 /**
  * The kit's bar, as a player re-binds it when a skill opens: the first six unlocked
  * kit skills in the five numbered sockets and the free mouse one, move on the left
- * button, the class's free attack on the right.
+ * button, the class's free attack on the right. `from` starts the six that many
+ * skills into the kit, wrapping: six sockets cannot hold a nine-skill kit at once.
  */
-function slotKit(g: Game): void {
+export function slotKit(g: Game, from = 0): void {
   const level = progress(g).level;
-  const kit = KITS[g.classId]!.bar.filter((id) => isUnlocked(SKILLS.get(id)!, level, g.classId));
+  const unlocked = KITS[g.classId]!.bar.filter((id) => isUnlocked(SKILLS.get(id)!, level, g.classId));
+  const kit = [...unlocked.slice(from), ...unlocked.slice(0, from)];
   const bar: (string | null)[] = new Array(SKILL_SLOT_COUNT).fill(null);
   const sockets = [0, 1, 2, 3, 4, MOUSE_SLOT_BASE + 1];
   kit.slice(0, sockets.length).forEach((id, i) => { bar[sockets[i]!] = id; });

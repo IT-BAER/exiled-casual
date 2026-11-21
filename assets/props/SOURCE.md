@@ -58,6 +58,15 @@ palette (its own lichen is lilac); the vaal set wears
 `apps/web/public/textures/tilesets/vaal_stone/wall_color.jpg` as a palette,
 except the bowl, which keeps its paint.
 
+## Held weapons
+
+Donors for `tools/prep_held_weapons.py` (its docstring lists the hammer, bow and
+sword meshes and their materials).
+
+| use | source file | asset | author | licence |
+|---|---|---|---|---|
+| broadsword blade steel | `source/mat-brushed-steel.blend` | Brushed Steel Metal, material (`e973ba88-12d5-4474-be7e-91ec9aa0712f`) | Astra Virgo | royalty_free |
+
 ## Hideout set
 
 Free BlenderKit assets, appended and re-dressed by `tools/build_props.py`, placed

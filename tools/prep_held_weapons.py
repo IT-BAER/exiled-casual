@@ -19,6 +19,8 @@ closes on at the origin.
 * Sword: BlenderKit "Stylized Sword" (bd139cc8-a102-4e1f-ade9-0d155cdafc8d,
   royalty_free, Sebastian Villanueva). Its twisted grip is 6 cm thick and 7 cm
   long, so it is thinned to the fist and lengthened to hold one; the pommel rides down.
+  The blade alone is re-dressed in BlenderKit "Brushed Steel Metal"
+  (e973ba88-12d5-4474-be7e-91ec9aa0712f, royalty_free, Astra Virgo), polished.
 
 Every source surface is baked, colour and metal/roughness, into one 512 atlas
 over a smart-projected UV (the sword keeps its own single UV), so each weapon
@@ -78,9 +80,16 @@ SWORD_AXIS_Z = 0.032
 SWORD_GRIP_LONG = 1.3        # 7 cm grip -> 9 cm, one fist between guard and pommel
 SWORD_GRIP_THIN = 0.45       # 60 mm -> 27 mm, ~30 mm once fitted
 SWORD_POMMEL_THIN = 0.6
-# The source blade is metallic 1 at roughness ~0.4, black without an environment
-# to reflect: scaled to the hammer's iron, roughness floored.
+# Grip, guard and pommel keep the hammer's iron (metallic scaled, roughness
+# floored). The blade, its own UV strip (v under the guard islands' bottom
+# edge), is polished steel off BlenderKit "Brushed Steel Metal" for the sky
+# environment to shine in. A position mask cuts through the guard's ornaments.
 SWORD_ROUGH_FLOOR = 0.5
+SWORD_BLADE_V = (0.2850, 0.2875)
+SWORD_BLADE_ROUGH = (0.16, 0.34)   # the steel map's 0.23..0.26 stretched to this
+SWORD_BLADE_SOURCE = 0.2           # share of the painted source colour kept on the blade
+SWORD_STEEL_GAIN = 1.8             # the map's 0.29 linear -> ~0.52, polished steel's reflectance
+SWORD_GRAIN_TILE = 0.12            # metres of blade per texture repeat, grain along it
 
 
 def clear():
@@ -462,22 +471,75 @@ def build_sword():
     nodes = me.materials[0].node_tree.nodes
     base, metal, rough = (next(n for n in nodes if n.type == "TEX_IMAGE" and n.image.name == f"T_Sword_low_{k}")
                           for k in ("BaseColor.png", "Metallic.jpg", "Roughness.jpg"))
+    steel = append("mat-brushed-steel.blend", images=["Steel N_BaseColor.jpg", "Steel N_Roughness.jpg"]).images
+
+    def steel_tex(t, img):
+        """The steel map over object space, its grain (the image's u) along the blade (+Z)."""
+        coord = node(t, "ShaderNodeTexCoord")
+        sep = node(t, "ShaderNodeSeparateXYZ")
+        t.links.new(sep.inputs["Vector"], coord.outputs["Object"])
+        uv = node(t, "ShaderNodeCombineXYZ")
+        t.links.new(uv.inputs["X"], sep.outputs["Z"])
+        t.links.new(uv.inputs["Y"], sep.outputs["X"])
+        scale = node(t, "ShaderNodeVectorMath", operation="SCALE")
+        scale.inputs["Scale"].default_value = 1 / SWORD_GRAIN_TILE
+        t.links.new(scale.inputs[0], uv.outputs["Vector"])
+        tex = node(t, "ShaderNodeTexImage", image=img)
+        t.links.new(tex.inputs["Vector"], scale.outputs["Vector"])
+        return tex.outputs["Color"]
+
+    def blade_mask(t):
+        """1 on the blade's own UV strip, below the guard's islands (atlas rows 366+ of 512)."""
+        coord = node(t, "ShaderNodeTexCoord")
+        sep = node(t, "ShaderNodeSeparateXYZ")
+        t.links.new(sep.inputs["Vector"], coord.outputs["UV"])
+        step = node(t, "ShaderNodeMapRange")
+        step.inputs["From Min"].default_value, step.inputs["From Max"].default_value = SWORD_BLADE_V
+        step.inputs["To Min"].default_value, step.inputs["To Max"].default_value = 1.0, 0.0
+        t.links.new(step.inputs["Value"], sep.outputs["Y"])
+        return step.outputs["Result"]
 
     def colour(mat, src):
-        emit_into(mat, mat.node_tree.nodes[base.name].outputs["Color"])
+        t = mat.node_tree
+        gain = node(t, "ShaderNodeVectorMath", operation="SCALE")
+        gain.inputs["Scale"].default_value = SWORD_STEEL_GAIN
+        t.links.new(gain.inputs[0], steel_tex(t, steel[0]))
+        painted = node(t, "ShaderNodeMix", data_type="RGBA")
+        painted.inputs["Factor"].default_value = SWORD_BLADE_SOURCE
+        t.links.new(painted.inputs[6], gain.outputs["Vector"])
+        t.links.new(painted.inputs[7], t.nodes[base.name].outputs["Color"])
+        pick = node(t, "ShaderNodeMix", data_type="RGBA")
+        t.links.new(pick.inputs["Factor"], blade_mask(t))
+        t.links.new(pick.inputs[6], t.nodes[base.name].outputs["Color"])
+        t.links.new(pick.inputs[7], painted.outputs[2])
+        emit_into(mat, pick.outputs[2])
 
     def orm(mat, src):
         t = mat.node_tree
+        mask = blade_mask(t)
         comb = node(t, "ShaderNodeCombineColor")
         comb.inputs["Red"].default_value = 1.0
         floor = node(t, "ShaderNodeMath", operation="MAXIMUM")
         floor.inputs[1].default_value = SWORD_ROUGH_FLOOR
         t.links.new(floor.inputs[0], t.nodes[rough.name].outputs["Color"])
-        t.links.new(comb.inputs["Green"], floor.outputs["Value"])
+        polish = node(t, "ShaderNodeMapRange")
+        polish.inputs["From Min"].default_value = 0.23
+        polish.inputs["From Max"].default_value = 0.26
+        polish.inputs["To Min"].default_value, polish.inputs["To Max"].default_value = SWORD_BLADE_ROUGH
+        t.links.new(polish.inputs["Value"], steel_tex(t, steel[1]))
+        r = node(t, "ShaderNodeMix", data_type="FLOAT")
+        t.links.new(r.inputs["Factor"], mask)
+        t.links.new(r.inputs[2], floor.outputs["Value"])
+        t.links.new(r.inputs[3], polish.outputs["Result"])
+        t.links.new(comb.inputs["Green"], r.outputs[0])
         iron = node(t, "ShaderNodeMath", operation="MULTIPLY")
         iron.inputs[1].default_value = IRON_METALLIC
         t.links.new(iron.inputs[0], t.nodes[metal.name].outputs["Color"])
-        t.links.new(comb.inputs["Blue"], iron.outputs["Value"])
+        m = node(t, "ShaderNodeMix", data_type="FLOAT")
+        t.links.new(m.inputs["Factor"], mask)
+        t.links.new(m.inputs[2], iron.outputs["Value"])
+        m.inputs[3].default_value = 1.0
+        t.links.new(comb.inputs["Blue"], m.outputs[0])
         emit_into(mat, comb.outputs["Color"])
 
     finish(obj, f"sword-{BUDGET}-v1", [("colour", colour, "sRGB"), ("orm", orm, "Non-Color")], own_uv=True)

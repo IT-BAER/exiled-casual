@@ -85,9 +85,13 @@ function faceDirection(face: number, u: number, v: number): Vector3 {
 }
 
 /** Linear colour at a direction: `ground` at straight down, `sky` at straight
- *  up, smoothstepped across the sphere between. */
-function colorAt(dir: Vector3, sky: Color3, ground: Color3): Color3 {
-  return Color3.Lerp(ground, sky, smoothstep((dir.y + 1) / 2));
+ *  up, smoothstepped across the sphere between, plus `band` (if any) as a
+ *  gaussian strip just above the horizon. */
+function colorAt(dir: Vector3, sky: Color3, ground: Color3, band?: Color3): Color3 {
+  const c = Color3.Lerp(ground, sky, smoothstep((dir.y + 1) / 2));
+  if (!band) return c;
+  const t = (dir.y - BAND_Y) / BAND_WIDTH;
+  return c.add(band.scale(Math.exp(-t * t)));
 }
 
 export interface SkyEnvironmentOptions {
@@ -95,6 +99,29 @@ export interface SkyEnvironmentOptions {
   ground: Color3;
   /** `scene.environmentIntensity`. Defaults to 1. */
   intensity?: number;
+  /** A bright strip above the horizon: what a polished face reflects as a streak. */
+  band?: Color3;
+  /** Texture name; a previous cube of this name is disposed. Defaults to the sky's. */
+  name?: string;
+  /** false builds the cube without making it the scene's environment. */
+  assign?: boolean;
+}
+
+/** The polished band's height (dir.y) and gaussian half-width. */
+const BAND_Y = 0.18;
+const BAND_WIDTH = 0.14;
+const POLISH_NAME = "polish-environment";
+/** A studio strip light over the neutral sky: the gradient alone gives a
+ *  polished blade one flat grey, nothing for the eye to read as shine. */
+const POLISH_BAND = new Color3(0.9, 0.86, 0.8);
+
+/** The reflection cube a polished held weapon reads instead of the scene's
+ *  gradient. One per scene, built on first use: after the wardrobe import. */
+export function polishedReflection(scene: Scene): BaseTexture {
+  return (
+    scene.textures.find((t) => t.name === POLISH_NAME) ??
+    buildSkyEnvironment(scene, { sky: SKY_COLOR, ground: GROUND_COLOR, band: POLISH_BAND, name: POLISH_NAME, assign: false })
+  );
 }
 
 /**
@@ -105,10 +132,10 @@ export interface SkyEnvironmentOptions {
  * lookups elsewhere in this file's neighbours.
  */
 export function buildSkyEnvironment(scene: Scene, opts: SkyEnvironmentOptions): BaseTexture {
-  const previous = scene.textures.find((t) => t.name === NAME);
+  const { sky, ground, band, intensity = 1, name = NAME, assign = true } = opts;
+  const previous = scene.textures.find((t) => t.name === name);
   previous?.dispose();
 
-  const { sky, ground, intensity = 1 } = opts;
   const size = FACE_SIZE;
   const faces: Uint8Array[] = [];
   // Per-texel direction, colour and raw (unnormalised) solid-angle weight,
@@ -124,7 +151,7 @@ export function buildSkyEnvironment(scene: Scene, opts: SkyEnvironmentOptions): 
         const u = (2 * (x + 0.5)) / size - 1;
         const v = (2 * (y + 0.5)) / size - 1;
         const dir = faceDirection(face, u, v).normalize();
-        const color = colorAt(dir, sky, ground);
+        const color = colorAt(dir, sky, ground, band);
         // The projection from a flat cube face to the sphere is not uniform:
         // texels nearer a face's centre subtend more solid angle than the
         // corners. `(2/size)^2` is the flat texel's own area in uv space, and
@@ -195,14 +222,16 @@ export function buildSkyEnvironment(scene: Scene, opts: SkyEnvironmentOptions): 
     internal.isReady = true;
     texture = new BaseTexture(scene, internal);
   }
-  texture.name = NAME;
+  texture.name = name;
   // Linear data written above, and this says so: get it wrong and the whole
   // scene's ambient shifts, since Babylon otherwise assumes sRGB and decodes
   // the bytes a second time.
   texture.gammaSpace = false;
   texture.sphericalPolynomial = SphericalPolynomial.FromHarmonics(sh);
 
-  scene.environmentTexture = texture;
-  scene.environmentIntensity = intensity;
+  if (assign) {
+    scene.environmentTexture = texture;
+    scene.environmentIntensity = intensity;
+  }
   return texture;
 }
