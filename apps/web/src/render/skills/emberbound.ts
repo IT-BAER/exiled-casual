@@ -2,7 +2,7 @@ import { Color3, FresnelParameters, Material, MeshBuilder, PointLight, Quaternio
 import type { Mesh, Scene, TransformNode } from "@babylonjs/core";
 import {
   addMat, blendMat, clamp01, cloneOf, core, easeOut, embers, fire, fissure, flameTrailPatch, Fx, fxMesh, Geo, kitFlash, kitPools,
-  landingImpact, meteorBody, puff, pulseRingTemplate, ragged, rand, rgba, ribbonTrail, scorch, shockRing, skyFall, sparks,
+  landingImpact, meteorBody, puff, pulseRingTemplate, ragged, rand, rgba, ribbonTrail, scorch, shockRing, skyFall, solidMat, sparks,
   TAU, template, throwChunks, type Rgb,
 } from "./kit";
 import { orbLight } from "../skill-fx";
@@ -23,6 +23,7 @@ const DEEP: Rgb = [0.85, 0.2, 0.04];
 const SUN: Rgb = [1, 0.62, 0.18];
 const CURSE: Rgb = [1, 0.4, 0.06];
 const ASH: Rgb = [0.3, 0.28, 0.27];
+const SKILL_VFX_PREVIEW = import.meta.env.DEV && import.meta.env.VITE_SKILL_VFX_PREVIEW === "1";
 
 const floorAt = (x: number, z: number, y = 0) => new Vector3(x, y, z);
 const posOf = (b: ActorRef) => b.node.getAbsolutePosition();
@@ -723,6 +724,127 @@ const FALL_DIR = new Vector3(-0.22, 1, -0.18).normalize();
 const FALL_LEN = 11;
 const FALL_SECONDS = 0.5;
 const FWD = new Vector3(0, 0, 1);
+const FALL_YAW = Math.atan2(-FALL_DIR.x, -FALL_DIR.z);
+const SKYFIRE_GOLD: Rgb = [1, 0.68, 0.23];
+
+function skyfireFootprint(scene: Scene): Mesh {
+  return template(scene, "eb-skyfire-footprint", () => {
+    const g = new Geo();
+    const rnd = seeded(27);
+    for (let start = 0; start < TAU - 0.3;) {
+      const end = Math.min(TAU - 0.12, start + 0.24 + rnd() * 0.53);
+      const width = 0.045 + rnd() * 0.035;
+      for (let i = 0; i <= 6; i++) {
+        const u = i / 6;
+        const yaw = start + (end - start) * u;
+        const heat = Math.sin(Math.PI * u) * (0.4 + rnd() * 0.5);
+        const r = 0.96 + rnd() * 0.04;
+        const x = Math.sin(yaw), z = Math.cos(yaw);
+        const inner = g.vert(x * (r - width), 0, z * (r - width), rgba(DEEP, 0));
+        g.vert(x * r, 0, z * r, rgba(FIRE, heat));
+        g.vert(x, 0, z, rgba(DEEP, 0));
+        if (i) {
+          g.quad(inner - 3, inner - 2, inner, inner + 1);
+          g.quad(inner - 2, inner - 1, inner + 1, inner + 2);
+        }
+      }
+      start = end + 0.16 + rnd() * 0.23;
+    }
+    return fxMesh(scene, g.mesh(scene, "eb-skyfire-footprint"), addMat(scene), false);
+  });
+}
+
+function skyfireRock(scene: Scene): Mesh {
+  return template(scene, "eb-skyfire-rock", () => {
+    const g = new Geo();
+    const rnd = seeded(33);
+    const sides = 7;
+    const mantle: Rgb[] = [[0.18, 0.046, 0.018], [0.35, 0.08, 0.025], [0.62, 0.16, 0.04], [0.96, 0.38, 0.08]];
+    const rings = [[0, -0.46], [0.24, -0.27], [0.33, 0], [0.24, 0.24], [0, 0.43]]
+      .map(([radius, z], row) => Array.from({ length: sides }, (_, i) => {
+        const a = (i + row * 0.36) / sides * TAU;
+        const r = radius! * (0.7 + rnd() * 0.46);
+        return [r * Math.cos(a) + row * 0.019, r * Math.sin(a), z!] as const;
+      }));
+    for (let j = 1; j < rings.length; j++) {
+      for (let i = 0; i < sides; i++) {
+        const next = (i + 1) % sides;
+        const back = rings[j - 1]!, front = rings[j]!;
+        const triangles = [[back[i]!, back[next]!, front[i]!], [back[next]!, front[next]!, front[i]!]];
+        for (const triangle of triangles) {
+          const c = mantle[Math.floor(rnd() ** 1.8 * mantle.length)]!;
+          g.idx.push(...triangle.map(([x, y, z]) => g.vert(x, y, z, rgba(c, 1))));
+        }
+      }
+    }
+    const m = fxMesh(scene, g.mesh(scene, "eb-skyfire-rock"), solidMat(scene, [1, 1, 1]), false);
+    m.hasVertexAlpha = false;
+    return m;
+  });
+}
+
+/** Wrapped flame ribbons with broken edges make the hot wake read at a distance. */
+function skyfireWake(scene: Scene): Mesh {
+  return template(scene, "eb-skyfire-wake", () => {
+    const g = new Geo();
+    const rnd = seeded(17);
+    for (let i = 0; i < 7; i++) {
+      const phase = i / 7 * TAU;
+      const end = 0.44 + rnd() * 0.56;
+      const width = 0.1 + rnd() * 0.16;
+      const twist = (rnd() - 0.5) * 3;
+      for (let j = 0; j <= 12; j++) {
+        const u = j / 12;
+        const z = -u * end;
+        const a = phase + twist * u + Math.sin(u * 15 + phase) * 0.31;
+        const jitter = 0.8 + rnd() * 0.35;
+        const taper = (1 - u) ** 1.05;
+        const r = (0.14 + 0.16 * Math.sin(Math.PI * u)) * taper * jitter;
+        const w = width * taper * jitter;
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        const dx = Math.sin(a) * w, dy = -Math.cos(a) * w;
+        const heat = taper * jitter * 0.85;
+        const e = g.vert(x - dx, y - dy, z, rgba(DEEP, 0));
+        g.vert(x, y, z, rgba(u < 0.24 ? SKYFIRE_GOLD : FIRE, heat));
+        g.vert(x + dx, y + dy, z, rgba(DEEP, 0));
+        if (j) {
+          g.quad(e - 3, e - 2, e, e + 1);
+          g.quad(e - 2, e - 1, e + 1, e + 2);
+        }
+      }
+    }
+    return fxMesh(scene, g.mesh(scene, "eb-skyfire-wake"), addMat(scene));
+  });
+}
+
+function skyfireMeteor(scene: Scene) {
+  const body = cloneOf(scene, skyfireRock(scene), "eb-skyfire-rock");
+  const wake = cloneOf(scene, skyfireWake(scene), "eb-wake-skyfire");
+  wake.parent = body;
+  return { body, wake };
+}
+
+function skyfireContact(scene: Scene): Mesh {
+  return template(scene, "eb-skyfire-contact", () => {
+    const g = new Geo();
+    const rnd = seeded(49);
+    for (let i = 0; i < 11; i++) {
+      const yaw = (i / 10 - 0.5) * 4.5 + (rnd() - 0.5) * 0.44;
+      const x = Math.sin(yaw), z = Math.cos(yaw);
+      const reach = (0.8 + rnd() * 0.9) * (0.6 + 0.4 * Math.cos(yaw * 0.5));
+      const lift = rnd() * 0.52;
+      const width = 0.055 + rnd() * 0.11;
+      const base = g.vert(x * 0.04, 0.025, z * 0.04, rgba(SKYFIRE_GOLD, 0.8));
+      g.vert(x * 0.24 - z * width, lift * 0.35, z * 0.24 + x * width, rgba(FIRE, 0.25));
+      g.vert(x * 0.4, lift * 0.7, z * 0.4, rgba(SKYFIRE_GOLD, 0.88));
+      g.vert(x * 0.29 + z * width, lift * 0.45, z * 0.29 - x * width, rgba(FIRE, 0.26));
+      g.vert(x * reach, lift, z * reach, rgba(DEEP, 0));
+      g.idx.push(base, base + 1, base + 2, base, base + 2, base + 3,
+        base + 1, base + 4, base + 2, base + 2, base + 4, base + 3);
+    }
+    return fxMesh(scene, g.mesh(scene, "eb-skyfire-contact"), addMat(scene));
+  });
+}
 
 interface StormBatch { now: number; xs: number[]; zs: number[]; total: number; landed: number }
 const stormBatch = new WeakMap<Scene, StormBatch>();
@@ -755,9 +877,10 @@ function landStorm(id: number): void {
 /** The sky going dark over the storm: a cloud shadow on the floor, smoke rolling overhead lit red from inside. */
 function storm(scene: Scene, b: StormBatch): Fx {
   const shadow = cloneOf(scene, stormShadow(scene), "eb-storm-shadow");
-  const edge = cloneOf(scene, pulseRingTemplate(scene, DEEP, "eb-storm-edge", false), "eb-storm-edge");
+  const edge = SKILL_VFX_PREVIEW ? null
+    : cloneOf(scene, pulseRingTemplate(scene, DEEP, "eb-storm-edge", false), "eb-storm-edge");
   shadow.setEnabled(false);
-  edge.setEnabled(false);
+  edge?.setEnabled(false);
   const pools = kitPools(scene);
   let cx = 0, cz = 0, R = 4.3, ending = -1, cloud = 0, placed = false;
   const fx = new Fx((f, dt) => {
@@ -770,11 +893,13 @@ function storm(scene: Scene, b: StormBatch): Fx {
     }
     if (ending < 0 && (b.landed >= b.total || f.age > 4)) ending = f.age;
     const k = clamp01(f.age / 0.35) * (ending < 0 ? 1 : clamp01(1 - (f.age - ending - 0.3) / 0.6));
+    const alive = ending < 0 || f.age - ending < 0.9;
     shadow.setEnabled(true);
-    edge.setEnabled(true);
     shadow.position.set(cx, 0.015, cz);
     shadow.scaling.set(R, 1, R);
-    shadow.visibility = k;
+    shadow.visibility = SKILL_VFX_PREVIEW ? 0.52 * k : k;
+    if (!edge) return alive;
+    edge.setEnabled(true);
     edge.position.set(cx, 0.02, cz);
     edge.scaling.set(R * 0.92, 0.6, R * 0.92);
     edge.visibility = 0.35 * k * (0.8 + 0.2 * Math.sin(f.age * 5));
@@ -791,10 +916,10 @@ function storm(scene: Scene, b: StormBatch): Fx {
           : { r: 0.1, g: 0.08, b: 0.08, a: 0.3, r1: 0.16, g1: 0.13, b1: 0.12 }),
       });
     }
-    return ending < 0 || f.age - ending < 0.9;
+    return alive;
   });
   fx.own(shadow);
-  fx.own(edge);
+  if (edge) fx.own(edge);
   return fx;
 }
 
@@ -821,6 +946,7 @@ function shedMeteor(scene: Scene, at: Vector3): void {
 function firestormWarn(ctx: LookContext, a: AreaState): FxHandle<AreaState> {
   const scene = ctx.scene;
   joinStorm(ctx, a);
+  if (SKILL_VFX_PREVIEW) return skyfireWarn(scene, a);
   const total = Math.max(a.impactIn, 0.05);
   const glow = cloneOf(scene, warnDisc(scene), "eb-warn");
   const rim = cloneOf(scene, pulseRingTemplate(scene, FIRE, "eb-warn-rim", false), "eb-warn-rim");
@@ -868,12 +994,43 @@ function firestormWarn(ctx: LookContext, a: AreaState): FxHandle<AreaState> {
   };
 }
 
+function skyfireWarn(scene: Scene, a: AreaState): FxHandle<AreaState> {
+  const footprint = cloneOf(scene, skyfireFootprint(scene), "eb-skyfire-footprint");
+  const total = Math.max(a.impactIn, 0.05);
+  const look = new Quaternion();
+  Quaternion.FromUnitVectorsToRef(FWD, FALL_DIR.scale(-1), look);
+  const spin = new Quaternion();
+  footprint.rotation.y = a.index * 1.73;
+  let meteor: ReturnType<typeof skyfireMeteor> | undefined;
+  return {
+    update(c, s) {
+      const p = 1 - clamp01(s.impactIn / total);
+      footprint.position.set(s.x, 0.023, s.y);
+      footprint.scaling.set(s.radius, 1, s.radius);
+      footprint.visibility = 0.26 + 0.34 * p * p;
+      if (s.impactIn > FALL_SECONDS) return;
+      meteor ??= skyfireMeteor(scene);
+      const { body, wake } = meteor;
+      const d = clamp01(s.impactIn / FALL_SECONDS) * FALL_LEN;
+      body.position.set(s.x + FALL_DIR.x * d, FALL_DIR.y * d, s.y + FALL_DIR.z * d);
+      Quaternion.RotationAxisToRef(FWD, c.now * 4 + s.index, spin);
+      look.multiplyToRef(spin, body.rotationQuaternion ??= new Quaternion());
+      wake.scaling.z = Math.min(4.4, FALL_LEN - d + 0.35);
+    },
+    dispose() {
+      footprint.dispose();
+      meteor?.body.dispose();
+    },
+  };
+}
+
 /**
  * A meteor striking: the kit meteor's landing, recomposed so no part of it is
  * white-hot. Additive white cores stacked on a bright floor flash as white balls;
  * every core and tongue here starts at gold and cools to red.
  */
 function meteorBlast(scene: Scene, at: Vector3, blast: number): Fx {
+  if (SKILL_VFX_PREVIEW) return skyfireBlast(scene, at, blast);
   const fx = new Fx(() => false);
   const gold: Rgb = [1, 0.66, 0.24];
   const pools = kitPools(scene);
@@ -907,7 +1064,48 @@ function meteorBlast(scene: Scene, at: Vector3, blast: number): Fx {
   fx.child(shockRing(scene, at, { radius: blast * 1.25, duration: 0.4, colour: FIRE, lip: 0.5, dust: 10, flash: 0 }));
   fx.child(scorch(scene, at, { radius: blast * 0.75, glow: FIRE, hold: 2.2 }));
   fx.child(fissure(scene, at, { radius: blast * 0.9, colour: FIRE, hold: 1.2 }));
-  for (let i = 0; i < 6; i++) puff(scene, at.x, at.y, at.z, { size: 1, drift: rand(2, 3.5), rise: 0.3 });
+  for (let i = 0; i < 6; i++) {
+    puff(scene, at.x, at.y, at.z, { size: 1, drift: rand(2, 3.5), rise: 0.3 });
+  }
+  return fx;
+}
+
+function skyfireBlast(scene: Scene, at: Vector3, blast: number): Fx {
+  const flare = cloneOf(scene, skyfireContact(scene), "eb-skyfire-contact");
+  const scale = blast / 2.4;
+  flare.position.set(at.x, at.y + 0.045, at.z);
+  flare.rotation.y = FALL_YAW;
+  kitFlash(scene, at, 0.8, FIRE);
+  const origin = floorAt(at.x, at.z, at.y + 0.18);
+  sparks(scene, origin, 15, SKYFIRE_GOLD, DEEP, {
+    yaw: FALL_YAW, cone: 1.7, speed: [6.6 * scale, 9 * scale], up: [0.09, 0.28], gravity: -11,
+    life: [0.19, 0.33], length: 0.28, thick: 0.039,
+  });
+  throwChunks(scene, "molten", at, { count: 5, speed: [1.5, 3.8], up: [1.1, 2.8], size: [0.065, 0.14] });
+  embers(scene, origin, 7, FIRE, DEEP, {
+    radius: blast * 0.32, life: [0.46, 0.82], size: 0.055, rise: [0.1, 0.36], gravity: 0, delay: 0.08,
+  });
+  for (let i = 0; i < 5; i++) {
+    const yaw = FALL_YAW + (i - 2) * 1.05 + rand(-0.15, 0.15);
+    const r = blast * rand(0.1, 0.24);
+    puff(scene, at.x + Math.sin(yaw) * r, at.y, at.z + Math.cos(yaw) * r, {
+      yaw, delay: rand(0.1, 0.17), size: Math.min(0.73, blast * 0.29), drift: rand(1, 1.65),
+      rise: rand(0.015, 0.045), life: rand(0.48, 0.76), colour: ASH, alpha: 0.36,
+    });
+  }
+  const fx = new Fx((f) => {
+    const t = f.age / 0.15;
+    const spread = easeOut(t);
+    flare.scaling.set(scale * (0.58 + spread * 0.46), scale * (1.15 - spread * 0.72), scale * (0.5 + spread));
+    flare.visibility = clamp01(1 - t * t);
+    return t < 1;
+  });
+  fx.own(flare);
+  fx.child(scorch(scene, at, { radius: blast * 0.58, hold: 1.5, fade: 1.5, alpha: 0.72 }));
+  fx.child(fissure(scene, at, {
+    radius: blast * 0.61, branches: 5, yaw: FALL_YAW, spread: 2.5, hold: 0.17, grow: 0.09, fade: 1.15,
+    colour: FIRE, width: 0.12, embers: 0,
+  }));
   return fx;
 }
 
@@ -921,6 +1119,15 @@ function firestormImpact(ctx: LookContext, a: AreaState): BurstHandle {
   if (a.index > 0) return burst(meteorBlast(scene, at, blast));
   // The first lands as it is called (no warning time): it streaks the last few metres in.
   const fx = new Fx(() => false);
+  if (SKILL_VFX_PREVIEW) {
+    const { body, wake } = skyfireMeteor(scene);
+    fx.child(skyFall(scene, at.add(FALL_DIR.scale(5)), at, {
+      speed: 60, body: () => body, wakeLength: 0, motes: 0, stick: 0, spin: 4,
+      onFly: (p) => { wake.scaling.z = Math.min(4.4, 5.35 - p.y / FALL_DIR.y); },
+      onLand: () => fx.child(meteorBlast(scene, at, blast)),
+    }));
+    return burst(fx);
+  }
   fx.child(skyFall(scene, at.add(FALL_DIR.scale(5)), at, {
     speed: 60, body: meteorBody(0.5, FIRE), wake: FIRE, wakeLength: 3, wakeWidth: 0.65, motes: 3, stick: 0,
     onLand: () => fx.child(meteorBlast(scene, at, blast)),
