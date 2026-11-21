@@ -433,13 +433,16 @@ export function GameView({
     let gameMsSent = false;
     const query = new URLSearchParams(window.location.search);
     const bot = import.meta.env?.DEV === true && query.has("bot");
+    // `?bot=kit` / `?bot=kit2`: the bot plays its class's whole kit (worker-core's `botKit`).
+    const botKit = bot ? ({ kit: 1, kit2: 2 } as Record<string, number>)[query.get("bot") ?? ""] : undefined;
     // ?tour: bot mode's open Atlas and no saving, with the player at the controls.
     const tour = import.meta.env?.DEV === true && query.has("tour");
     // `lab` rides beside the protocol's init: sim-worker reads it in a dev build only.
     const labClass = import.meta.env?.DEV === true ? lab : undefined;
     worker.postMessage({
       type: "init", seed: worldSeed(characterId), characterId, bot, tour, ...(labClass ? { lab: labClass } : {}),
-    } satisfies ToWorker & { lab?: string });
+      ...(botKit ? { kit: botKit } : {}),
+    } satisfies ToWorker & { lab?: string; kit?: number });
     /** DEV: `window.__lab`, ready once the lab's scene is drawn and its dummies stand in it. */
     const labState: { ready: boolean } | null = labClass ? { ready: false } : null;
     if (import.meta.env?.DEV && labState) (window as unknown as { __lab?: unknown }).__lab = labState;
@@ -699,14 +702,17 @@ export function GameView({
             mapBaseIdForNode(n.id) === base &&
             isNodeReachable(graph, snap.completedNodes, n.id))
           .sort((a, b) => atlasNodeTier(graph, a.id) - atlasNodeTier(graph, b.id));
-        const node = candidates.find((n) =>
-          stones.some((st) => st.waystone!.tier >= atlasNodeTier(graph, n.id)));
+        // `&tier=<n>`: a stone of at least that tier, for a place harder than its node asks.
+        const floor = Number(new URLSearchParams(window.location.search).get("tier")) || 0;
+        const opens = (st: (typeof stones)[number], n: (typeof graph)[number]): boolean =>
+          st.waystone!.tier >= Math.max(floor, atlasNodeTier(graph, n.id));
+        const node = candidates.find((n) => stones.some((st) => opens(st, n)));
         if (!node) {
           console.warn(`?map: no reachable "${base}" node this character can open`);
           harness = "done";
           return;
         }
-        const stone = stones.find((st) => st.waystone!.tier >= atlasNodeTier(graph, node.id))!;
+        const stone = stones.find((st) => opens(st, node))!;
         console.info("?map: opening", node.id, "tier", atlasNodeTier(graph, node.id), "with stone tier", stone.waystone!.tier);
         // `worker`, not `workerRef.current`: this runs from THIS worker's own
         // message handler, and under StrictMode the ref has already been
