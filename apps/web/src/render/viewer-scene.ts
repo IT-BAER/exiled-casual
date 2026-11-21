@@ -1066,6 +1066,12 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   // does not offer, or playing a clip, from the console.
   if (import.meta.env.DEV) {
     (window as unknown as Record<string, unknown>).__viewerScene = viewer;
+    // A reference clip's skeleton beside the character: `__reference("basebow-run_bow_01")`, or `?viewer&ref=<name>`.
+    const reference = async (name: string | null, opts?: import("../dev/reference-skeleton").ReferenceOptions) =>
+      (await import("../dev/reference-skeleton")).showReference(scene, () => host, name, opts);
+    (window as unknown as Record<string, unknown>).__reference = reference;
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) void reference(ref).catch((e) => console.warn(e));
   }
   return viewer;
 }

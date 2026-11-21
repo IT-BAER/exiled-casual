@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
@@ -47,6 +48,13 @@ function playtestCapture(): Plugin {
     apply: "serve",
     configureServer(server) {
       server.middlewares.use("/__capture", captureHandler(root, review));
+      // Reference clips for the viewer overlay (`dev/reference-skeleton.ts`), read from the gitignored review/poe2-ref/.
+      server.middlewares.use("/__ref", (req, res) => {
+        const file = join(review, "poe2-ref", basename(decodeURIComponent((req.url ?? "").split("?")[0]!)));
+        if (!file.endsWith(".json") || !existsSync(file)) { res.statusCode = 404; res.end(); return; }
+        res.setHeader("Content-Type", "application/json");
+        res.end(readFileSync(file));
+      });
     },
   };
 }

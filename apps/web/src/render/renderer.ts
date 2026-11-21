@@ -15,7 +15,7 @@ import { animateActor, keepGroundBlobFlat, makeMesh, setDangerGlow, setHitFlash,
 import { deviceBeckon } from "./props";
 import type { MeshKind } from "./meshes";
 import type { Tier } from "./rim";
-import { POE2_RUN, rigOf } from "./rig";
+import { ORIGINAL_MOVEMENT, POE2_RUN, rigOf } from "./rig";
 import type { ReactionClip, RigClip } from "./rig";
 import { looksForEquipment } from "./gear-looks";
 import { characterClass } from "@exiled/content-runtime";
@@ -285,6 +285,11 @@ const TURN_MAX_RATE = 12;
  * in 0.16 s, so the body keeps up with the sim's own heading (a 180 in five ticks).
  */
 const PLAYER_TURN = POE2_RUN ? { omega: 40, max: 20 } : { omega: TURN_OMEGA, max: TURN_MAX_RATE };
+/**
+ * The PoE2 run and the original movement both carry PoE2's own 21 degree lean; pitching the
+ * root on top tips the trailing foot up and leans the run 3 degrees past its fit.
+ */
+const PLAYER_RUN_PITCH = POE2_RUN || ORIGINAL_MOVEMENT ? 0 : RUN_PITCH;
 
 /**
  * Where the killing blow came FROM, in world space.
@@ -1430,7 +1435,7 @@ export class SnapshotRenderer {
     // which is a runner falling out of his own corner.
     const raw = -(yawStep / dt) * ROLL_PER_TURN_RATE * runFrac;
     const rollTo = Math.max(-MAX_ROLL, Math.min(MAX_ROLL, raw));
-    const pitchTo = RUN_PITCH * runFrac;
+    const pitchTo = (kind === "player" ? PLAYER_RUN_PITCH : RUN_PITCH) * runFrac;
     const [roll, pitch] = this.tilt.get(id) ?? [0, 0];
     const ease = 1 - Math.exp(-dt / TILT_EASE_SEC);
     const nextRoll = lerp(roll, rollTo, ease);
