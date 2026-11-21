@@ -23,7 +23,7 @@ import { MeshoptDecoder } from "meshoptimizer/decoder";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 import { modelUrl } from "./model-url";
-import { BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_BACK_GAITS, BOW_GAITS, createMovementClips, MOVEMENT_PACE, type MovementKeyframeSpec } from "./movement-clips";
+import { BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_BACK_GAITS, BOW_GAITS, BOW_SIDE_GAITS, BOW_SIDE_RIGHT_GAITS, createMovementClips, MOVEMENT_PACE, type MovementKeyframeSpec } from "./movement-clips";
 
 /**
  * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
@@ -2561,7 +2561,7 @@ export class RigActor {
     const movement = ORIGINAL_MOVEMENT
       ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()])
       : null;
-    const bowMovement = movement ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()], BOW_GAITS, BOW_BACK_GAITS, BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS) : null;
+    const bowMovement = movement ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()], BOW_GAITS, BOW_BACK_GAITS, BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_SIDE_GAITS, BOW_SIDE_RIGHT_GAITS) : null;
     this.originalMovement = movement !== null;
     this.movementSets = movement ? { free: movement, bow: bowMovement } : null;
     for (const [style, set] of [["", movement], ["bow-", bowMovement]] as const) {

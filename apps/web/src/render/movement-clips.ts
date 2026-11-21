@@ -357,6 +357,16 @@ export const BOW_BACK_DIAG_RIGHT_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>
   },
 };
 
+/**
+ * Keys for the sideways clips of the forward half (the run's 55-degree strafes, the walk's 45 and 90), fitted
+ * at the yaw the game plays them to PoE2's `_left_01` / `_right_01` takes, which are no mirror of each other.
+ */
+export const SIDE_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {};
+export const SIDE_RIGHT_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {};
+/** The bow carry over the sideways clips: the side keys' legs, upper body fitted to PoE2's `_bow_left_01` / `_bow_right_01`. */
+export const BOW_SIDE_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {};
+export const BOW_SIDE_RIGHT_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {};
+
 const halfOn = (v: Loop): Loop => [...v.slice(v.length / 2), ...v.slice(0, v.length / 2)];
 
 /**
@@ -383,6 +393,8 @@ function mirrorArm(a: ArmKeys): ArmKeys {
 
 /** Off-facing angle past which a clip takes the backpedal's keys, not the back diagonal's: midway between 110 and 180. */
 const BACK_FROM = (145 * Math.PI) / 180;
+/** Off-facing angle past which a forward-half clip takes the side keys: midway between straight ahead and the 45-degree walk. */
+const SIDE_FROM = (22.5 * Math.PI) / 180;
 
 function catmull(p0: number, p1: number, p2: number, p3: number, t: number): number {
   const t2 = t * t, t3 = t2 * t;
@@ -575,6 +587,8 @@ export function createMovementClips(
   backGaits: Readonly<Partial<Record<Gait, GaitKeys>>> = BACK_GAITS,
   diagGaits: Readonly<Partial<Record<Gait, GaitKeys>>> = BACK_DIAG_GAITS,
   diagRightGaits: Readonly<Partial<Record<Gait, GaitKeys>>> = BACK_DIAG_RIGHT_GAITS,
+  sideGaits: Readonly<Partial<Record<Gait, GaitKeys>>> = SIDE_GAITS,
+  sideRightGaits: Readonly<Partial<Record<Gait, GaitKeys>>> = SIDE_RIGHT_GAITS,
 ): Map<string, AnimationGroup> | null {
   function joint(name: string): TransformNode | null {
     const node = bones.get(name);
@@ -639,7 +653,8 @@ export function createMovementClips(
       const diag = diagonal ? (right ? diagRightGaits : diagGaits)[spec.gait] : undefined;
       // A gait with no right back-diagonal keys plays the left one's mirror.
       const mirrored = diagonal && right && diag === undefined && diagGaits[spec.gait] !== undefined;
-      const own = off > BACK_FROM ? backGaits[spec.gait] : mirrored ? mirrorKeys(diagGaits[spec.gait]!) : diag;
+      const side = off > SIDE_FROM && off <= Math.PI / 2 ? (right ? sideRightGaits : sideGaits)[spec.gait] : undefined;
+      const own = off > BACK_FROM ? backGaits[spec.gait] : mirrored ? mirrorKeys(diagGaits[spec.gait]!) : diagonal ? diag : side;
       const keys = own ?? gaits[spec.gait];
       // Right back-diagonal keys, fitted or mirrored, lead with the other foot.
       const lane = diagonal && right ? -1 : 1;
