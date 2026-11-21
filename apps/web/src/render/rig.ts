@@ -23,7 +23,7 @@ import { MeshoptDecoder } from "meshoptimizer/decoder";
 import { SkirtSim, type SkirtCollider } from "./skirt";
 import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 import { modelUrl } from "./model-url";
-import { BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_BACK_GAITS, BOW_GAITS, createMovementClips, MOVEMENT_PACE, type MovementKeyframeSpec } from "./movement-clips";
+import { BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_BACK_GAITS, BOW_GAITS, BOW_SIDE_GAITS, BOW_SIDE_RIGHT_GAITS, createMovementClips, MOVEMENT_PACE, type MovementKeyframeSpec } from "./movement-clips";
 
 /**
  * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
@@ -907,6 +907,30 @@ const BOW_NOCKS = ["stalkerbow_nock_top", "stalkerbow_nock_bottom"] as const;
 const STRING_FINGERS = ["index_02_r", "middle_02_r", "ring_02_r"] as const;
 /** The bow fist's finger joints; the nocked arrow rests across the top of them. */
 const BOW_FIST = ["index", "middle", "ring", "pinky"].flatMap((f) => [1, 2, 3].map((i) => `${f}_0${i}_l`));
+/** Every finger joint of both hands. */
+const FIST_JOINTS: ReadonlySet<string> = new Set(["l", "r"].flatMap((side) =>
+  ["thumb", "index", "middle", "ring", "pinky"].flatMap((f) => [1, 2, 3].map((i) => `${f}_0${i}_${side}`))));
+
+/**
+ * Hold every finger of the clips in `sets` at `take`'s middle frame, the fist `tools/build_wardrobe.py`
+ * seats a held weapon in. A baked clip keys no finger, and an unkeyed finger keeps the rest pose's open hand.
+ */
+function holdFists(sets: readonly (Map<string, AnimationGroup> | null)[], take: AnimationGroup, byName: ReadonlyMap<string, Node>): void {
+  const middle = (take.from + take.to) / 2;
+  for (const targeted of take.targetedAnimations) {
+    const name = (targeted.target as Node).name;
+    const bone = byName.get(name);
+    if (!bone || !FIST_JOINTS.has(name) || targeted.animation.targetProperty !== ROTATION) continue;
+    const pose = targeted.animation.evaluate(middle) as Quaternion;
+    for (const group of sets.flatMap((set) => [...set?.values() ?? []])) {
+      const hold = new Animation(`${group.name}-${name}`, ROTATION, targeted.animation.framePerSecond,
+        Animation.ANIMATIONTYPE_QUATERNION, Animation.ANIMATIONLOOPMODE_CYCLE);
+      hold.setKeys([{ frame: group.from, value: pose }, { frame: group.to, value: pose }]);
+      group.addTargetedAnimation(hold, bone);
+    }
+  }
+}
+
 /** The bow thumb, which says which side of the stave the arrow lies on. */
 const BOW_THUMB = "thumb_02_l";
 /** Arrow axis above the highest fist joint (finger, glove, shaft) and off the stave's centre. */
@@ -2561,7 +2585,9 @@ export class RigActor {
     const movement = ORIGINAL_MOVEMENT
       ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()])
       : null;
-    const bowMovement = movement ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()], BOW_GAITS, BOW_BACK_GAITS, BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS) : null;
+    const bowMovement = movement ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()], BOW_GAITS, BOW_BACK_GAITS, BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_SIDE_GAITS, BOW_SIDE_RIGHT_GAITS) : null;
+    const fistTake = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME.idle);
+    if (fistTake) holdFists([movement, bowMovement], fistTake, byName);
     this.originalMovement = movement !== null;
     this.movementSets = movement ? { free: movement, bow: bowMovement } : null;
     for (const [style, set] of [["", movement], ["bow-", bowMovement]] as const) {

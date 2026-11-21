@@ -24,10 +24,20 @@ class NodeFileReader {
   }
 }
 
+const deg = (d: number) => (d * Math.PI) / 180;
+/** One clip per key set: forward, side and back-diagonal both ways, backpedal (rig.ts DIRECTIONS strides). */
 const SPECS: MovementKeyframeSpec[] = [
   { name: "walk", gait: "walk", yaw: 0, stride: 1 },
+  { name: "walkFwdL", gait: "walk", yaw: deg(-45), stride: 1 },
+  { name: "walkStrafeR", gait: "walk", yaw: deg(90), stride: 0.66 },
+  { name: "walkBackL", gait: "walk", yaw: deg(-135), stride: 1.2 },
+  { name: "walkBackR", gait: "walk", yaw: deg(135), stride: 1.2 },
+  { name: "walkBack", gait: "walk", yaw: Math.PI, stride: 1.2 },
   { name: "run", gait: "run", yaw: 0, stride: 1 },
-  { name: "runStrafeR", gait: "run", yaw: (55 * Math.PI) / 180, stride: 1 },
+  { name: "runStrafeL", gait: "run", yaw: deg(-55), stride: 1 },
+  { name: "runStrafeR", gait: "run", yaw: deg(55), stride: 1 },
+  { name: "runBackL", gait: "run", yaw: deg(-110), stride: 0.914 },
+  { name: "runBackR", gait: "run", yaw: deg(110), stride: 0.914 },
   { name: "runBack", gait: "run", yaw: Math.PI, stride: 0.75 },
 ];
 
@@ -129,7 +139,8 @@ describe.each([
           const share = spec.gait === "run" ? 0.22 : 0.3;
           expect(planted.length, `${spec.name} ${side} never plants`).toBeGreaterThan(frames * share);
           // The right foot runs half a cycle behind, so its plant crosses the loop.
-          const local = (f: number) => (f + Math.round(side * 0.5 * frames)) % frames;          const drift = planted.map(({ f, at }) => Vector3.Dot(at, travel) + local(f) * perFrame);
+          const local = (f: number) => (f + Math.round(side * 0.5 * frames)) % frames;
+          const drift = planted.map(({ f, at }) => Vector3.Dot(at, travel) + local(f) * perFrame);
           // A plant that lands before the loop's last frame continues at frame 0: one cycle of travel apart.
           const cycle = frames * perFrame;
           const wrapped = drift.map((d) => d - Math.round((d - drift[0]!) / cycle) * cycle);
