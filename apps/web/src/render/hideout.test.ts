@@ -155,9 +155,9 @@ describe("hideout decor", () => {
     const discs = hideoutFootprints();
     expect(discs.length).toBeGreaterThanOrEqual(solid.length);
     for (const disc of discs) {
-      // A stretched table's end discs sit its scaled half-length out.
+      // A stretched table's corner discs sit just inside its top: 1.35 out on the map table (half-diagonal 1.73).
       const nearest = Math.min(...solid.map((d) => Math.hypot(d.x - disc.x, d.z - disc.z)));
-      expect(nearest).toBeLessThanOrEqual(1.0);
+      expect(nearest).toBeLessThanOrEqual(1.4);
     }
     for (const d of solid) {
       const nearest = Math.min(...discs.map((disc) => Math.hypot(d.x - disc.x, d.z - disc.z)));

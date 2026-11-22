@@ -209,12 +209,10 @@ export const HIDEOUT_DECOR: readonly Decor[] = [
  * player's own body is a 0.5 disc, so a footprint drawn to the silhouette stops
  * him half a metre short of the timber and reads as an invisible wall around the
  * furniture. Shoulders clipping a tabletop is what every ARPG does and nobody
- * sees; a gap is what everybody sees. A table takes three discs so a stretched one
- * leaves no gap a body fits through. A rug is floor.
+ * sees; a gap is what everybody sees. A rug is floor, and a table is `tableDiscs`.
  */
-const FOOTPRINT: Record<DecorKind, readonly (readonly [number, number, number])[]> = {
+const FOOTPRINT: Record<Exclude<DecorKind, "table">, readonly (readonly [number, number, number])[]> = {
   rug: [],
-  table: [[-0.65, 0, 0.3], [0, 0, 0.3], [0.65, 0, 0.3]],
   bench: [[-0.32, 0, 0.18], [0.32, 0, 0.18]],
   crate: [[0, 0, 0.28]],
   barrel: [[0, 0, 0.2]],
@@ -267,6 +265,30 @@ export function yawToRot(yaw: number): number {
 /** A moved piece: world floats and whole degrees, a multiple of ROT_STEP. */
 export interface PiecePlacement { x: number; z: number; rot: number }
 
+/** `table_top` in `build_table` (tools/build_props.py): half its length and depth, before `scale`. */
+const TABLE_HALF = { x: 1.1, z: 0.475 };
+/** A table's discs: how far inside the top's edge they stand, their radius, and the widest gap between two. */
+const TABLE_INSET = 0.3;
+const TABLE_DISC = 0.2;
+const TABLE_GAP = 0.85;
+
+/**
+ * A table's discs in its own frame, after `scale`: a ring just inside the edge of
+ * the top, a row down each long side. Discs on the centreline cannot hold a corner:
+ * the 0.5 body does not grow with the table, so on a stretched one his centre
+ * reached the corner of the top. These keep it 0.25 to 0.4 off the top all round.
+ */
+function tableDiscs(sx: number, sz: number): (readonly [number, number, number])[] {
+  const hx = TABLE_HALF.x * sx - TABLE_INSET, hz = TABLE_HALF.z * sz - TABLE_INSET;
+  const n = Math.ceil((2 * hx) / TABLE_GAP);
+  const out: (readonly [number, number, number])[] = [];
+  for (let i = 0; i <= n; i++) {
+    const lx = -hx + (2 * hx * i) / n;
+    out.push([lx, -hz, TABLE_DISC], [lx, hz, TABLE_DISC]);
+  }
+  return out;
+}
+
 /** The discs `kind` stands on at (x, z), turned by `[c, s]` = cos/sin of its yaw. */
 export function decorDiscs(
   d: Pick<Decor, "kind" | "scale">, x: number, z: number, trig: readonly [number, number],
@@ -274,20 +296,26 @@ export function decorDiscs(
   const [c, s] = trig;
   const sx = d.scale?.x ?? 1, sz = d.scale?.z ?? 1;
   const rs = Math.min(sx, sz);
-  return FOOTPRINT[d.kind].map(([lx0, lz0, r]) => {
-    const lx = lx0 * sx, lz = lz0 * sz;
-    // Babylon's yaw takes local (lx, lz) to world (lx c + lz s, -lx s + lz c).
-    return { x: x + lx * c + lz * s, z: z - lx * s + lz * c, r: r * rs };
-  });
+  const local = d.kind === "table"
+    ? tableDiscs(sx, sz)
+    : FOOTPRINT[d.kind].map(([lx, lz, r]) => [lx * sx, lz * sz, r * rs] as const);
+  // Babylon's yaw takes local (lx, lz) to world (lx c + lz s, -lx s + lz c).
+  return local.map(([lx, lz, r]) => ({ x: x + lx * c + lz * s, z: z - lx * s + lz * c, r }));
 }
 
+/** cos and sin of the two tables' own yaws, which sit off a ROT_STEP: literals, for COS_STEPS's reason. */
+const TABLE_TRIG: Readonly<Record<number, readonly [number, number]>> = {
+  39: [0.7771459614569709, 0.6293203910498374],
+  51: [0.6293203910498375, 0.7771459614569709],
+};
+
 /**
- * A piece's own yaw as cos/sin, snapped to the nearest ROT_STEP so the literal
- * table answers and no transcendental reaches the collision. A table drawn a few
- * degrees off a step collides on the step; its discs are two thirds of it anyway.
+ * A piece's own yaw as cos/sin with no transcendental reaching the collision: the
+ * tables' from their own literals, so a corner of the top is where its discs hold
+ * it, every other piece snapped to the nearest ROT_STEP (one centred disc, or on a step).
  */
 function defaultTrig(d: Decor): readonly [number, number] {
-  return rotTrig(yawToRot(d.yaw));
+  return TABLE_TRIG[Math.round((d.yaw * 180) / Math.PI)] ?? rotTrig(yawToRot(d.yaw));
 }
 
 /**
@@ -298,9 +326,14 @@ export function hideoutFootprints(moved?: Readonly<Record<string, PiecePlacement
   const out: { x: number; z: number; r: number }[] = [];
   for (const d of HIDEOUT_DECOR) {
     const m = moved?.[d.id];
-    out.push(...(m ? decorDiscs(d, m.x, m.z, rotTrig(m.rot)) : decorDiscs(d, d.x, d.z, defaultTrig(d))));
+    out.push(...(m ? decorDiscs(d, m.x, m.z, rotTrig(m.rot)) : defaultDiscs(d)));
   }
   return out;
+}
+
+/** The discs one piece stands on where content puts it. */
+export function defaultDiscs(d: Decor): { x: number; z: number; r: number }[] {
+  return decorDiscs(d, d.x, d.z, defaultTrig(d));
 }
 
 /** The decor piece with this id, if there is one. */
