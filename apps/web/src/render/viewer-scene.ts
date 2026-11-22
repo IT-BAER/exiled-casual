@@ -1089,6 +1089,8 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     const reference = async (name: string | null, opts?: import("../dev/reference-skeleton").ReferenceOptions) =>
       (await import("../dev/reference-skeleton")).showReference(scene, () => host, name, opts);
     (window as unknown as Record<string, unknown>).__reference = reference;
+    // The app's own retarget module (its binds), for checks run from the console.
+    void import("./retarget").then((m) => { (window as unknown as Record<string, unknown>).__retarget = m; });
     const ref = new URLSearchParams(window.location.search).get("ref");
     if (ref) void reference(ref).catch((e) => console.warn(e));
   }

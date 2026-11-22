@@ -25,6 +25,7 @@ import { ARROW_LENGTH, buildArrow, swingTrail } from "./skill-fx";
 import { modelUrl } from "./model-url";
 import { polishedReflection } from "./environment";
 import { BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_BACK_GAITS, BOW_GAITS, BOW_SIDE_GAITS, BOW_SIDE_RIGHT_GAITS, createMovementClips, MOVEMENT_PACE, type MovementKeyframeSpec } from "./movement-clips";
+import { createRetargetClips, type PoseClip } from "./retarget";
 
 /**
  * Skinned player actor: a base body on a 65-bone Unreal-named skeleton, and
@@ -313,6 +314,47 @@ export const ORIGINAL_DIRECTIONS: Record<Gait, readonly { yaw: number; clip: Rig
   walk: ORIGINAL_TAKES.walk.map(({ rel, turn, clip, stride }) => ({ yaw: ((rel - turn) * Math.PI) / 180, clip, stride })),
   run: ORIGINAL_TAKES.run.map(({ rel, turn, clip, stride }) => ({ yaw: ((rel - turn) * Math.PI) / 180, clip, stride })),
 };
+
+/**
+ * DEV, original movement: each direction is a PoE2 take retargeted onto the body (`retarget.ts`), fetched from
+ * the dev server's `/__ref/` (review/poe2-ref, never bundled). The takes travel at 0, +-90, +-135 and 180 degrees
+ * within 3, faces forward and legs turned in the take itself, so no hip turn. `VITE_RETARGET=0` keeps the keyed clips.
+ */
+const RETARGET = ORIGINAL_MOVEMENT && import.meta.env.VITE_RETARGET !== "0";
+const TAKE_OF: Partial<Record<RigClip, readonly [Gait, string]>> = {
+  run: ["run", "01"], runStrafeL: ["run", "left_01"], runStrafeR: ["run", "right_01"],
+  runBackL: ["run", "bwd_left_01"], runBackR: ["run", "bwd_right_01"], runBack: ["run", "bwd_01"],
+  walk: ["walk", "01"], walkStrafeL: ["walk", "left_01"], walkStrafeR: ["walk", "right_01"],
+  walkBackL: ["walk", "bwd_left_01"], walkBackR: ["walk", "bwd_right_01"], walkBack: ["walk", "bwd_01"],
+};
+const takeName = (bow: boolean, gait: Gait, dir: string) => (bow ? `basebow-${gait}_bow_${dir}` : `basesword-${gait}_sword_unarmed_${dir}`);
+export const RETARGET_DIRECTIONS: Record<Gait, readonly { yaw: number; clip: RigClip; stride: number }[]> = {
+  walk: ([[-180, "walkBack"], [-135, "walkBackL"], [-90, "walkStrafeL"], [0, "walk"], [90, "walkStrafeR"], [135, "walkBackR"], [180, "walkBack"]] as const)
+    .map(([deg, clip]) => ({ yaw: (deg * Math.PI) / 180, clip, stride: 1 })),
+  run: ([[-180, "runBack"], [-135, "runBackL"], [-90, "runStrafeL"], [0, "run"], [90, "runStrafeR"], [135, "runBackR"], [180, "runBack"]] as const)
+    .map(([deg, clip]) => ({ yaw: (deg * Math.PI) / 180, clip, stride: 1 })),
+};
+let takesLoading: Promise<Map<string, PoseClip> | null> | null = null;
+let takesLoaded: Map<string, PoseClip> | null = null;
+function loadTakes(): Promise<Map<string, PoseClip> | null> {
+  const names = Object.values(TAKE_OF).flatMap(([gait, dir]) => [takeName(false, gait, dir), takeName(true, gait, dir)]);
+  return Promise.all(names.map(async (n) => {
+    const res = await fetch(`/__ref/${n}.json`);
+    if (!res.ok) throw new Error(`${n}: HTTP ${res.status}`);
+    return [n, (await res.json()) as PoseClip] as const;
+  })).then((pairs) => new Map(pairs), (e) => { console.warn("PoE2 takes unavailable, keyed original movement", e); return null; });
+}
+/** The retargeted clips for one carry, or null without every take. */
+function retargetSet(scene: Scene, pivot: TransformNode, byName: ReadonlyMap<string, Node>, bow: boolean): Map<string, AnimationGroup> | null {
+  if (!takesLoaded) return null;
+  const takes = new Map<string, { clip: PoseClip; pace: number }>();
+  for (const [clip, [gait, dir]] of Object.entries(TAKE_OF)) {
+    const take = takesLoaded.get(takeName(bow, gait, dir));
+    if (!take) return null;
+    takes.set(clip, { clip: take, pace: MOVEMENT_PACE[gait] });
+  }
+  return createRetargetClips(scene, pivot, byName, takes);
+}
 
 const MOVEMENT_SPECS = new Map<RigClip, MovementKeyframeSpec>();
 if (ORIGINAL_MOVEMENT) {
@@ -1561,6 +1603,7 @@ export function loadPlayerRig(
     .then(async () => {
       const need = missing();
       if (need.length === 0) return;
+      if (RETARGET) takesLoaded = await (takesLoading ??= loadTakes());
       const fresh = loaded?.scene !== scene;
       const [anims, ...wardrobes] = await Promise.all([
         fresh ? LoadAssetContainerAsync(sources.anims, scene) : loaded!.anims,
@@ -1716,6 +1759,8 @@ export class RigActor {
   private nextStrikeIndex = 0;
   private locomotion: RigClip = "idle";
   private originalMovement = false;
+  /** Original movement is the retargeted PoE2 takes (`RETARGET`): canonical directions, no hip turn. */
+  private retargeted = false;
   /** Original movement baked twice: arms free, and the bow carry (`BOW_GAITS`); `groups` holds the worn one. */
   private movementSets: { free: Map<string, AnimationGroup>; bow: Map<string, AnimationGroup> | null } | null = null;
   /** The move's yaw off the body's facing, and the hip turn eased toward it. */
@@ -1962,8 +2007,8 @@ export class RigActor {
     } else {
       this.turnHold = 0;
       const gait = clip === "run" ? "run" : "walk";
-      this.legsTarget = this.originalMovement ? originalHipTurn(this.moveRel, gait) : hipTurn(this.moveRel);
-      const dirs = (this.originalMovement ? ORIGINAL_DIRECTIONS : DIRECTIONS)[gait];
+      this.legsTarget = this.retargeted ? 0 : this.originalMovement ? originalHipTurn(this.moveRel, gait) : hipTurn(this.moveRel);
+      const dirs = (this.retargeted ? RETARGET_DIRECTIONS : this.originalMovement ? ORIGINAL_DIRECTIONS : DIRECTIONS)[gait];
       // Off the hips as they ARE, mid-turn, so the feet always travel the real move.
       const b = directionBlend(this.moveRel - this.legs, gait, dirs);
       // The heavier clip plays, the lighter one is blended in: straight behind
@@ -2624,10 +2669,13 @@ export class RigActor {
         : a.targetProperty === ROTATION ? node.rotationQuaternion ?? Quaternion.FromEulerVector(node.rotation) : node.position;
       return swayOnto(a, anchor, STRIKE_LEG_SHARE_OF[clip] ?? STRIKE_LEG_SHARE);
     };
+    const retargeted = ORIGINAL_MOVEMENT ? retargetSet(this.scene, this.pivot, byName, false) : null;
     const movement = ORIGINAL_MOVEMENT
-      ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()])
+      ? retargeted ?? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()])
       : null;
-    const bowMovement = movement ? createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()], BOW_GAITS, BOW_BACK_GAITS, BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_SIDE_GAITS, BOW_SIDE_RIGHT_GAITS) : null;
+    const bowMovement = !movement ? null : retargeted ? retargetSet(this.scene, this.pivot, byName, true)
+      : createMovementClips(this.scene, this.pivot, byName, [...MOVEMENT_SPECS.values()], BOW_GAITS, BOW_BACK_GAITS, BOW_BACK_DIAG_GAITS, BOW_BACK_DIAG_RIGHT_GAITS, BOW_SIDE_GAITS, BOW_SIDE_RIGHT_GAITS);
+    this.retargeted = retargeted !== null;
     const fistTake = loaded.anims.animationGroups.find((g) => g.name === CLIP_NAME.idle);
     if (fistTake) holdFists([movement, bowMovement], fistTake, byName);
     this.originalMovement = movement !== null;
@@ -2766,7 +2814,9 @@ export class RigActor {
           const idling = idle && this.activeClip === "idle" && !this.isRolling()
             && ![...this.groups].some(([c, g]) => c !== "idle" && g.isPlaying);
           const walking = carry.spec.run === true && (this.activeClip === null || gaitOf(this.activeClip) !== "run");
-          const busy = idling || walking || (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
+          // A retargeted PoE2 bow take holds the bow in its own fist.
+          const taken = this.retargeted && carry.spec.clip === BOW_CARRY && this.activeClip !== null && this.activeClip !== "idle" && TAKE_OF[this.activeClip] !== undefined;
+          const busy = idling || walking || taken || (roll && this.isRolling()) || [...yieldsTo].some((c) => this.groups.get(c)?.isPlaying);
           carry.weight = worn(this.looks) && !busy ? Math.min(1, carry.weight + step) : Math.max(0, carry.weight - step);
           if (carry.weight <= 0) continue;
           const weight = carry.weight * carry.spec.hold;
