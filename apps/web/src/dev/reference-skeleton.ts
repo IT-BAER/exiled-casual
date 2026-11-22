@@ -130,6 +130,12 @@ export interface ReferenceOptions {
   rate?: number;
   /** Hold the figure at this fraction of its clip instead of playing it. */
   phase?: number;
+  /** Turn the figure about Y by this many degrees (counter-clockwise in atan2(z, x)), e.g. to stand on a body whose feet point off +Z. */
+  yaw?: number;
+  /** The subject's planted ankle height; default is the subject's ankle in the pose it holds when the figure appears. */
+  ankleY?: number;
+  /** Draw over the subject (rendering group 1) instead of hidden inside him, for an on-body overlay. */
+  onTop?: boolean;
 }
 
 let shown: { dispose(): void } | null = null;
@@ -154,6 +160,7 @@ export async function showReference(scene: Scene, subject: () => TransformNode |
   });
   const head = MeshBuilder.CreateSphere("ref-head", { diameter: 0.2, segments: 8 }, scene);
   head.material = mat;
+  if (opts.onTop) for (const m of [...sticks, head]) m.renderingGroupId = 1;
   const headIx = clip.bones.findIndex((b) => b.name === "head_jntBnd");
   let [ox, oy, oz] = opts.offset ?? [0, 0, 0];
   const n = clip.frames.length - 1;
@@ -166,7 +173,9 @@ export async function showReference(scene: Scene, subject: () => TransformNode |
     if (frames === null) {
       const fit = fitOf(subject());
       if (fit === null) return;
-      frames = toStage(clip, fit);
+      frames = toStage(clip, opts.ankleY === undefined ? fit : { ...fit, ankleY: opts.ankleY });
+      const r = ((opts.yaw ?? 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+      if (r !== 0) for (const frame of frames) for (const p of frame) [p[0], p[2]] = [p[0] * c - p[2] * s, p[0] * s + p[2] * c];
     }
     if (!opts.offset && scene.activeCamera) {
       // Without a fixed offset the figure stands to the screen's right of the subject, however the camera orbits.
