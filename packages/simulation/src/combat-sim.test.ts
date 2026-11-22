@@ -5,7 +5,7 @@ import { MONSTERS, CONTENT_VERSION } from "@exiled/content-runtime";
 import { generateArea } from "@exiled/mapgen";
 import { createCombatSim, spawnLabActors } from "./combat-sim";
 import { gridCollision } from "./collision";
-import type { BossC, MonsterC, Position, MoveTarget, SessionC, InventoryC, ProgressC, SkillsC } from "./components";
+import type { BossC, MonsterC, Position, MoveTarget, SessionC, InventoryC, ItemC, ProgressC, SkillsC } from "./components";
 
 describe("createCombatSim", () => {
   it("spawns exactly 1 player and 6 monsters (5 normal + 1 rare)", () => {
@@ -225,6 +225,22 @@ describe("createCombatSim", () => {
     const ids = world.get<InventoryC>(sessionE, "inventory")!.items.map((p) => p.item.baseId);
     expect(ids).toContain("base.stalker_buckler");
     expect(ids).toContain("base.ironsworn_tower_shield");
+  });
+
+  it("lab loot spawn lays each press on its own spot round the player, never on him", () => {
+    const { world } = createCombatSim(42, { area: "hideout" });
+    const had = new Set(world.query("item", "position"));
+    const cx = fp(3), cy = fp(4);
+    for (let i = 0; i < 8; i++) spawnLabActors(world, "loot", cx, cy);
+    const drops = world.query("item", "position").filter((e) => !had.has(e));
+    expect(drops).toHaveLength(8);
+    const spots = drops.map((e) => world.get<Position>(e, "position")!);
+    expect(new Set(spots.map((p) => `${p.x},${p.y}`)).size).toBe(8);
+    // Clear of his body (0.5) and of a label's height, so no beam stands through him.
+    for (const p of spots) expect(Math.hypot(p.x - cx, p.y - cy)).toBeGreaterThanOrEqual(fp(1.2));
+    const rarities = drops.map((e) => world.get<ItemC>(e, "item")!.item.rarity);
+    expect(rarities.filter((r) => r === "unique")).toHaveLength(1);
+    expect(rarities[7]).toBe("unique");
   });
 
   it("system registration order matches canonical spec", () => {
