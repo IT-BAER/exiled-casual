@@ -15,6 +15,7 @@ const SIM_ACTIONS: { kind: SpawnKind; label: string }[] = [
   { kind: "boss", label: "the boss" },
   { kind: "hurtboss", label: "hurt boss -20%" },
   { kind: "item", label: "drop an item" },
+  { kind: "loot", label: "loot round you, one a press" },
   { kind: "shields", label: "both shields" },
   { kind: "levelup", label: "level up +1" },
   { kind: "dummy", label: "7 training dummies" },
