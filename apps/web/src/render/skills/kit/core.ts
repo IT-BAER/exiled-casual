@@ -1,5 +1,5 @@
 import { Color3, Material, Mesh, PBRMaterial, PointLight, StandardMaterial, TransformNode, Vector3, VertexData } from "@babylonjs/core";
-import type { GlowLayer, Scene } from "@babylonjs/core";
+import type { AbstractMesh, GlowLayer, Scene } from "@babylonjs/core";
 import { FxPool, featherEdges } from "../../fx-pool";
 import { FLASH_NAME, flash } from "../../skill-fx";
 
@@ -251,12 +251,43 @@ function glowLayer(scene: Scene): GlowLayer | undefined {
   return scene.effectLayers?.find((l) => l.name === "glow") as GlowLayer | undefined;
 }
 
+/**
+ * The share of a kit volume (wall, disc, ring, wake, shell) the bloom takes. At 1 the
+ * glow layer blurs every one of them back over the frame at full strength, and a pack
+ * fight is a white cloud with no flame left in it. The pools keep all of theirs: sparks
+ * and embers are the light sources. 1 until a DEV build sets VITE_KIT_BLOOM; `__kitBloom(share)` tunes it live.
+ */
+let volumeBloom = import.meta.env?.DEV && import.meta.env.VITE_KIT_BLOOM ? Number(import.meta.env.VITE_KIT_BLOOM) : 1;
+if (import.meta.env?.DEV && typeof window !== "undefined") {
+  (window as unknown as { __kitBloom?: unknown }).__kitBloom = (share: number) => { volumeBloom = share; };
+}
+const bloomVolumes = new WeakSet<AbstractMesh>();
+const dimmedLayers = new WeakSet<GlowLayer>();
+
+/** Draw the kit's volumes into the glow pass at `volumeBloom` of their own brightness. */
+function dimVolumes(layer: GlowLayer): void {
+  if (dimmedLayers.has(layer)) return;
+  dimmedLayers.add(layer);
+  let own = 1;
+  layer.onBeforeRenderMeshToEffect.add((m) => {
+    if (volumeBloom === 1 || !bloomVolumes.has(m)) return;
+    own = m.visibility;
+    m.visibility = own * volumeBloom;
+  });
+  layer.onAfterRenderMeshToEffect.add((m) => {
+    if (volumeBloom !== 1 && bloomVolumes.has(m)) m.visibility = own;
+  });
+}
+
 /** Let the glow layer bloom a mesh with its real (vertex-coloured) material, or keep it out of the glow altogether. */
 export function glowOwn(scene: Scene, mesh: Mesh, glow = true): void {
   const layer = glowLayer(scene);
   if (!layer) return;
-  if (glow) layer.referenceMeshToUseItsOwnMaterial(mesh);
-  else layer.addExcludedMesh(mesh);
+  if (glow) {
+    layer.referenceMeshToUseItsOwnMaterial(mesh);
+    bloomVolumes.add(mesh);
+    dimVolumes(layer);
+  } else layer.addExcludedMesh(mesh);
 }
 
 /**
