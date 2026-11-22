@@ -6,7 +6,7 @@ import {
   Quaternion,
   type Scene,
   StandardMaterial,
-  type TransformNode,
+  TransformNode,
   Vector3,
 } from "@babylonjs/core";
 
@@ -130,6 +130,17 @@ export interface ReferenceOptions {
   rate?: number;
   /** Hold the figure at this fraction of its clip instead of playing it. */
   phase?: number;
+  /** Turn the figure about Y by this many degrees (counter-clockwise in atan2(z, x)), e.g. to stand on a body whose feet point off +Z. */
+  yaw?: number;
+  /** The subject's planted ankle height; default is the subject's ankle in the pose it holds when the figure appears. */
+  ankleY?: number;
+  /** Draw over the subject (rendering group 1) instead of hidden inside him, for an on-body overlay. */
+  onTop?: boolean;
+  /**
+   * Draw the take on the subject's own proportions: its bone directions at his bone lengths, hips on the take's,
+   * at his retargeted clip's phase (`retarget.ts`). Needs the rig to have baked the retargeted clips.
+   */
+  retarget?: boolean;
 }
 
 let shown: { dispose(): void } | null = null;
@@ -154,21 +165,42 @@ export async function showReference(scene: Scene, subject: () => TransformNode |
   });
   const head = MeshBuilder.CreateSphere("ref-head", { diameter: 0.2, segments: 8 }, scene);
   head.material = mat;
+  if (opts.onTop) for (const m of [...sticks, head]) m.renderingGroupId = 1;
+  // On his own proportions the marker sits inside his skull.
+  if (opts.retarget) head.scaling.setAll(0.5);
   const headIx = clip.bones.findIndex((b) => b.name === "head_jntBnd");
   let [ox, oy, oz] = opts.offset ?? [0, 0, 0];
   const n = clip.frames.length - 1;
   let frames: V[][] | null = null;
   let t = 0;
   const a = new Vector3(), b = new Vector3(), dir = new Vector3();
+  if (opts.retarget) {
+    const rt = await import("../render/retarget");
+    const host = subject();
+    const pivot = host?.getDescendants(false).find((d): d is TransformNode => d instanceof TransformNode && rt.BINDS.has(d)) ?? null;
+    const bind = pivot ? rt.BINDS.get(pivot)! : null;
+    if (!bind) throw new Error("no retargeted body under the subject");
+    const take = rt.takeOf(clip, bind);
+    // Every frame of the take on his proportions, world space.
+    const placed: V[][] = Array.from({ length: take.n + 1 }, (_, f) => {
+      const j = rt.targetJoints(bind, take.frame(f % take.n));
+      const w = bind.pivot.getWorldMatrix();
+      return clip.bones.map((bn) => { const p = j[bn.name]; if (!p) return [NaN, NaN, NaN]; const q = Vector3.TransformCoordinates(p, w); return [q.x, q.y, q.z]; });
+    });
+    frames = placed;
+    ox = oy = oz = 0;
+  }
   const lerp = (fa: V[], fb: V[], u: number, i: number, out: Vector3) =>
     out.set(fa[i]![0] + (fb[i]![0] - fa[i]![0]) * u + ox, fa[i]![1] + (fb[i]![1] - fa[i]![1]) * u + oy, fa[i]![2] + (fb[i]![2] - fa[i]![2]) * u + oz);
   const tick: Observer<Scene> = scene.onBeforeRenderObservable.add(() => {
     if (frames === null) {
       const fit = fitOf(subject());
       if (fit === null) return;
-      frames = toStage(clip, fit);
+      frames = toStage(clip, opts.ankleY === undefined ? fit : { ...fit, ankleY: opts.ankleY });
+      const r = ((opts.yaw ?? 0) * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+      if (r !== 0) for (const frame of frames) for (const p of frame) [p[0], p[2]] = [p[0] * c - p[2] * s, p[0] * s + p[2] * c];
     }
-    if (!opts.offset && scene.activeCamera) {
+    if (!opts.offset && !opts.retarget && scene.activeCamera) {
       // Without a fixed offset the figure stands to the screen's right of the subject, however the camera orbits.
       const right = scene.activeCamera.getDirection(Vector3.Right());
       const flat = Math.hypot(right.x, right.z) || 1;

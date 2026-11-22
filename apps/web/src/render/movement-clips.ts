@@ -48,13 +48,18 @@ export interface ArmKeys {
 
 /**
  * One gait as authored keys. Distances are in leg lengths (thigh to ankle), angles in radians.
- * The left leg runs the stride from phase 0, the right half a stride later on the same keys.
+ * The left leg runs the stride from phase 0, the right half a stride later on the same keys
+ * unless `secondAt` / `secondStance` give it its own touchdown and stance.
  */
 export interface GaitKeys {
   /** Seconds per stride at `MOVEMENT_PACE`. */
   period: number;
   /** Share of the stride a foot is planted. */
   stance: number;
+  /** The right foot's touchdown, as a stride share after the left's; absent, half a stride. */
+  secondAt?: number;
+  /** Share of the stride the right foot is planted; absent, `stance`. Its keys stretch to fit. */
+  secondStance?: number;
   /** Share of the planted travel the foot lands ahead of its hip. */
   reach: number;
   /** Ankle outward of its rest line while planted. */
@@ -217,13 +222,13 @@ export const BACK_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {
     period: 0.9254,
     stance: 0.5509,
     reach: 0.5261,
-    width: -0.0138,
+    width: -0.0655,
     swingAlong: [0.0796, 0.1692, 0.4634, 0.682, 0.9098, 0.9303],
-    swingOut: [0.0736, -0.007, -0.0388, -0.0844],
+    swingOut: [-0.024, -0.026, -0.0, -0.0308],
     height: [0.046, -0.0337, -0.2925, 0.0956, 0.0382, 0.0921, 0.1661, 0.2204],
     footPitch: [0.6856, 0.0996, 0.0438, 0.0503, -0.2118, -0.1754, 0.3562, 0.6425],
     hipHeight: [-0.065, -0.072, -0.0209, -0.0082, -0.0721, -0.0727, -0.0356, -0.0141],
-    hipSway: [-0.1005, -0.1223, -0.0846, -0.0326, 0.0284, 0.0214, -0.0217, -0.0484],
+    hipSway: [0.0073, -0.0165, -0.018, -0.016, 0.0132, 0.0465, 0.0388, 0.0221],
     hipYaw: [-0.3445, -0.242, -0.1288, -0.0999, -0.095, -0.2393, -0.3855, -0.3929],
     hipRoll: [0.0267, 0.0173, 0.0167, 0.0084, 0.0478, 0.0363, -0.0135, -0.0042],
     hipPitch: [0.041, 0.0704, 0.0372, 0.0143, 0.0105, 0.0507, 0.0466, 0.0331],
@@ -245,13 +250,13 @@ export const BACK_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {
     period: 0.8888,
     stance: 0.2589,
     reach: 0.5114,
-    width: -0.0913,
+    width: -0.1424,
     swingAlong: [-0.2954, -0.2037, 0.1988, 0.8303, 1.2395, 1.1704],
-    swingOut: [0.0528, 0.1908, 0.1387, 0.0298],
+    swingOut: [0.0888, 0.186, 0.1247, -0.0173],
     height: [0.2121, -0.0247, 0.043, 0.0031, 0.2181, 0.3013, 0.2995, 0.4456, 0.5452, 0.5252, 0.5206, 0.3971],
     footPitch: [0.7756, 0.3519, 0.3826, 0.2929, 0.2017, 0.2904, 0.6832, 1.3751, 1.9009, 1.8432, 1.5962, 1.7886],
     hipHeight: [0.016, -0.0351, 0.0858, 0.0637, 0.0229, -0.0339, 0.081, 0.0547],
-    hipSway: [-0.0361, -0.0172, -0.0147, -0.0142, -0.0323, -0.0632, -0.0865, -0.0649],
+    hipSway: [0.0028, 0.0144, 0.0052, 0.0002, -0.0055, -0.0216, -0.0268, -0.0118],
     hipYaw: [-0.1552, -0.0126, 0.1043, 0.1553, 0.169, 0.0201, -0.1353, -0.1636],
     hipRoll: [0.0307, 0.0719, 0.1211, 0.0474, -0.0107, -0.0517, -0.0879, -0.028],
     hipPitch: [-0.1798, -0.1255, -0.1701, -0.3099, -0.3998, -0.2306, -0.1054, -0.1534],
@@ -276,6 +281,9 @@ export const BACK_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {
 export const BOW_BACK_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {
   walk: {
     ...BACK_GAITS.walk!,
+    swingOut: [-0.024, -0.026, -0.0, -0.0308],
+    width: -0.0655,
+    hipSway: [0.0073, -0.0165, -0.018, -0.016, 0.0132, 0.0465, 0.0388, 0.0221],
     twist: [0.3999, 0.3181, 0.0384, -0.2708, -0.2817, 0.0348, 0.3214, 0.3997],
     chestLean: [-0.0202, 0.0, 0.0063, -0.0287, -0.0429, -0.0101, 0.0162, -0.0054],
     chestTwist: [0.3105, 0.2147, 0.2582, 0.3998, 0.3998, 0.3041, 0.2959, 0.3516],
@@ -289,6 +297,9 @@ export const BOW_BACK_GAITS: Readonly<Partial<Record<Gait, GaitKeys>>> = {
   },
   run: {
     ...BACK_GAITS.run!,
+    swingOut: [0.0888, 0.186, 0.1247, -0.0173],
+    width: -0.1424,
+    hipSway: [0.0028, 0.0144, 0.0052, 0.0002, -0.0055, -0.0216, -0.0268, -0.0118],
     twist: [0.3063, 0.0216, -0.22, -0.2497, -0.1483, 0.0979, 0.3166, 0.4],
     chestLean: [0.2468, 0.4499, 0.4687, 0.137, -0.0086, 0.2906, 0.5028, 0.3524],
     chestTwist: [0.2226, 0.1746, 0.059, -0.1182, -0.2123, -0.0887, 0.0709, 0.1573],
@@ -773,6 +784,7 @@ const halfOn = (v: Loop): Loop => [...v.slice(v.length / 2), ...v.slice(0, v.len
 /**
  * The same gait moving to the other side: the body half a stride on (each foot does what the other did),
  * every sideways and yaw loop negated, the arms swapped. The legs' own keys stay: the move mirrors them.
+ * Assumes half-stride timing: keys with `secondAt` / `secondStance` are never mirrored (both diagonals carry their own).
  */
 export function mirrorKeys(keys: GaitKeys): GaitKeys {
   const flip = (v: Loop): Loop => halfOn(v).map((x) => -x);
@@ -927,10 +939,25 @@ interface FootGoal {
   pole: Vector3;
 }
 
-function footTarget(leg: Leg, lane: number, q: number, keys: GaitKeys, distance: number, travel: Vector3, ahead: number, legLength: number): FootGoal {
+/** A foot's time in the keys (`q`), and how far its planted travel (`k`) and its swing's duration (`w`) stretch. */
+interface FootTime { q: number; k: number; w: number }
+
+/**
+ * The right foot's time: `secondAt` after the left, its own stance mapped onto the keys' stance and its
+ * swing onto theirs. Planted longer, it travels further on the ground, so its stance and swing scale by `k`.
+ */
+function secondFoot(phase: number, keys: GaitKeys): FootTime {
+  const t = (phase + (1 - (keys.secondAt ?? SECOND_FOOT))) % 1;
+  if (keys.secondStance === undefined) return { q: t, k: 1, w: 1 };
+  const own = keys.secondStance, stance = keys.stance;
+  const q = t < own ? (t * stance) / own : stance + ((t - own) * (1 - stance)) / (1 - own);
+  return { q, k: own / stance, w: (1 - own) / (1 - stance) };
+}
+
+function footTarget(leg: Leg, lane: number, { q, k, w }: FootTime, keys: GaitKeys, distance: number, travel: Vector3, ahead: number, legLength: number): FootGoal {
   const planted = q < keys.stance;
   const s = (q - keys.stance) / (1 - keys.stance);
-  const along = planted ? keys.reach - q / keys.stance : keys.reach - 1 + span(keys.swingAlong, s, 0, 1);
+  const along = planted ? keys.reach - (k * q) / keys.stance : keys.reach - k + k * span(keys.swingAlong, s, 0, 1);
   const at = leg.anchor.add(travel.scale(along * distance));
   // The swing leaves and meets the stance on the floor: the loop's own values at both ends are taken
   // off along it, or the foot pops up at toe-off and drops at touchdown within a frame.
@@ -950,7 +977,7 @@ function footTarget(leg: Leg, lane: number, q: number, keys: GaitKeys, distance:
   // The heel lifted at toe-off fades out over the swing and the heel strike's lift fades in, so the
   // ankle leaves and meets the planted track without a jump.
   const lifted = heelRise(leg, loop(keys.footPitch, keys.stance) * scale).scale((1 - s) ** 2);
-  const land = s > 0.5 ? at.add(travel.scale((keys.reach + (1 - q) / keys.stance - along) * distance)).addInPlace(leg.toe) : undefined;
+  const land = s > 0.5 ? at.add(travel.scale((keys.reach + ((1 - q) * w) / keys.stance - along) * distance)).addInPlace(leg.toe) : undefined;
   if (land) {
     land.y = leg.anchor.y + leg.toe.y;
     land.x -= leg.side * span(keys.swingOut, s, 0, 0) * legLength;
@@ -1080,7 +1107,7 @@ export function createMovementClips(
         turn(pelvis, FORWARD, loop(keys.hipRoll, phase), pivotWorld);
         turn(pelvis, RIGHT, loop(keys.hipPitch, phase) * ahead, pivotWorld);
         pelvis.computeWorldMatrix(true);
-        const feet = legs.map((leg, i) => footTarget(leg, (i === 0 ? 1 : -1) * lane, (phase + SECOND_FOOT * i) % 1, keys, distance, travel, ahead, legLength));
+        const feet = legs.map((leg, i) => footTarget(leg, (i === 0 ? 1 : -1) * lane, i === 0 ? { q: phase, k: 1, w: 1 } : secondFoot(phase, keys), keys, distance, travel, ahead, legLength));
         const shift = new Vector3(loop(keys.hipSway, phase) * legLength, loop(keys.hipHeight, phase) * legLength, 0);
         for (const [i, leg] of legs.entries()) {
           // The whole leg, not the thigh alone: a calf and foot left at rest under a turned pelvis misread its reach.

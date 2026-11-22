@@ -4,7 +4,7 @@ import { describe, it, expect } from "vitest";
 import { LoadAssetContainerAsync, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
 import { indexRigSubtree, ORIGINAL_DIRECTIONS } from "./rig";
-import { BOW_GAITS, createMovementClips, GAITS, HEEL_BACK, HEEL_DOWN, MOVEMENT_PACE, type GaitKeys, type MovementKeyframeSpec } from "./movement-clips";
+import { BACK_DIAG_GAITS, BACK_DIAG_RIGHT_GAITS, BACK_GAITS, BOW_GAITS, createMovementClips, GAITS, HEEL_BACK, HEEL_DOWN, MOVEMENT_PACE, type GaitKeys, type MovementKeyframeSpec } from "./movement-clips";
 
 const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
 
@@ -139,5 +139,100 @@ describe.each([
       engine.dispose();
       (globalThis as { FileReader?: unknown }).FileReader = original;
     }
+  }, 60_000);
+});
+
+describe("second-foot timing keys", () => {
+  /** Bakes one walk back-left clip on the male body and samples both ankles, balls and heels per frame. */
+  async function bakeBackLeft(diag: GaitKeys) {
+    const original = (globalThis as { FileReader?: unknown }).FileReader;
+    (globalThis as { FileReader?: unknown }).FileReader = NodeFileReader;
+    const engine = new NullEngine();
+    try {
+      const { scene } = createScene(engine);
+      const file = "wardrobe.glb";
+      const container = await LoadAssetContainerAsync(
+        new File([readFileSync(`${MODELS}${file}`)], file, { type: "model/gltf-binary" }), scene);
+      const entries = container.instantiateModelsToScene((n) => n, false, { doNotInstantiate: true });
+      const pivot = new TransformNode("rig", scene);
+      for (const node of entries.rootNodes) node.parent = pivot;
+      const byName = indexRigSubtree(entries.rootNodes, "Armature");
+      const inPivot = (name: string) => {
+        const node = byName.get(name) as TransformNode;
+        node.computeWorldMatrix(true);
+        return Vector3.TransformCoordinates(node.getAbsolutePosition(), pivot.getWorldMatrix().clone().invert());
+      };
+      const leg = Vector3.Distance(inPivot("thigh_r"), inPivot("calf_r")) + Vector3.Distance(inPivot("calf_r"), inPivot("foot_r"));
+      const footInPivot = () => (byName.get("foot_r") as TransformNode).computeWorldMatrix(true).multiply(pivot.getWorldMatrix().clone().invert());
+      const restFoot = footInPivot().clone().invert();
+      const ankle = inPivot("foot_r"), ball = inPivot("ball_r"), toe = ball.subtract(ankle);
+      const rest = { ankle, ball, heel: ankle.add(new Vector3(0, HEEL_DOWN * toe.y, -HEEL_BACK * toe.z)) };
+      const spec: MovementKeyframeSpec = { name: "walkBackLeft", gait: "walk", yaw: (-135 * Math.PI) / 180, stride: 1 };
+      const group = createMovementClips(scene, pivot, byName, [spec], GAITS, BACK_GAITS, { walk: diag }, BACK_DIAG_RIGHT_GAITS)!.get(spec.name)!;
+      const frames = Math.round(group.to - group.from);
+      group.start(true, 1, group.from, group.to);
+      group.pause();
+      const samples: { ankle: Vector3; ball: Vector3; heel: Vector3 }[] = [];
+      const turns: Quaternion[][] = [];
+      for (let f = 0; f < frames; f++) {
+        group.goToFrame(group.from + f);
+        for (const node of byName.values()) if (node instanceof TransformNode) node.computeWorldMatrix(true);
+        samples.push({ ankle: inPivot("foot_r"), ball: inPivot("ball_r"), heel: Vector3.TransformCoordinates(rest.heel, restFoot.multiply(footInPivot())) });
+        turns.push(["thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r", "pelvis"].map((n) => (byName.get(n) as TransformNode).rotationQuaternion!.clone()));
+      }
+      group.stop();
+      const fps = group.targetedAnimations[0]!.animation.framePerSecond;
+      return { samples, turns, frames, leg, rest, perFrame: (MOVEMENT_PACE.walk * spec.stride) / fps, travel: new Vector3(Math.sin(spec.yaw), 0, Math.cos(spec.yaw)) };
+    } finally {
+      engine.dispose();
+      (globalThis as { FileReader?: unknown }).FileReader = original;
+    }
+  }
+
+  /** The right foot's longest run of frames with the ball, ankle or heel on the floor: where it starts and how long it lasts, as stride shares. */
+  function rightPlant({ samples, frames, leg, rest }: Awaited<ReturnType<typeof bakeBackLeft>>) {
+    const down = samples.map((s) => s.ball.y < rest.ball.y + 0.0005 * leg || s.ankle.y < rest.ankle.y + 0.0005 * leg || s.heel.y < rest.heel.y + 0.0005 * leg);
+    let best = { start: 0, length: 0 };
+    for (let start = 0; start < frames; start++) {
+      if (!down[start] || down[(start + frames - 1) % frames]) continue;
+      let length = 0;
+      while (length < frames && down[(start + length) % frames]) length++;
+      if (length > best.length) best = { start, length };
+    }
+    return { start: best.start / frames, share: best.length / frames, frames: best };
+  }
+
+  it("lands the right foot at secondAt, keeps it down for secondStance, and does not skate", async () => {
+    const keys = BACK_DIAG_GAITS.walk!;
+    const timed = await bakeBackLeft({ ...keys, secondAt: 0.66, secondStance: 0.35 });
+    const plant = rightPlant(timed);
+    // A landing ball rides in early (0.03 of the default half-stride swing, longer as the swing stretches);
+    // the heel-off ball contact stays a little past the stance.
+    expect(plant.start, "right foot touchdown").toBeGreaterThan(0.58);
+    expect(plant.start, "right foot touchdown").toBeLessThan(0.69);
+    expect(plant.share, "right foot planted share").toBeGreaterThan(0.33);
+    expect(plant.share, "right foot planted share").toBeLessThan(0.45);
+    const { samples, frames, perFrame, travel, leg, rest } = timed;
+    // The contact point moved back onto its ankle's track, as the clip test above does.
+    const toe = rest.ball.subtract(rest.ankle).multiplyByFloats(1, 0, 1);
+    const heelBack = rest.heel.subtract(rest.ankle).multiplyByFloats(1, 0, 1);
+    const drift = Array.from({ length: plant.frames.length }, (_, j) => {
+      const s = samples[(plant.frames.start + j) % frames]!;
+      const at = s.ball.y < rest.ball.y + 0.0005 * leg ? s.ball.subtract(toe)
+        : s.ankle.y < rest.ankle.y + 0.0005 * leg ? s.ankle : s.heel.subtract(heelBack);
+      return Vector3.Dot(at, travel) + j * perFrame;
+    });
+    const slip = Math.max(...drift) - Math.min(...drift);
+    expect(slip, `right foot skates ${(slip / leg).toFixed(3)} legs`).toBeLessThan(0.02 * leg);
+  }, 60_000);
+
+  it("half-stride timing at the gait's own stance bakes the same pose as no timing keys", async () => {
+    const keys = BACK_DIAG_GAITS.walk!;
+    const plain = await bakeBackLeft(keys);
+    const timed = await bakeBackLeft({ ...keys, secondAt: 0.5, secondStance: keys.stance });
+    let worst = 1;
+    for (const [f, row] of plain.turns.entries()) for (const [j, q] of row.entries()) worst = Math.min(worst, Math.abs(Quaternion.Dot(q, timed.turns[f]![j]!)));
+    // Two bakes of the same keys already differ by ~3e-8 (float32 key storage).
+    expect(worst).toBeGreaterThan(1 - 1e-6);
   }, 60_000);
 });
