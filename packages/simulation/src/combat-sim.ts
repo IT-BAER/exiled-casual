@@ -1,7 +1,7 @@
 import { fp } from "@exiled/fixed-point";
 import {
   baseCasterStats, makeMagic, makeRare, rollItem, FLASK_MAX_CHARGES, START_LEVEL,
-  offerWaystones, WAYSTONE_OFFER_COUNT, START_GOLD, gainXp, xpToNext,
+  offerWaystones, WAYSTONE_OFFER_COUNT, START_GOLD, gainXp, xpToNext, familyForClass, familyOf,
 } from "@exiled/rules";
 import { SKILLS, MONSTERS, rareTemplate, CONTENT_VERSION, ITEM_POOLS, baseOf, CURRENCY_DROPS, currencyItem, waystoneItem } from "@exiled/content-runtime";
 import { generateArea, type AreaLayout } from "@exiled/mapgen";
@@ -233,6 +233,23 @@ const LAB_ITEM_TIERS = ["normal", "magic", "rare", "unique"] as const;
 let labItemDrops = 0;
 let labRareSpawns = 0;
 
+/**
+ * A payout laid round the player a press at a time: what drops, and where relative to
+ * him. Spaced for the screen, which the camera turns 45 degrees (right is +x +y, towards
+ * the viewer +x -y): two labels a row, none over his body.
+ */
+const LAB_LOOT: readonly { tier?: (typeof LAB_ITEM_TIERS)[number]; currency?: string; dx: number; dy: number }[] = [
+  { currency: "currency.alchemy", dx: fp(1.13), dy: fp(2.4) },
+  { tier: "normal", dx: fp(-2.12), dy: fp(-1.41) },
+  { tier: "magic", dx: fp(0.42), dy: fp(-2.26) },
+  { currency: "currency.wisdom", dx: fp(-0.78), dy: fp(2.47) },
+  { tier: "rare", dx: fp(2.47), dy: fp(-0.35) },
+  { tier: "magic", dx: fp(-2.47), dy: fp(0.64) },
+  { currency: "currency.embers", dx: fp(-1.27), dy: fp(-2.55) },
+  { tier: "unique", dx: fp(1.98), dy: fp(1.13) },
+];
+let labLootDrops = 0;
+
 /** Life multiple of a lab dummy, so a skill can be watched landing again and again. */
 export const DUMMY_LIFE_MUL = 10;
 
@@ -257,7 +274,7 @@ export function dummySpots(cx: number, cy: number, facing: { x: number; y: numbe
 
 export function spawnLabActors(
   world: World,
-  kind: "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "shields" | "levelup" | "dummy",
+  kind: "imp" | "pack" | "magic" | "rare" | "boss" | "clear" | "hurtboss" | "item" | "loot" | "shields" | "levelup" | "dummy",
   cx: number,
   cy: number,
   count = 7,
@@ -313,6 +330,23 @@ export function spawnLabActors(
       world.set<Position>(se, "position", { x: cx + fp(1 + k), y: cy + fp(1) });
       world.set<ItemC>(se, "item", { item: currencyItem(c.baseId), w: 1, h: 1 });
     });
+    return;
+  }
+
+  if (kind === "loot") {
+    // Rolled as a map pays him, his own family favoured; the unique is one of his own, unidentified as it drops.
+    const n = labLootDrops++;
+    const d = LAB_LOOT[n % LAB_LOOT.length]!;
+    const sessionE = world.query("session")[0];
+    const family = familyForClass(sessionE !== undefined ? world.get<SessionC>(sessionE, "session")?.classId : undefined);
+    const item = d.currency !== undefined
+      ? currencyItem(d.currency)
+      : rollItem(d.tier === "unique" && family !== undefined ? { ...ITEM_POOLS, uniques: ITEM_POOLS.uniques?.filter((u) => familyOf(u.baseId) === family) } : ITEM_POOLS,
+          fnv1a32(`lab.loot:${n}`), 80, 3, d.tier, 0, family);
+    const base = d.currency !== undefined ? { w: 1, h: 1 } : baseOf(item.baseId);
+    const ge = world.create();
+    world.set<Position>(ge, "position", { x: cx + d.dx, y: cy + d.dy });
+    world.set<ItemC>(ge, "item", { item, w: base.w, h: base.h });
     return;
   }
 
