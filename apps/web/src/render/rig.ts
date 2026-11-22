@@ -599,11 +599,12 @@ export const AIM_CHAIN: readonly { name: string; weight: number }[] = [
 /**
  * Pitch the spine takes on top of the clips, about the body's right axis
  * (positive stands it up). `actionFree` is 1 with no upper-body clip playing
- * and 0 under one; `moveRel` is the move's yaw off the facing.
+ * and 0 under one; `moveRel` is the move's yaw off the facing. Original movement's takes are
+ * fitted with PoE2's own trunk, so standing them up leans them back (run back-left 11 degrees).
  */
-export function spinePitch(gait: Gait | null, moveRel: number, actionFree: number): number {
+export function spinePitch(gait: Gait | null, moveRel: number, actionFree: number, originalMovement = false): number {
   if (gait !== "run") return 0;
-  const sideways = actionFree * STRAFE_UPRIGHT * Math.abs(Math.sin(moveRel));
+  const sideways = originalMovement ? 0 : actionFree * STRAFE_UPRIGHT * Math.abs(Math.sin(moveRel));
   const backpedal = (1 - actionFree) * BACKPEDAL_FORWARD * Math.max(0, -Math.cos(moveRel));
   return sideways - backpedal;
 }
@@ -2547,7 +2548,7 @@ export class RigActor {
       // at nothing, so the spine stands up by how sideways the move is. A layered
       // clip (bow, cast, strike) holds the spine itself, but not the pelvis a
       // backpedal tilts back, so under one the spine comes forward instead.
-      const pitch = spinePitch(gaitOf(this.locomotion), this.moveRel, this.uprightGain);
+      const pitch = spinePitch(gaitOf(this.locomotion), this.moveRel, this.uprightGain, this.originalMovement);
       const twist = Math.abs(this.legs) >= 1e-4;
       if ((!twist && Math.abs(pitch) <= 1e-3) || !(pelvisNode instanceof TransformNode)) return;
       twisted.forEach((n, i) => { if (n.rotationQuaternion) untwisted[i]?.copyFrom(n.rotationQuaternion); });

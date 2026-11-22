@@ -381,6 +381,23 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
   let rawName: string | null = null;
   let dead = false;
   let paused = false;
+  let settling = false;
+  /**
+   * A paused seek alone re-keys the clip but not the rig's after-animation pose (hip turn, spine pitch), and the
+   * rig restores pelvis and waist from before it: one pass at time scale 0 shows the frame the game plays.
+   */
+  const settle = () => {
+    if (!paused || settling) return;
+    settling = true;
+    const timeScale = scene.animationTimeScale;
+    scene.animationTimeScale = 0;
+    scene.animationsEnabled = true;
+    scene.onAfterAnimationsObservable.addOnce(() => {
+      if (scene.animationTimeScale === 0) scene.animationTimeScale = timeScale;
+      scene.animationsEnabled = !paused;
+      settling = false;
+    });
+  };
   let repeat = false;
   /** The last action asked for, and the group it plays through, so repeat can tell when it ended. */
   let lastAction: { run: () => void; group: () => AnimationGroup | null } | null = null;
@@ -980,13 +997,14 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
     setPaused(p) {
       paused = p;
       // Stops every animatable AND the rig's per-frame observers, so the pose holds whole.
-      scene.animationsEnabled = !p;
+      if (!settling) scene.animationsEnabled = !p;
     },
     seek(fraction) {
       const group = mainGroup(groupsNow());
       if (group === null) return;
       const f = Math.min(1, Math.max(0, fraction));
       group.goToFrame(group.from + f * (group.to - group.from));
+      settle();
     },
     step(frames) {
       viewer.setPaused(true);
@@ -996,6 +1014,7 @@ export async function createViewerScene(canvas: HTMLCanvasElement): Promise<View
       const span = group.to - group.from;
       const next = group.from + ((((at - group.from + frames) % span) + span) % span);
       group.goToFrame(next);
+      settle();
     },
     setSpeed(s) {
       scene.animationTimeScale = s;

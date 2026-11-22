@@ -387,6 +387,12 @@ describe("spinePitch", () => {
     expect(spinePitch("run", 0, 0)).toBeCloseTo(0);
     expect(spinePitch("walk", behind, 0)).toBeCloseTo(0);
   });
+  it("leaves original movement's sidesteps and back diagonals the trunk their takes were fitted with", () => {
+    for (const rel of [Math.PI / 2, -Math.PI / 2, (3 * Math.PI) / 4, (-3 * Math.PI) / 4]) {
+      expect(spinePitch("run", rel, 1, true)).toBeCloseTo(0);
+    }
+    expect(spinePitch("run", behind, 0, true)).toBeCloseTo(spinePitch("run", behind, 0));
+  });
 });
 
 describe("aimAngles", () => {
