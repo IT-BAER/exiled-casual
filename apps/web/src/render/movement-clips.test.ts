@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { LoadAssetContainerAsync, NullEngine, Quaternion, TransformNode, Vector3 } from "@babylonjs/core";
 import { createScene } from "./engine";
-import { indexRigSubtree } from "./rig";
+import { indexRigSubtree, ORIGINAL_DIRECTIONS } from "./rig";
 import { BOW_GAITS, createMovementClips, GAITS, HEEL_BACK, HEEL_DOWN, MOVEMENT_PACE, type GaitKeys, type MovementKeyframeSpec } from "./movement-clips";
 
 const MODELS = fileURLToPath(new URL("../../public/models/", import.meta.url));
@@ -24,22 +24,9 @@ class NodeFileReader {
   }
 }
 
-const deg = (d: number) => (d * Math.PI) / 180;
-/** One clip per key set: forward, side and back-diagonal both ways, backpedal (rig.ts DIRECTIONS strides). */
-const SPECS: MovementKeyframeSpec[] = [
-  { name: "walk", gait: "walk", yaw: 0, stride: 1 },
-  { name: "walkFwdL", gait: "walk", yaw: deg(-45), stride: 1 },
-  { name: "walkStrafeR", gait: "walk", yaw: deg(90), stride: 0.66 },
-  { name: "walkBackL", gait: "walk", yaw: deg(-135), stride: 1.2 },
-  { name: "walkBackR", gait: "walk", yaw: deg(135), stride: 1.2 },
-  { name: "walkBack", gait: "walk", yaw: Math.PI, stride: 1.2 },
-  { name: "run", gait: "run", yaw: 0, stride: 1 },
-  { name: "runStrafeL", gait: "run", yaw: deg(-55), stride: 1 },
-  { name: "runStrafeR", gait: "run", yaw: deg(55), stride: 1 },
-  { name: "runBackL", gait: "run", yaw: deg(-110), stride: 0.914 },
-  { name: "runBackR", gait: "run", yaw: deg(110), stride: 0.914 },
-  { name: "runBack", gait: "run", yaw: Math.PI, stride: 0.75 },
-];
+/** The clips the game bakes: one per key set, forward, side and back-diagonal both ways, backpedal. */
+const SPECS: MovementKeyframeSpec[] = (["walk", "run"] as const).flatMap((gait) =>
+  [...new Map(ORIGINAL_DIRECTIONS[gait].map(({ clip, yaw, stride }) => [clip, { name: clip, gait, yaw, stride }])).values()]);
 
 const SPINE_OWNED = ["spine_01", "neck_01"];
 

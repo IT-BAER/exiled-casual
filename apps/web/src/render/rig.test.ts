@@ -38,6 +38,9 @@ import {
   framePhaseMatched,
   gaitOf,
   hipTurn,
+  originalHipTurn,
+  ORIGINAL_DIRECTIONS,
+  ORIGINAL_TAKES,
   turnStep,
   TURN_STEP_RATE,
   HIP_TURN,
@@ -209,6 +212,61 @@ describe("directionBlend", () => {
     expect(stride("walkBack")).toBeGreaterThan(1);
     expect(stride("walkStrafeL")).toBeLessThan(0.8);
     expect(DIRECTIONS.run.find((d) => d.clip === "runStrafeR")!.stride).toBe(1);
+  });
+});
+
+/**
+ * Original movement plays each PoE2 take where PoE2 does: the take's move off the aim, its legs at the
+ * angle its travel makes with its planted feet (aimprobe.py), the hips turning the rest.
+ */
+describe("original movement directions (VITE_ORIGINAL_MOVEMENT)", () => {
+  const deg = (d: number) => (d * Math.PI) / 180;
+  const round = (r: number) => Math.round((r * 180) / Math.PI);
+  const alone = (legYaw: number, gait: "walk" | "run") => {
+    const b = directionBlend(legYaw, gait, ORIGINAL_DIRECTIONS[gait]);
+    const dirs = ORIGINAL_DIRECTIONS[gait];
+    return b.w < 1e-9 ? dirs[b.from]!.clip : b.w > 1 - 1e-9 ? dirs[b.to]!.clip : "blend";
+  };
+
+  it("sets each take's legs at the travel PoE2's own take makes with its feet", () => {
+    expect(ORIGINAL_DIRECTIONS.run.map((d) => round(d.yaw))).toEqual([-180, -110, -29, 0, 29, 110, 180]);
+    expect(ORIGINAL_DIRECTIONS.walk.map((d) => round(d.yaw))).toEqual([-180, -123, -42, 0, 30, 106, 180]);
+  });
+
+  it("plays every take alone at its own move, the hips turned by its turn", () => {
+    for (const gait of ["walk", "run"] as const) {
+      for (const take of ORIGINAL_TAKES[gait]) {
+        const rel = deg(take.rel);
+        expect(round(originalHipTurn(rel, gait)), `${gait} ${take.rel}`).toBe(take.turn);
+        expect(alone(rel - originalHipTurn(rel, gait), gait), `${gait} ${take.rel}`).toBe(take.clip);
+      }
+    }
+  });
+
+  it("turns the hips none ahead or behind, and the same either way round the back seam", () => {
+    for (const gait of ["walk", "run"] as const) {
+      expect(originalHipTurn(0, gait)).toBeCloseTo(0, 9);
+      expect(originalHipTurn(Math.PI, gait)).toBeCloseTo(0, 9);
+      expect(originalHipTurn(-Math.PI, gait)).toBeCloseTo(0, 9);
+      expect(originalHipTurn(deg(179.9), gait)).toBeCloseTo(originalHipTurn(deg(-179.9), gait), 2);
+    }
+  });
+
+  it("blends neighbouring takes linearly in the move, as PoE2's six takes share the circle", () => {
+    const b = directionBlend(deg(45) - originalHipTurn(deg(45), "run"), "run", ORIGINAL_DIRECTIONS.run);
+    expect([ORIGINAL_DIRECTIONS.run[b.from]!.clip, ORIGINAL_DIRECTIONS.run[b.to]!.clip]).toEqual(["run", "runStrafeR"]);
+    expect(b.w).toBeCloseTo(0.5, 6);
+  });
+
+  it("keeps every gait's legs in yaw order and every clip's plant known", () => {
+    for (const gait of ["walk", "run"] as const) {
+      const yaws = ORIGINAL_DIRECTIONS[gait].map((d) => d.yaw);
+      for (let i = 1; i < yaws.length; i++) expect(yaws[i]).toBeGreaterThan(yaws[i - 1]!);
+      for (const d of ORIGINAL_DIRECTIONS[gait]) {
+        expect(LEFT_PLANT[d.clip]).toBeDefined();
+        expect(gaitOf(d.clip)).toBe(gait);
+      }
+    }
   });
 });
 

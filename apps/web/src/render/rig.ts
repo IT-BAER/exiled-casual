@@ -292,10 +292,32 @@ export const DIRECTIONS: Record<Gait, readonly { yaw: number; clip: RigClip; str
   ] as const).map(([deg, clip, stride]) => ({ yaw: (deg * Math.PI) / 180, clip, stride })),
 };
 
+/**
+ * Original movement's PoE2 takes per gait (forward, side, back diagonal, back): `rel` is the take's move off
+ * the aim, `turn` the hips' turn there (the planted feet's angle off the aim), both in degrees. Its legs travel
+ * `rel - turn` off the hips: the angle PoE2's own take travels off its feet (review/movement-fit/aimprobe.py).
+ */
+export const ORIGINAL_TAKES: Record<Gait, readonly { rel: number; clip: RigClip; stride: number; turn: number }[]> = {
+  walk: ([
+    [-180, "walkBack", 1.2, 0], [-135, "walkBackL", 1.2, -12], [-90, "walkStrafeL", 1, -48], [0, "walk", 1, 0],
+    [90, "walkStrafeR", 1, 60], [135, "walkBackR", 1.2, 29], [180, "walkBack", 1.2, 0],
+  ] as const).map(([rel, clip, stride, turn]) => ({ rel, clip, stride, turn })),
+  run: ([
+    [-180, "runBack", 0.75, 0], [-135, "runBackL", 0.914, -25], [-90, "runStrafeL", 1, -61], [0, "run", 1, 0],
+    [90, "runStrafeR", 1, 61], [135, "runBackR", 0.914, 25], [180, "runBack", 0.75, 0],
+  ] as const).map(([rel, clip, stride, turn]) => ({ rel, clip, stride, turn })),
+};
+
+/** DIRECTIONS for original movement: each take at its legs' yaw off the hips. */
+export const ORIGINAL_DIRECTIONS: Record<Gait, readonly { yaw: number; clip: RigClip; stride: number }[]> = {
+  walk: ORIGINAL_TAKES.walk.map(({ rel, turn, clip, stride }) => ({ yaw: ((rel - turn) * Math.PI) / 180, clip, stride })),
+  run: ORIGINAL_TAKES.run.map(({ rel, turn, clip, stride }) => ({ yaw: ((rel - turn) * Math.PI) / 180, clip, stride })),
+};
+
 const MOVEMENT_SPECS = new Map<RigClip, MovementKeyframeSpec>();
 if (ORIGINAL_MOVEMENT) {
   for (const gait of ["walk", "run"] as const) {
-    for (const { clip, yaw, stride } of DIRECTIONS[gait]) {
+    for (const { clip, yaw, stride } of ORIGINAL_DIRECTIONS[gait]) {
       MOVEMENT_SPECS.set(clip, { name: clip, gait, yaw, stride });
     }
   }
@@ -358,13 +380,23 @@ export function hipTurn(rel: number): number {
   return HIP_TURN * Math.sin(wrapPi(rel));
 }
 
+/** Original movement's hip turn: each take's own, linear in the move between takes, so their blend is too. */
+export function originalHipTurn(rel: number, gait: Gait): number {
+  const takes = ORIGINAL_TAKES[gait];
+  const y = (wrapPi(rel) * 180) / Math.PI;
+  let i = 0;
+  while (i < takes.length - 2 && y > takes[i + 1]!.rel) i++;
+  const a = takes[i]!, b = takes[i + 1]!;
+  const w = Math.min(1, Math.max(0, (y - a.rel) / (b.rel - a.rel)));
+  return ((a.turn + (b.turn - a.turn) * w) * Math.PI) / 180;
+}
+
 /**
  * The two DIRECTIONS neighbours either side of `legYaw` (the move's yaw off the
  * hips) and the weight of the second, linear in yaw, so the legs turn with the
  * move instead of switching clips at a border.
  */
-export function directionBlend(legYaw: number, gait: Gait): { from: number; to: number; w: number } {
-  const dirs = DIRECTIONS[gait];
+export function directionBlend(legYaw: number, gait: Gait, dirs = DIRECTIONS[gait]): { from: number; to: number; w: number } {
   const y = wrapPi(legYaw);
   let i = 0;
   while (i < dirs.length - 2 && y > dirs[i + 1]!.yaw) i++;
@@ -1929,13 +1961,13 @@ export class RigActor {
     } else {
       this.turnHold = 0;
       const gait = clip === "run" ? "run" : "walk";
-      this.legsTarget = hipTurn(this.moveRel);
+      this.legsTarget = this.originalMovement ? originalHipTurn(this.moveRel, gait) : hipTurn(this.moveRel);
+      const dirs = (this.originalMovement ? ORIGINAL_DIRECTIONS : DIRECTIONS)[gait];
       // Off the hips as they ARE, mid-turn, so the feet always travel the real move.
-      const b = directionBlend(this.moveRel - this.legs, gait);
+      const b = directionBlend(this.moveRel - this.legs, gait, dirs);
       // The heavier clip plays, the lighter one is blended in: straight behind
       // sits on the +-PI seam, and there the pair flips every frame.
       const [main, over, w] = b.w > 0.5 ? [b.to, b.from, 1 - b.w] : [b.from, b.to, b.w];
-      const dirs = DIRECTIONS[gait];
       clip = dirs[main]!.clip;
       this.blendClip = dirs[over]!.clip;
       this.blendTo = this.groups.get(this.blendClip) ?? null;
