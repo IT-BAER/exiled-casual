@@ -172,12 +172,12 @@ describe("second-foot timing keys", () => {
       const frames = Math.round(group.to - group.from);
       group.start(true, 1, group.from, group.to);
       group.pause();
-      const samples: { ankle: Vector3; ball: Vector3; heel: Vector3 }[] = [];
+      const samples: { ankle: Vector3; ball: Vector3; heel: Vector3; left: Vector3 }[] = [];
       const turns: Quaternion[][] = [];
       for (let f = 0; f < frames; f++) {
         group.goToFrame(group.from + f);
         for (const node of byName.values()) if (node instanceof TransformNode) node.computeWorldMatrix(true);
-        samples.push({ ankle: inPivot("foot_r"), ball: inPivot("ball_r"), heel: Vector3.TransformCoordinates(rest.heel, restFoot.multiply(footInPivot())) });
+        samples.push({ ankle: inPivot("foot_r"), ball: inPivot("ball_r"), heel: Vector3.TransformCoordinates(rest.heel, restFoot.multiply(footInPivot())), left: inPivot("foot_l") });
         turns.push(["thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r", "pelvis"].map((n) => (byName.get(n) as TransformNode).rotationQuaternion!.clone()));
       }
       group.stop();
@@ -234,5 +234,18 @@ describe("second-foot timing keys", () => {
     for (const [f, row] of plain.turns.entries()) for (const [j, q] of row.entries()) worst = Math.min(worst, Math.abs(Quaternion.Dot(q, timed.turns[f]![j]!)));
     // Two bakes of the same keys already differ by ~3e-8 (float32 key storage).
     expect(worst).toBeGreaterThan(1 - 1e-6);
+  }, 60_000);
+
+  it("right-foot swing keys move the right foot's swing only, and the gait's own values bake the same pose", async () => {
+    const keys = BACK_DIAG_GAITS.walk!;
+    const plain = await bakeBackLeft(keys);
+    const same = await bakeBackLeft({ ...keys, second: { swingOut: keys.swingOut, height: keys.height } });
+    let worst = 1;
+    for (const [f, row] of plain.turns.entries()) for (const [j, q] of row.entries()) worst = Math.min(worst, Math.abs(Quaternion.Dot(q, same.turns[f]![j]!)));
+    expect(worst).toBeGreaterThan(1 - 1e-6);
+    const wide = await bakeBackLeft({ ...keys, second: { swingOut: keys.swingOut.map((x) => x + 0.1) } });
+    const moved = (side: "ankle" | "left") => Math.max(...plain.samples.map((s, f) => Vector3.Distance(s[side], wide.samples[f]![side]))) / plain.leg;
+    expect(moved("ankle"), "right ankle moves with its own swingOut").toBeGreaterThan(0.05);
+    expect(moved("left"), "left ankle stays").toBeLessThan(0.005);
   }, 60_000);
 });
